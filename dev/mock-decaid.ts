@@ -47,7 +47,7 @@ function simulateShotSamples(target: number, seconds: number) {
   const start = Date.now() - seconds * 1000;
   for (let t = 0; t <= seconds; t += 0.5) {
     const pi = t < 8;
-    const pressure = pi ? Math.min(3, t * 0.6) : Math.max(5.5, 9 - (t - 8) * 0.12);
+    const pressure = pi ? Math.min(3, t * 0.6) : t < 10 ? 3 + (t - 8) * 3 : Math.max(5.5, 9 - (t - 10) * 0.12);
     const flow = pi ? 4 - t * 0.3 : 1.6 + Math.sin(t / 5) * 0.2;
     const weight = Math.max(0, Math.min(target, ((t - 6) / (seconds - 6)) * target));
     samples.push({
@@ -82,7 +82,7 @@ function startShot() {
     const pi = t < 8;
     machine.substate = pi ? "preinfusion" : "pouring";
     live = {
-      pressure: pi ? Math.min(3, t * 0.6) : Math.max(5.5, 9 - (t - 8) * 0.12),
+      pressure: pi ? Math.min(3, t * 0.6) : t < 10 ? 3 + (t - 8) * 3 : Math.max(5.5, 9 - (t - 10) * 0.12),
       flow: pi ? 4 - t * 0.3 : 1.6 + Math.sin(t / 5) * 0.2,
       weight: Math.max(0, Math.min(target, ((t - 6) / (seconds - 6)) * target)),
       mixTemperature: 92.6 + Math.random() * 0.3,

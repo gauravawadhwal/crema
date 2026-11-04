@@ -36,11 +36,18 @@ export class Store {
     this.loaded = true;
   }
 
-  private async save() {
-    await mkdir(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    await writeFile(tmp, JSON.stringify(this.data, null, 2));
-    await rename(tmp, this.file);
+  private queue: Promise<void> = Promise.resolve();
+
+  /** Writes are serialized and atomic (write a temp file, then rename). */
+  private save() {
+    const snapshot = JSON.stringify(this.data, null, 2);
+    this.queue = this.queue.catch(() => {}).then(async () => {
+      await mkdir(path.dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.${process.pid}.${Date.now()}.tmp`;
+      await writeFile(tmp, snapshot);
+      await rename(tmp, this.file);
+    });
+    return this.queue;
   }
 
   async get(beanId: string) {

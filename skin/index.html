@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crema</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Crema: coffee shelf, recipes and live shots for a Decent DE1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Crema">
+<meta name="theme-color" content="#17120f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an instrument panel. A side rail on the tablet, a bottom tab bar on the phone.
+   Readouts are monospace numerals; telemetry colours follow the Decent convention
+   (pressure green, flow blue, weight brown, temperature red). Dark-first: it lives
+   next to a machine, often early in the morning. */
+:root {
+  --bg: #17120f;          /* roasted, not black */
+  --surface: #211a16;
+  --surface-2: #2b231e;
+  --line: #3a2f28;
+  --fg: #efe6dc;
+  --muted: #a4968a;
+  --accent: #e0a458;      /* crema */
+  --accent-ink: #1d140c;
+  --pressure: #5cc59a;
+  --flow: #6aa8ea;
+  --weight: #c99a6b;
+  --temp: #e6735c;
+  --good: #5cc59a;
+  --warn: #e0b458;
+  --bad: #e6735c;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px rgba(0,0,0,.25);
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --r: 14px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eceeed; --surface: #f8f8f6; --surface-2: #e3e5e3; --line: #d0d3d0;
+    --fg: #231a14; --muted: #6c625a; --accent: #a8641c; --accent-ink: #fff8ef;
+    --pressure: #1f8a5e; --flow: #2a6db5; --weight: #8a5a2e; --temp: #c2462f;
+    --good: #1f8a5e; --warn: #9a6a08; --bad: #c2462f;
+    --shadow: 0 1px 2px rgba(35,26,20,.06), 0 8px 24px rgba(35,26,20,.06);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #eceeed; --surface: #f8f8f6; --surface-2: #e3e5e3; --line: #d0d3d0;
+  --fg: #231a14; --muted: #6c625a; --accent: #a8641c; --accent-ink: #fff8ef;
+  --pressure: #1f8a5e; --flow: #2a6db5; --weight: #8a5a2e; --temp: #c2462f;
+  --good: #1f8a5e; --warn: #9a6a08; --bad: #c2462f;
+  --shadow: 0 1px 2px rgba(35,26,20,.06), 0 8px 24px rgba(35,26,20,.06);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+a.btn, a.tab { text-decoration: none; color: inherit; }
+a.btn.primary { color: var(--accent-ink); }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: 1.75rem; line-height: 1.15; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 1rem; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
+.muted { color: var(--muted); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* ---------- shell ---------- */
+.app { display: grid; grid-template-columns: 92px 1fr; min-height: 100%; }
+.rail {
+  position: sticky; top: 0; height: 100vh; height: 100dvh;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: max(18px, env(safe-area-inset-top, 0px)) 0 18px max(0px, env(safe-area-inset-left, 0px));
+  border-right: 1px solid var(--line); background: var(--surface);
+}
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; margin-bottom: 18px; color: var(--accent); }
+.tab {
+  display: grid; place-items: center; gap: 4px; width: 72px; padding: 10px 0;
+  border: 0; border-radius: 12px; background: transparent; color: var(--muted);
+  cursor: pointer; font-size: .72rem; font-weight: 500; text-decoration: none;
+}
+.tab svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-current="page"] { background: var(--surface-2); color: var(--fg); }
+.tab[aria-current="page"] svg { stroke: var(--accent); }
+.rail .spacer { flex: 1; }
+
+main {
+  min-width: 0;
+  padding-block: 22px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 18px; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; justify-content: space-between; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line); font-size: .82rem; white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.ok { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.dot.live { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.demo-banner {
+  font-size: .8rem; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 7px 12px;
+}
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow); min-width: 0; }
+.grid-brew { display: grid; gap: 18px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+.stack { display: grid; gap: 14px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.between { justify-content: space-between; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 18px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: .92rem;
+  min-height: 44px;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.small { padding: 6px 12px; min-height: 34px; font-size: .82rem; border-radius: 10px; }
+
+/* ---------- current coffee ---------- */
+.coffee-head { display: grid; grid-template-columns: 76px minmax(0,1fr); gap: 14px; align-items: center; }
+.bag {
+  width: 76px; height: 92px; border-radius: 10px 10px 14px 14px; overflow: hidden;
+  background: var(--surface-2); display: grid; place-items: center; position: relative;
+  border: 1px solid var(--line);
+}
+.bag img { width: 100%; height: 100%; object-fit: cover; }
+.bag .initial { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--bg); }
+.bag::before { content: ""; position: absolute; top: 7px; left: 10px; right: 10px; height: 3px; border-radius: 2px; background: rgba(0,0,0,.18); }
+.origin { color: var(--muted); font-size: .88rem; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: .76rem; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--fg); }
+
+.rest { display: grid; gap: 6px; }
+.rest-track { position: relative; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: visible; }
+.rest-window { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: color-mix(in srgb, var(--good) 45%, transparent); }
+.rest-marker { position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px; border-radius: 2px; background: var(--fg); }
+.rest-scale { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); }
+
+.recipe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.recipe > div { background: var(--surface); padding: 12px 12px 10px; display: grid; gap: 2px; }
+.recipe .v { font-family: var(--font-mono); font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.recipe .v small { font-size: .8rem; color: var(--muted); margin-left: 2px; }
+.profile-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.profile-name { font-family: var(--font-display); font-size: 1.15rem; font-weight: 600; }
+.why { margin: 0; padding-left: 18px; color: var(--muted); font-size: .88rem; display: grid; gap: 3px; }
+.source-note { font-size: .75rem; color: var(--muted); }
+
+/* ---------- live shot ---------- */
+.readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.readout { display: grid; gap: 0; }
+.readout .v { font-family: var(--font-mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.readout .k { display: flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 3px; border-radius: 2px; }
+.chart-box { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; }
+.chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .9rem; text-align: center; padding: 20px; }
+
+/* ---------- taste ---------- */
+.taste { display: grid; gap: 14px; }
+.slider { display: grid; gap: 6px; }
+.slider input { width: 100%; accent-color: var(--accent); }
+.slider .ends { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
+.stars { display: flex; gap: 4px; }
+.star { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-size: 1.1rem; color: var(--muted); }
+.star[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.advice { border-left: 3px solid var(--accent); padding: 10px 14px; background: var(--surface-2); border-radius: 0 10px 10px 0; }
+.advice strong { font-family: var(--font-display); font-size: 1.05rem; }
+
+/* ---------- shelf ---------- */
+.shelf { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.bean-card { display: grid; gap: 12px; align-content: start; }
+.bean-card.current { border-color: var(--accent); }
+.pill { font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; }
+.pill.peak { color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); }
+.pill.resting { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+.pill.fading { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+.pill.unknown { color: var(--muted); background: var(--surface-2); }
+.grams { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.grams > div { height: 100%; background: var(--weight); }
+
+/* ---------- add coffee ---------- */
+.seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: var(--surface-2); flex-wrap: wrap; }
+.seg button { border: 0; background: transparent; padding: 8px 14px; border-radius: 9px; cursor: pointer; font-weight: 500; color: var(--muted); min-height: 38px; }
+.seg button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
+.field { display: grid; gap: 6px; }
+.field input[type="text"], .field input[type="url"], .field input[type="date"], .field input[type="number"] {
+  width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); min-height: 46px;
+}
+.drop {
+  display: grid; place-items: center; gap: 8px; text-align: center; padding: 30px 16px;
+  border: 1.5px dashed var(--line); border-radius: var(--r); background: var(--bg); cursor: pointer;
+}
+.drop:hover { border-color: var(--accent); }
+.thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
+.thumbs img { width: 72px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; gap: 10px; align-items: center; color: var(--muted); }
+.steps li.done { color: var(--fg); }
+.steps li.active { color: var(--fg); }
+.steps .tick { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: .7rem; flex: none; }
+.steps li.done .tick { background: var(--good); border-color: var(--good); color: var(--bg); }
+.steps li.active .tick { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.facts { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.facts > div { background: var(--surface); padding: 9px 12px; min-width: 0; overflow-wrap: anywhere; }
+.facts .k { color: var(--muted); font-size: .85rem; }
+.facts .flag { background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.prov { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+.prov.src-bag { color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.prov.src-web { color: var(--flow); background: color-mix(in srgb, var(--flow) 15%, transparent); }
+.prov.src-inferred { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.sources a { color: var(--flow); overflow-wrap: anywhere; }
+
+/* ---------- shots ---------- */
+.shot-list { display: grid; gap: 10px; }
+.shot-row {
+  display: grid; grid-template-columns: 120px minmax(0,1fr) auto; gap: 14px; align-items: center;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; width: 100%;
+}
+.shot-row:hover { border-color: var(--muted); }
+.shot-row canvas { width: 120px; height: 44px; }
+.shot-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; color: var(--muted); }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 50;
+  box-shadow: var(--shadow); max-width: calc(100% - 32px);
+}
+.error { color: var(--bad); }
+
+/* ---------- phone ---------- */
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  .rail {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; z-index: 20;
+    flex-direction: row; justify-content: space-around; gap: 0;
+    padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+    border-right: 0; border-top: 1px solid var(--line);
+  }
+  .brand, .rail .spacer { display: none; }
+  .tab { width: auto; flex: 1; padding: 6px 0; }
+  main { padding-block: 16px calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .grid-brew { grid-template-columns: minmax(0, 1fr); }
+  .recipe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts { grid-template-columns: minmax(0, 1fr) auto; }
+  .facts .k { grid-column: 1 / -1; padding-bottom: 0; }
+  .shot-row { grid-template-columns: 84px minmax(0,1fr); }
+  .shot-row canvas { width: 84px; }
+  .shot-row .go { display: none; }
+  h1 { font-size: 1.45rem; }
+  .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="rail" aria-label="Sections">
+    <div class="brand">crema</div>
+    <a class="tab" href="#brew" data-view="brew">
+      <svg viewBox="0 0 24 24"><path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3c0 1.5 1 1.5 1 3M12 3c0 1.5 1 1.5 1 3"/></svg>
+      Brew
+    </a>
+    <a class="tab" href="#shelf" data-view="shelf">
+      <svg viewBox="0 0 24 24"><path d="M7 4h10l1.5 4v11a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V8z"/><path d="M5.5 8h13"/><path d="M10 13h4"/></svg>
+      Shelf
+    </a>
+    <a class="tab" href="#add" data-view="add">
+      <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 6l1.2-2h4.6l1.2 2"/></svg>
+      Add
+    </a>
+    <a class="tab" href="#shots" data-view="shots">
+      <svg viewBox="0 0 24 24"><path d="M3 18c3 0 3-9 6-9s3 6 6 6 3-8 6-8"/><path d="M3 21h18"/></svg>
+      Shots
+    </a>
+    <div class="spacer"></div>
+  </nav>
+
+  <main>
+    <div class="wrap">
+      <header class="topbar">
+        <div class="status" id="status" aria-live="polite"></div>
+        <div class="demo-banner" id="demoBanner" hidden>Demo with a simulated DE1 and sample coffees</div>
+      </header>
+
+      <!-- BREW -->
+      <section id="view-brew" class="grid-brew" hidden>
+        <div class="stack">
+          <div class="panel stack" id="currentCoffee"></div>
+          <div class="panel stack" id="recipePanel"></div>
+        </div>
+        <div class="stack">
+          <div class="panel stack">
+            <div class="row between">
+              <h2>Live shot</h2>
+              <div class="row">
+                <span class="num muted" id="shotClock">0.0 s</span>
+                <button class="btn small primary" id="pullBtn" hidden>Pull a shot</button>
+              </div>
+            </div>
+            <div class="readouts" id="readouts"></div>
+            <div class="chart-box"><canvas id="liveChart" aria-label="Pressure, flow and weight over time"></canvas><div class="chart-empty" id="chartEmpty">Waiting for a shot. Press the espresso button on the group head.</div></div>
+          </div>
+          <div class="panel taste" id="tastePanel" hidden></div>
+        </div>
+      </section>
+
+      <!-- SHELF -->
+      <section id="view-shelf" class="stack" hidden>
+        <div class="row between">
+          <h1>Coffee shelf</h1>
+          <a class="btn primary" href="#add">Add coffee</a>
+        </div>
+        <div class="shelf" id="shelf"></div>
+      </section>
+
+      <!-- ADD -->
+      <section id="view-add" class="stack" hidden>
+        <h1>Add a coffee</h1>
+        <div class="grid-brew">
+          <div class="panel stack">
+            <div class="seg" role="tablist" aria-label="How to add">
+              <button role="tab" id="mode-photo" aria-selected="true" data-mode="photo">Photo of the bag</button>
+              <button role="tab" id="mode-search" aria-selected="false" data-mode="search">Search</button>
+              <button role="tab" id="mode-link" aria-selected="false" data-mode="link">Paste a link</button>
+            </div>
+            <form id="addForm" class="stack">
+              <div data-pane="photo" class="stack">
+                <label class="drop" for="photoInput">
+                  <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2.5"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8.5 6l1.2-2h4.6l1.2 2"/></svg>
+                  <strong>Take or choose photos</strong>
+                  <span class="muted">Front of the bag, plus the roast-date sticker if it's separate</span>
+                </label>
+                <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
+                <div class="thumbs" id="thumbs"></div>
+              </div>
+              <div data-pane="search" class="field" hidden>
+                <label class="label" for="queryInput">Roaster and coffee</label>
+                <input type="text" id="queryInput" placeholder="e.g. Northbound Kii AA" autocomplete="off">
+              </div>
+              <div data-pane="link" class="field" hidden>
+                <label class="label" for="urlInput">Product page</label>
+                <input type="url" id="urlInput" placeholder="https://roaster.example/coffee/kii-aa">
+              </div>
+              <label class="row" for="offlineInput" style="gap:8px">
+                <input type="checkbox" id="offlineInput"> <span class="muted">Bag only. Don't look it up online.</span>
+              </label>
+              <div class="row">
+                <button class="btn primary" type="submit" id="identifyBtn">Identify coffee</button>
+              </div>
+            </form>
+          </div>
+          <div class="panel stack" id="reviewPanel">
+            <h2>How it works</h2>
+            <ul class="steps">
+              <li class="done"><span class="tick">1</span><span><b>Read the bag.</b> Roaster, name and the roast date. Only the bag has the date for your lot.</span></li>
+              <li class="done"><span class="tick">2</span><span><b>Find the roaster's page.</b> Origin, variety, process, altitude, tasting notes and any recipe they publish.</span></li>
+              <li class="done"><span class="tick">3</span><span><b>Check and save.</b> Every fact is tagged with where it came from, and guesses are flagged.</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SHOTS -->
+      <section id="view-shots" class="stack" hidden>
+        <h1>Recent shots</h1>
+        <div class="grid-brew">
+          <div class="shot-list" id="shotList"></div>
+          <div class="panel stack" id="shotDetail"><p class="muted">Pick a shot to see its curves.</p></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+"use strict";
+/* ====================================================================
+   Crema web app: the DE1 tablet skin, the iPhone companion, and the demo.
+   API mode talks to the Crema server (/api/*) and Decaid's snapshot
+   WebSocket. If the server can't be reached it runs a self-contained demo.
+   ==================================================================== */
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("crema:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("crema:" + k, JSON.stringify(v)); } catch {} },
+};
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const DAY = 864e5;
+const isoDaysAgo = (n) => new Date(Date.now() - n * DAY).toISOString().slice(0, 10);
+const daysSince = (iso) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / DAY) : null);
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2600);
+}
+
+/* ---------------- recipe rules (same logic as server/recommend/rules.ts) ---------------- */
+const BASE = {
+  "light":        { temp: 94, ratio: 2.5, time: [25, 40], profiles: ["adaptive", "blooming", "allongé", "turbo"], rest: [14, 40] },
+  "medium-light": { temp: 93, ratio: 2.2, time: [25, 35], profiles: ["adaptive", "blooming", "default"], rest: [10, 35] },
+  "medium":       { temp: 92, ratio: 2.0, time: [26, 34], profiles: ["adaptive", "default", "best practice"], rest: [7, 28] },
+  "medium-dark":  { temp: 90, ratio: 2.0, time: [26, 34], profiles: ["londinium", "cremina", "gentle", "default"], rest: [5, 24] },
+  "dark":         { temp: 88, ratio: 1.8, time: [24, 32], profiles: ["londinium", "cremina", "gentle"], rest: [4, 21] },
+};
+function restOf(info) {
+  const roast = info.roastLevel?.value || "medium-light";
+  const w = BASE[roast].rest;
+  const d = daysSince(info.roastDate?.value);
+  if (d == null) return { days: null, window: w, status: "unknown", advice: "No roast date yet" };
+  if (d < w[0]) return { days: d, window: w, status: "resting", advice: `Opens up from day ${w[0]}` };
+  if (d <= w[1]) return { days: d, window: w, status: "peak", advice: `Best window, days ${w[0]}–${w[1]}` };
+  return { days: d, window: w, status: "fading", advice: "Past its best: grind finer or freeze" };
+}
+function rulesRecipe(info, titles) {
+  const roast = info.roastLevel?.value || "medium-light";
+  const b = BASE[roast];
+  let temp = b.temp, ratio = b.ratio;
+  const why = [`${roast} roast: start near ${b.temp}°C and 1:${b.ratio}`];
+  if (["natural", "anaerobic", "experimental"].includes(info.processKind)) { temp -= 1; why.push(`${info.processKind} process: 1°C cooler keeps the fruit clean`); }
+  if (info.processKind === "decaf") { temp -= 2; why.push("Decaf extracts fast: cooler"); }
+  const alt = Math.max(0, ...(info.altitudeMasl?.value || []));
+  if (alt >= 1900) { temp += 0.5; why.push(`Grown at ${alt} masl: dense, a touch hotter`); }
+  const r = info.roasterRecipe;
+  if (r?.doseG) why.push("Using the roaster's published dose and yield");
+  const pick = b.profiles.map((k) => titles.find((t) => t.toLowerCase().includes(k))).find(Boolean) || titles[0];
+  const dose = r?.doseG ?? 18;
+  return {
+    profileTitle: pick, doseG: dose, yieldG: r?.yieldG ?? Math.round(dose * ratio), tempC: r?.tempC ?? Math.round(temp * 2) / 2,
+    targetTimeS: b.time,
+    grindHint: roast.startsWith("light") ? "Finer than a medium roast" : roast.includes("dark") ? "Coarser than a medium roast" : "About medium",
+    restAdvice: restOf(info).advice, rationale: why.slice(0, 4),
+    alternatives: b.profiles.slice(1).map((k) => titles.find((t) => t.toLowerCase().includes(k))).filter((t) => t && t !== pick).slice(0, 2).map((t) => ({ profileTitle: t, why: "Also suits this roast" })),
+  };
+}
+function rulesDialIn(fb, timeS, recipe) {
+  const [lo, hi] = recipe.targetTimeS;
+  if (fb.sourBitter <= -1 || (timeS < lo && fb.sourBitter <= 0)) return { change: "Grind finer", reasoning: timeS < lo ? `Ran fast (${timeS}s, target ${lo}–${hi}s) and tasted sour, so it's under-extracted.` : "Sour means under-extracted. Finer grinding pulls out more sweetness." };
+  if (fb.sourBitter >= 1 || (timeS > hi && fb.sourBitter >= 0)) return { change: "Grind coarser", reasoning: timeS > hi ? `Ran slow (${timeS}s) and tasted bitter, so it's over-extracted.` : "Bitter or harsh means over-extracted." };
+  if (fb.body <= -1) return { change: "Shorten the yield by 3 g", reasoning: "Balanced but thin. A tighter ratio adds body." };
+  if (fb.body >= 2) return { change: "Lengthen the yield by 3 g", reasoning: "Balanced but heavy. A longer ratio adds clarity." };
+  return { change: "Keep it. You're dialled in.", reasoning: "Balanced taste and body. Note the grind setting." };
+}
+
+/* ---------------- shot curves ---------------- */
+function synthShot(target, seconds, style = "adaptive", seed = 1) {
+  const pts = [];
+  let w = 0;
+  const rnd = (i) => Math.sin(seed * 999 + i * 12.9898) * 0.5;
+  for (let t = 0; t <= seconds; t += 0.25) {
+    const pi = style === "lever" ? 10 : 7;
+    let p, f;
+    if (t < pi) { p = Math.min(style === "lever" ? 4 : 3.2, t * 0.7); f = Math.max(1.2, 4.2 - t * 0.45); }
+    else if (style === "lever") { p = Math.max(4, 9 - (t - pi) * 0.25); f = 1.5 + (t - pi) * 0.03; }
+    else { p = Math.max(5.5, 8.8 - (t - pi) * 0.12); f = 1.9 + Math.sin(t / 4) * 0.15 + (t - pi) * 0.02; }
+    p += rnd(t * 4) * 0.12; f += rnd(t * 7) * 0.06;
+    if (t > pi - 1.5) w = Math.min(target, w + f * 0.25 * 0.92);
+    pts.push({ t, p: Math.max(0, p), f: Math.max(0, f), w, temp: 92.4 + rnd(t) * 0.4 });
+  }
+  return pts;
+}
+
+/* ---------------- chart ---------------- */
+function drawChart(canvas, pts, { maxT = 40, maxW = 50, compact = false, ghost = null } = {}) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = rect.width, H = rect.height;
+  const pad = compact ? { l: 2, r: 2, t: 4, b: 4 } : { l: 30, r: 34, t: 10, b: 22 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const x = (t) => pad.l + (t / maxT) * iw;
+  const yB = (v) => pad.t + ih - (v / 12) * ih;     // bar & ml/s share 0–12
+  const yW = (v) => pad.t + ih - (v / maxW) * ih;   // grams
+  ctx.clearRect(0, 0, W, H);
+  const muted = css("--muted"), line = css("--line");
+  if (!compact) {
+    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.fillStyle = muted;
+    ctx.font = `11px ${css("--font-mono")}`;
+    for (let v = 0; v <= 12; v += 3) {
+      ctx.globalAlpha = .6; ctx.beginPath(); ctx.moveTo(pad.l, yB(v)); ctx.lineTo(W - pad.r, yB(v)); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.textAlign = "right"; ctx.fillText(String(v), pad.l - 6, yB(v) + 4);
+      ctx.textAlign = "left"; ctx.fillText(String(Math.round((v / 12) * maxW)), W - pad.r + 6, yB(v) + 4);
+    }
+    ctx.textAlign = "center";
+    for (let t = 0; t <= maxT; t += 10) ctx.fillText(`${t}s`, x(t), H - 5);
+  }
+  const series = (key, color, y, width, alpha = 1, data = pts) => {
+    if (!data?.length) return;
+    ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
+    ctx.beginPath();
+    data.forEach((d, i) => (i ? ctx.lineTo(x(d.t), y(d[key])) : ctx.moveTo(x(d.t), y(d[key]))));
+    ctx.stroke(); ctx.globalAlpha = 1;
+  };
+  if (ghost) { series("p", css("--pressure"), yB, 1.5, .22, ghost); series("w", css("--weight"), yW, 1.5, .22, ghost); }
+  // weight gets a soft area fill
+  if (pts.length && !compact) {
+    ctx.globalAlpha = .12; ctx.fillStyle = css("--weight"); ctx.beginPath();
+    ctx.moveTo(x(pts[0].t), yW(0)); pts.forEach((d) => ctx.lineTo(x(d.t), yW(d.w))); ctx.lineTo(x(pts.at(-1).t), yW(0)); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  series("w", css("--weight"), yW, compact ? 1.5 : 2);
+  series("f", css("--flow"), yB, compact ? 1.5 : 2);
+  series("p", css("--pressure"), yB, compact ? 1.5 : 2.4);
+  if (pts.length && !compact) {
+    const e = pts.at(-1);
+    for (const [k, c, y] of [["p", "--pressure", yB], ["f", "--flow", yB], ["w", "--weight", yW]]) {
+      ctx.fillStyle = css(c); ctx.beginPath(); ctx.arc(x(e.t), y(e[k]), 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+/* ---------------- demo backend ---------------- */
+const DEMO_PROFILES = ["Adaptive v2", "Blooming espresso", "Londinium", "Default", "Best practice", "Extractamundo Dos!", "Gentle and sweet", "Cremina lever machine", "Turbo shot", "Allongé"];
+const src = (value, source = "web") => ({ value, source });
+function demoBean(o) {
+  return {
+    roaster: src(o.roaster, "bag"), name: src(o.name, "bag"), country: src(o.country), region: src(o.region ?? null), producer: src(o.producer ?? null),
+    variety: src(o.variety ?? null), process: src(o.process), processKind: o.processKind, altitudeMasl: src(o.alt ?? null),
+    roastLevel: src(o.roast, o.roastSource ?? "web"), roastedFor: o.roastedFor ?? null, roastDate: src(o.roastDate, "bag"), bestBefore: null,
+    weightGrams: o.weight ?? 250, tastingNotes: src(o.notes), isBlend: !!o.blend, blendComponents: o.blend ?? null,
+    roasterRecipe: o.recipe ?? null, productUrl: o.url ?? null, imageUrl: null, sources: o.url ? [o.url] : [],
+    confidence: o.confidence ?? 0.86, needsConfirmation: o.flags ?? [], summary: o.summary,
+  };
+}
+const DEMO_SHELF = [
+  { id: "b1", batch: "t1", color: "#c0603a", remaining: 162, info: demoBean({
+      roaster: "Northbound Coffee", name: "Kii AA", country: "Kenya", region: "Kirinyaga", producer: "Kii Factory", variety: ["SL28", "SL34"],
+      process: "Washed", processKind: "washed", alt: [1700, 1800], roast: "light", roastedFor: "omni", roastDate: isoDaysAgo(17),
+      notes: ["blackcurrant", "pink grapefruit", "demerara"], url: "https://northbound.example/kii-aa",
+      summary: "Bright and juicy, with blackcurrant up front and a long, sugary finish." }) },
+  { id: "b2", batch: "t2", color: "#5d7f6a", remaining: 220, info: demoBean({
+      roaster: "Alma Roasting Co", name: "La Esperanza Gesha", country: "Colombia", region: "Huila", producer: "Finca La Esperanza", variety: ["Gesha"],
+      process: "Anaerobic natural, 96h", processKind: "anaerobic", alt: [1900, 2050], roast: "light", roastDate: isoDaysAgo(8),
+      notes: ["jasmine", "mango", "bergamot"], url: "https://alma.example/esperanza-gesha", flags: ["roastLevel"], roastSource: "inferred",
+      summary: "Florals and tropical fruit. Fragile, so it needs a gentle hand." }) },
+  { id: "b3", batch: "t3", color: "#7a5236", remaining: 640, info: demoBean({
+      roaster: "Harbour St Roasters", name: "Wharf Espresso", country: "Brazil · Colombia", process: "Natural and washed", processKind: "natural",
+      roast: "medium-dark", roastedFor: "espresso", roastDate: isoDaysAgo(29), weight: 1000, blend: ["Brazil Cerrado natural", "Colombia Huila washed"],
+      notes: ["dark chocolate", "hazelnut", "molasses"], recipe: { doseG: 18, yieldG: 38, timeS: 30, tempC: 91, text: "18 g in, 38 g out, about 30 s" },
+      url: "https://harbourst.example/wharf", summary: "Chocolatey and low in acidity. Made for milk drinks." }) },
+];
+
+function makeDemoApi() {
+  const shelf = DEMO_SHELF.map((b) => ({ ...b, recipe: rulesRecipe(b.info, DEMO_PROFILES) }));
+  const listeners = new Set();
+  let machine = { state: "idle", substate: "ready" };
+  const shots = [];
+  const mkShot = (bean, hoursAgo, seconds, enjoyment, seed) => {
+    const r = bean.recipe;
+    const style = /londinium|cremina/i.test(r.profileTitle) ? "lever" : "adaptive";
+    shots.push({ id: "s" + shots.length, timestamp: new Date(Date.now() - hoursAgo * 36e5).toISOString(), beanId: bean.id, coffee: bean.info.name.value, roaster: bean.info.roaster.value,
+      profileTitle: r.profileTitle, doseG: r.doseG, yieldG: r.yieldG, timeS: seconds, enjoyment, points: synthShot(r.yieldG, seconds, style, seed) });
+  };
+  mkShot(shelf[0], 2, 31, 4, 1); mkShot(shelf[0], 26, 26, 3, 2); mkShot(shelf[2], 30, 29, 4, 3); mkShot(shelf[2], 50, 33, 5, 4); mkShot(shelf[1], 74, 27, 3, 5);
+  let current = shelf[0].id;
+
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  return {
+    demo: true,
+    async health() { return { providers: [{ id: "demo", billing: "sample data" }], machine: { ...machine, simulated: true } }; },
+    async shelf() { return shelf; },
+    async current() { return shelf.find((b) => b.id === current) ?? shelf[0]; },
+    async setCurrent(id) { current = id; const b = shelf.find((x) => x.id === id); await wait(250); return b; },
+    async identify({ files, query, url }, onStep) {
+      const steps = files?.length ? ["Reading the bag", "Finding the roaster's page", "Building the record"] : ["Searching for the coffee", "Reading the roaster's page", "Building the record"];
+      for (let i = 0; i < steps.length; i++) { onStep(i, steps); await wait(900); }
+      const name = query || (url ? decodeURIComponent(url.split("/").filter(Boolean).pop() || "").replace(/[-_]/g, " ") : "") || "Halo Beriti";
+      return demoBean({ roaster: query ? "Your roaster" : "Daybreak Coffee", name: query ? name.replace(/^\S+\s/, "") || name : name.replace(/\b\w/g, (c) => c.toUpperCase()),
+        country: "Ethiopia", region: "Yirgacheffe", producer: "Halo Beriti washing station", variety: ["Kurume", "Wolisho"], process: "Washed", processKind: "washed",
+        alt: [2000, 2200], roast: "light", roastedFor: "filter", roastDate: files?.length ? isoDaysAgo(6) : null, notes: ["bergamot", "white peach", "honey"],
+        url: "https://daybreak.example/halo-beriti", flags: files?.length ? ["roastDate"] : ["roastDate", "roastLevel"], confidence: 0.78,
+        summary: "Delicate and tea-like. Lemon and peach, with a honey finish." });
+    },
+    async saveBean(info, photo) {
+      const b = { id: "b" + (shelf.length + 1), batch: "t" + (shelf.length + 1), color: "#8a6a9a", remaining: info.weightGrams ?? 250, photo, info };
+      b.recipe = rulesRecipe(info, DEMO_PROFILES); shelf.unshift(b); current = b.id; return b;
+    },
+    async recommend(id) { const b = shelf.find((x) => x.id === id); await wait(350); return { recipe: b.recipe, source: "rules (demo)" }; },
+    async apply() { await wait(300); return { ok: true }; },
+    async shots() { return [...shots].sort((a, b) => b.timestamp.localeCompare(a.timestamp)); },
+    async feedback(shotId, beanId, fb) {
+      const s = shots.find((x) => x.id === shotId); const b = shelf.find((x) => x.id === beanId);
+      if (s) s.enjoyment = fb.enjoyment;
+      await wait(500); return { advice: rulesDialIn(fb, s?.timeS ?? 30, b.recipe) };
+    },
+    canPull: true,
+    async pull() {
+      if (machine.state === "espresso") return;
+      const b = shelf.find((x) => x.id === current);
+      const r = b.recipe; const style = /londinium|cremina/i.test(r.profileTitle) ? "lever" : "adaptive";
+      const seconds = r.targetTimeS[0] + Math.round(Math.random() * (r.targetTimeS[1] - r.targetTimeS[0] + 4)) - 2;
+      const pts = synthShot(r.yieldG, seconds, style, Math.random() * 10);
+      machine = { state: "espresso", substate: "pouring" };
+      let i = 0;
+      const iv = setInterval(() => {
+        const d = pts[i];
+        listeners.forEach((fn) => fn({ state: machine, pressure: d.p, flow: d.f, weight: d.w, mixTemperature: d.temp, elapsed: d.t }));
+        i += 1;
+        if (i >= pts.length) {
+          clearInterval(iv);
+          machine = { state: "idle", substate: "ready" };
+          shots.push({ id: "s" + shots.length, timestamp: new Date().toISOString(), beanId: b.id, coffee: b.info.name.value, roaster: b.info.roaster.value, profileTitle: r.profileTitle, doseG: r.doseG, yieldG: Math.round(d.w * 10) / 10, timeS: seconds, enjoyment: null, points: pts });
+          listeners.forEach((fn) => fn({ state: machine, pressure: 0, flow: 0, weight: d.w, mixTemperature: 92.6, elapsed: d.t, finished: shots.at(-1).id }));
+        }
+      }, 60); // 4× speed so the demo doesn't take 30 seconds
+    },
+    subscribe(fn) { listeners.add(fn); fn({ state: machine, pressure: 0, flow: 0, weight: 0, mixTemperature: 92.6, elapsed: 0 }); },
+  };
+}
+
+/* ---------------- live backend (Crema server + Decaid) ---------------- */
+function makeLiveApi(cfg) {
+  const j = async (path, opts = {}) => {
+    const res = await fetch(path, { ...opts, headers: opts.body && !(opts.body instanceof FormData) ? { "content-type": "application/json" } : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+    return data;
+  };
+  const adapt = (row) => ({ id: row.bean.id, batch: row.record?.decaidBatchId, info: row.record?.info, recipe: row.record?.recipe, photo: row.record?.photo,
+    remaining: row.batches?.[0]?.weightRemaining ?? row.record?.info?.weightGrams ?? null, raw: row });
+  let currentId = store.get("current", null);
+  return {
+    demo: false,
+    health: () => j("/api/health"),
+    async shelf() { return (await j("/api/shelf")).filter((r) => r.record).map(adapt); },
+    async current() { const s = await this.shelf(); return s.find((b) => b.id === currentId) ?? s[0] ?? null; },
+    async setCurrent(id) { currentId = id; store.set("current", id); const s = await this.shelf(); return s.find((b) => b.id === id); },
+    async identify({ files, query, url, offline }, onStep) {
+      onStep(0, [files?.length ? "Reading the bag and finding the roaster's page" : "Looking up the coffee", "Building the record"]);
+      const fd = new FormData();
+      (files || []).forEach((f) => fd.append("images", f));
+      if (query) fd.set("query", query); if (url) fd.set("url", url); if (offline) fd.set("offline", "true");
+      const { info } = await j("/api/identify", { method: "POST", body: fd });
+      return info;
+    },
+    async saveBean(info, photo) { const rec = await j("/api/beans", { method: "POST", body: JSON.stringify({ info, photo }) }); currentId = rec.decaidBeanId; store.set("current", currentId); return { id: rec.decaidBeanId, info: rec.info, recipe: null }; },
+    recommend: (beanId) => j("/api/recommend", { method: "POST", body: JSON.stringify({ beanId }) }),
+    apply: (beanId, recipe) => j("/api/apply", { method: "POST", body: JSON.stringify({ beanId, recipe }) }),
+    async shots() {
+      const { items } = await j("/api/shots?limit=12");
+      return Promise.all(items.map(async (s) => {
+        const full = await j(`/api/shots/${encodeURIComponent(s.id)}`).catch(() => s);
+        const m = full.measurements || [];
+        const t0 = m.length ? Date.parse(m[0].machine.timestamp) : 0;
+        const points = m.map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? 0, f: x.machine.flow ?? 0, w: x.scale?.weight ?? 0 }));
+        const ctx = s.workflow?.context || {};
+        return { id: s.id, timestamp: s.timestamp, beanId: null, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
+          doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? ctx.targetYield, timeS: points.length ? Math.round(points.at(-1).t) : null,
+          enjoyment: s.annotations?.enjoyment ?? null, points };
+      }));
+    },
+    feedback: (shotId, beanId, feedback) => j(`/api/shots/${encodeURIComponent(shotId)}/feedback`, { method: "POST", body: JSON.stringify({ beanId, feedback }) }),
+    canPull: false,
+    subscribe(fn) {
+      let prev = "idle";
+      const connect = () => {
+        const ws = new WebSocket(cfg.decaidWs);
+        ws.onmessage = (e) => {
+          const s = JSON.parse(e.data);
+          const state = s.state?.state;
+          if (prev === "espresso" && state !== "espresso") s.finished = "latest";
+          prev = state; fn(s);
+        };
+        ws.onclose = () => setTimeout(connect, 1500);
+      };
+      connect();
+    },
+  };
+}
+
+/* ---------------- app ---------------- */
+let api, current = null, live = [], lastFinished = null, lastHealth = null;
+
+function bagArt(b) {
+  if (b.photo) return `<div class="bag"><img src="${esc(b.photo)}" alt=""></div>`;
+  const initial = (b.info?.name?.value || "?").trim()[0];
+  return `<div class="bag" style="background:${esc(b.color || "var(--weight)")}"><span class="initial">${esc(initial)}</span></div>`;
+}
+function restBar(rest) {
+  if (!rest || rest.days == null) return `<div class="rest"><div class="row between"><span class="label">Rest</span><span class="pill unknown">No roast date</span></div></div>`;
+  const span = rest.window[1] + 10;
+  const pct = (d) => Math.max(0, Math.min(100, (d / span) * 100));
+  return `<div class="rest">
+    <div class="row between"><span class="label">Day <span class="num">${rest.days}</span> off roast</span><span class="pill ${rest.status}">${rest.status === "peak" ? "In its window" : rest.status === "resting" ? "Resting" : "Fading"}</span></div>
+    <div class="rest-track" role="img" aria-label="Day ${rest.days}; best between day ${rest.window[0]} and ${rest.window[1]}">
+      <div class="rest-window" style="left:${pct(rest.window[0])}%;width:${pct(rest.window[1]) - pct(rest.window[0])}%"></div>
+      <div class="rest-marker" style="left:${pct(rest.days)}%"></div>
+    </div>
+    <div class="rest-scale num"><span>roast</span><span>day ${rest.window[0]}</span><span>day ${rest.window[1]}</span><span>${span}</span></div>
+  </div>`;
+}
+
+function renderStatus(snap) {
+  const st = snap?.state?.state || lastHealth?.machine?.state || "unknown";
+  const ok = !lastHealth?.machine?.error;
+  const label = { idle: "Ready", sleep: "Asleep", espresso: "Pulling a shot", steam: "Steaming", hotWater: "Hot water", flush: "Flushing" }[st] || st;
+  $("#status").innerHTML = `
+    <span class="chip"><span class="dot ${!ok ? "bad" : st === "espresso" ? "live" : st === "sleep" ? "warn" : "ok"}"></span>${esc(ok ? label : "Machine offline")}${api.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
+    <span class="chip"><span class="muted">Group</span> <span class="num">${(snap?.groupTemperature ?? snap?.mixTemperature ?? 92.6).toFixed(1)}°C</span></span>
+    <span class="chip"><span class="muted">AI</span> ${esc(lastHealth?.providers?.map((p) => p.id).join(" → ") || "rules only")}</span>`;
+}
+
+function renderCurrent() {
+  const el = $("#currentCoffee");
+  if (!current?.info) { el.innerHTML = `<h2>No coffee selected</h2><p class="muted">Add a bag to get a recipe.</p><div><a class="btn primary" href="#add">Add coffee</a></div>`; $("#recipePanel").innerHTML = ""; return; }
+  const i = current.info;
+  const origin = [i.country?.value, i.region?.value, i.process?.value].filter(Boolean).join(" · ");
+  el.innerHTML = `
+    <div class="coffee-head">${bagArt(current)}
+      <div style="min-width:0"><div class="label">${esc(i.roaster.value)}</div><h1>${esc(i.name.value)}</h1><div class="origin">${esc(origin)}</div></div>
+    </div>
+    ${i.tastingNotes?.value?.length ? `<div class="tags">${i.tastingNotes.value.map((n) => `<span class="tag">${esc(n)}</span>`).join("")}</div>` : ""}
+    ${restBar(restOf(i))}
+    <div class="row"><a class="btn small ghost" href="#shelf">Change coffee</a></div>`;
+  renderRecipe();
+}
+
+function renderRecipe(source) {
+  const r = current?.recipe;
+  const el = $("#recipePanel");
+  if (!r) { el.innerHTML = `<h2>Recipe</h2><p class="muted">Getting a recipe…</p>`; return; }
+  el.innerHTML = `
+    <div class="row between"><span class="label">Recipe</span>${source ? `<span class="source-note">from ${esc(source)}</span>` : ""}</div>
+    <div class="profile-line"><span class="profile-name">${esc(r.profileTitle)}</span><span class="muted">profile</span></div>
+    <div class="recipe">
+      <div><span class="label">Dose</span><span class="v">${r.doseG}<small>g</small></span></div>
+      <div><span class="label">Yield</span><span class="v">${r.yieldG}<small>g</small></span></div>
+      <div><span class="label">Temp</span><span class="v">${r.tempC}<small>°C</small></span></div>
+      <div><span class="label">Time</span><span class="v">${r.targetTimeS[0]}–${r.targetTimeS[1]}<small>s</small></span></div>
+    </div>
+    <div class="muted" style="font-size:.88rem">Ratio <span class="num">1:${(r.yieldG / r.doseG).toFixed(1)}</span> · Grind: ${esc(r.grindHint)}</div>
+    <ul class="why">${r.rationale.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    ${r.alternatives?.length ? `<div class="muted" style="font-size:.85rem">Also try: ${r.alternatives.map((a) => esc(a.profileTitle)).join(", ")}</div>` : ""}
+    <div class="row"><button class="btn primary" id="applyBtn">Load onto machine</button><button class="btn ghost" id="refreshRecipe">Ask again</button></div>`;
+  $("#applyBtn").onclick = async (e) => {
+    e.target.disabled = true;
+    try { await api.apply(current.id, current.recipe); toast(`Loaded ${r.profileTitle}, ${r.doseG} g → ${r.yieldG} g`); }
+    catch (err) { toast(`Couldn't load the recipe: ${err.message}`); }
+    e.target.disabled = false;
+  };
+  $("#refreshRecipe").onclick = () => fetchRecipe(true);
+}
+
+async function fetchRecipe(force) {
+  if (!current) return;
+  if (current.recipe && !force) return renderRecipe();
+  $("#recipePanel").innerHTML = `<h2>Recipe</h2><p class="muted">Working out a starting recipe…</p>`;
+  try { const out = await api.recommend(current.id); current.recipe = out.recipe; renderRecipe(out.source); }
+  catch (err) { $("#recipePanel").innerHTML = `<h2>Recipe</h2><p class="error">Couldn't get a recipe: ${esc(err.message)}</p>`; }
+}
+
+function renderReadouts(s) {
+  const items = [["Pressure", s?.pressure, "bar", "--pressure"], ["Flow", s?.flow, "ml/s", "--flow"], ["Weight", s?.weight, "g", "--weight"], ["Temp", s?.mixTemperature, "°C", "--temp"]];
+  $("#readouts").innerHTML = items.map(([k, v, u, c]) => `<div class="readout"><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : v.toFixed(1)}<small class="muted" style="font-size:.75rem"> ${u}</small></span></div>`).join("");
+}
+
+function onSnapshot(s) {
+  renderStatus(s);
+  renderReadouts(s);
+  if (s.state?.state === "espresso") {
+    if (!live.length) { $("#tastePanel").hidden = true; }
+    live.push({ t: s.elapsed ?? live.length * 0.25, p: s.pressure ?? 0, f: s.flow ?? 0, w: s.weight ?? 0 });
+    $("#chartEmpty").hidden = true;
+    $("#shotClock").textContent = `${(live.at(-1).t).toFixed(1)} s`;
+    drawChart($("#liveChart"), live, { maxT: Math.max(40, Math.ceil(live.at(-1).t / 10) * 10), maxW: Math.max(50, (current?.recipe?.yieldG ?? 36) + 10) });
+  }
+  if (s.finished) {
+    lastFinished = s.finished;
+    showTaste(live.length ? Math.round(live.at(-1).t) : null, s.weight);
+    live = [];
+  }
+}
+
+function showTaste(timeS, weight) {
+  const p = $("#tastePanel");
+  p.hidden = false;
+  let stars = 0;
+  p.innerHTML = `
+    <div class="row between"><h2>How was it?</h2><span class="muted num">${timeS ?? "–"} s · ${weight != null ? weight.toFixed(1) : "–"} g</span></div>
+    <div class="slider"><label class="label" for="sb">Taste</label><input type="range" id="sb" min="-2" max="2" step="1" value="0"><div class="ends"><span>Sour</span><span>Balanced</span><span>Bitter</span></div></div>
+    <div class="slider"><label class="label" for="bd">Body</label><input type="range" id="bd" min="-2" max="2" step="1" value="0"><div class="ends"><span>Thin</span><span>Just right</span><span>Heavy</span></div></div>
+    <div class="row"><span class="label">Enjoyment</span><div class="stars" id="stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="false" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
+    <div class="row"><button class="btn primary" id="sendTaste">Get the next adjustment</button></div>
+    <div id="adviceBox"></div>`;
+  p.querySelectorAll(".star").forEach((b) => (b.onclick = () => { stars = +b.dataset.n; p.querySelectorAll(".star").forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.n <= stars))); }));
+  $("#sendTaste").onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const shots = await api.shots();
+      const shotId = lastFinished === "latest" ? shots[0]?.id : lastFinished;
+      const { advice } = await api.feedback(shotId, current.id, { sourBitter: +$("#sb").value, body: +$("#bd").value, enjoyment: stars || 3, notes: null });
+      $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div></div>`;
+    } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+    e.target.disabled = false;
+  };
+}
+
+async function renderShelf() {
+  const el = $("#shelf");
+  el.innerHTML = `<p class="muted">Loading…</p>`;
+  const beans = await api.shelf();
+  if (!beans.length) { el.innerHTML = `<div class="panel stack"><h2>Your shelf is empty</h2><p class="muted">Photograph a bag, search for a coffee or paste a link to add one.</p><div><a class="btn primary" href="#add">Add coffee</a></div></div>`; return; }
+  el.innerHTML = beans.map((b) => {
+    const i = b.info, rest = restOf(i);
+    const left = b.remaining != null && i.weightGrams ? Math.max(0, Math.min(100, (b.remaining / i.weightGrams) * 100)) : null;
+    return `<article class="panel bean-card ${current?.id === b.id ? "current" : ""}">
+      <div class="coffee-head">${bagArt(b)}<div style="min-width:0"><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2><div class="origin">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div></div></div>
+      ${restBar(rest)}
+      ${left != null ? `<div class="stack" style="gap:6px"><div class="row between"><span class="label">Left</span><span class="num muted">${b.remaining} / ${i.weightGrams} g · about ${Math.floor(b.remaining / (b.recipe?.doseG ?? 18))} shots</span></div><div class="grams"><div style="width:${left}%"></div></div></div>` : ""}
+      <div class="row between"><span class="muted" style="font-size:.85rem">${esc(b.recipe ? `${b.recipe.profileTitle} · ${b.recipe.doseG}→${b.recipe.yieldG} g` : "No recipe yet")}</span>
+      <button class="btn small ${current?.id === b.id ? "" : "primary"}" data-brew="${esc(b.id)}">${current?.id === b.id ? "Brewing" : "Brew this"}</button></div>
+    </article>`;
+  }).join("");
+  el.querySelectorAll("[data-brew]").forEach((btn) => (btn.onclick = async () => {
+    current = await api.setCurrent(btn.dataset.brew);
+    location.hash = "#brew";
+    toast(`Now brewing ${current.info.name.value}`);
+  }));
+}
+
+/* ---- add coffee ---- */
+let addMode = "photo", files = [], pending = null;
+function setMode(m) {
+  addMode = m;
+  document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
+  document.querySelectorAll("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
+}
+async function thumbnail(file, max = 360) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const s = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.8);
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
+}
+function factRows(info) {
+  const rows = [
+    ["Roaster", "roaster"], ["Coffee", "name"], ["Country", "country"], ["Region", "region"], ["Producer", "producer"], ["Variety", "variety"],
+    ["Process", "process"], ["Altitude", "altitudeMasl", (v) => `${v.join("–")} masl`], ["Roast", "roastLevel"], ["Roast date", "roastDate"], ["Tasting notes", "tastingNotes"],
+  ];
+  return rows.map(([label, key, fmt]) => {
+    const f = info[key] || {};
+    const v = f.value == null ? null : fmt ? fmt(f.value) : Array.isArray(f.value) ? f.value.join(", ") : f.value;
+    const flag = info.needsConfirmation?.includes(key);
+    if (key === "roastDate") {
+      return `<div class="k ${flag ? "flag" : ""}">${label}</div><div class="${flag ? "flag" : ""}"><input type="date" id="roastDateInput" value="${esc(f.value || "")}" style="background:transparent;border:0;padding:0"> ${flag ? '<span class="muted" style="font-size:.8rem">Check this against the bag</span>' : ""}</div><div class="${flag ? "flag" : ""}">${f.source ? `<span class="prov src-${f.source}">${f.source}</span>` : ""}</div>`;
+    }
+    return `<div class="k ${flag ? "flag" : ""}">${label}</div><div class="${flag ? "flag" : ""}">${v == null ? '<span class="muted">Unknown</span>' : esc(v)}</div><div class="${flag ? "flag" : ""}">${f.source ? `<span class="prov src-${f.source}">${f.source}</span>` : ""}</div>`;
+  }).join("");
+}
+function renderReview(info, photo) {
+  pending = { info, photo };
+  $("#reviewPanel").innerHTML = `
+    <div class="coffee-head">${bagArt({ photo, info, color: "#8a6a9a" })}<div style="min-width:0"><div class="label">${esc(info.roaster.value)}</div><h2>${esc(info.name.value)}</h2><div class="origin">${esc(info.summary)}</div></div></div>
+    <div class="row"><span class="label">Match confidence</span><span class="num">${Math.round(info.confidence * 100)}%</span>
+      <span class="prov src-bag">bag</span><span class="prov src-web">web</span><span class="prov src-inferred">inferred</span></div>
+    <div class="facts">${factRows(info)}</div>
+    ${info.roasterRecipe?.text ? `<div class="advice"><div class="label">Roaster's recipe</div>${esc(info.roasterRecipe.text)}</div>` : ""}
+    ${info.sources?.length ? `<div class="sources muted" style="font-size:.82rem">Sources: ${info.sources.map((s) => `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s.replace(/^https?:\/\//, ""))}</a>`).join(", ")}</div>` : ""}
+    <div class="row"><button class="btn primary" id="saveBean">Save to shelf and brew</button><button class="btn ghost" id="discardBean">Discard</button></div>`;
+  $("#saveBean").onclick = async (e) => {
+    e.target.disabled = true;
+    const d = $("#roastDateInput").value;
+    if (d) { pending.info.roastDate = { value: d, source: "bag" }; pending.info.needsConfirmation = pending.info.needsConfirmation.filter((k) => k !== "roastDate"); }
+    try {
+      const saved = await api.saveBean(pending.info, pending.photo);
+      current = await api.setCurrent(saved.id);
+      files = []; $("#thumbs").innerHTML = ""; resetReview();
+      location.hash = "#brew"; toast(`Added ${saved.info.name.value}`);
+    } catch (err) { toast(`Couldn't save: ${err.message}`); e.target.disabled = false; }
+  };
+  $("#discardBean").onclick = resetReview;
+}
+let REVIEW_INTRO = "";
+function resetReview() { pending = null; $("#reviewPanel").innerHTML = REVIEW_INTRO; }
+
+async function onIdentify(e) {
+  e.preventDefault();
+  const query = $("#queryInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
+  const input = addMode === "photo" ? { files } : addMode === "search" ? { query } : { url };
+  if (addMode === "photo" && !files.length) return toast("Add a photo of the bag first");
+  if (addMode === "search" && !query) return toast("Type a roaster and coffee name");
+  if (addMode === "link" && !url) return toast("Paste a product link");
+  const btn = $("#identifyBtn"); btn.disabled = true;
+  const panel = $("#reviewPanel");
+  const draw = (i, steps) => { panel.innerHTML = `<h2>Identifying…</h2><ul class="steps">${steps.map((s, n) => `<li class="${n < i ? "done" : n === i ? "active" : ""}"><span class="tick">${n < i ? "✓" : ""}</span>${esc(s)}</li>`).join("")}</ul>`; };
+  try {
+    const info = await api.identify({ ...input, offline }, draw);
+    const photo = files[0] ? await thumbnail(files[0]) : null;
+    renderReview(info, photo);
+  } catch (err) {
+    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try another photo with the label in focus, or search by name.</p>`;
+  }
+  btn.disabled = false;
+}
+
+/* ---- shots ---- */
+async function renderShots() {
+  const list = $("#shotList");
+  list.innerHTML = `<p class="muted">Loading…</p>`;
+  const shots = await api.shots();
+  if (!shots.length) { list.innerHTML = `<p class="muted">No shots yet.</p>`; return; }
+  list.innerHTML = shots.map((s, i) => `<button class="shot-row" data-i="${i}">
+      <canvas data-spark="${i}" aria-hidden="true"></canvas>
+      <div style="min-width:0"><strong>${esc(s.coffee || "Unknown coffee")}</strong>
+        <div class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${s.doseG ?? "–"}→${s.yieldG ?? "–"} g</span><span class="num">${s.timeS ?? "–"} s</span><span>${s.enjoyment ? "★".repeat(s.enjoyment) : "Not rated"}</span></div>
+      </div><span class="go muted">›</span></button>`).join("");
+  requestAnimationFrame(() => shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 45 })));
+  const show = (i) => {
+    const s = shots[i];
+    $("#shotDetail").innerHTML = `<div class="row between"><h2>${esc(s.coffee || "Shot")}</h2><span class="muted">${esc(s.profileTitle || "")}</span></div>
+      <div class="readouts">
+        <div class="readout"><span class="label">Dose</span><span class="v">${s.doseG ?? "–"}</span></div>
+        <div class="readout"><span class="label">Yield</span><span class="v">${s.yieldG ?? "–"}</span></div>
+        <div class="readout"><span class="label">Time</span><span class="v">${s.timeS ?? "–"}</span></div>
+        <div class="readout"><span class="label">Ratio</span><span class="v">${s.doseG && s.yieldG ? (s.yieldG / s.doseG).toFixed(1) : "–"}</span></div>
+      </div>
+      <div class="chart-box"><canvas id="detailChart"></canvas></div>
+      <div class="row muted" style="font-size:.8rem;gap:14px"><span><span class="swatch" style="display:inline-block;background:var(--pressure)"></span> Pressure (bar)</span><span><span class="swatch" style="display:inline-block;background:var(--flow)"></span> Flow (ml/s)</span><span><span class="swatch" style="display:inline-block;background:var(--weight)"></span> Weight (g, right)</span></div>`;
+    requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil((s.timeS ?? 30) / 10) * 10), maxW: Math.max(50, (s.yieldG ?? 36) + 10) }));
+  };
+  list.querySelectorAll(".shot-row").forEach((b) => (b.onclick = () => show(+b.dataset.i)));
+  show(0);
+}
+
+/* ---- routing ---- */
+const VIEWS = ["brew", "shelf", "add", "shots"];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "brew";
+  VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
+  document.querySelectorAll(".tab").forEach((t) => (t.dataset.view === v ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
+  if (v === "brew") { renderCurrent(); fetchRecipe(); }
+  if (v === "shelf") renderShelf();
+  if (v === "shots") renderShots();
+  window.scrollTo(0, 0);
+}
+
+async function boot() {
+  REVIEW_INTRO = $("#reviewPanel").innerHTML;
+  const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
+  if (!forceDemo) {
+    try {
+      const cfg = await fetch("/api/config").then((r) => { if (!r.ok) throw new Error(); return r.json(); });
+      api = makeLiveApi(cfg);
+      lastHealth = await api.health();
+    } catch { api = null; }
+  }
+  if (!api) { api = makeDemoApi(); lastHealth = await api.health(); }
+  $("#demoBanner").hidden = !api.demo;
+  $("#pullBtn").hidden = !api.canPull;
+  if (api.canPull) $("#chartEmpty").textContent = "Tap Pull a shot to run the simulated DE1.";
+  $("#pullBtn").onclick = () => api.pull();
+
+  document.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  $("#photoInput").onchange = async (e) => {
+    files = [...files, ...e.target.files].slice(0, 4);
+    const thumbs = await Promise.all(files.map((f) => thumbnail(f, 200)));
+    $("#thumbs").innerHTML = thumbs.filter(Boolean).map((t) => `<img src="${t}" alt="Bag photo">`).join("");
+    e.target.value = "";
+  };
+  $("#addForm").addEventListener("submit", onIdentify);
+
+  current = await api.current();
+  renderReadouts(null); renderStatus(null);
+  api.subscribe(onSnapshot);
+  window.addEventListener("hashchange", route);
+  window.addEventListener("resize", () => { if (!$("#view-shots").hidden) renderShots(); });
+  route();
+}
+boot();
+</script>
+</body>
+</html>
