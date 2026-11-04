@@ -26,6 +26,8 @@ Rules:
 - Dates are ISO YYYY-MM-DD. When a printed date is ambiguous (03/04), assume the roaster's country's date format and flag it.
 - processKind is a normalized bucket; process keeps the roaster's own wording (e.g. "Anaerobic natural, 72h").
 - confidence reflects how sure you are that you found the right coffee, not how complete the record is.
+- productUrl: the roaster's own product page for this coffee, if you found it.
+- imageUrl: the direct URL of the roaster's main product photo (the packshot), only if you actually saw it on the page; otherwise null.
 - summary: one or two plain sentences on how the coffee will taste as espresso.`;
 
 export async function identify(llm: ProviderChain, input: IdentifyInput): Promise<BeanInfo> {

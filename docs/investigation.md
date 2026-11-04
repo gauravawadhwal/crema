@@ -33,10 +33,13 @@ You asked whether we need bag photos at all, or should just look the coffee up o
 | Tasting notes | ✅ | ✅ |
 | Roaster's recommended espresso recipe | sometimes | sometimes |
 | Small local roasters with little web presence | ✅ | ❌ |
+| A clean product photo for your shelf | ❌ glare, crumpled bags | ✅ the roaster's packshot |
 
 The roast date matters most. It drives the rest window (light roasts often taste best from about day 14), and that's one of the biggest factors in how a shot tastes. No website can tell you when *your* bag was roasted.
 
 So the model gets the photos plus web search, and every field records where it came from (`bag`, `web`, or `inferred`). Guesses are flagged for you to check, and if the bag and the website disagree on a lot fact, the bag wins.
+
+**Product photos.** The shelf shows the roaster's own packshot rather than your snapshot of a crumpled bag. Crema reads it from the product page's metadata (Open Graph `og:image`, JSON-LD `Product.image`, or Twitter card), which nearly every roaster shop publishes. It doesn't ask the AI to guess an image URL. The image is downloaded once and cached, so the shelf works offline and doesn't keep loading from the roaster's site. When you add a coffee you choose which picture to use, and `POST /api/beans/:id/image` can re-run the lookup or take a specific image URL later. Lookups only go to public addresses, never your home network.
 
 Search and paste-a-link use the same pipeline, so they're there too. They're handy for:
 - browsing or a wishlist before you buy,

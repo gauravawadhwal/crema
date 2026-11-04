@@ -5,6 +5,8 @@ A custom interface and companion service for a Decent DE1 espresso machine.
 - **Add a coffee** by photographing the bag, searching for it, or pasting the roaster's link. Crema reads the bag (including the roast date), finds the roaster's own page for the details, and tags every fact with where it came from.
 - **Get a starting recipe**: a profile from the machine's own library, plus dose, yield, temperature and grind guidance, with the reasons. Load it onto the machine in one tap.
 - **Dial in**: rate a shot (sour ↔ bitter, thin ↔ heavy, stars) and get the one change to make next.
+- **Roaster product photos** on your shelf, read from the roaster's product page and cached locally. You can use your own photo instead.
+- **Light, dark or auto theme**, remembered on each device.
 - **Watch shots live**: pressure, flow and weight curves, plus recent-shot history.
 - **Runs on the DE1 tablet as a skin and on your iPhone** as a home-screen app.
 
@@ -83,6 +85,8 @@ DECAID_URL=http://<tablet-ip>:8080 LLM_PROVIDERS=claude-cli npm start
 | `POST` | `/api/identify` | multipart `images[]`, `query`, `url`, `offline` → coffee record (not saved) |
 | `POST` | `/api/beans` | save a confirmed record → Decaid bean + batch |
 | `GET` | `/api/shelf` | beans, batches, records and rest status |
+| `POST` | `/api/beans/:id/image` | `{lookup: true}` re-find the roaster's photo, `{url}` use a specific image, `{art: "product"\|"photo"}` pick which to show |
+| `GET` | `/api/images/:file` | cached roaster product photos |
 | `POST` | `/api/recommend` | `{beanId}` → recipe (rules + AI) |
 | `POST` | `/api/apply` | `{beanId, recipe?}` → sets the workflow on the machine |
 | `GET` | `/api/shots`, `/api/shots/:id` | shot history |

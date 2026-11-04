@@ -12,7 +12,9 @@ export interface CremaBeanRecord {
   decaidBatchId: string | null;
   info: BeanInfo;
   recipe: Recipe | null;
-  photo: string | null; // data: URL thumbnail
+  photo: string | null; // data: URL thumbnail of your own bag photo
+  productImage?: string | null; // cached roaster packshot, served at /api/images/…
+  art?: "product" | "photo"; // which picture to show
   addedAt: string;
 }
 

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { DecaidClient, type ShotSummary } from "./decaid.js";
 import { identify } from "./identify.js";
+import { cacheImage, findProductImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
 import type { ImageInput } from "./llm/types.js";
 import { dialIn, recommend, type PastShot } from "./recommend/index.js";
@@ -79,12 +80,18 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
       url: str("url"),
       offline: str("offline") === "true",
     });
+    // The roaster's own packshot: prefer what the page's metadata says over a
+    // URL the model may have guessed.
+    if (info.imageUrl && !isSafeUrl(info.imageUrl)) info.imageUrl = null;
+    if (info.productUrl && str("offline") !== "true") {
+      info.imageUrl = (await findProductImage(info.productUrl)) ?? info.imageUrl;
+    }
     return c.json({ info, provider: llm.lastUsed });
   });
 
   /** Save a confirmed BeanInfo to Decaid (bean + batch) and Crema's store. */
   app.post("/api/beans", async (c) => {
-    const body = await c.req.json<{ info: unknown; photo?: string | null }>();
+    const body = await c.req.json<{ info: unknown; photo?: string | null; art?: "product" | "photo" }>();
     const info = BeanInfo.parse(body.info);
     const existing = (await decaid.listBeans()).find(
       (b) => b.roaster === info.roaster.value && b.name === info.name.value,
@@ -107,16 +114,49 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
       roastLevel: info.roastLevel.value,
       weight: info.weightGrams,
     });
+    const productImage = info.imageUrl ? await cacheImage(info.imageUrl) : null;
     const rec = {
       decaidBeanId: bean.id,
       decaidBatchId: batch.id,
       info,
       recipe: null,
       photo: body.photo ?? null,
+      productImage,
+      art: body.art ?? (productImage ? "product" : "photo"),
       addedAt: new Date().toISOString(),
-    };
+    } as const;
     await store.put(rec);
     return c.json(rec, 201);
+  });
+
+  /** Cached roaster product photos. */
+  app.get("/api/images/:name", async (c) => {
+    const img = await readCachedImage(c.req.param("name"));
+    if (!img) return c.json({ error: "not found" }, 404);
+    return c.body(new Uint8Array(img.data), 200, { "content-type": img.type, "cache-control": "public, max-age=31536000, immutable" });
+  });
+
+  /**
+   * Change a coffee's picture: re-run the roaster lookup, use a specific image
+   * URL, or switch between the roaster's photo and your own.
+   */
+  app.post("/api/beans/:id/image", async (c) => {
+    const id = c.req.param("id");
+    const rec = await store.get(id);
+    if (!rec) return c.json({ error: "unknown bean" }, 404);
+    const body = await c.req.json<{ url?: string; art?: "product" | "photo"; lookup?: boolean }>();
+    let productImage = rec.productImage ?? null;
+    let imageUrl = rec.info.imageUrl;
+    if (body.url) imageUrl = body.url;
+    else if (body.lookup && rec.info.productUrl) imageUrl = await findProductImage(rec.info.productUrl);
+    if (body.url || body.lookup) {
+      if (!imageUrl) return c.json({ error: "no product image found on the roaster's page" }, 404);
+      productImage = await cacheImage(imageUrl);
+      if (!productImage) return c.json({ error: "couldn't download that image" }, 502);
+    }
+    const art = body.art ?? (body.url || body.lookup ? "product" : rec.art ?? "product");
+    const updated = await store.patch(id, { productImage, art, info: { ...rec.info, imageUrl } });
+    return c.json(updated);
   });
 
   /** Everything the shelf view needs in one call. */

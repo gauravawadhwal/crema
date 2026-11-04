@@ -108,6 +108,16 @@ main {
 .dot.ok { background: var(--good); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
 .dot.live { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
+.theme-switch { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.theme-switch button { border: 0; background: transparent; color: var(--muted); padding: 4px 11px; border-radius: 999px; cursor: pointer; font-size: .8rem; font-weight: 500; min-height: 30px; }
+.theme-switch button[aria-pressed="true"] { background: var(--surface-2); color: var(--fg); }
+.top-right { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.art-pick { display: flex; gap: 10px; flex-wrap: wrap; }
+.art-pick label { display: grid; gap: 6px; justify-items: center; cursor: pointer; font-size: .8rem; color: var(--muted); }
+.art-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.art-pick img { width: 88px; height: 108px; object-fit: cover; border-radius: 10px; border: 2px solid var(--line); background: var(--surface-2); }
+.art-pick input:checked + img { border-color: var(--accent); }
+.art-pick input:focus-visible + img { outline: 2px solid var(--accent); outline-offset: 2px; }
 .demo-banner {
   font-size: .8rem; color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 7px 12px;
 }
@@ -139,6 +149,9 @@ main {
   border: 1px solid var(--line);
 }
 .bag img { width: 100%; height: 100%; object-fit: cover; }
+.bag.has-img { background: var(--surface-2); }
+.bag.has-img::before { display: none; }
+.bag.lg { width: 96px; height: 116px; }
 .bag .initial { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--bg); }
 .bag::before { content: ""; position: absolute; top: 7px; left: 10px; right: 10px; height: 3px; border-radius: 2px; background: rgba(0,0,0,.18); }
 .origin { color: var(--muted); font-size: .88rem; }
@@ -297,7 +310,14 @@ main {
     <div class="wrap">
       <header class="topbar">
         <div class="status" id="status" aria-live="polite"></div>
-        <div class="demo-banner" id="demoBanner" hidden>Demo with a simulated DE1 and sample coffees</div>
+        <div class="top-right">
+          <div class="demo-banner" id="demoBanner" hidden>Demo with a simulated DE1 and sample coffees</div>
+          <div class="theme-switch" role="group" aria-label="Theme">
+            <button type="button" data-theme-set="auto" aria-pressed="true">Auto</button>
+            <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+            <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+          </div>
+        </div>
       </header>
 
       <!-- BREW -->
@@ -415,6 +435,45 @@ function toast(msg) {
   const t = $("#toast");
   t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2600);
+}
+
+/* ---------------- theme ---------------- */
+const HOST_THEME = document.documentElement.getAttribute("data-theme");
+function applyTheme(mode, redraw = true) {
+  const root = document.documentElement;
+  if (mode === "light" || mode === "dark") root.setAttribute("data-theme", mode);
+  else if (HOST_THEME) root.setAttribute("data-theme", HOST_THEME);
+  else root.removeAttribute("data-theme");
+  document.querySelectorAll("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", css("--bg") || "#17120f");
+  store.set("theme", mode);
+  if (redraw && typeof route === "function" && api) route(false); // charts read colours at draw time
+}
+
+/* ---------------- sample packshots (demo only) ----------------
+   Stand-ins for the roaster product photos Crema fetches in real use. */
+function packshot({ roaster, name, origin, bag, label, ink, accent }) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 480">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#f4f2ee"/><stop offset="1" stop-color="#d9d6d0"/></radialGradient>
+    <linearGradient id="sheen" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".18"/><stop offset=".22" stop-color="#fff" stop-opacity=".12"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>
+  </defs>
+  <rect width="400" height="480" fill="url(#bg)"/>
+  <ellipse cx="200" cy="438" rx="128" ry="14" fill="#000" opacity=".16"/>
+  <path d="M92 70 L308 70 L318 96 L322 418 Q322 432 308 432 L92 432 Q78 432 78 418 L82 96 Z" fill="${bag}"/>
+  <path d="M92 70 L308 70 L310 84 L90 84 Z" fill="#000" opacity=".18"/>
+  <path d="M92 70 L308 70 L318 96 L322 418 Q322 432 308 432 L92 432 Q78 432 78 418 L82 96 Z" fill="url(#sheen)"/>
+  <circle cx="200" cy="122" r="11" fill="#000" opacity=".22"/><circle cx="200" cy="122" r="6" fill="#fff" opacity=".18"/>
+  <rect x="112" y="168" width="176" height="200" rx="6" fill="${label}"/>
+  <text x="200" y="206" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="13" letter-spacing="2.5" font-weight="700" fill="${accent}">${roaster.toUpperCase()}</text>
+  <line x1="140" y1="222" x2="260" y2="222" stroke="${ink}" stroke-opacity=".25"/>
+  <text x="200" y="${name.length > 14 ? 262 : 270}" text-anchor="middle" font-family="Georgia, serif" font-size="${name.length > 14 ? 22 : 30}" fill="${ink}">${name}</text>
+  <text x="200" y="300" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="12" letter-spacing="1.5" fill="${ink}" fill-opacity=".7">${origin.toUpperCase()}</text>
+  <rect x="166" y="326" width="68" height="20" rx="10" fill="none" stroke="${ink}" stroke-opacity=".35"/>
+  <text x="200" y="340" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="10" letter-spacing="1" fill="${ink}" fill-opacity=".7">250 G</text>
+</svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
 
 /* ---------------- recipe rules (same logic as server/recommend/rules.ts) ---------------- */
@@ -542,7 +601,7 @@ function demoBean(o) {
     variety: src(o.variety ?? null), process: src(o.process), processKind: o.processKind, altitudeMasl: src(o.alt ?? null),
     roastLevel: src(o.roast, o.roastSource ?? "web"), roastedFor: o.roastedFor ?? null, roastDate: src(o.roastDate, "bag"), bestBefore: null,
     weightGrams: o.weight ?? 250, tastingNotes: src(o.notes), isBlend: !!o.blend, blendComponents: o.blend ?? null,
-    roasterRecipe: o.recipe ?? null, productUrl: o.url ?? null, imageUrl: null, sources: o.url ? [o.url] : [],
+    roasterRecipe: o.recipe ?? null, productUrl: o.url ?? null, imageUrl: o.pack ? packshot({ roaster: o.roaster, name: o.name, origin: o.country, ...o.pack }) : null, sources: o.url ? [o.url] : [],
     confidence: o.confidence ?? 0.86, needsConfirmation: o.flags ?? [], summary: o.summary,
   };
 }
@@ -551,17 +610,20 @@ const DEMO_SHELF = [
       roaster: "Northbound Coffee", name: "Kii AA", country: "Kenya", region: "Kirinyaga", producer: "Kii Factory", variety: ["SL28", "SL34"],
       process: "Washed", processKind: "washed", alt: [1700, 1800], roast: "light", roastedFor: "omni", roastDate: isoDaysAgo(17),
       notes: ["blackcurrant", "pink grapefruit", "demerara"], url: "https://northbound.example/kii-aa",
+      pack: { bag: "#c0603a", label: "#f6efe4", ink: "#2b1d14", accent: "#a2452a" },
       summary: "Bright and juicy, with blackcurrant up front and a long, sugary finish." }) },
   { id: "b2", batch: "t2", color: "#5d7f6a", remaining: 220, info: demoBean({
       roaster: "Alma Roasting Co", name: "La Esperanza Gesha", country: "Colombia", region: "Huila", producer: "Finca La Esperanza", variety: ["Gesha"],
       process: "Anaerobic natural, 96h", processKind: "anaerobic", alt: [1900, 2050], roast: "light", roastDate: isoDaysAgo(8),
       notes: ["jasmine", "mango", "bergamot"], url: "https://alma.example/esperanza-gesha", flags: ["roastLevel"], roastSource: "inferred",
+      pack: { bag: "#e9e4da", label: "#2f5a48", ink: "#f3efe6", accent: "#e7c27a" },
       summary: "Florals and tropical fruit. Fragile, so it needs a gentle hand." }) },
   { id: "b3", batch: "t3", color: "#7a5236", remaining: 640, info: demoBean({
       roaster: "Harbour St Roasters", name: "Wharf Espresso", country: "Brazil · Colombia", process: "Natural and washed", processKind: "natural",
       roast: "medium-dark", roastedFor: "espresso", roastDate: isoDaysAgo(29), weight: 1000, blend: ["Brazil Cerrado natural", "Colombia Huila washed"],
       notes: ["dark chocolate", "hazelnut", "molasses"], recipe: { doseG: 18, yieldG: 38, timeS: 30, tempC: 91, text: "18 g in, 38 g out, about 30 s" },
-      url: "https://harbourst.example/wharf", summary: "Chocolatey and low in acidity. Made for milk drinks." }) },
+      url: "https://harbourst.example/wharf", summary: "Chocolatey and low in acidity. Made for milk drinks.",
+      pack: { bag: "#1f2a36", label: "#d8b36a", ink: "#1f2a36", accent: "#1f2a36" } }) },
 ];
 
 function makeDemoApi() {
@@ -593,10 +655,11 @@ function makeDemoApi() {
         country: "Ethiopia", region: "Yirgacheffe", producer: "Halo Beriti washing station", variety: ["Kurume", "Wolisho"], process: "Washed", processKind: "washed",
         alt: [2000, 2200], roast: "light", roastedFor: "filter", roastDate: files?.length ? isoDaysAgo(6) : null, notes: ["bergamot", "white peach", "honey"],
         url: "https://daybreak.example/halo-beriti", flags: files?.length ? ["roastDate"] : ["roastDate", "roastLevel"], confidence: 0.78,
+        pack: { bag: "#f1d7a8", label: "#fffaf1", ink: "#3b2a4a", accent: "#7b4f9a" },
         summary: "Delicate and tea-like. Lemon and peach, with a honey finish." });
     },
-    async saveBean(info, photo) {
-      const b = { id: "b" + (shelf.length + 1), batch: "t" + (shelf.length + 1), color: "#8a6a9a", remaining: info.weightGrams ?? 250, photo, info };
+    async saveBean(info, photo, art) {
+      const b = { id: "b" + (shelf.length + 1), batch: "t" + (shelf.length + 1), color: "#8a6a9a", remaining: info.weightGrams ?? 250, photo, art, info };
       b.recipe = rulesRecipe(info, DEMO_PROFILES); shelf.unshift(b); current = b.id; return b;
     },
     async recommend(id) { const b = shelf.find((x) => x.id === id); await wait(350); return { recipe: b.recipe, source: "rules (demo)" }; },
@@ -641,6 +704,7 @@ function makeLiveApi(cfg) {
     return data;
   };
   const adapt = (row) => ({ id: row.bean.id, batch: row.record?.decaidBatchId, info: row.record?.info, recipe: row.record?.recipe, photo: row.record?.photo,
+    productImage: row.record?.productImage, art: row.record?.art,
     remaining: row.batches?.[0]?.weightRemaining ?? row.record?.info?.weightGrams ?? null, raw: row });
   let currentId = store.get("current", null);
   return {
@@ -657,7 +721,7 @@ function makeLiveApi(cfg) {
       const { info } = await j("/api/identify", { method: "POST", body: fd });
       return info;
     },
-    async saveBean(info, photo) { const rec = await j("/api/beans", { method: "POST", body: JSON.stringify({ info, photo }) }); currentId = rec.decaidBeanId; store.set("current", currentId); return { id: rec.decaidBeanId, info: rec.info, recipe: null }; },
+    async saveBean(info, photo, art) { const rec = await j("/api/beans", { method: "POST", body: JSON.stringify({ info, photo, art }) }); currentId = rec.decaidBeanId; store.set("current", currentId); return { id: rec.decaidBeanId, info: rec.info, recipe: null }; },
     recommend: (beanId) => j("/api/recommend", { method: "POST", body: JSON.stringify({ beanId }) }),
     apply: (beanId, recipe) => j("/api/apply", { method: "POST", body: JSON.stringify({ beanId, recipe }) }),
     async shots() {
@@ -695,10 +759,15 @@ function makeLiveApi(cfg) {
 /* ---------------- app ---------------- */
 let api, current = null, live = [], lastFinished = null, lastHealth = null;
 
-function bagArt(b) {
-  if (b.photo) return `<div class="bag"><img src="${esc(b.photo)}" alt=""></div>`;
+function artSrc(b) {
+  const product = b.productImage || b.info?.imageUrl;
+  return b.art === "photo" ? b.photo || product : product || b.photo;
+}
+function bagArt(b, size = "") {
+  const src = artSrc(b);
+  if (src) return `<div class="bag has-img ${size}"><img src="${esc(src)}" alt="" loading="lazy" onerror="this.parentNode.classList.remove('has-img');this.remove()"></div>`;
   const initial = (b.info?.name?.value || "?").trim()[0];
-  return `<div class="bag" style="background:${esc(b.color || "var(--weight)")}"><span class="initial">${esc(initial)}</span></div>`;
+  return `<div class="bag ${size}" style="background:${esc(b.color || "var(--weight)")}"><span class="initial">${esc(initial)}</span></div>`;
 }
 function restBar(rest) {
   if (!rest || rest.days == null) return `<div class="rest"><div class="row between"><span class="label">Rest</span><span class="pill unknown">No roast date</span></div></div>`;
@@ -828,7 +897,7 @@ async function renderShelf() {
     const i = b.info, rest = restOf(i);
     const left = b.remaining != null && i.weightGrams ? Math.max(0, Math.min(100, (b.remaining / i.weightGrams) * 100)) : null;
     return `<article class="panel bean-card ${current?.id === b.id ? "current" : ""}">
-      <div class="coffee-head">${bagArt(b)}<div style="min-width:0"><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2><div class="origin">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div></div></div>
+      <div class="coffee-head" style="grid-template-columns:96px minmax(0,1fr)">${bagArt(b, "lg")}<div style="min-width:0"><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2><div class="origin">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div></div></div>
       ${restBar(rest)}
       ${left != null ? `<div class="stack" style="gap:6px"><div class="row between"><span class="label">Left</span><span class="num muted">${b.remaining} / ${i.weightGrams} g · about ${Math.floor(b.remaining / (b.recipe?.doseG ?? 18))} shots</span></div><div class="grams"><div style="width:${left}%"></div></div></div>` : ""}
       <div class="row between"><span class="muted" style="font-size:.85rem">${esc(b.recipe ? `${b.recipe.profileTitle} · ${b.recipe.doseG}→${b.recipe.yieldG} g` : "No recipe yet")}</span>
@@ -874,12 +943,21 @@ function factRows(info) {
     return `<div class="k ${flag ? "flag" : ""}">${label}</div><div class="${flag ? "flag" : ""}">${v == null ? '<span class="muted">Unknown</span>' : esc(v)}</div><div class="${flag ? "flag" : ""}">${f.source ? `<span class="prov src-${f.source}">${f.source}</span>` : ""}</div>`;
   }).join("");
 }
+function artPicker(info, photo) {
+  const product = info.imageUrl;
+  if (!product && !photo) return "";
+  if (!product) return `<div class="muted" style="font-size:.85rem">No product photo on the roaster's page. Your photo will be used.</div>`;
+  const opt = (val, src, text, checked) => `<label><input type="radio" name="art" value="${val}" ${checked ? "checked" : ""}><img src="${esc(src)}" alt="">${text}</label>`;
+  return `<div class="stack" style="gap:8px"><span class="label">Picture on your shelf</span><div class="art-pick">
+    ${opt("product", product, "Roaster's photo", true)}${photo ? opt("photo", photo, "Your photo", false) : ""}</div></div>`;
+}
 function renderReview(info, photo) {
   pending = { info, photo };
   $("#reviewPanel").innerHTML = `
     <div class="coffee-head">${bagArt({ photo, info, color: "#8a6a9a" })}<div style="min-width:0"><div class="label">${esc(info.roaster.value)}</div><h2>${esc(info.name.value)}</h2><div class="origin">${esc(info.summary)}</div></div></div>
     <div class="row"><span class="label">Match confidence</span><span class="num">${Math.round(info.confidence * 100)}%</span>
       <span class="prov src-bag">bag</span><span class="prov src-web">web</span><span class="prov src-inferred">inferred</span></div>
+    ${artPicker(info, photo)}
     <div class="facts">${factRows(info)}</div>
     ${info.roasterRecipe?.text ? `<div class="advice"><div class="label">Roaster's recipe</div>${esc(info.roasterRecipe.text)}</div>` : ""}
     ${info.sources?.length ? `<div class="sources muted" style="font-size:.82rem">Sources: ${info.sources.map((s) => `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s.replace(/^https?:\/\//, ""))}</a>`).join(", ")}</div>` : ""}
@@ -889,7 +967,8 @@ function renderReview(info, photo) {
     const d = $("#roastDateInput").value;
     if (d) { pending.info.roastDate = { value: d, source: "bag" }; pending.info.needsConfirmation = pending.info.needsConfirmation.filter((k) => k !== "roastDate"); }
     try {
-      const saved = await api.saveBean(pending.info, pending.photo);
+      const art = document.querySelector('input[name="art"]:checked')?.value ?? (pending.info.imageUrl ? "product" : "photo");
+      const saved = await api.saveBean(pending.info, pending.photo, art);
       current = await api.setCurrent(saved.id);
       files = []; $("#thumbs").innerHTML = ""; resetReview();
       location.hash = "#brew"; toast(`Added ${saved.info.name.value}`);
@@ -951,18 +1030,20 @@ async function renderShots() {
 
 /* ---- routing ---- */
 const VIEWS = ["brew", "shelf", "add", "shots"];
-function route() {
+function route(scroll = true) {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "brew";
   VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
   document.querySelectorAll(".tab").forEach((t) => (t.dataset.view === v ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderCurrent(); fetchRecipe(); }
   if (v === "shelf") renderShelf();
   if (v === "shots") renderShots();
-  window.scrollTo(0, 0);
+  if (scroll) window.scrollTo(0, 0);
 }
 
 async function boot() {
   REVIEW_INTRO = $("#reviewPanel").innerHTML;
+  applyTheme(store.get("theme", "auto"), false);
+  document.querySelectorAll("[data-theme-set]").forEach((b) => (b.onclick = () => applyTheme(b.dataset.themeSet)));
   const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
   if (!forceDemo) {
     try {
