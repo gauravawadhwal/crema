@@ -1,6 +1,8 @@
 import { Hono } from "hono";
+import { ZodError } from "zod";
 import { cors } from "hono/cors";
 import { DecaidClient, type ShotSummary } from "./decaid.js";
+import { batchUsage, registerHomeRoutes } from "./home.js";
 import { identify } from "./identify.js";
 import { cacheImage, findProductImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
@@ -33,6 +35,25 @@ export function toPastShot(s: ShotSummary): PastShot {
   };
 }
 
+/**
+ * Shift every step's temperature so the first step matches the recipe, keeping
+ * the profile's own temperature curve (declining-temperature profiles stay
+ * declining). This is what the DE1 app does when you change brew temperature.
+ */
+export function withTemperature(profile: Record<string, unknown>, tempC: number) {
+  const steps = Array.isArray(profile.steps) ? (profile.steps as Record<string, unknown>[]) : [];
+  const first = Number(steps[0]?.temperature);
+  if (!steps.length || !Number.isFinite(first)) return profile;
+  const delta = tempC - first;
+  return {
+    ...profile,
+    steps: steps.map((st) => {
+      const t = Number(st.temperature);
+      return Number.isFinite(t) ? { ...st, temperature: Math.round((t + delta) * 10) / 10 } : st;
+    }),
+  };
+}
+
 export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; store: Store }) {
   const { llm, decaid, store } = deps;
   const app = new Hono();
@@ -41,6 +62,7 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
   app.use("/api/*", cors());
 
   app.onError((err, c) => {
+    if (err instanceof ZodError) return c.json({ error: "invalid request", issues: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`) }, 400);
     console.error(err);
     return c.json({ error: err.message }, 500);
   });
@@ -160,7 +182,9 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
     return c.json(updated);
   });
 
-  /** Everything the shelf view needs in one call. */
+  registerHomeRoutes(app, { decaid, store });
+
+  /** Everything the shelf view needs in one call, including grams left. */
   app.get("/api/shelf", async (c) => {
     const beans = await decaid.listBeans();
     const records = await Promise.all(beans.map((b) => store.get(b.id)));
@@ -168,11 +192,15 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
       beans.map(async (b, i) => {
         const rec = records[i];
         const batches = await decaid.listBatches(b.id).catch(() => []);
+        const batch = batches.find((x) => x.id === rec?.decaidBatchId) ?? batches[0];
+        const usage = batch ? await batchUsage(decaid, batch.id).catch(() => null) : null;
+        const weight = batch?.weight ?? rec?.info.weightGrams ?? null;
+        const remaining = weight != null && usage ? Math.max(0, Math.round(weight - usage.grams)) : (batch?.weightRemaining ?? null);
         const rest = rec ? baseline(rec.info).rest : null;
-        return { bean: b, batches, record: rec, rest };
+        return { bean: b, batches, record: rec, rest, usage, remaining, frozen: batch?.frozen ?? false };
       }),
     );
-    return c.json(shelf);
+    return c.json(shelf.filter((s) => !s.record?.finished));
   });
 
   app.post("/api/recommend", async (c) => {
@@ -199,7 +227,7 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
 
   /** Load the recipe onto the machine: profile + dose/yield + bean context. */
   app.post("/api/apply", async (c) => {
-    const { beanId, recipe: raw } = await c.req.json<{ beanId: string; recipe?: unknown }>();
+    const { beanId, recipe: raw, grinderSetting } = await c.req.json<{ beanId: string; recipe?: unknown; grinderSetting?: string }>();
     const rec = await store.get(beanId);
     if (!rec) return c.json({ error: "unknown bean" }, 404);
     const recipe = raw ? Recipe.parse(raw) : rec.recipe;
@@ -208,11 +236,12 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
     const profile = profiles.find((p) => p.id === recipe.profileId) ?? profiles.find((p) => p.profile.title === recipe.profileTitle);
     if (!profile) return c.json({ error: `profile "${recipe.profileTitle}" not found on the machine` }, 404);
     const workflow = await decaid.putWorkflow({
-      profile: { ...profile.profile, target_weight: recipe.yieldG },
+      profile: withTemperature({ ...profile.profile, target_weight: recipe.yieldG }, recipe.tempC),
       context: {
         targetDoseWeight: recipe.doseG,
         targetYield: recipe.yieldG,
         beanBatchId: rec.decaidBatchId ?? undefined,
+        grinderSetting: grinderSetting || undefined,
         coffeeName: rec.info.name.value ?? undefined,
         coffeeRoaster: rec.info.roaster.value ?? undefined,
       },

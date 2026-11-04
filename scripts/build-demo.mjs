@@ -1,8 +1,10 @@
-// Builds demo/crema-demo.html: the web app forced into demo mode, as a page
-// fragment (no <html>/<head>/<body>) suitable for publishing as a Claude artifact.
+// Builds demo/crema-demo.html: the web app forced into demo mode, with its
+// scripts inlined, as a page fragment (no <html>/<head>/<body>) suitable for
+// publishing as a Claude artifact. Run scripts/build-demo-data.ts first.
 import { readFileSync, writeFileSync } from "node:fs";
 
 let s = readFileSync("skin/index.html", "utf8");
+const inline = (file) => readFileSync(`skin/${file}`, "utf8").replace(/<\/script/gi, "<\\/script");
 s = s
   .replace(/<!doctype html>\s*/i, "")
   .replace(/<html[^>]*>\s*/i, "")
@@ -14,6 +16,9 @@ s = s
   .replace(/<meta name="viewport"[^>]*>\s*/i, "")
   .replace(/<link rel="(manifest|apple-touch-icon)"[^>]*>\s*/gi, "")
   .replace(/<meta name="(apple-mobile-web-app|mobile-web-app)[^>]*>\s*/gi, "")
-  .replace('<script>\n"use strict";', '<script>\n"use strict";\nwindow.CREMA_FORCE_DEMO = true;');
+  .replace('<script src="demo-data.js"></script>', `<script>window.CREMA_FORCE_DEMO = true;\n${inline("demo-data.js")}</script>`)
+  .replace('<script src="demo.js"></script>', `<script>${inline("demo.js")}</script>`)
+  .replace('<script src="app.js"></script>', `<script>${inline("app.js")}</script>`);
+if (/<script src=/.test(s)) throw new Error("a script was not inlined");
 writeFileSync("demo/crema-demo.html", s);
-console.log(`demo/crema-demo.html: ${s.length} bytes; title at ${s.indexOf("<title>")}`);
+console.log(`demo/crema-demo.html: ${(s.length / 1024).toFixed(0)} KB; title at ${s.indexOf("<title>")}`);

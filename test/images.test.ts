@@ -31,3 +31,14 @@ describe("isSafeUrl", () => {
     (u) => expect(isSafeUrl(u)).toBe(false),
   );
 });
+
+import { withTemperature } from "../server/app.js";
+describe("withTemperature", () => {
+  it("shifts every step, keeping the curve", () => {
+    const p = withTemperature({ steps: [{ temperature: "83.5" }, { temperature: 83.5 }, { temperature: "67.5" }] }, 86);
+    expect((p.steps as { temperature: number }[]).map((s) => s.temperature)).toEqual([86, 86, 70]);
+  });
+  it("leaves profiles without steps alone", () => {
+    expect(withTemperature({ title: "x" }, 90)).toEqual({ title: "x" });
+  });
+});

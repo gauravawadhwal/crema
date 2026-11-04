@@ -1,13 +1,19 @@
 /**
- * A pretend DE1 + Decaid for development before the machine arrives.
- * Implements the slice of the Decaid REST/WebSocket API that Crema uses, and
- * simulates a shot (pressure/flow/weight curves) when espresso is requested.
+ * A pretend DE1 + scale + Decaid for development before the machine arrives.
+ * Implements the slice of the Decaid REST/WebSocket API that Crema uses:
+ * espresso, steam, hot water and flush with live telemetry; a scale with tare;
+ * the water tank; machine and shot settings; sleep, wake schedules and
+ * presence; display brightness; beans, batches, profiles, workflow and shots;
+ * the plugin list, including Time To Ready's WebSocket.
  *
  *   npm run mock:decaid      # listens on :8080 like the real thing
+ *   curl -X PUT localhost:8080/api/v1/machine/state/espresso
  */
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
+
+type Json = Record<string, any>;
 
 // Titles as bundled with Decaid (assets/defaultProfiles), the espresso ones.
 const PROFILE_TITLES = [
@@ -21,86 +27,160 @@ const PROFILE_TITLES = [
 ];
 const profiles = PROFILE_TITLES.map((title, i) => ({
   id: `profile:${(i + 1).toString(16).padStart(16, "0")}`,
-  profile: { version: "2", title, author: "Decent", notes: "", beverage_type: "espresso", steps: [], target_weight: 36, target_volume: 0, tank_temperature: 0 },
+  profile: {
+    version: "2", title, author: "Decent", notes: "", beverage_type: "espresso",
+    steps: [{ name: "preinfusion", temperature: 92 }, { name: "extraction", temperature: 92 }],
+    target_weight: 36, target_volume: 0, tank_temperature: 0,
+  },
   visibility: "visible",
   isDefault: true,
 }));
 
-type Json = Record<string, any>;
 const beans: Json[] = [];
 const batches: Json[] = [];
+const grinders: Json[] = [];
 const shots: Json[] = [];
-let workflow: Json = {
-  id: randomUUID(),
-  name: "Crema",
-  profile: profiles[0].profile,
-  context: { targetDoseWeight: 18, targetYield: 36 },
-};
-let machine = { state: "idle", substate: "ready" };
-let live: Json = { flow: 0, pressure: 0, weight: 0, mixTemperature: 93, groupTemperature: 93 };
+let workflow: Json = { id: randomUUID(), name: "Crema", profile: profiles[0].profile, context: { targetDoseWeight: 18, targetYield: 36 } };
+let shotSettings: Json = { steamSetting: 0, targetSteamTemp: 150, targetSteamDuration: 45, targetHotWaterTemp: 85, targetHotWaterVolume: 120, targetHotWaterDuration: 60, targetShotVolume: 36, groupTemp: 92 };
+let settings: Json = { usb: false, fan: 50, flushTemp: 88, flushFlow: 6.0, flushTimeout: 5, hotWaterFlow: 6.0, steamFlow: 1.5, tankTemp: 0 };
+let presence: Json = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
+const schedules: Json[] = [{ id: randomUUID(), time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }];
+let display: Json = { wakeLockEnabled: true, wakeLockOverride: false, brightness: 80, requestedBrightness: 80, lowBatteryBrightnessActive: false, platformSupported: { brightness: true, wakeLock: true } };
+let waterWarning = 20;
 
-function simulateShotSamples(target: number, seconds: number) {
-  const samples: Json[] = [];
-  const start = Date.now() - seconds * 1000;
-  for (let t = 0; t <= seconds; t += 0.5) {
-    const pi = t < 8;
-    const pressure = pi ? Math.min(3, t * 0.6) : t < 10 ? 3 + (t - 8) * 3 : Math.max(5.5, 9 - (t - 10) * 0.12);
-    const flow = pi ? 4 - t * 0.3 : 1.6 + Math.sin(t / 5) * 0.2;
-    const weight = Math.max(0, Math.min(target, ((t - 6) / (seconds - 6)) * target));
-    samples.push({
-      machine: { timestamp: new Date(start + t * 1000).toISOString(), state: { state: "espresso", substate: pi ? "preinfusion" : "pouring" }, flow: +flow.toFixed(2), pressure: +pressure.toFixed(2), mixTemperature: 92.5 + Math.random() * 0.4 },
-      scale: { timestamp: new Date(start + t * 1000).toISOString(), weight: +weight.toFixed(1), weightFlow: t > 6 ? +(target / (seconds - 6)).toFixed(2) : 0 },
-    });
-  }
-  return samples;
+// ---------------- the simulated machine ----------------
+const sim = {
+  state: "idle",
+  substate: "idle",
+  group: 92.8,
+  steamTemp: 150,
+  water: 58, // mm in the tank, like the DE1's level sensor
+  refill: 7,
+  scaleConnected: true,
+  scaleWeight: 0,
+  scaleOffset: 0,
+  scaleBattery: 86,
+  live: { pressure: 0, flow: 0, targetPressure: 0, targetFlow: 0, elapsed: 0, profileFrame: 0 } as Json,
+  timer: null as NodeJS.Timeout | null,
+  samples: [] as Json[],
+  lastActive: Date.now(),
+};
+
+const isLever = (title: string) => /londinium|lrv|lever|leva|cremina|80's|forge|gentle/i.test(title);
+
+function stop(next = "idle") {
+  if (sim.timer) clearInterval(sim.timer);
+  sim.timer = null;
+  if (sim.state === "espresso" && sim.samples.length > 10) recordShot();
+  sim.state = next;
+  sim.substate = next === "idle" ? "idle" : next;
+  sim.live = { pressure: 0, flow: 0, targetPressure: 0, targetFlow: 0, elapsed: 0, profileFrame: 0 };
 }
 
-function recordShot(seconds = 28 + Math.round(Math.random() * 6)) {
+function run(state: string) {
+  if (sim.state === "sleeping" && state !== "idle") return;
+  if (sim.water <= sim.refill) {
+    sim.state = "needsWater";
+    return;
+  }
+  if (sim.timer) stop();
+  sim.state = state;
+  sim.lastActive = Date.now();
+  sim.samples = [];
   const ctx = workflow.context ?? {};
+  const target = Number(ctx.targetYield ?? 36);
+  const lever = isLever(workflow.profile?.title ?? "");
+  const shotSeconds = 26 + Math.random() * 10;
+  const limit =
+    state === "steam" ? Number(shotSettings.targetSteamDuration || 600) :
+    state === "hotWater" ? Number(shotSettings.targetHotWaterVolume) / Number(settings.hotWaterFlow || 6) :
+    state === "flush" ? Number(settings.flushTimeout) : 120;
+  let t = 0;
+  if (state === "espresso") sim.scaleOffset = sim.scaleWeight; // auto-tare
+  sim.timer = setInterval(() => {
+    t += 0.1;
+    let p = 0, f = 0;
+    if (state === "espresso") {
+      const pi = lever ? 9 : 7;
+      if (t < pi) { p = Math.min(lever ? 4 : 3, t * 0.7); f = Math.max(1, 4 - t * 0.45); sim.substate = "preinfusion"; }
+      else if (t < pi + 2) { p = 3 + (t - pi) * 3; f = 1.5; sim.substate = "pouring"; }
+      else { p = lever ? Math.max(4, 9 - (t - pi - 2) * 0.28) : Math.max(5.5, 9 - (t - pi - 2) * 0.13); f = 1.7 + Math.sin(t / 4) * 0.12 + (t - pi) * 0.025; }
+      p += (Math.random() - 0.5) * 0.08; f += (Math.random() - 0.5) * 0.04;
+      if (t > pi - 1) sim.scaleWeight += Math.max(0, f) * 0.1 * 0.93;
+      sim.live = { pressure: p, flow: f, targetPressure: t < pi ? 3 : 9, targetFlow: t < pi ? 4 : 2, elapsed: t, profileFrame: t < pi ? 0 : 1 };
+      sim.samples.push({ t, p, f, w: sim.scaleWeight - sim.scaleOffset, temp: sim.group });
+      // stop at weight, with the usual lag
+      if (sim.scaleWeight - sim.scaleOffset >= target - 1.2 || t >= shotSeconds + 15) {
+        sim.substate = "pouringDone";
+        return stop();
+      }
+    } else if (state === "steam") {
+      p = 1.8 + Math.random() * 0.2; f = Number(settings.steamFlow);
+      sim.steamTemp = Math.max(135, sim.steamTemp - 0.05);
+      sim.substate = "pouring";
+    } else if (state === "hotWater") {
+      f = Number(settings.hotWaterFlow); p = 0.4;
+      sim.scaleWeight += f * 0.1;
+    } else if (state === "flush") {
+      f = Number(settings.flushFlow); p = 0.3;
+    }
+    sim.water = Math.max(0, sim.water - (f * 0.1) / 40);
+    sim.live = { ...sim.live, pressure: p, flow: f, elapsed: t };
+    if (state !== "espresso" && t >= limit) stop();
+  }, 100);
+}
+
+function recordShot() {
+  const ctx = workflow.context ?? {};
+  const start = Date.now() - sim.samples.length * 100;
   const shot = {
     id: `shot-${new Date().toISOString().replace(/[:.]/g, "-")}`,
     timestamp: new Date().toISOString(),
-    measurements: simulateShotSamples(ctx.targetYield ?? 36, seconds),
+    measurements: sim.samples.filter((_, i) => i % 2 === 0).map((s) => ({
+      machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" }, flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), mixTemperature: +s.temp.toFixed(1) },
+      scale: { timestamp: new Date(start + s.t * 1000).toISOString(), weight: +s.w.toFixed(1) },
+    })),
     workflow: { name: workflow.name, profile: { title: workflow.profile?.title }, context: { ...ctx } },
-    annotations: { actualDoseWeight: ctx.targetDoseWeight ?? 18, actualYield: +(ctx.targetYield ?? 36).toFixed(1) },
+    annotations: { actualDoseWeight: ctx.targetDoseWeight ?? 18, actualYield: +(sim.scaleWeight - sim.scaleOffset).toFixed(1) },
   };
   shots.unshift(shot);
   return shot;
 }
 
-function startShot() {
-  if (machine.state === "espresso") return;
-  machine = { state: "espresso", substate: "preinfusion" };
-  const target = workflow.context?.targetYield ?? 36;
-  const seconds = 30;
-  let t = 0;
-  const iv = setInterval(() => {
-    t += 0.25;
-    const pi = t < 8;
-    machine.substate = pi ? "preinfusion" : "pouring";
-    live = {
-      pressure: pi ? Math.min(3, t * 0.6) : t < 10 ? 3 + (t - 8) * 3 : Math.max(5.5, 9 - (t - 10) * 0.12),
-      flow: pi ? 4 - t * 0.3 : 1.6 + Math.sin(t / 5) * 0.2,
-      weight: Math.max(0, Math.min(target, ((t - 6) / (seconds - 6)) * target)),
-      mixTemperature: 92.6 + Math.random() * 0.3,
-      groupTemperature: 92.8,
-      elapsed: t,
-    };
-    if (t >= seconds) {
-      clearInterval(iv);
-      recordShot(seconds);
-      machine = { state: "idle", substate: "ready" };
-      live = { ...live, flow: 0, pressure: 0 };
-    }
-  }, 250);
-}
+// Idle drift and auto-sleep.
+setInterval(() => {
+  if (sim.state === "sleeping") {
+    sim.group = Math.max(25, sim.group - 0.05);
+    return;
+  }
+  if (sim.state === "heating") {
+    sim.group = Math.min(92.8, sim.group + 0.6);
+    if (sim.group >= 92.8) sim.state = "idle";
+  } else if (sim.state === "idle") sim.group = 92.6 + Math.random() * 0.3;
+  if (presence.userPresenceEnabled && sim.state === "idle" && Date.now() - sim.lastActive > presence.sleepTimeoutMinutes * 60_000) sim.state = "sleeping";
+  if (sim.state !== "steam") sim.steamTemp = Math.min(150, sim.steamTemp + 0.2);
+}, 1000);
 
 // A little history so the UI isn't empty on first run.
-for (let i = 0; i < 4; i++) {
-  const s = recordShot();
-  s.timestamp = new Date(Date.now() - (i + 1) * 864e5).toISOString();
+for (let i = 0; i < 5; i++) {
+  workflow.profile = profiles[i % 3].profile;
+  const target = 36 + i * 2;
+  sim.samples = [];
+  let w = 0;
+  for (let t = 0; t < 30 + i; t += 0.2) {
+    const p = t < 7 ? Math.min(3, t * 0.7) : t < 9 ? 3 + (t - 7) * 3 : Math.max(5.5, 9 - (t - 9) * 0.13);
+    const f = t < 7 ? Math.max(1, 4 - t * 0.45) : 1.7 + (t - 7) * 0.025;
+    if (t > 6) w = Math.min(target, w + f * 0.2 * 0.93);
+    sim.samples.push({ t, p, f, w, temp: 92.4 });
+  }
+  sim.scaleWeight = target; sim.scaleOffset = 0;
+  workflow.context = { targetDoseWeight: 18, targetYield: target };
+  recordShot().timestamp = new Date(Date.now() - (i + 1) * 864e5).toISOString();
 }
+workflow.profile = profiles[0].profile;
+sim.samples = []; sim.scaleWeight = 0; sim.scaleOffset = 0;
 
+// ---------------- HTTP ----------------
 async function body(req: IncomingMessage): Promise<Json> {
   let raw = "";
   for await (const chunk of req) raw += chunk;
@@ -109,8 +189,27 @@ async function body(req: IncomingMessage): Promise<Json> {
 
 function send(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" });
-  res.end(JSON.stringify(data));
+  res.end(status === 204 ? undefined : JSON.stringify(data));
 }
+
+const snapshot = () => ({
+  timestamp: new Date().toISOString(),
+  state: { state: sim.state, substate: sim.substate },
+  flow: +sim.live.flow.toFixed(2),
+  pressure: +sim.live.pressure.toFixed(2),
+  targetFlow: sim.live.targetFlow,
+  targetPressure: sim.live.targetPressure,
+  mixTemperature: +(sim.group + (sim.state === "espresso" ? -0.3 : 0)).toFixed(1),
+  groupTemperature: +sim.group.toFixed(1),
+  targetMixTemperature: 92.8,
+  targetGroupTemperature: 92.8,
+  profileFrame: sim.live.profileFrame,
+  steamTemperature: +sim.steamTemp.toFixed(1),
+  // Not in Decaid's snapshot: the elapsed time of the current operation, so
+  // a client can tell how long it's been running.
+  elapsed: +sim.live.elapsed.toFixed(1),
+  simulated: true,
+});
 
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") return send(res, 204, {});
@@ -119,8 +218,91 @@ const server = createServer(async (req, res) => {
   const m = req.method;
   let match: RegExpMatchArray | null;
   try {
+    // machine
+    if (m === "GET" && p === "/api/v1/machine/state") return send(res, 200, snapshot());
+    if (m === "GET" && p === "/api/v1/machine/info") return send(res, 200, { model: "DE1+ (simulated)", serialNumber: "SIM-0001", GHC: false, firmwareVersion: "1352" });
+    if ((match = p.match(/^\/api\/v1\/machine\/state\/(\w+)$/)) && m === "PUT") {
+      const next = match[1];
+      sim.lastActive = Date.now();
+      if (next === "idle") {
+        if (sim.state === "sleeping") sim.state = "heating";
+        else stop("idle");
+      } else if (next === "sleeping") {
+        stop("sleeping");
+      } else if (["espresso", "steam", "hotWater", "flush"].includes(next)) run(next);
+      else return send(res, 400, { error: `unsupported state ${next}` });
+      return send(res, 200, snapshot());
+    }
+    // Older Crema/mock form, kept for the tests: PUT /machine/state {state}
+    if (p === "/api/v1/machine/state" && (m === "PUT" || m === "POST")) {
+      const { state } = await body(req);
+      if (state === "espresso") run("espresso");
+      return send(res, 200, snapshot());
+    }
+    if (p === "/api/v1/machine/shotSettings") {
+      if (m === "POST") shotSettings = { ...shotSettings, ...(await body(req)) };
+      return send(res, 200, shotSettings);
+    }
+    if (p === "/api/v1/machine/settings") {
+      if (m === "POST") settings = { ...settings, ...(await body(req)) };
+      return send(res, 200, settings);
+    }
+    if (p === "/api/v1/machine/waterLevels") {
+      if (m === "POST") waterWarning = (await body(req)).warningThresholdPercentage ?? waterWarning;
+      return send(res, 200, { currentLevel: Math.round(sim.water), refillLevel: sim.refill, warningThresholdPercentage: waterWarning });
+    }
+    if (p === "/api/v1/machine/heartbeat" && m === "POST") {
+      sim.lastActive = Date.now();
+      return send(res, 200, { timeout: presence.userPresenceEnabled ? presence.sleepTimeoutMinutes * 60 : -1 });
+    }
+    if (m === "PUT" && p === "/api/v1/scale/tare") {
+      if (!sim.scaleConnected) return send(res, 404, { error: "no scale" });
+      sim.scaleOffset = sim.scaleWeight;
+      return send(res, 200, { ok: true });
+    }
+    // demo helper: refill the tank
+    if (m === "POST" && p === "/dev/refill") {
+      sim.water = 58;
+      if (sim.state === "needsWater") sim.state = "idle";
+      return send(res, 200, { ok: true });
+    }
+    // presence & display
+    if (p === "/api/v1/presence/settings") {
+      if (m === "POST") presence = { ...presence, ...(await body(req)) };
+      return send(res, 200, { ...presence, schedules });
+    }
+    if (p === "/api/v1/presence/schedules") {
+      if (m === "POST") {
+        const b = await body(req);
+        const s = { id: randomUUID(), time: b.time ?? `${String(b.hour).padStart(2, "0")}:${String(b.minute).padStart(2, "0")}`, daysOfWeek: b.daysOfWeek ?? [], enabled: b.enabled ?? true };
+        schedules.push(s);
+        return send(res, 201, s);
+      }
+      return send(res, 200, schedules);
+    }
+    if ((match = p.match(/^\/api\/v1\/presence\/schedules\/([^/]+)$/))) {
+      const i = schedules.findIndex((s) => s.id === match![1]);
+      if (i < 0) return send(res, 404, { error: "not found" });
+      if (m === "DELETE") { schedules.splice(i, 1); return send(res, 200, { ok: true }); }
+      if (m === "PUT") Object.assign(schedules[i], await body(req));
+      return send(res, 200, schedules[i]);
+    }
+    if (p === "/api/v1/display") return send(res, 200, display);
+    if (p === "/api/v1/display/brightness" && m === "PUT") {
+      const { brightness } = await body(req);
+      display = { ...display, brightness, requestedBrightness: brightness };
+      return send(res, 200, display);
+    }
+    if (p === "/api/v1/plugins") {
+      return send(res, 200, [
+        { id: "visualizer.reaplugin", name: "Visualizer upload", version: "1.5.11", settings: { Username: { type: "string" }, Password: { type: "string", secure: true }, AutoUpload: { type: "boolean" } } },
+        { id: "time-to-ready.reaplugin", name: "Time To Ready", version: "1.0.4", api: [{ id: "timeToReady", type: "websocket" }] },
+        { id: "decent-profile.reaplugin", name: "Decent Profile Generator", version: "1.1.2" },
+      ]);
+    }
+    // library
     if (m === "GET" && p === "/api/v1/profiles") return send(res, 200, profiles);
-    if (m === "GET" && p === "/api/v1/beans") return send(res, 200, beans.filter((b) => !b.archived));
+    if (m === "GET" && p === "/api/v1/beans") return send(res, 200, beans.filter((b) => url.searchParams.get("includeArchived") === "true" || !b.archived));
     if (m === "POST" && p === "/api/v1/beans") {
       const b = { id: randomUUID(), archived: false, createdAt: new Date().toISOString(), ...(await body(req)) };
       beans.push(b);
@@ -141,20 +323,26 @@ const server = createServer(async (req, res) => {
       }
       return send(res, 200, batches.filter((b) => b.beanId === match![1]));
     }
+    if ((match = p.match(/^\/api\/v1\/bean-batches\/([^/]+)$/))) {
+      const bt = batches.find((x) => x.id === match![1]);
+      if (!bt) return send(res, 404, { error: "not found" });
+      if (m === "PUT") Object.assign(bt, await body(req));
+      return send(res, 200, bt);
+    }
+    if (p === "/api/v1/grinders") {
+      if (m === "POST") {
+        const g = { id: randomUUID(), archived: false, ...(await body(req)) };
+        grinders.push(g);
+        return send(res, 201, g);
+      }
+      return send(res, 200, grinders);
+    }
     if (p === "/api/v1/workflow") {
       if (m === "PUT") {
         const patch = await body(req);
         workflow = { ...workflow, ...patch, context: { ...workflow.context, ...(patch.context ?? {}) } };
       }
       return send(res, 200, workflow);
-    }
-    if (p === "/api/v1/machine/state") {
-      if (m === "PUT" || m === "POST") {
-        const { state } = await body(req);
-        if (state === "espresso") startShot();
-        else machine = { state: state ?? "idle", substate: "ready" };
-      }
-      return send(res, 200, { ...machine, simulated: true });
     }
     if (m === "GET" && p === "/api/v1/shots") {
       const limit = Number(url.searchParams.get("limit") ?? 20);
@@ -178,28 +366,30 @@ const server = createServer(async (req, res) => {
   }
 });
 
-const wss = new WebSocketServer({ server, path: "/ws/v1/machine/snapshot" });
-const clients = new Set<WebSocket>();
-wss.on("connection", (ws) => {
-  clients.add(ws);
-  ws.on("close", () => clients.delete(ws));
-});
-setInterval(() => {
-  const snap = JSON.stringify({
-    timestamp: new Date().toISOString(),
-    state: machine,
-    flow: live.flow,
-    pressure: live.pressure,
-    weight: live.weight,
-    elapsed: live.elapsed ?? 0,
-    mixTemperature: live.mixTemperature,
-    groupTemperature: live.groupTemperature,
-    targetMixTemperature: 93,
-    steamTemperature: 140,
-    simulated: true,
+// ---------------- WebSockets ----------------
+const streams: Record<string, { hz: number; frame: () => unknown }> = {
+  "/ws/v1/machine/snapshot": { hz: 10, frame: snapshot },
+  "/ws/v1/scale/snapshot": { hz: 5, frame: () => ({ timestamp: new Date().toISOString(), weight: +(sim.scaleWeight - sim.scaleOffset).toFixed(1), batteryLevel: sim.scaleBattery }) },
+  "/ws/v1/machine/waterLevels": { hz: 1, frame: () => ({ currentLevel: Math.round(sim.water), refillLevel: sim.refill }) },
+  "/ws/v1/machine/shotSettings": { hz: 0.5, frame: () => shotSettings },
+  "/ws/v1/plugins/time-to-ready.reaplugin/timeToReady": {
+    hz: 1,
+    frame: () => sim.state === "heating"
+      ? { status: "heating", remainingTimeMs: Math.max(0, ((92.8 - sim.group) / 0.6) * 1000), heatingRate: 0.6 }
+      : { status: sim.state === "sleeping" ? "not_heating" : "reached", remainingTimeMs: 0 },
+  },
+};
+const wss = new WebSocketServer({ noServer: true });
+server.on("upgrade", (req, socket, head) => {
+  const path = new URL(req.url ?? "/", "http://x").pathname;
+  const stream = streams[path];
+  if (!stream) return socket.destroy();
+  wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+    if (path === "/ws/v1/scale/snapshot") ws.send(JSON.stringify({ status: "connected" }));
+    const iv = setInterval(() => ws.readyState === ws.OPEN && ws.send(JSON.stringify(stream.frame())), 1000 / stream.hz);
+    ws.on("close", () => clearInterval(iv));
   });
-  for (const c of clients) c.send(snap);
-}, 250);
+});
 
 const port = Number(process.env.PORT ?? 8080);
-server.listen(port, () => console.log(`mock-decaid on http://localhost:${port} (POST /api/v1/machine/state {"state":"espresso"} pulls a shot)`));
+server.listen(port, () => console.log(`mock-decaid on http://localhost:${port} (PUT /api/v1/machine/state/espresso pulls a shot)`));

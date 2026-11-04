@@ -75,4 +75,34 @@ describe("full flow", () => {
     const shot = await decaid.shot(shotId);
     expect(shot.annotations?.enjoyment).toBe(3);
   }, 30000);
+
+  it("keeps favourites, presets, preferences and maintenance", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "crema-test-"));
+    const app = createApp({ llm: new ProviderChain(["mock"]), decaid: new DecaidClient(`http://localhost:${PORT}`), store: new Store(path.join(dir, "crema.json")) });
+    const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+
+    const fav = { name: "Morning", profileTitle: "Londonium", doseG: 18, yieldG: 40, tempC: 90, beanId: null, grinderSetting: "12" };
+    const favs = await (await app.request("/api/favourites/2", json("PUT", fav))).json();
+    expect(favs).toHaveLength(5);
+    expect(favs[2].name).toBe("Morning");
+    expect((await app.request("/api/favourites/9", json("PUT", fav))).status).toBe(400);
+
+    const presets = await (await app.request("/api/presets")).json();
+    presets.steam[0].seconds = 18;
+    expect((await (await app.request("/api/presets", json("PUT", presets))).json()).steam[0].seconds).toBe(18);
+
+    expect((await (await app.request("/api/preferences", json("PUT", { drink: "milk" }))).json()).drink).toBe("milk");
+    expect((await app.request("/api/preferences", json("PUT", { drink: "tea" }))).status).toBe(400);
+
+    await app.request("/api/maintenance/backflush/done", { method: "POST" });
+    const m = await (await app.request("/api/maintenance")).json();
+    expect(m.shotsSinceBackflush).toBe(0);
+    expect(m.backflushDue).toBe(false);
+
+    const cat = await (await app.request("/api/profiles/catalog")).json();
+    expect(cat.find((p: { title: string }) => p.title === "Londonium").installed).toBe(true);
+
+    const proxied = await app.request("/decaid/api/v1/machine/state");
+    expect((await proxied.json()).state.state).toBeTruthy();
+  }, 30000);
 });

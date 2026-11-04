@@ -1,0 +1,1041 @@
+/* Crema web app: the DE1 tablet skin, the iPhone companion and the demo.
+
+   API mode talks to the Crema server (/api/*), to Decaid's REST API through
+   Crema's /decaid proxy, and to Decaid's WebSockets directly. When the server
+   can't be reached, it runs the self-contained demo from demo.js.
+
+   API interface (implemented by makeLiveApi below and makeDemoApi in demo.js):
+     shelf, identify, saveBean, setBeanState, pinBest, recommend, rank, catalog,
+     apply, shots, annotate, feedback, prefs, favourites, presets, maintenance,
+     machine { setState, tare, shotSettings, settings, waterThreshold, presence,
+               schedules, display, plugins, info, heartbeat }, subscribe */
+"use strict";
+
+/* ================= utilities ================= */
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const local = {
+  get(k, d) { try { const v = localStorage.getItem("crema:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("crema:" + k, JSON.stringify(v)); } catch {} },
+};
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const DAY = 864e5;
+const daysSince = (iso) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / DAY) : null);
+const round = (n, step) => Math.round(n / step) * step;
+const fmt1 = (n) => (n == null || Number.isNaN(n) ? "–" : Number(n).toFixed(1));
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2800);
+}
+
+/* ================= theme ================= */
+const HOST_THEME = document.documentElement.getAttribute("data-theme");
+function applyTheme(mode, redraw = true) {
+  const root = document.documentElement;
+  if (mode === "light" || mode === "dark") root.setAttribute("data-theme", mode);
+  else if (HOST_THEME) root.setAttribute("data-theme", HOST_THEME);
+  else root.removeAttribute("data-theme");
+  local.set("theme", mode);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", css("--bg") || "#17120f");
+  $$("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
+  if (redraw && S.api) route(false);
+}
+
+/* ================= rest + dial-in rules (mirror server/recommend) ================= */
+const REST = { light: [14, 40], "medium-light": [10, 35], medium: [7, 28], "medium-dark": [5, 24], dark: [4, 21] };
+function restOf(info) {
+  const roast = info?.roastLevel?.value || (info?.isBlend ? "medium" : "medium-light");
+  const w = REST[roast] || REST["medium-light"];
+  const d = daysSince(info?.roastDate?.value);
+  if (d == null) return { days: null, window: w, status: "unknown", label: "No roast date" };
+  if (d < w[0]) return { days: d, window: w, status: "resting", label: "Resting" };
+  if (d <= w[1]) return { days: d, window: w, status: "peak", label: "In its window" };
+  return { days: d, window: w, status: "fading", label: "Past its best" };
+}
+window.rulesDialIn = function rulesDialIn(fb, timeS, recipe) {
+  const [lo, hi] = recipe.targetTimeS || [25, 35];
+  if (fb.sourBitter <= -1 || (timeS < lo && fb.sourBitter <= 0)) return { change: "Grind finer", reasoning: timeS < lo ? `Ran fast (${timeS} s against ${lo}–${hi} s) and tasted sour: under-extracted.` : "Sour means under-extracted. Finer grinding pulls out more sweetness." };
+  if (fb.sourBitter >= 1 || (timeS > hi && fb.sourBitter >= 0)) return { change: "Grind coarser", reasoning: timeS > hi ? `Ran slow (${timeS} s) and tasted bitter: over-extracted.` : "Bitter or harsh means over-extracted." };
+  if (fb.body <= -1) return { change: "Shorten the yield by 3 g", reasoning: "Balanced but thin. A tighter ratio adds body." };
+  if (fb.body >= 2) return { change: "Lengthen the yield by 3 g", reasoning: "Balanced but heavy. A longer ratio adds clarity." };
+  return { change: "Keep it. You're dialled in.", reasoning: "Balanced taste and body. Note the grind setting." };
+};
+
+/* ================= live API ================= */
+function makeLiveApi(cfg, health) {
+  const j = async (path, opts = {}) => {
+    const init = { ...opts };
+    if (opts.body && !(opts.body instanceof FormData)) init.headers = { "content-type": "application/json" };
+    const res = await fetch(path, init);
+    const text = await res.text();
+    const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
+    if (!res.ok) throw new Error((data && data.error) || `${res.status} ${res.statusText}`);
+    return data;
+  };
+  const put = (path, body) => j(path, { method: "PUT", body: JSON.stringify(body) });
+  const post = (path, body) => j(path, { method: "POST", body: JSON.stringify(body ?? {}) });
+  const D = (p) => `/decaid/api/v1${p}`;
+  const wsBase = cfg.decaidWs.replace(/\/ws\/v1\/machine\/snapshot$/, "");
+  const shotPoints = (full) => {
+    const m = full.measurements || [];
+    const t0 = m.length ? Date.parse(m[0].machine.timestamp) : 0;
+    return m.map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? 0, f: x.machine.flow ?? 0, w: x.scale?.weight ?? 0, temp: x.machine.mixTemperature, tp: x.machine.targetPressure, tf: x.machine.targetFlow }));
+  };
+  const toShot = (s, full) => {
+    const ctx = s.workflow?.context || {};
+    const points = full ? shotPoints(full) : [];
+    return { id: s.id, timestamp: s.timestamp, beanId: null, batch: ctx.beanBatchId, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
+      doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? ctx.targetYield, timeS: points.length ? Math.round(points.at(-1).t) : null,
+      enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points };
+  };
+  let heartbeatAt = 0;
+  return {
+    demo: false,
+    info: { providers: health?.providers ?? [], decaidUrl: cfg.decaidUrl },
+    async shelf() {
+      const rows = await j("/api/shelf");
+      return rows.filter((r) => r.record).map((r) => ({
+        id: r.bean.id, batch: r.record.decaidBatchId, info: r.record.info, recipe: r.record.recipe, recipeSource: r.record.recipe ? "saved" : null,
+        photo: r.record.photo, productImage: r.record.productImage, art: r.record.art, weight: r.batches?.[0]?.weight ?? r.record.info.weightGrams,
+        remaining: r.remaining, frozen: r.frozen, bestShotId: r.record.bestShotId ?? null, shots: r.usage?.shots ?? 0,
+      }));
+    },
+    async identify({ files, query, url, offline }, onStep) {
+      onStep(0, [files?.length ? "Reading the bag and finding the roaster's page" : "Looking up the coffee", "Building the record"]);
+      const fd = new FormData();
+      (files || []).forEach((f) => fd.append("images", f));
+      if (query) fd.set("query", query); if (url) fd.set("url", url); if (offline) fd.set("offline", "true");
+      return (await j("/api/identify", { method: "POST", body: fd })).info;
+    },
+    async saveBean(info, photo, art) { const rec = await post("/api/beans", { info, photo, art }); return { id: rec.decaidBeanId }; },
+    setBeanState: (id, patch) => put(`/api/beans/${id}/state`, patch),
+    pinBest: (id, shotId) => put(`/api/beans/${id}/best-shot`, { shotId }),
+    recommend: (beanId, opts = {}) => post("/api/recommend", { beanId, rulesOnly: !!opts.rulesOnly }),
+    rank: (beanId) => j(`/api/profiles/rank/${beanId}`),
+    catalog: () => j("/api/profiles/catalog"),
+    apply: (beanId, recipe, grinderSetting) => post("/api/apply", { beanId, recipe, grinderSetting }),
+    async shots(limit = 15) {
+      const { items } = await j(`/api/shots?limit=${limit}`);
+      return Promise.all(items.map(async (s) => toShot(s, await j(`/api/shots/${encodeURIComponent(s.id)}`).catch(() => null))));
+    },
+    annotate: (id, a) => put(D(`/shots/${encodeURIComponent(id)}`), { annotations: a }),
+    feedback: (shotId, beanId, feedback) => post(`/api/shots/${encodeURIComponent(shotId)}/feedback`, { beanId, feedback }),
+    prefs: { get: () => j("/api/preferences"), set: (p) => put("/api/preferences", p) },
+    favourites: { get: () => j("/api/favourites"), set: (slot, fav) => put(`/api/favourites/${slot}`, fav) },
+    presets: { get: () => j("/api/presets"), set: (p) => put("/api/presets", p) },
+    maintenance: { get: () => j("/api/maintenance"), done: (kind) => post(`/api/maintenance/${kind}/done`), set: (p) => put("/api/maintenance", p) },
+    machine: {
+      canStart: true,
+      info: () => j(D("/machine/info")),
+      setState: (s) => j(D(`/machine/state/${s}`), { method: "PUT" }),
+      tare: () => j(D("/scale/tare"), { method: "PUT" }),
+      shotSettings: { get: () => j(D("/machine/shotSettings")).catch(() => null), set: (p) => post(D("/machine/shotSettings"), p) },
+      settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
+      waterThreshold: (pct) => post(D("/machine/waterLevels"), { warningThresholdPercentage: pct }),
+      presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
+      schedules: {
+        list: () => j(D("/presence/schedules")),
+        add: (s) => post(D("/presence/schedules"), s),
+        update: (id, p) => put(D(`/presence/schedules/${id}`), p),
+        remove: (id) => j(D(`/presence/schedules/${id}`), { method: "DELETE" }),
+      },
+      display: { get: () => j(D("/display")), brightness: (n) => put(D("/display/brightness"), { brightness: n }) },
+      plugins: () => j(D("/plugins")),
+      heartbeat() { if (Date.now() - heartbeatAt > 30000) { heartbeatAt = Date.now(); post(D("/machine/heartbeat")).catch(() => {}); } },
+    },
+    subscribe(h) {
+      const open = (path, fn) => {
+        const connect = () => {
+          let ws;
+          try { ws = new WebSocket(wsBase + path); } catch { return; }
+          ws.onmessage = (e) => { try { fn(JSON.parse(e.data)); } catch {} };
+          ws.onclose = () => setTimeout(connect, 2000);
+        };
+        connect();
+      };
+      let prev = null;
+      open("/ws/v1/machine/snapshot", (s) => {
+        const st = s.state?.state;
+        if (prev === "espresso" && st !== "espresso") s.finished = "latest";
+        prev = st; h.snapshot?.(s);
+      });
+      open("/ws/v1/scale/snapshot", (s) => h.scale?.(s.status ? { connected: s.status === "connected" } : { connected: true, weight: s.weight, batteryLevel: s.batteryLevel }));
+      open("/ws/v1/machine/waterLevels", (s) => h.water?.(s));
+      open("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", (s) => h.ready?.(s));
+    },
+  };
+}
+
+/* ================= app state ================= */
+const S = {
+  api: null,
+  snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
+  shelf: [], current: null, next: null, loaded: false,
+  prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
+  live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null,
+  catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
+  shots: [], selShot: null, cmpShot: null,
+};
+
+/* ================= chart ================= */
+function drawChart(canvas, pts, o = {}) {
+  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true } = o;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = rect.width, H = rect.height;
+  const pad = compact ? { l: 2, r: 2, t: 4, b: 4 } : { l: 30, r: 34, t: 10, b: 22 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const x = (t) => pad.l + (t / maxT) * iw;
+  const yB = (v) => pad.t + ih - (clamp(v, 0, 12) / 12) * ih;
+  const yW = (v) => pad.t + ih - (clamp(v, 0, maxW) / maxW) * ih;
+  const yT = (v) => pad.t + ih - ((clamp(v, 70, 100) - 70) / 30) * ih;
+  ctx.clearRect(0, 0, W, H);
+  if (!compact) {
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.fillStyle = css("--muted");
+    ctx.font = `11px ${css("--font-mono") || "monospace"}`;
+    for (let v = 0; v <= 12; v += 3) {
+      ctx.globalAlpha = .6; ctx.beginPath(); ctx.moveTo(pad.l, yB(v)); ctx.lineTo(W - pad.r, yB(v)); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.textAlign = "right"; ctx.fillText(String(v), pad.l - 6, yB(v) + 4);
+      ctx.textAlign = "left"; ctx.fillText(String(Math.round((v / 12) * maxW)), W - pad.r + 6, yB(v) + 4);
+    }
+    ctx.textAlign = "center";
+    const step = maxT > 60 ? 20 : 10;
+    for (let t = 0; t <= maxT; t += step) ctx.fillText(`${t}s`, x(t), H - 5);
+  }
+  const line = (data, key, color, y, width, { alpha = 1, dash = null } = {}) => {
+    if (!data?.length || data[0][key] == null) return;
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    data.forEach((d, i) => (i ? ctx.lineTo(x(d.t), y(d[key])) : ctx.moveTo(x(d.t), y(d[key]))));
+    ctx.stroke(); ctx.restore();
+  };
+  if (ghost?.length) {
+    line(ghost, "p", css("--pressure"), yB, 1.5, { alpha: .25 });
+    line(ghost, "f", css("--flow"), yB, 1.5, { alpha: .25 });
+    line(ghost, "w", css("--weight"), yW, 1.5, { alpha: .25 });
+  }
+  if (pts.length && !compact) {
+    ctx.globalAlpha = .12; ctx.fillStyle = css("--weight"); ctx.beginPath();
+    ctx.moveTo(x(pts[0].t), yW(0)); pts.forEach((d) => ctx.lineTo(x(d.t), yW(d.w))); ctx.lineTo(x(pts.at(-1).t), yW(0)); ctx.fill(); ctx.globalAlpha = 1;
+  }
+  if (!compact && targets) {
+    line(pts, "tp", css("--pressure"), yB, 1.2, { alpha: .7, dash: [4, 4] });
+    line(pts, "tf", css("--flow"), yB, 1.2, { alpha: .7, dash: [4, 4] });
+  }
+  if (!compact) line(pts, "temp", css("--temp"), yT, 1.4, { alpha: .8 });
+  line(pts, "w", css("--weight"), yW, compact ? 1.5 : 2);
+  line(pts, "f", css("--flow"), yB, compact ? 1.5 : 2);
+  line(pts, "p", css("--pressure"), yB, compact ? 1.5 : 2.4);
+  if (pts.length && !compact) {
+    const e = pts.at(-1);
+    for (const [k, c, y] of [["p", "--pressure", yB], ["f", "--flow", yB], ["w", "--weight", yW]]) {
+      if (e[k] == null) continue;
+      ctx.fillStyle = css(c); ctx.beginPath(); ctx.arc(x(e.t), y(e[k]), 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+function legendHtml(withGhost) {
+  const item = (c, t, dash) => `<span><span class="swatch" style="background:var(${c})${dash ? ";opacity:.6" : ""}"></span>${t}</span>`;
+  return [item("--pressure", "Pressure (bar)"), item("--flow", "Flow (ml/s)"), item("--weight", "Weight (g, right)"), item("--temp", "Temp (70–100 °C)"),
+    `<span class="muted">Dashed: targets</span>`, withGhost ? `<span class="muted">Faint: reference shot</span>` : ""].join("");
+}
+
+/* ================= bag art + rest ================= */
+function artSrc(b) {
+  const product = b.productImage || b.info?.imageUrl;
+  return b.art === "photo" ? b.photo || product : product || b.photo;
+}
+function bagArt(b, size = "") {
+  const src = artSrc(b);
+  if (src) return `<div class="bag ${size}"><img src="${esc(src)}" alt="" loading="lazy"></div>`;
+  return `<div class="bag ${size}" style="background:#c99a6b"><span class="initial">${esc((b.info?.name?.value || "?").trim()[0])}</span></div>`;
+}
+function restBar(rest) {
+  if (rest.days == null) return `<div class="row between"><span class="label">Rest</span><span class="pill unknown">No roast date</span></div>`;
+  const span = rest.window[1] + 10, pct = (d) => clamp((d / span) * 100, 0, 100);
+  return `<div class="rest">
+    <div class="row between"><span class="label">Day <span class="num">${rest.days}</span> off roast</span><span class="pill ${rest.status}">${rest.label}</span></div>
+    <div class="rest-track" role="img" aria-label="Day ${rest.days}; best between day ${rest.window[0]} and ${rest.window[1]}">
+      <div class="rest-window" style="left:${pct(rest.window[0])}%;width:${pct(rest.window[1]) - pct(rest.window[0])}%"></div>
+      <div class="rest-marker" style="left:${pct(rest.days)}%"></div></div>
+    <div class="rest-scale num"><span>roast</span><span>day ${rest.window[0]}</span><span>day ${rest.window[1]}</span><span>${span}</span></div></div>`;
+}
+
+/* ================= status + alerts ================= */
+const STATE_LABEL = { idle: "Ready", sleeping: "Asleep", heating: "Warming up", preheating: "Preheating", espresso: "Espresso", steam: "Steaming", hotWater: "Hot water", flush: "Flushing", steamRinse: "Purging steam", cleaning: "Cleaning", descaling: "Descaling", needsWater: "Refill the tank", error: "Error", booting: "Starting" };
+function renderStatus() {
+  const s = S.snap, st = s?.state?.state || "unknown";
+  const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
+  const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
+  const low = S.water && tank < (S.water.warningThresholdPercentage ?? 20);
+  const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
+  $("#status").innerHTML = `
+    <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
+    <span class="chip"><span class="muted">Group</span><span class="num">${fmt1(s?.groupTemperature ?? s?.mixTemperature)}°</span></span>
+    <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
+    ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
+    <button class="chip" type="button" id="scaleChip" title="Tap to tare">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</button>
+    ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`;
+  $("#scaleChip").onclick = tare;
+  const asleep = st === "sleeping";
+  $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
+}
+function renderAlerts() {
+  const st = S.snap?.state?.state;
+  const a = [];
+  if (st === "needsWater") a.push(`<div class="banner bad"><span><b>Refill the water tank.</b> The machine stops until it has water.</span>${S.api.demo ? '<button class="btn small" id="refillBtn">Refill (demo)</button>' : ""}</div>`);
+  if (!S.snap && !S.api.demo) a.push(`<div class="banner bad"><span><b>Can't reach the machine.</b> Check that Decaid is running on the tablet and on the same network.</span></div>`);
+  $("#alerts").innerHTML = a.join("");
+  const r = $("#refillBtn"); if (r) r.onclick = () => S.api.machine.refill();
+}
+async function tare() {
+  try { await S.api.machine.tare(); toast("Scale tared"); } catch (e) { toast(`Couldn't tare: ${e.message}`); }
+}
+
+/* ================= next shot (brew home, left) ================= */
+function setNextFromRecipe(bean, recipe) {
+  const r = recipe || bean?.recipe;
+  S.next = bean && r ? { beanId: bean.id, profileTitle: r.profileTitle, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.targetTimeS, grind: local.get(`grind:${bean.id}`, "") } : null;
+  S.loaded = false;
+}
+function renderNextShot() {
+  const el = $("#nextShot");
+  const b = S.current;
+  if (!b) { el.innerHTML = `<h2>No coffee yet</h2><p class="muted">Add a bag to get a profile and recipe matched to it.</p><div><a class="btn primary" href="#add">Add coffee</a></div>`; return; }
+  const i = b.info, n = S.next, r = b.recipe, rest = restOf(i);
+  const idx = S.shelf.findIndex((x) => x.id === b.id);
+  const ratio = n ? (n.yieldG / n.doseG).toFixed(1) : "–";
+  el.innerHTML = `
+    <div class="coffee-line">${bagArt(b)}
+      <div style="min-width:0"><div class="label">${esc(i.roaster.value)}</div><div class="coffee-name">${esc(i.name.value)}</div>
+        <div class="row" style="gap:6px;margin-top:3px"><span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}</span>${b.frozen ? '<span class="pill plain">Frozen</span>' : ""}</div></div>
+      <div class="cycler">${S.shelf.length > 1 ? `<button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button>` : ""}</div>
+    </div>
+    ${n ? `
+    <div class="field-row first"><span class="label">Profile</span>
+      <button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "Tap for recommendations")}</span></span><span class="muted">›</span></button></div>
+    <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
+    <div class="field-row"><span class="label">Yield</span>${stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
+    <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
+    <div class="field-row"><span class="label">Grind</span>
+      <div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
+    <div class="row">
+      <button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.loaded ? "Loaded on the machine ✓" : "Load onto machine"}</button>
+      <button class="btn ghost" id="resetRecipe" title="Back to the recommended recipe">Reset</button>
+    </div>
+    ${r ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px">
+      <ul class="why">${(r.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+      ${r.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(r.dialIn)}</div>` : ""}
+      <div class="muted small">Target ${r.targetTimeS?.[0] ?? "–"}–${r.targetTimeS?.[1] ?? "–"} s · ${esc(r.grindHint || "")}</div>
+      ${r.alternatives?.length ? `<div class="muted small">Also try: ${r.alternatives.map((a) => esc(a.profileTitle)).join(", ")}</div>` : ""}</div></details>` : ""}
+    ` : `<p class="muted">Working out a recipe…</p>`}`;
+  const go = (d) => selectBean(S.shelf[(idx + d + S.shelf.length) % S.shelf.length].id);
+  if ($("#prevBean")) { $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1); }
+  if (!n) return;
+  $("#profileBtn").onclick = () => (location.hash = "#profiles");
+  $$("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
+  $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b.id}`, n.grind); S.loaded = false; renderNextShot(); };
+  $("#loadBtn").onclick = () => loadOntoMachine();
+  $("#resetRecipe").onclick = () => { setNextFromRecipe(b); renderNextShot(); };
+}
+function stepper(key, valHtml) {
+  return `<div class="stepper"><button type="button" data-step="${key}:-1" aria-label="Less">−</button><div class="val">${valHtml}</div><button type="button" data-step="${key}:1" aria-label="More">+</button></div>`;
+}
+function step(spec) {
+  const [key, dir] = spec.split(":"); const d = Number(dir), n = S.next;
+  if (key === "dose") n.doseG = clamp(round(n.doseG + d * 0.5, 0.5), 5, 30);
+  if (key === "yield") n.yieldG = clamp(round(n.yieldG + d * 1, 0.5), 10, 150);
+  if (key === "temp") n.tempC = clamp(round(n.tempC + d * 0.5, 0.5), 60, 100);
+  if (key === "grind") {
+    const v = parseFloat(n.grind);
+    n.grind = Number.isFinite(v) ? String(round(v + d * 0.5, 0.5)) : n.grind;
+    local.set(`grind:${n.beanId}`, n.grind);
+  }
+  S.loaded = false; renderNextShot();
+}
+async function loadOntoMachine(silent = false) {
+  const n = S.next, b = S.current;
+  if (!n || !b) return false;
+  const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
+  try {
+    await S.api.apply(b.id, recipe, n.grind || undefined);
+    S.loaded = true; renderNextShot();
+    if (!silent) toast(`Loaded ${n.profileTitle}: ${n.doseG} g → ${n.yieldG} g at ${n.tempC} °C`);
+    return true;
+  } catch (e) { toast(`Couldn't load the recipe: ${e.message}`); return false; }
+}
+async function selectBean(id, opts = {}) {
+  S.current = S.shelf.find((b) => b.id === id) || S.shelf[0] || null;
+  local.set("current", S.current?.id);
+  if (S.current && !S.current.recipe) {
+    renderNextShot();
+    try { const out = await S.api.recommend(S.current.id); S.current.recipe = out.recipe; S.current.recipeSource = out.source; } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+  }
+  setNextFromRecipe(S.current);
+  S.ghost = null;
+  await loadGhost();
+  renderNextShot(); renderLive();
+  if (!opts.quiet && S.current) toast(`Now brewing ${S.current.info.name.value}`);
+}
+async function loadGhost() {
+  const b = S.current;
+  if (!b?.bestShotId) { S.ghost = null; return; }
+  if (!S.shots.length) S.shots = await S.api.shots(40).catch(() => []);
+  S.ghost = S.shots.find((s) => s.id === b.bestShotId)?.points || null;
+}
+
+/* ================= favourites ================= */
+function renderFavs() {
+  $("#favs").innerHTML = S.favourites.map((f, i) => f
+    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmt1(f.doseG)}→${fmt1(f.yieldG)}</span></button><button class="fav-edit" data-favedit="${i}" aria-label="Edit favourite">⋯</button></div>`
+    : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("");
+  $$("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
+  $$("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
+}
+async function useFav(i) {
+  const f = S.favourites[i];
+  if (!f) {
+    if (!S.next) return toast("Pick a coffee first");
+    const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 18);
+    const fav = { name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
+    S.favourites = await S.api.favourites.set(i, fav);
+    renderFavs(); toast(`Saved "${name}" to slot ${i + 1}`);
+    return;
+  }
+  if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
+  S.next = { ...S.next, beanId: S.current?.id, profileTitle: f.profileTitle, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting ?? S.next?.grind ?? "" };
+  renderNextShot();
+  await loadOntoMachine(true);
+  toast(`Loaded favourite "${f.name}"`);
+}
+function editFav(i) {
+  const f = S.favourites[i];
+  openSheet(`<h2>Favourite ${i + 1}</h2>
+    <div class="field"><label class="label" for="favName">Name</label><input type="text" id="favName" value="${esc(f.name)}" maxlength="40"></div>
+    <p class="muted small">${esc(f.profileTitle)} · ${fmt1(f.doseG)} g → ${fmt1(f.yieldG)} g · ${fmt1(f.tempC)} °C${f.grinderSetting ? ` · grind ${esc(f.grinderSetting)}` : ""}</p>
+    <div class="row"><button class="btn primary" id="favSave">Save name</button><button class="btn" id="favUpdate">Replace with current shot</button><button class="btn ghost" id="favClear">Clear slot</button></div>`);
+  $("#favSave").onclick = async () => { S.favourites = await S.api.favourites.set(i, { ...f, name: $("#favName").value.trim() || f.name }); closeSheet(); renderFavs(); };
+  $("#favUpdate").onclick = async () => {
+    if (!S.next) return;
+    S.favourites = await S.api.favourites.set(i, { ...f, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null });
+    closeSheet(); renderFavs(); toast("Favourite updated");
+  };
+  $("#favClear").onclick = async () => { S.favourites = await S.api.favourites.set(i, null); closeSheet(); renderFavs(); };
+}
+
+/* ================= machine controls (brew home, right) ================= */
+function renderControls() {
+  const p = S.presets, st = S.snap?.state?.state;
+  if (!p) return;
+  const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
+  const disabled = S.ghc || !S.snap || st === "sleeping" || st === "needsWater";
+  const sel = p.selected;
+  const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
+  const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
+  $("#controls").innerHTML = `
+    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmt1(S.next.doseG)}→${fmt1(S.next.yieldG)} g` : ""}</span></button>
+      ${S.loaded || !S.next ? "" : '<span class="ghc-note">Starting loads the recipe first</span>'}</div>
+    <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
+    <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
+    <div class="ctl"><button class="ctl-btn" data-run="flush" ${disabled || busy ? "disabled" : ""}>Flush<span class="sub">${flush.seconds} s</span></button>${chips("flush", p.flush)}</div>
+    <div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap ? "" : "disabled"}>STOP</button>
+      ${S.ghc ? '<span class="ghc-note">Your machine starts from the group head controller. Crema sets the recipe and presets; press the group head to start.</span>' : ""}</div>`;
+  $$("[data-run]").forEach((b) => (b.onclick = () => startOp(b.dataset.run)));
+  $$("[data-preset]").forEach((b) => (b.onclick = async () => {
+    const [kind, idx] = b.dataset.preset.split(":");
+    S.presets.selected[kind] = Number(idx);
+    renderControls();
+    await S.api.presets.set(S.presets).catch(() => {});
+    await pushPresetSettings(kind).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
+  }));
+  $("#stopBtn").onclick = () => S.api.machine.setState("idle").catch((e) => toast(e.message));
+}
+async function pushPresetSettings(kind) {
+  const p = S.presets, sel = p.selected;
+  if (kind === "steam") await S.api.machine.shotSettings.set({ targetSteamDuration: p.steam[sel.steam].seconds || 255 });
+  if (kind === "water") await S.api.machine.shotSettings.set({ targetHotWaterVolume: p.water[sel.water].ml });
+  if (kind === "flush") await S.api.machine.settings.set({ flushTimeout: p.flush[sel.flush].seconds });
+}
+async function startOp(kind) {
+  try {
+    if (kind === "espresso" && !S.loaded) { const ok = await loadOntoMachine(true); if (!ok) return; }
+    if (kind === "steam") await pushPresetSettings("steam");
+    if (kind === "hotWater") await pushPresetSettings("water");
+    if (kind === "flush") await pushPresetSettings("flush");
+    await S.api.machine.setState(kind);
+    S.api.machine.heartbeat();
+  } catch (e) { toast(`Couldn't start: ${e.message}`); }
+}
+
+/* ================= live panel + running overlay ================= */
+const PHASE = { preinfusion: "Preinfusion", pouring: "Pouring", pouringDone: "Done", preparingForShot: "Preparing" };
+function renderReadouts() {
+  const s = S.snap || {};
+  const w = S.scale.connected ? S.scale.weight : null;
+  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"], ["Steam", s.steamTemperature, "°C", "--muted"]];
+  $("#readouts").innerHTML = items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join("");
+  const wr = $("#weightReadout"); if (wr) wr.onclick = tare;
+}
+function renderLive() {
+  const target = S.next?.yieldG ?? 36;
+  const pts = S.live;
+  const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0);
+  drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost });
+  const st = S.snap?.state?.state;
+  $("#chartEmpty").hidden = pts.length > 0;
+  $("#chartEmpty").textContent = !S.snap ? "Waiting for the machine…" : S.ghc ? "Press the espresso button on the group head." : S.ghost ? "Tap Espresso. The faint curves are your reference shot for this coffee." : "Tap Espresso to pull a shot.";
+  $("#legend").innerHTML = legendHtml(!!S.ghost);
+  $("#phase").textContent = st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
+  $("#phaseSub").textContent = st === "espresso" && S.next ? `${S.next.profileTitle} · target ${fmt1(target)} g` : "";
+}
+function onSnapshot(s) {
+  const prevState = S.snap?.state?.state;
+  S.snap = s;
+  const st = s.state?.state;
+  if (st !== prevState) { renderControls(); renderAlerts(); updateSaver(); if (st === "espresso") onShotStart(); opOverlay(); }
+  if (st === "espresso") {
+    // Decaid's snapshot has no timer; the simulators send one. Ignore a stale
+    // value carried over from the previous operation on the first frame.
+    const local = (Date.now() - S.opStart) / 1000;
+    const t = s.elapsed != null && !(S.live.length === 0 && s.elapsed > 2) ? s.elapsed : local;
+    S.live.push({ t, p: s.pressure ?? 0, f: s.flow ?? 0, w: S.scale.weight ?? 0, temp: s.mixTemperature, tp: s.targetPressure, tf: s.targetFlow });
+    $("#shotClock").textContent = t.toFixed(1);
+    if (!$("#view-brew").hidden) renderLive();
+  } else if (["steam", "hotWater", "flush"].includes(st)) {
+    opOverlay();
+  }
+  if (s.finished) onShotEnd(s.finished);
+  renderStatus(); renderReadouts();
+  if (st === "espresso" || st !== prevState) { if (!$("#view-brew").hidden) renderLive(); }
+}
+function onShotStart() {
+  S.live = []; S.opStart = Date.now();
+  $("#afterShot").hidden = true;
+  if (location.hash !== "#brew") location.hash = "#brew";
+}
+async function onShotEnd(finishedId) {
+  const pts = S.live.slice();
+  S.shots = await S.api.shots(40).catch(() => S.shots);
+  const shot = finishedId === "latest" ? S.shots[0] : S.shots.find((x) => x.id === finishedId) || S.shots[0];
+  S.lastShotId = shot?.id;
+  showAfterShot(shot, pts);
+  if (S.current) S.current.remaining = S.current.remaining != null ? Math.max(0, S.current.remaining - (S.next?.doseG ?? 18)) : null;
+}
+function shotMetrics(points, s) {
+  const first = points.find((p) => p.w > 0.5);
+  const peak = points.reduce((m, p) => Math.max(m, p.p), 0);
+  const pour = points.filter((p) => first && p.t >= first.t);
+  const avgFlow = pour.length ? pour.reduce((a, p) => a + p.f, 0) / pour.length : null;
+  const yieldG = s?.yieldG ?? points.at(-1)?.w;
+  const doseG = s?.doseG ?? S.next?.doseG;
+  return [["Time", points.at(-1) ? `${points.at(-1).t.toFixed(1)}` : s?.timeS, "s"], ["First drops", first ? first.t.toFixed(1) : "–", "s"], ["Yield", fmt1(yieldG), "g"], ["Ratio", doseG && yieldG ? `1:${(yieldG / doseG).toFixed(2)}` : "–", ""], ["Peak", fmt1(peak), "bar"], ["Avg flow", fmt1(avgFlow), "ml/s"]];
+}
+function metricsHtml(m) {
+  return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
+}
+function showAfterShot(shot, pts) {
+  const p = $("#afterShot");
+  p.hidden = false;
+  let stars = 0;
+  const r = S.current?.recipe;
+  const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
+  const [lo, hi] = r?.targetTimeS || [25, 35];
+  const timing = timeS == null ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
+  p.innerHTML = `
+    <div class="row between"><h2>How was it?</h2>${timing}</div>
+    ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
+    <div class="slider"><label class="label" for="sb">Taste</label><input type="range" id="sb" min="-2" max="2" step="1" value="0"><div class="ends"><span>Sour</span><span>Balanced</span><span>Bitter</span></div></div>
+    <div class="slider"><label class="label" for="bd">Body</label><input type="range" id="bd" min="-2" max="2" step="1" value="0"><div class="ends"><span>Thin</span><span>Just right</span><span>Heavy</span></div></div>
+    <div class="row"><span class="label">Enjoyment</span><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="false" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
+    <div class="row"><button class="btn primary" id="sendTaste">Get the next adjustment</button><button class="btn" id="pinShot">Make this the reference shot</button></div>
+    <div id="adviceBox"></div>`;
+  $$(".star", p).forEach((b) => (b.onclick = () => { stars = +b.dataset.n; $$(".star", p).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.n <= stars))); }));
+  $("#sendTaste").onclick = async (e) => {
+    if (!shot || !S.current) return;
+    e.target.disabled = true;
+    try {
+      const { advice } = await S.api.feedback(shot.id, S.current.id, { sourBitter: +$("#sb").value, body: +$("#bd").value, enjoyment: stars || 3, notes: null });
+      $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div></div>`;
+    } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
+    e.target.disabled = false;
+  };
+  $("#pinShot").onclick = async () => {
+    if (!shot || !S.current) return;
+    await S.api.pinBest(S.current.id, shot.id);
+    S.current.bestShotId = shot.id; S.ghost = pts.length ? pts : shot.points;
+    toast("Pinned as the reference shot for this coffee"); renderLive();
+  };
+}
+function opOverlay() {
+  const st = S.snap?.state?.state, o = $("#opOverlay");
+  const kind = ["steam", "hotWater", "flush"].includes(st) ? st : null;
+  if (!kind) { o.hidden = true; S.opKind = null; return; }
+  if (S.opKind !== kind) { S.opKind = kind; S.opStart = Date.now(); }
+  const p = S.presets, sel = p?.selected || {};
+  const t = (Date.now() - S.opStart) / 1000; // steam/water/flush run in real time
+  const total = kind === "steam" ? p?.steam[sel.steam]?.seconds || 0 : kind === "hotWater" ? (p?.water[sel.water]?.ml || 120) / 6 : p?.flush[sel.flush]?.seconds || 5;
+  const title = { steam: "Steaming", hotWater: "Hot water", flush: "Flushing" }[kind];
+  const detail = kind === "steam" ? `Steam ${Math.round(S.snap.steamTemperature ?? 0)} °C · ${fmt1(S.snap.flow)} ml/s` : kind === "hotWater" ? `${p?.water[sel.water]?.ml ?? "–"} ml · ${S.scale.connected ? `${fmt1(S.scale.weight)} g in the cup` : `${fmt1(S.snap.flow)} ml/s`}` : `Group ${fmt1(S.snap.groupTemperature)} °C`;
+  o.hidden = false;
+  $("#opCard").innerHTML = `<span class="label">${title}</span><div class="op-time">${t.toFixed(0)}<small style="font-size:1.4rem" class="muted"> s</small></div>
+    ${total ? `<div class="op-bar"><div style="width:${clamp((t / total) * 100, 0, 100)}%"></div></div><div class="muted">${Math.max(0, total - t).toFixed(0)} s left</div>` : '<div class="muted">Runs until you stop it</div>'}
+    <div>${esc(detail)}</div><button class="stop-btn active" id="opStop">STOP</button>`;
+  $("#opStop").onclick = () => S.api.machine.setState("idle").catch(() => {});
+}
+
+/* ================= screen saver ================= */
+function updateSaver() {
+  const asleep = S.snap?.state?.state === "sleeping";
+  clearTimeout(updateSaver._t);
+  if (asleep && S.saver) updateSaver._t = setTimeout(() => { $("#saver").hidden = false; tickSaver(); }, 4000);
+  else $("#saver").hidden = true;
+}
+function tickSaver() {
+  if ($("#saver").hidden) return;
+  $("#saverTime").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  setTimeout(tickSaver, 10000);
+}
+async function sleepWake() {
+  const asleep = S.snap?.state?.state === "sleeping";
+  try { await S.api.machine.setState(asleep ? "idle" : "sleeping"); toast(asleep ? "Waking up" : "Going to sleep"); } catch (e) { toast(e.message); }
+}
+
+/* ================= sheet ================= */
+function openSheet(html) { $("#sheet").innerHTML = html + `<div class="row"><button class="btn ghost small" id="sheetClose">Close</button></div>`; $("#sheetBack").hidden = false; $("#sheetClose").onclick = closeSheet; }
+function closeSheet() { $("#sheetBack").hidden = true; }
+
+/* ================= shelf ================= */
+async function renderShelf() {
+  const el = $("#shelf");
+  if (!S.shelf.length) { el.innerHTML = `<div class="panel stack"><h2>Your shelf is empty</h2><p class="muted">Photograph a bag, search for a coffee or paste a roaster's link.</p><div><a class="btn primary" href="#add">Add coffee</a></div></div>`; return; }
+  el.innerHTML = S.shelf.map((b) => {
+    const i = b.info, rest = restOf(i);
+    const left = b.remaining != null && b.weight ? clamp((b.remaining / b.weight) * 100, 0, 100) : null;
+    const shotsLeft = b.remaining != null ? Math.floor(b.remaining / (b.recipe?.doseG ?? 18)) : null;
+    return `<article class="panel bean-card ${S.current?.id === b.id ? "current" : ""}">
+      <div class="coffee-head">${bagArt(b, "lg")}<div style="min-width:0" class="stack" style="gap:2px"><div><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2>
+        <div class="muted small">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div></div>
+        ${i.tastingNotes?.value?.length ? `<div class="tags">${i.tastingNotes.value.slice(0, 3).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div></div>
+      ${restBar(rest)}
+      ${left != null ? `<div class="stack" style="gap:6px"><div class="row between"><span class="label">Left</span><span class="num muted small">${b.remaining} / ${b.weight} g · about ${shotsLeft} shots</span></div><div class="grams"><div style="width:${left}%"></div></div>
+        ${shotsLeft != null && shotsLeft <= 4 ? '<span class="pill warn" style="justify-self:start">Running low. Time to reorder</span>' : ""}</div>` : ""}
+      <div class="muted small">${esc(b.recipe ? `${b.recipe.profileTitle} · ${fmt1(b.recipe.doseG)}→${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C` : "No recipe yet")}</div>
+      <div class="row">
+        <button class="btn small ${S.current?.id === b.id ? "" : "primary"}" data-brew="${esc(b.id)}">${S.current?.id === b.id ? "Brewing" : "Brew this"}</button>
+        <button class="btn small ghost" data-freeze="${esc(b.id)}">${b.frozen ? "Thaw" : "Freeze"}</button>
+        <button class="btn small ghost" data-finish="${esc(b.id)}">Finished</button>
+        ${i.productUrl ? `<a class="btn small ghost" href="${esc(i.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}
+      </div></article>`;
+  }).join("");
+  $$("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
+  $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
+    const b = S.shelf.find((x) => x.id === btn.dataset.freeze);
+    await S.api.setBeanState(b.id, { frozen: !b.frozen }); b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
+  }));
+  $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
+    const b = S.shelf.find((x) => x.id === btn.dataset.finish);
+    openSheet(`<h2>Finished ${esc(b.info.name.value)}?</h2><p class="muted">It moves off your shelf. Its shots stay in your history.</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
+    $("#confirmFinish").onclick = async () => {
+      await S.api.setBeanState(b.id, { finished: true });
+      closeSheet(); await refreshShelf();
+      if (S.current?.id === b.id) await selectBean(S.shelf[0]?.id, { quiet: true });
+      renderShelf(); toast("Moved off the shelf");
+    };
+  }));
+}
+async function refreshShelf() { S.shelf = await S.api.shelf(); }
+
+/* ================= add coffee ================= */
+let addMode = "photo", files = [], pending = null, REVIEW_INTRO = "";
+function setMode(m) {
+  addMode = m;
+  $$("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
+  $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
+}
+async function thumbnail(file, max = 360) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const s = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.8);
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
+}
+function factRows(info) {
+  const rows = [["Roaster", "roaster"], ["Coffee", "name"], ["Country", "country"], ["Region", "region"], ["Producer", "producer"], ["Variety", "variety"], ["Process", "process"], ["Altitude", "altitudeMasl", (v) => `${v.join("–")} masl`], ["Roast", "roastLevel"], ["Roast date", "roastDate"], ["Tasting notes", "tastingNotes"]];
+  return rows.map(([label, key, f]) => {
+    const fld = info[key] || {};
+    const v = fld.value == null ? null : f ? f(fld.value) : Array.isArray(fld.value) ? fld.value.join(", ") : fld.value;
+    const flag = info.needsConfirmation?.includes(key) ? "flag" : "";
+    const prov = fld.source ? `<span class="prov src-${fld.source}">${fld.source}</span>` : "";
+    if (key === "roastDate") return `<div class="k ${flag}">${label}</div><div class="${flag}"><input type="date" id="roastDateInput" value="${esc(fld.value || "")}" style="background:transparent;border:0;padding:0" aria-label="Roast date"> ${flag ? '<span class="muted small">From the bag</span>' : ""}</div><div class="${flag}">${prov}</div>`;
+    return `<div class="k ${flag}">${label}</div><div class="${flag}">${v == null ? '<span class="muted">Not given</span>' : esc(v)}</div><div class="${flag}">${prov}</div>`;
+  }).join("");
+}
+function artPicker(info, photo) {
+  const product = info.imageUrl;
+  if (!product && !photo) return "";
+  if (!product) return `<div class="muted small">No product photo on the roaster's page. Your photo will be used.</div>`;
+  const opt = (val, src, text, checked) => `<label><input type="radio" name="art" value="${val}" ${checked ? "checked" : ""}><img src="${esc(src)}" alt="">${text}</label>`;
+  return `<div class="stack" style="gap:8px"><span class="label">Picture on your shelf</span><div class="art-pick">${opt("product", product, "Roaster's photo", true)}${photo ? opt("photo", photo, "Your photo", false) : ""}</div></div>`;
+}
+function renderReview(info, photo) {
+  pending = { info, photo };
+  $("#reviewPanel").innerHTML = `
+    <div class="coffee-line" style="grid-template-columns:76px minmax(0,1fr)">${bagArt({ photo, info, art: "product" }, "xl")}<div style="min-width:0"><div class="label">${esc(info.roaster.value)}</div><h2>${esc(info.name.value)}</h2><div class="muted small">${esc(info.summary)}</div></div></div>
+    <div class="row"><span class="label">Match confidence</span><span class="num">${Math.round((info.confidence ?? 0) * 100)}%</span><span class="prov src-bag">bag</span><span class="prov src-web">web</span><span class="prov src-inferred">inferred</span></div>
+    ${artPicker(info, photo)}
+    <div class="facts">${factRows(info)}</div>
+    ${info.roasterRecipe?.text ? `<div class="advice"><div class="label">Roaster's recipe</div>${esc(info.roasterRecipe.text)}</div>` : ""}
+    ${info.sources?.length ? `<div class="muted small" style="overflow-wrap:anywhere">Sources: ${info.sources.map((s) => /^https?:/.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s.replace(/^https?:\/\//, ""))}</a>` : esc(s)).join(", ")}</div>` : ""}
+    <div class="row"><button class="btn primary" id="saveBean">Save to shelf and match a profile</button><button class="btn ghost" id="discardBean">Discard</button></div>`;
+  $("#saveBean").onclick = async (e) => {
+    e.target.disabled = true;
+    const d = $("#roastDateInput").value;
+    if (d) { pending.info.roastDate = { value: d, source: "bag" }; pending.info.needsConfirmation = (pending.info.needsConfirmation || []).filter((k) => k !== "roastDate"); }
+    try {
+      const art = document.querySelector('input[name="art"]:checked')?.value ?? (pending.info.imageUrl ? "product" : "photo");
+      const saved = await S.api.saveBean(pending.info, pending.photo, art);
+      files = []; $("#thumbs").innerHTML = ""; pending = null; $("#reviewPanel").innerHTML = REVIEW_INTRO;
+      await refreshShelf();
+      const b = S.shelf.find((x) => x.id === saved.id); if (b) b.recipe = null;
+      location.hash = "#profiles";
+      await selectBean(saved.id);
+    } catch (err) { toast(`Couldn't save: ${err.message}`); e.target.disabled = false; }
+  };
+  $("#discardBean").onclick = () => { pending = null; $("#reviewPanel").innerHTML = REVIEW_INTRO; };
+}
+async function onIdentify(e) {
+  e.preventDefault();
+  const query = $("#queryInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
+  const input = addMode === "photo" ? { files } : addMode === "search" ? { query } : { url };
+  if (addMode === "photo" && !files.length) return toast("Add a photo of the bag first");
+  if (addMode === "search" && !query) return toast("Type a roaster and coffee name");
+  if (addMode === "link" && !url) return toast("Paste a product link");
+  const btn = $("#identifyBtn"); btn.disabled = true;
+  const panel = $("#reviewPanel");
+  const draw = (i, steps) => { panel.innerHTML = `<h2>Identifying…</h2><ul class="steps">${steps.map((s, n) => `<li class="${n < i ? "done" : n === i ? "active" : ""}"><span class="tick">${n < i ? "✓" : ""}</span>${esc(s)}</li>`).join("")}</ul>`; };
+  try {
+    const info = await S.api.identify({ ...input, offline }, draw);
+    renderReview(info, files[0] ? await thumbnail(files[0]) : null);
+  } catch (err) {
+    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or search by roaster and name.</p>`;
+  }
+  btn.disabled = false;
+}
+
+/* ================= profiles ================= */
+const ROASTS = ["light", "medium-light", "medium", "medium-dark", "dark"];
+let catFilter = { roast: null, milk: false, easy: false, scale: null };
+async function renderProfiles() {
+  const b = S.current;
+  $("#profilesTitle").textContent = b ? `Profiles for ${b.info.name.value}` : "Profiles";
+  $("#profilesSub").textContent = b ? `Matched against what ${b.info.roaster.value} says about it: ${[b.info.roastLevel?.value, b.info.processKind, (b.info.tastingNotes?.value || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ")}` : "Add a coffee to see recommendations.";
+  const rec = $("#recommended");
+  if (b) {
+    rec.innerHTML = `<p class="muted">Ranking profiles…</p>`;
+    try {
+      const cands = await S.api.rank(b.id);
+      const top = cands[0]?.score || 1;
+      const chosen = b.recipe?.profileTitle;
+      rec.innerHTML = `${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "")}</span></div>
+          <div class="row between"><h2>${esc(chosen)}</h2><span class="num">${fmt1(b.recipe.doseG)} g → ${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C · ${b.recipe.targetTimeS?.join("–")} s</span></div>
+          <ul class="why">${(b.recipe.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+          ${b.recipe.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(b.recipe.dialIn)}</div>` : ""}
+          <div class="row"><button class="btn primary" data-use="${esc(chosen)}" data-rec="1">Use this</button><button class="btn" id="askAgain">Ask the AI again</button></div></div>` : ""}
+        <div class="row between"><span class="label">Ranked by the rules</span><span class="muted small">The AI chooses among the top candidates</span></div>
+        <div class="cands">${cands.slice(0, 6).map((c, i) => `<div class="cand ${c.title === chosen ? "top" : ""}">
+          <div class="row between"><h3>${esc(c.title)}</h3>${c.title === chosen ? '<span class="pill accent">AI pick</span>' : `<span class="muted small num">#${i + 1}</span>`}</div>
+          <div class="scorebar" aria-label="Match score ${c.score}"><div style="width:${clamp((c.score / top) * 100, 5, 100)}%"></div></div>
+          <ul>${c.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}${c.cautions.map((r) => `<li class="caution">${esc(r)}</li>`).join("")}</ul>
+          <div class="row between"><span class="num small">${fmt1(c.recipe.doseG)}→${fmt1(c.recipe.yieldG)} g · ${fmt1(c.recipe.tempC)} °C</span><button class="btn small" data-use="${esc(c.title)}">Use</button></div></div>`).join("")}</div>`;
+      $$("[data-use]", rec).forEach((btn) => (btn.onclick = () => {
+        const c = cands.find((x) => x.title === btn.dataset.use);
+        const r = btn.dataset.rec ? b.recipe : { ...b.recipe, profileTitle: c.title, doseG: c.recipe.doseG, yieldG: c.recipe.yieldG, tempC: c.recipe.tempC, targetTimeS: c.recipe.timeS };
+        setNextFromRecipe(b, r);
+        location.hash = "#brew";
+        toast(`${r.profileTitle} set for the next shot. Tap Load or Espresso.`);
+      }));
+      const again = $("#askAgain");
+      if (again) again.onclick = async () => {
+        again.disabled = true; again.textContent = "Asking…";
+        try { const out = await S.api.recommend(b.id); b.recipe = out.recipe; b.recipeSource = out.source; setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(e.message); again.disabled = false; }
+      };
+    } catch (e) { rec.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+  } else rec.innerHTML = "";
+  if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
+  renderCatalog();
+}
+function renderCatalog() {
+  const f = catFilter;
+  $("#catFilters").innerHTML = [
+    ...ROASTS.map((r) => `<button class="fchip" data-f="roast:${r}" aria-pressed="${f.roast === r}">${r}</button>`),
+    `<button class="fchip" data-f="milk" aria-pressed="${f.milk}">Good with milk</button>`,
+    `<button class="fchip" data-f="easy" aria-pressed="${f.easy}">Easy to dial</button>`,
+    `<button class="fchip" data-f="scale" aria-pressed="${f.scale === false}">No scale needed</button>`,
+  ].join("");
+  $$("[data-f]").forEach((b) => (b.onclick = () => {
+    const [k, v] = b.dataset.f.split(":");
+    if (k === "roast") f.roast = f.roast === v ? null : v; else if (k === "scale") f.scale = f.scale === false ? null : false; else f[k] = !f[k];
+    renderCatalog();
+  }));
+  const list = (S.catalog || []).filter((p) => (!f.roast || p.roasts.includes(f.roast)) && (!f.milk || p.milk === "great") && (!f.easy || p.difficulty === "easy") && (f.scale !== false || !p.needsScale))
+    .sort((a, b) => b.popularity - a.popularity);
+  $("#catCount").textContent = `${list.length} of ${(S.catalog || []).length}`;
+  $("#catalog").innerHTML = list.map((p) => `<button class="cat-card" data-p="${esc(p.title)}">
+      <div class="row between"><h3>${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>
+      <div class="roastbar" aria-label="Roasts: ${p.roasts.join(", ")}">${ROASTS.map((r) => `<span class="${p.roasts.includes(r) ? "on" : ""}"></span>`).join("")}</div>
+      <div class="muted small">${esc(p.author)} · ${esc(p.style)} · ${p.difficulty}${p.milk === "great" ? " · milk" : ""}</div>
+      <div class="small">${esc(p.character)}</div></button>`).join("");
+  $$("[data-p]").forEach((b) => (b.onclick = () => showProfile(b.dataset.p)));
+}
+function showProfile(title) {
+  const p = S.catalog.find((x) => x.title === title);
+  openSheet(`<div class="stack" style="gap:4px"><span class="label">${esc(p.author)} · ${esc(p.style)}</span><h2>${esc(p.title)}</h2></div>
+    <p>${esc(p.character)}</p>
+    <div class="metrics">${[["Dose", fmt1(p.recipe.doseG), "g"], ["Yield", fmt1(p.recipe.yieldG), "g"], ["Temp", fmt1(p.recipe.tempC), "°C"], ["Time", p.recipe.timeS.join("–"), "s"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
+    <div class="small"><b>Written for:</b> ${p.roasts.join(", ")} roasts · <b>Milk:</b> ${p.milk} · <b>Difficulty:</b> ${p.difficulty}${p.needsScale ? " · works best with a scale" : ""}${p.wantsFlatBurrs ? " · high-extraction flat burrs" : ""}</div>
+    <div class="advice small"><div class="label">Author's dial-in guidance</div>${esc(p.dialIn)}</div>
+    <div class="muted small">Source: ${esc(p.source)}</div>
+    ${S.current ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(S.current.info.name.value)}</button></div>` : ""}`);
+  const u = $("#useProfile");
+  if (u) u.onclick = async () => {
+    const cands = await S.api.rank(S.current.id).catch(() => []);
+    const c = cands.find((x) => x.title === p.title);
+    const r = { ...S.current.recipe, profileTitle: p.title, doseG: c?.recipe.doseG ?? p.recipe.doseG, yieldG: c?.recipe.yieldG ?? p.recipe.yieldG, tempC: c?.recipe.tempC ?? p.recipe.tempC, targetTimeS: p.recipe.timeS, dialIn: p.dialIn };
+    setNextFromRecipe(S.current, r); closeSheet(); location.hash = "#brew"; toast(`${p.title} set for the next shot`);
+  };
+}
+
+/* ================= shots ================= */
+async function renderShots() {
+  const list = $("#shotList");
+  list.innerHTML = `<p class="muted">Loading…</p>`;
+  S.shots = await S.api.shots(40).catch(() => []);
+  if (!S.shots.length) { list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
+  if (!S.shots.some((s) => s.id === S.selShot)) S.selShot = S.shots[0].id;
+  list.innerHTML = S.shots.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
+      <input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}>
+      <canvas data-spark="${i}" aria-hidden="true"></canvas>
+      <button class="open" data-open="${esc(s.id)}"><strong>${esc(s.coffee || "Unknown coffee")}</strong>
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span>${s.enjoyment ? "★".repeat(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("");
+  requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
+  $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShots(); }));
+  $$("[data-cmp]").forEach((b) => (b.onchange = () => { S.cmpShot = b.checked ? b.dataset.cmp : null; renderShots(); }));
+  renderShotDetail();
+}
+function renderShotDetail() {
+  const s = S.shots.find((x) => x.id === S.selShot), c = S.shots.find((x) => x.id === S.cmpShot);
+  const bean = S.shelf.find((b) => b.id === s.beanId || (s.batch && b.batch === s.batch));
+  $("#shotDetail").innerHTML = `
+    <div class="row between"><div><span class="label">${esc(new Date(s.timestamp).toLocaleString())}</span><h2>${esc(s.coffee || "Shot")}</h2></div><span class="muted small">${esc(s.profileTitle || "")}</span></div>
+    ${metricsHtml(shotMetrics(s.points, s))}
+    <div class="chart-box"><canvas id="detailChart"></canvas></div>
+    <div class="legend">${legendHtml(false)}${c ? `<span><span class="swatch" style="background:var(--muted)"></span>Faint: ${esc(c.coffee || "")} ${new Date(c.timestamp).toLocaleDateString()}</span>` : ""}</div>
+    <div class="row"><span class="label">Rating</span><div class="stars" id="detailStars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="${(s.enjoyment || 0) >= n}" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
+    <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
+    <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Reference shot ✓" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>`;
+  requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
+  $$("#detailStars .star").forEach((b) => (b.onclick = async () => { s.enjoyment = +b.dataset.n; await S.api.annotate(s.id, { enjoyment: s.enjoyment }).catch(() => {}); renderShotDetail(); }));
+  $("#shotNotes").onchange = async (e) => { s.notes = e.target.value; await S.api.annotate(s.id, { espressoNotes: s.notes }).catch(() => {}); toast("Notes saved"); };
+  const pin = $("#pinDetail");
+  if (pin) pin.onclick = async () => { await S.api.pinBest(bean.id, s.id); bean.bestShotId = s.id; if (S.current?.id === bean.id) await loadGhost(); renderShots(); toast("Reference shot set"); };
+}
+
+/* ================= settings ================= */
+function sw(id, checked) { return `<label class="switch"><input type="checkbox" id="${id}" ${checked ? "checked" : ""}><span></span></label>`; }
+function mini(id, value, stepV, unit) { return `<div class="mini"><button type="button" data-mini="${id}:-${stepV}" aria-label="Less">−</button><input id="${id}" inputmode="decimal" value="${value ?? ""}" aria-label="${unit}"><button type="button" data-mini="${id}:${stepV}" aria-label="More">+</button></div>`; }
+function seg(id, options, value) { return `<div class="seg" id="${id}">${options.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(value)}">${l}</button>`).join("")}</div>`; }
+async function renderSettings() {
+  const el = $("#settings");
+  el.innerHTML = `<p class="muted">Loading…</p>`;
+  const m = S.api.machine;
+  const [ss, ms, pres, scheds, disp, plugins, maint] = await Promise.all([m.shotSettings.get().catch(() => null), m.settings.get().catch(() => null), m.presence.get().catch(() => null), m.schedules.list().catch(() => []), m.display.get().catch(() => null), m.plugins().catch(() => []), S.api.maintenance.get().catch(() => null)]);
+  S.maint = maint;
+  const p = S.prefs, theme = local.get("theme", "auto");
+  const viz = plugins.find((x) => /visualizer/i.test(x.id));
+  const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
+  el.innerHTML = `
+  <div class="panel stack"><h2>Your setup</h2><p class="muted small">Used to match profiles to your coffee.</p>
+    <div class="set-row first"><span>How you drink it</span>${seg("pDrink", [["straight", "Straight"], ["milk", "Milk"], ["both", "Both"]], p.drink ?? "both")}</div>
+    <div class="set-row"><span>Bluetooth scale<span class="hint">Needed for D-Flow, A-Flow, blooming and allongé profiles</span></span>${sw("pScale", p.hasScale !== false)}</div>
+    <div class="set-row"><span>Grinder burrs</span>${seg("pBurrs", [["flat", "Flat"], ["conical", "Conical"], ["unknown", "Not sure"]], p.burrs ?? "unknown")}</div>
+    <div class="set-row"><span>Experience</span>${seg("pExp", [["new", "New"], ["comfortable", "Comfortable"], ["advanced", "Advanced"]], p.experience ?? "comfortable")}</div>
+    <div class="set-row"><span>Basket dose<span class="hint">Grams your basket holds</span></span>${mini("pDose", p.basketDoseG ?? 18, 0.5, "grams")}</div>
+  </div>
+
+  <div class="panel stack"><h2>Steam, hot water and flush</h2>
+    ${ss ? `<div class="set-row first"><span>Steam temperature</span>${mini("sSteamT", ss.targetSteamTemp, 5, "°C")}</div>` : ""}
+    ${ms ? `<div class="set-row"><span>Steam flow<span class="hint">ml/s. Higher steams faster</span></span>${mini("sSteamF", ms.steamFlow, 0.1, "ml/s")}</div>` : ""}
+    ${ss ? `<div class="set-row"><span>Hot water temperature</span>${mini("sWaterT", ss.targetHotWaterTemp, 1, "°C")}</div>` : ""}
+    ${ms ? `<div class="set-row"><span>Hot water flow</span>${mini("sWaterF", ms.hotWaterFlow, 0.5, "ml/s")}</div>
+    <div class="set-row"><span>Flush flow</span>${mini("sFlushF", ms.flushFlow, 0.5, "ml/s")}</div>
+    <div class="set-row"><span>Flush temperature</span>${mini("sFlushT", ms.flushTemp, 1, "°C")}</div>` : ""}
+    <div class="set-row"><span>Presets<span class="hint">Steam jugs, hot water volumes and flush times on the home screen</span></span><button class="btn small" id="editPresets">Edit presets</button></div>
+    ${!ss && !ms ? '<p class="muted">The machine isn\'t reachable right now.</p>' : ""}
+  </div>
+
+  <div class="panel stack"><h2>Machine</h2>
+    <div class="set-row first"><span>Start from the group head<span class="hint">For machines with a group head controller: Crema sets recipes and presets, and you start shots on the machine</span></span>${sw("sGhc", S.ghc)}</div>
+    <div class="set-row"><span>Low water warning<span class="hint">Percent of the tank</span></span>${mini("sWaterWarn", 20, 5, "%")}</div>
+    ${ms ? `<div class="set-row"><span>Tablet USB charging</span>${sw("sUsb", ms.usb === true || ms.usb === "enable")}</div>
+    <div class="set-row"><span>Fan threshold</span>${mini("sFan", ms.fan, 5, "°C")}</div>` : ""}
+  </div>
+
+  <div class="panel stack"><h2>Sleep and wake</h2>
+    ${pres ? `<div class="set-row first"><span>Sleep when idle</span>${sw("sPresence", pres.userPresenceEnabled)}</div>
+    <div class="set-row"><span>After<span class="hint">Minutes without use</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
+    <span class="label">Wake schedules</span>
+    <div class="stack" style="gap:6px" id="scheds">${scheds.map((s) => `<div class="sched"><span class="num">${esc(s.time)}</span><div class="days">${DAYS.map((d, i) => `<button type="button" data-day="${esc(s.id)}:${i + 1}" aria-pressed="${!s.daysOfWeek.length || s.daysOfWeek.includes(i + 1)}">${d}</button>`).join("")}</div>${sw(`en-${s.id}`, s.enabled)}<button class="btn small ghost" data-del="${esc(s.id)}">Remove</button></div>`).join("") || '<p class="muted small">None yet.</p>'}</div>
+    <div class="row"><div class="field" style="flex:1"><label class="label" for="newWake">Add a wake time</label><input type="time" id="newWake" value="06:45"></div><button class="btn" id="addWake" style="align-self:end">Add</button></div>
+  </div>
+
+  <div class="panel stack"><h2>Display</h2>
+    <div class="set-row first"><span>Theme</span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
+    <div class="set-row"><span>Clock when asleep<span class="hint">A dark screen saver while the machine sleeps; tap to wake</span></span>${sw("sSaver", S.saver)}</div>
+    ${disp?.platformSupported?.brightness ? `<div class="set-row"><span>Tablet brightness</span><input type="range" id="sBright" min="5" max="100" value="${disp.brightness}" aria-label="Brightness" style="accent-color:var(--accent)"></div>` : ""}
+  </div>
+
+  <div class="panel stack"><h2>Maintenance</h2>
+    ${maint ? `<div class="set-row first"><span>Backflush<span class="hint">${maint.shotsSinceBackflush ?? "–"} shots since the last one · reminder every ${maint.backflushEveryShots}</span></span><div class="row">${maint.backflushDue ? '<span class="pill warn">Due</span>' : ""}<button class="btn small" id="doneBackflush">Done today</button></div></div>
+    <div class="set-row"><span>Remind after<span class="hint">Shots</span></span>${mini("mBack", maint.backflushEveryShots, 10, "shots")}</div>
+    <div class="set-row"><span>Descale<span class="hint">${maint.daysSinceDescale != null ? `${maint.daysSinceDescale} days ago` : "Not recorded yet"} · reminder every ${maint.descaleEveryDays} days</span></span><div class="row">${maint.descaleDue ? '<span class="pill warn">Due</span>' : ""}<button class="btn small" id="doneDescale">Done today</button></div></div>
+    <div class="set-row"><span>Remind after<span class="hint">Days. Depends on your water</span></span>${mini("mDesc", maint.descaleEveryDays, 15, "days")}</div>` : '<p class="muted">Unavailable.</p>'}
+  </div>
+
+  <div class="panel stack"><h2>AI and integrations</h2>
+    <div class="set-row first"><span>AI providers<span class="hint">Tried in order. Set LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "rules only")}</span></div>
+    <div class="set-row"><span>Visualizer upload<span class="hint">${viz ? "Decaid's Visualizer plugin uploads shots. Set your account in Decaid's plugin settings" : "Install Decaid's Visualizer plugin to upload shots"}</span></span>${viz ? '<span class="pill good">Available</span>' : '<span class="pill plain">Not found</span>'}</div>
+    <div class="set-row"><span>Machine connection</span><span class="num small">${esc(S.api.info.decaidUrl || "")}</span></div>
+  </div>`;
+
+  // ---- wire up ----
+  const savePrefs = async (patch) => { S.prefs = await S.api.prefs.set(patch); for (const b of S.shelf) b.recipe = null; S.current && (await selectBean(S.current.id, { quiet: true })); toast("Saved. Recommendations updated"); };
+  const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
+  segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
+  $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
+  const num = (id) => parseFloat($(`#${id}`)?.value);
+  const handlers = {
+    pDose: () => savePrefs({ basketDoseG: num("pDose") }),
+    sSteamT: () => m.shotSettings.set({ targetSteamTemp: num("sSteamT") }),
+    sSteamF: () => m.settings.set({ steamFlow: num("sSteamF") }),
+    sWaterT: () => m.shotSettings.set({ targetHotWaterTemp: num("sWaterT") }),
+    sWaterF: () => m.settings.set({ hotWaterFlow: num("sWaterF") }),
+    sFlushF: () => m.settings.set({ flushFlow: num("sFlushF") }),
+    sFlushT: () => m.settings.set({ flushTemp: num("sFlushT") }),
+    sWaterWarn: () => m.waterThreshold(num("sWaterWarn")),
+    sFan: () => m.settings.set({ fan: num("sFan") }),
+    sSleepMin: () => m.presence.set({ sleepTimeoutMinutes: num("sSleepMin") }),
+    mBack: () => S.api.maintenance.set({ backflushEveryShots: num("mBack") }),
+    mDesc: () => S.api.maintenance.set({ descaleEveryDays: num("mDesc") }),
+  };
+  for (const [id, fn] of Object.entries(handlers)) {
+    const input = $(`#${id}`); if (!input) continue;
+    const run = async () => { try { await fn(); if (!id.startsWith("p")) toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); } };
+    input.onchange = run;
+    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { const d = parseFloat(b.dataset.mini.split(":")[1]); input.value = String(round((parseFloat(input.value) || 0) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
+  }
+  $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
+  const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
+  const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
+  $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
+  const br = $("#sBright"); if (br) br.onchange = (e) => m.display.brightness(Number(e.target.value)).catch(() => {});
+  $$("[data-theme-set]", el).forEach((b) => (b.onclick = () => { applyTheme(b.dataset.themeSet, false); $$("[data-theme-set]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }));
+  $$("[data-day]").forEach((b) => (b.onclick = async () => {
+    const [id, d] = b.dataset.day.split(":"); const s = scheds.find((x) => x.id === id);
+    const days = s.daysOfWeek.length ? s.daysOfWeek.slice() : [1, 2, 3, 4, 5, 6, 7];
+    const i = days.indexOf(+d); i >= 0 ? days.splice(i, 1) : days.push(+d);
+    s.daysOfWeek = days.sort(); await m.schedules.update(id, { daysOfWeek: s.daysOfWeek }); renderSettings();
+  }));
+  scheds.forEach((s) => { const t = $(`#en-${CSS.escape(s.id)}`); if (t) t.onchange = (e) => m.schedules.update(s.id, { enabled: e.target.checked }); });
+  $$("[data-del]").forEach((b) => (b.onclick = async () => { await m.schedules.remove(b.dataset.del); renderSettings(); }));
+  $("#addWake").onclick = async () => { const t = $("#newWake").value; if (!t) return; await m.schedules.add({ time: t, daysOfWeek: [1, 2, 3, 4, 5], enabled: true }); toast(`Wakes at ${t} on weekdays`); renderSettings(); };
+  const db = $("#doneBackflush"); if (db) db.onclick = async () => { await S.api.maintenance.done("backflush"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Backflush recorded"); };
+  const dd = $("#doneDescale"); if (dd) dd.onclick = async () => { await S.api.maintenance.done("descale"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Descale recorded"); };
+  $("#editPresets").onclick = editPresets;
+}
+function editPresets() {
+  const p = JSON.parse(JSON.stringify(S.presets));
+  const rows = (kind, unit, key) => p[kind].map((x, i) => `<div class="row"><input class="input" style="flex:1;min-width:0" data-pl="${kind}:${i}" value="${esc(x.label)}" maxlength="24" aria-label="Name"><input class="input" style="width:90px" data-pv="${kind}:${i}:${key}" inputmode="numeric" value="${x[key]}" aria-label="${unit}"><span class="muted small" style="width:30px">${unit}</span></div>`).join("");
+  openSheet(`<h2>Presets</h2>
+    <span class="label">Steam (seconds, 0 = until you stop)</span>${rows("steam", "s", "seconds")}
+    <span class="label">Hot water (ml)</span>${rows("water", "ml", "ml")}
+    <span class="label">Flush (seconds)</span>${rows("flush", "s", "seconds")}
+    <div class="row"><button class="btn primary" id="savePresets">Save presets</button></div>`);
+  $("#savePresets").onclick = async () => {
+    $$("[data-pl]").forEach((i) => { const [k, n] = i.dataset.pl.split(":"); p[k][n].label = i.value.trim() || p[k][n].label; });
+    $$("[data-pv]").forEach((i) => { const [k, n, key] = i.dataset.pv.split(":"); const v = parseFloat(i.value); if (Number.isFinite(v)) p[k][n][key] = v; });
+    try { S.presets = await S.api.presets.set(p); closeSheet(); renderControls(); toast("Presets saved"); } catch (e) { toast(e.message); }
+  };
+}
+
+/* ================= routing + boot ================= */
+const VIEWS = ["brew", "shelf", "add", "profiles", "shots", "settings"];
+function route(scroll = true) {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "brew";
+  VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
+  $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
+  if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
+  if (v === "shelf") renderShelf();
+  if (v === "profiles") renderProfiles();
+  if (v === "shots") renderShots();
+  if (v === "settings") renderSettings();
+  if (scroll) window.scrollTo(0, 0);
+}
+
+async function boot() {
+  REVIEW_INTRO = $("#reviewPanel").innerHTML;
+  applyTheme(local.get("theme", "auto"), false);
+  const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
+  if (!forceDemo) {
+    try {
+      const cfg = await fetch("/api/config").then((r) => { if (!r.ok) throw new Error(); return r.json(); });
+      const health = await fetch("/api/health").then((r) => r.json()).catch(() => null);
+      S.api = makeLiveApi(cfg, health);
+    } catch { S.api = null; }
+  }
+  if (!S.api) S.api = makeDemoApi();
+  $("#demoBanner").hidden = !S.api.demo;
+
+  document.addEventListener("pointerdown", () => S.api.machine.heartbeat(), { passive: true });
+  $$("[data-mode]").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  $("#photoInput").onchange = async (e) => {
+    files = [...files, ...e.target.files].slice(0, 4);
+    const thumbs = await Promise.all(files.map((f) => thumbnail(f, 200)));
+    $("#thumbs").innerHTML = thumbs.filter(Boolean).map((t) => `<img src="${t}" alt="Bag photo">`).join("");
+    e.target.value = "";
+  };
+  $("#addForm").addEventListener("submit", onIdentify);
+  $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
+  $("#saver").onclick = () => { $("#saver").hidden = true; S.api.machine.setState("idle").catch(() => {}); };
+  $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+  const [prefs, favs, presets, maint] = await Promise.all([S.api.prefs.get().catch(() => ({})), S.api.favourites.get().catch(() => S.favourites), S.api.presets.get().catch(() => null), S.api.maintenance.get().catch(() => null)]);
+  Object.assign(S, { prefs, favourites: favs, presets, maint });
+  await refreshShelf().catch(() => (S.shelf = []));
+  await selectBean(local.get("current", null) || S.shelf[0]?.id, { quiet: true });
+
+  S.api.subscribe({
+    snapshot: onSnapshot,
+    scale: (s) => { S.scale = { ...S.scale, ...s }; renderStatus(); if (!$("#view-brew").hidden) renderReadouts(); },
+    water: (w) => { S.water = w; renderStatus(); },
+    ready: (r) => { S.ready = r; },
+  });
+  window.addEventListener("hashchange", () => route());
+  window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });
+  renderStatus(); renderAlerts();
+  route();
+}
+boot();

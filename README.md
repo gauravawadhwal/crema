@@ -2,12 +2,13 @@
 
 A custom interface and companion service for a Decent DE1 espresso machine.
 
-- **Add a coffee** by photographing the bag, searching for it, or pasting the roaster's link. Crema reads the bag (including the roast date), finds the roaster's own page for the details, and tags every fact with where it came from.
-- **Get a starting recipe**: a profile from the machine's own library, plus dose, yield, temperature and grind guidance, with the reasons. Load it onto the machine in one tap.
-- **Dial in**: rate a shot (sour ↔ bitter, thin ↔ heavy, stars) and get the one change to make next.
-- **Roaster product photos** on your shelf, read from the roaster's product page and cached locally. You can use your own photo instead.
-- **Light, dark or auto theme**, remembered on each device.
-- **Watch shots live**: pressure, flow and weight curves, plus recent-shot history.
+- **A full home screen for the machine.** It has Espresso, Steam, Hot water, Flush and Stop with presets, live pressure, flow, weight and temperature with profile targets, a reference-shot overlay, five favourites, the water tank, the scale, sleep and wake, and "ready in N minutes". See [docs/parity.md](docs/parity.md) for the full comparison with the Decent app.
+- **Add a coffee** by photographing the bag, searching, or pasting the roaster's link. Crema reads the bag (including the roast date), finds the roaster's page and product photo, and tags every fact with where it came from.
+- **Profile recommendations from the coffee's description.** It ranks 31 community profiles (Adaptive, D-Flow, A-Flow, Londonium, Extractamundo Dos, allongés, turbo shots and more, described from their authors' own notes) against what the roaster and bag say. It also takes your setup into account (milk or straight, scale, burrs, experience). The AI then picks one and explains why in plain words.
+- **Dial in**: rate a shot (sour ↔ bitter, thin ↔ heavy, stars) and get the one change to make next. Shots outside the profile's time window are flagged.
+- **Shelf**: rest window, grams left (from shot doses), reorder nudges, freeze and finish.
+- **Shots**: history with metrics, side-by-side comparison, ratings and notes.
+- **Settings**: your setup, steam, water and flush, machine, wake schedules, display and theme, and descale and backflush reminders.
 - **Runs on the DE1 tablet as a skin and on your iPhone** as a home-screen app.
 
 Research and design decisions: [docs/investigation.md](docs/investigation.md).
@@ -46,7 +47,19 @@ Then open http://localhost:8787 in a browser. Pull a simulated shot with:
 curl -X PUT localhost:8080/api/v1/machine/state -d '{"state":"espresso"}'
 ```
 
-Opening `skin/index.html?demo` straight from disk runs a fully in-browser demo with sample coffees and a simulated DE1.
+Opening `skin/index.html?demo` straight from disk runs a fully in-browser demo with a simulated DE1. Its coffees are nine real ONA and Haven coffees identified by the real pipeline (`samples/beans.json`), and its recommendations are real AI runs (`samples/recipes.json`). Rebuild them with:
+
+```bash
+LLM_PROVIDERS=claude-cli npx tsx scripts/seed-samples.ts
+```
+
+```bash
+LLM_PROVIDERS=claude-cli npx tsx scripts/seed-recipes.ts
+```
+
+```bash
+npx tsx scripts/build-demo-data.ts && node scripts/build-demo.mjs
+```
 
 ## Using real AI
 
@@ -92,6 +105,14 @@ DECAID_URL=http://<tablet-ip>:8080 LLM_PROVIDERS=claude-cli npm start
 | `GET` | `/api/shots`, `/api/shots/:id` | shot history |
 | `POST` | `/api/shots/:id/feedback` | taste feedback → annotation + next adjustment |
 | `GET` | `/api/health`, `/api/config` | provider chain, machine state, WebSocket URL |
+| `GET` | `/api/profiles/catalog` | community profile catalog, marked installed or not |
+| `GET` | `/api/profiles/rank/:beanId` | rules ranking for a coffee (instant, no AI) |
+| `GET/PUT` | `/api/preferences` | your setup: drink, scale, burrs, experience, basket |
+| `GET/PUT` | `/api/favourites`, `/api/favourites/:slot` | five favourite slots |
+| `GET/PUT` | `/api/presets` | steam, hot water and flush presets |
+| `PUT` | `/api/beans/:id/best-shot`, `/api/beans/:id/state` | reference shot; freeze, thaw or finish |
+| `GET/PUT/POST` | `/api/maintenance`, `/api/maintenance/:kind/done` | backflush and descale reminders |
+| any | `/decaid/*` | same-origin proxy to Decaid's REST API (machine control from the phone) |
 
 ## Development
 

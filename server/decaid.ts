@@ -78,6 +78,7 @@ export class DecaidClient {
   listBatches = (beanId: string) => this.req<DecaidBatch[]>("GET", `/api/v1/beans/${beanId}/batches?includeArchived=false`);
   createBatch = (beanId: string, batch: Omit<DecaidBatch, "id">) =>
     this.req<DecaidBatch>("POST", `/api/v1/beans/${beanId}/batches`, batch);
+  updateBatch = (id: string, patch: Partial<DecaidBatch>) => this.req<DecaidBatch>("PUT", `/api/v1/bean-batches/${id}`, patch);
   getWorkflow = () => this.req<Record<string, unknown>>("GET", "/api/v1/workflow");
   putWorkflow = (patch: Record<string, unknown>) => this.req<Record<string, unknown>>("PUT", "/api/v1/workflow", patch);
   machineState = () => this.req<Record<string, unknown>>("GET", "/api/v1/machine/state");

@@ -1,0 +1,599 @@
+{
+  "generatedAt": "2026-11-04T14:15:02.236Z",
+  "recipes": {
+    "Raspberry Candy|both": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 20.5,
+        "yieldG": 38,
+        "tempC": 93.5,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start a bit finer than your medium-roast setting, then adjust so about 4 g drips during preinfusion and flow at Pressurize is near 1.5 ml/s.",
+        "restAdvice": "No roast date was given. ONA suggests using it 16–30 days after roast, so check the bag. If it's fresher than about 10 days, rest it longer or expect a gassy, uneven shot.",
+        "dialIn": "Aim for about 4 g dripping in preinfusion and about 1.5 ml/s at Pressurize, finishing at 38 g in 28–36 s. If the shot runs fast or tastes sharp, grind finer. If it is slow or bitter, grind coarser. Change temperature only after the grind is right: 93.5°C is the roaster's number, and you can go to 94–95°C if it tastes sour.",
+        "rationale": [
+          "ONA's own recipe (20.5 g to 38 g, 93.5°C, 25–30 s) maps directly onto Adaptive v2, so you start from a tested recipe.",
+          "Adaptive v2 is written for medium-light roasts and favours sweetness and clarity, which suits the raspberry and white chocolate notes.",
+          "This blend of naturals, washed and carbonic maceration coffees can vary from bag to bag. A forgiving, flow-adaptive profile helps with that, and it works for both milk and straight shots.",
+          "You have no past shots, so it makes sense to start with the forgiving option that matches the roaster's recipe."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Try this for a cleaner, fruitier straight espresso. It uses a low, declining temperature and a longer 1:2.2 ratio, but it is less milk-focused."
+          },
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "A simple, scale-driven profile that works well in milk. Lower the infusion pressure to behave more like Adaptive for this lighter roast."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Maple|milk": {
+      "recipe": {
+        "profileTitle": "Londonium",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 90.5,
+        "targetTimeS": [
+          30,
+          45
+        ],
+        "grindHint": "Start about where you'd grind a medium roast for espresso, then adjust finer or coarser based on the first shot's drip rate.",
+        "restAdvice": "No roast date is known. This blend is best about 7–28 days off roast, so add the date from the bag. If it's under a week old, rest it a few more days.",
+        "dialIn": "Aim for the first drips at about 8–10 s and about 40 g out in 30–40 s. If it runs faster than that or tastes thin and sharp, grind finer. If it's slow, bitter or dry, grind coarser. Once the cup is balanced, you can stretch the yield toward 42 g.",
+        "rationale": [
+          "A medium, milk-style blend with caramel, biscuit, nut and spice notes suits Londonium's big body and chocolatey, syrupy texture.",
+          "Londonium is written for medium roasts and is rated great in milk, which is how you drink it.",
+          "Its extra steps tolerate imperfect puck prep, which helps because this is a first shot with an unknown roast date.",
+          "I trimmed the yield from 42 g to 40 g so it cuts through milk a little better while staying sweet."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "Its weight-driven shot adapts to your grind, so it's a good second try if Londonium tastes flat or you want more clarity and sweetness."
+          },
+          {
+            "profileTitle": "Gentle and sweet",
+            "why": "Its low pressure avoids channelling and keeps acidity down, so it suits a fresh bag or a harsh-tasting shot in milk."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Maple|both": {
+      "recipe": {
+        "profileTitle": "Londonium",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 90.5,
+        "targetTimeS": [
+          30,
+          42
+        ],
+        "grindHint": "Start about where you'd grind a medium roast for espresso, then adjust by dripping weight and shot time.",
+        "restAdvice": "No roast date was found. If the bag has one, rest the coffee 7–28 days off roast. If it's under a week old, expect a bit more CO2 and a less stable shot.",
+        "dialIn": "Aim for the first drips at about 8–10 s and a finish of 18 g in, about 40 g out, in 30–42 s. If it runs faster or tastes thin or sharp, grind finer. If it's slow, bitter or drying, grind coarser. Once it's balanced, move the yield toward 42 g for more sweetness, or toward 36 g for more body in milk drinks.",
+        "rationale": [
+          "ONA Maple is a medium-roast blend made for milk drinks. Its caramel, biscuit, nut and spice notes suit a body-and-texture profile like Londonium.",
+          "Londonium is written for medium roasts and rated great with milk. You drink both milk drinks and straight shots, and it works for both.",
+          "It's forgiving of imperfect puck prep. That helps on a first bag when you have no past shots to go on.",
+          "A yield of 40 g (about 1:2.2) is a middle point between Londonium's 42 g and a tighter milk-drink ratio."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "It's scale-driven and adapts to your grind. Try it if you want a sweeter, more flexible shot, or if Londonium tastes heavy."
+          },
+          {
+            "profileTitle": "Gentle and sweet",
+            "why": "Its low 6 bar peak avoids channelling and acidity. Try it if the blend tastes sharp or you want a softer shot for milk."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Kaliluni AA|both": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 92,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start about where you'd grind a medium roast, then go slightly finer if the first shot runs fast. Kenyan washed coffees are dense and usually need a fairly fine grind.",
+        "restAdvice": "There's no roast date. If it's under 7 days off roast, rest it a few more days. The best window is about 7–28 days. Add the roast date from the bag so the app can track it.",
+        "dialIn": "Aim for about 4 g dripping by the end of preinfusion and about 1.5 ml/s at Pressurize, then 40 g out in 28–36 s. If the shot runs fast or sour, grind finer. If it's bitter or chokes, grind coarser. If the red currant acidity is too sharp, raise the temperature 1 °C.",
+        "rationale": [
+          "Washed medium-roast Kenyan with red currant and pomegranate notes. Adaptive v2 is written for medium roasts and aims for sweetness and clarity, so the fruit stays bright and the brown sugar comes through.",
+          "It's forgiving and corrects for grind, which suits a first shot of an unfamiliar bag with no past shots.",
+          "The 1:2.2 ratio keeps the acidity juicy without thinning out. It also works for milk drinks, and you drink both.",
+          "Extractamundo Dos! ranks first, but its 82 °C declining temperature is a bigger risk on a medium roast. Under-extraction would taste sour on a high-acid Kenyan."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Try it next for a cleaner, more fruit-forward straight espresso. It's the top rules pick for sweetness and clarity."
+          },
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "Better for milk drinks. It adds body and adapts to your grind by dripped weight."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Raspberry Candy|milk": {
+      "recipe": {
+        "profileTitle": "D-Flow / default",
+        "profileId": null,
+        "doseG": 20.5,
+        "yieldG": 38,
+        "tempC": 92,
+        "targetTimeS": [
+          25,
+          32
+        ],
+        "grindHint": "Start a bit finer than your medium-roast setting, then adjust by dripping weight and flow.",
+        "restAdvice": "No roast date yet. ONA suggests using it 16–30 days after roast, so add the date from the bag to track this.",
+        "dialIn": "Aim for about 38 g out in 25–32 s, with max flow around 1.7–2.0 ml/s. If it runs fast or tastes sour, grind finer. If it is bitter or choked, grind coarser. For this fruity medium-light blend, lower infusion pressure toward 0 as the author advises for lighter roasts. Raise the temperature to 93.5°C (the roaster's number) if it tastes thin or sharp.",
+        "rationale": [
+          "This is a medium-light Ethiopian blend roasted for espresso and milk. D-Flow is written for medium-light roasts and is rated great in milk.",
+          "D-Flow advances on dripped weight, so it adapts to the grind. That helps when there is no past shot data and you have a scale.",
+          "It brings out sweetness and body, which suits the raspberry and white chocolate notes and the roaster's 20.5 g to 38 g recipe.",
+          "I start slightly below the roaster's 93.5°C, at 92°C, to keep the berry sweetness clean. Adjust up if it tastes sharp."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Adaptive v2",
+            "why": "It is sweet and clear for light-to-medium roasts and also adapts to the grind. Try it if you want more fruit definition and a little less body."
+          },
+          {
+            "profileTitle": "Default",
+            "why": "It is a simple flat-pressure shot at the roaster's 93.5°C. It is a forgiving fallback if D-Flow feels fiddly."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Kaliluni AA|milk": {
+      "recipe": {
+        "profileTitle": "D-Flow / default",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 92,
+        "targetTimeS": [
+          25,
+          38
+        ],
+        "grindHint": "Start about where you'd grind a medium roast, then go a touch finer if the first shot runs fast. Kenyan washed beans are dense and usually need a slightly finer grind than a typical medium.",
+        "restAdvice": "No roast date is known. Aim for 7–28 days off roast, and add the date from the bag so rest can be tracked. If the beans are under a week old, rest them a few more days.",
+        "dialIn": "Aim for about 40 g out in 25–38 s, with the first drips at around 6–8 s into the shot. If it runs fast or tastes sour and thin, grind finer. If it is bitter or slow, grind coarser. Use 92 °C to start, which is higher than the profile's 89 °C default, to get the dense Kenyan to extract. Drop to 90 °C if it turns harsh or sharp.",
+        "rationale": [
+          "D-Flow is written for medium roasts and is forgiving. It advances on dripped weight, so it adapts to your grind while you dial in a new bag.",
+          "The profile suits milk drinks. It builds body and sweetness, which helps the brown sugar come through and balances the bright red currant and pomegranate acidity in milk.",
+          "You have a scale and are comfortable with dialing in, so weight-based control is easy to use. Keep max pressure at 8.5–9 bar and max flow at 1.7–2.2 ml/s, as the author advises.",
+          "The washed Kenyan is bright and juicy. I raised the temperature slightly above the profile's 89 °C default so the fruit stays sweet rather than sharp or underdeveloped."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Adaptive v2",
+            "why": "Balanced and sweet, and it adapts to the bean. Try it if you want more clarity from the red currant and pomegranate. It works fine in milk."
+          },
+          {
+            "profileTitle": "Gentle and sweet",
+            "why": "Low pressure with less acidity. Choose it if D-Flow tastes too sharp in milk or channels."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Guji Yabitu Koba G1|milk": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 94,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start much finer than you'd grind a medium roast; this is a dense, high-grown light roast. If unsure, begin slightly coarser than your final target and tighten from there.",
+        "restAdvice": "No roast date was found. Check the bag. Light roasts like this usually taste best about 14–40 days after roast, so if it is very fresh, give it a few more days.",
+        "dialIn": "Aim for about 1.5 ml/s at Pressurize and about 4 g dripping during preinfusion. Then aim for 40 g out in 28–36 s. If the shot runs fast or tastes sharp and sour, grind finer. If it is slow, bitter or muddy, grind coarser. For milk, you can pull it to 1:2.2–2.3 so the fruit stays sweet and doesn't turn sharp.",
+        "rationale": [
+          "Adaptive v2 is written for light roasts and aims for sweetness and clarity, which suits the cherry, raisin and chocolate notes of this natural Ethiopian.",
+          "Its adaptive flow follows your grind, so it is forgiving while you dial in a new bag with no past shots.",
+          "The long contact time suits dense beans grown at 2100–2350 m.",
+          "A 1:2.2 ratio keeps the acidity balanced. The sweetness and chocolate notes should still come through in milk."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Espresso Forge Light",
+            "why": "Its hotter start and higher extraction mute the fruit, which could help if the shot tastes too sharp or sour in milk."
+          },
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "It is the best of the candidates for milk. Lower the infusion pressure toward 0 for this light roast."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Guji Yabitu Koba G1|both": {
+      "recipe": {
+        "profileTitle": "Best practice (light roast)",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 50,
+        "tempC": 92,
+        "targetTimeS": [
+          50,
+          65
+        ],
+        "grindHint": "Start clearly coarser than for a medium roast, but still in espresso range. Adjust from the first shot using preinfusion drip weight and peak flow.",
+        "restAdvice": "No roast date was found. Check the bag. This light, dense natural usually tastes best about 14–40 days after roast. If it is fresher than 14 days, wait or expect more CO2 and uneven flow.",
+        "dialIn": "Aim for about 8 g dripping during preinfusion and about 2.5 ml/s at peak pressure, finishing 50 g out in 50–65 s. If it drips less than 6 g, runs slowly or tastes sharp and thin, grind coarser. If it gushes or tastes hollow, go finer. Change the grind in small steps.",
+        "rationale": [
+          "A light, high-grown Ethiopian natural (cherry, raisin, chocolate) suits a profile written for light roasts that emphasises fruit and clarity.",
+          "The longer 1:2.8 ratio keeps the natural's sweetness and acidity balanced without a very long allongé.",
+          "You are comfortable with the process and have a scale, so you can track preinfusion drip and flow.",
+          "It is more forgiving for a first shot than Rao Allongé, which swings a lot with small grind changes. The suggested temperature is 92 °C, close to the recipe's 91.5 °C."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Rao Allongé",
+            "why": "The top-ranked profile. Try it if you want the biggest fruit bomb and a tea-like 1:5 cup, and don't mind fiddly dialling."
+          },
+          {
+            "profileTitle": "Adaptive v2",
+            "why": "A shorter, sweeter 1:2.2 shot that works for milk drinks. Use it if the light-roast profiles taste too sharp."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "La Fincona, Honduras, Washed|both": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 93,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start a bit finer than you'd grind a medium roast, then adjust by the preinfusion drip weight and flow.",
+        "restAdvice": "No roast date given. Roasted for espresso, so the best window is about 10–35 days off roast. Add the date from the bag so rest can be tracked. If it's under 10 days, expect extra CO2 and an uneven first shot.",
+        "dialIn": "Aim for about 4 g dripping during preinfusion and about 1.5 ml/s at Pressurize. If the flow is faster or the drip is heavier, grind finer. If the flow is slower, grind coarser. Aim for 40 g out in 28–36 s. If the shot tastes sharp, raise the temperature by 1 °C or lengthen the ratio slightly.",
+        "rationale": [
+          "A clean, sweet washed Typica with hazelnut, pear and mandarin notes suits a balanced, sweetness-focused profile.",
+          "The roast level is unknown (probably medium-light for espresso), so a forgiving adaptive profile copes well with a first bag and no past shots.",
+          "You drink both milk and black, and this profile is rated ok for milk while still keeping clarity.",
+          "It is comfortable with a scale, which makes the dripping-weight targets easy to follow."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Try it next if you want a cleaner, fruitier shot to emphasise the pear and mandarin; use a finer grind and a cooler, declining temperature."
+          },
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "Better if you mostly make milk drinks; it has more body and is forgiving, and you can lower the infusion pressure to behave more like Adaptive."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Compass House Blend|both": {
+      "recipe": {
+        "profileTitle": "Londonium",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 42,
+        "tempC": 90.5,
+        "targetTimeS": [
+          30,
+          45
+        ],
+        "grindHint": "Start about where you'd grind a medium roast, then adjust by the first shot's flow.",
+        "restAdvice": "No roast date was found. Check the bag and rest the coffee 7–28 days off roast. If it's under a week old, expect a gassier, less even shot.",
+        "dialIn": "Aim for the first drips at about 8–10 s into the pour and 42 g out in 30–45 s. If it runs faster than 30 s or tastes sour, grind finer. If it runs past 45 s or tastes bitter and dry, grind coarser. If the blackcurrant is too sharp, drop the temperature by 0.5–1 °C.",
+        "rationale": [
+          "This is a medium-roast Colombia/Ethiopia blend made for espresso and milk drinks. Londonium is written for medium roasts and rated great with milk.",
+          "The caramel and milk chocolate notes fit its body and chocolate emphasis, and the Ethiopian blackcurrant should still come through at 90.5 °C.",
+          "You drink both milk and black, and you're comfortable with espresso. Londonium's forgiving steps help on a first bag with no past shots.",
+          "The roaster gives no recipe, so I used the profile's own 18 g to 42 g recipe."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Adaptive v2",
+            "why": "Try it if you want more sweetness and clarity from the Ethiopian fruit in straight espresso. It adapts to your grind."
+          },
+          {
+            "profileTitle": "Gentle and sweet",
+            "why": "Try it if shots taste sharp or channel, or if you mostly make milk drinks. It gives a low-acidity, easy cup."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "La Fincona, Honduras, Washed|milk": {
+      "recipe": {
+        "profileTitle": "D-Flow / default",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 91,
+        "targetTimeS": [
+          25,
+          40
+        ],
+        "grindHint": "Start a bit finer than your medium-roast setting, then adjust by dripping weight and flow.",
+        "restAdvice": "No roast date was found. If the bag is under about 10 days off roast, rest it longer. The best window is roughly 10–35 days. Add the roast date to track this.",
+        "dialIn": "Aim for about 40 g out in 28–35 s, with peak flow around 1.7–2.0 ml/s. If the shot runs fast or tastes sour or thin, grind finer. If it is slow, bitter or drying, grind coarser. Because the coffee is medium-light, you can lower the infusion pressure a little for more clarity.",
+        "rationale": [
+          "Washed Typica roasted for espresso, with hazelnut, pear and mandarin notes. D-Flow suits this clean, sweet cup and is written for medium-light roasts.",
+          "You drink milk, and D-Flow is rated great in milk. It keeps body and sweetness so the nutty and fruit notes still show through.",
+          "It advances on dripped weight, so it adapts to your grind. That makes it forgiving for a first shot on a new bag with no history.",
+          "A slightly higher temperature than the 90.5 °C suggested (91 °C) helps extract the medium-light roast. Lower it if the shot tastes harsh."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Default",
+            "why": "A gentle, forgiving flat-pressure profile that holds up in milk, with a slightly shorter 1:2 ratio for more body."
+          },
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Try it for more clarity and fruit (pear, mandarin) if you also drink it straight, though it is less suited to milk."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Compass House Blend|milk": {
+      "recipe": {
+        "profileTitle": "Londonium",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 42,
+        "tempC": 90.5,
+        "targetTimeS": [
+          30,
+          45
+        ],
+        "grindHint": "Start about where you'd grind a medium roast, then adjust finer or coarser based on the first shot's flow.",
+        "restAdvice": "No roast date was entered. Add it from the bag. This blend is roasted for espresso, so it usually does best about 7–28 days after roast. If the bag is under a week old, rest it a few more days.",
+        "dialIn": "Aim for the first drips at about 8–10 s and 42 g out in 30–45 s. If it runs faster than 30 s or tastes sharp and thin, grind finer. If it runs past 45 s or tastes bitter and flat, grind coarser. If the blackcurrant is too sharp, raise the temperature by 0.5–1 °C.",
+        "rationale": [
+          "It's a medium, espresso-roasted Colombia/Ethiopia blend, and Londonium is written for medium roasts.",
+          "It's rated great in milk, and you mainly drink milk. Its body and chocolate should bring out the caramel and milk chocolate notes without the blackcurrant getting lost.",
+          "The author built in extra steps to cope with imperfect puck prep, which helps on a first bag with no shot history.",
+          "The 1:2.3 ratio at 90.5 °C leaves some room for the Ethiopian fruit, so the shot isn't flat or overly roasty."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "Because it advances on dripped weight, it adapts to your grind. It's sweet and good in milk, and it's worth trying if you want a lighter, juicier cup."
+          },
+          {
+            "profileTitle": "Gentle and sweet",
+            "why": "Its low 6 bar peak keeps acidity down and avoids channelling. Try it if the Ethiopian part tastes sour or sharp."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Ethiopia Guji Gogogu|milk": {
+      "recipe": {
+        "profileTitle": "D-Flow / default",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 91,
+        "targetTimeS": [
+          25,
+          40
+        ],
+        "grindHint": "Start a bit finer than your medium-roast setting, then adjust by dripping weight and flow rather than the clock.",
+        "restAdvice": "No roast date is known. Ethiopian light-to-medium roasts usually taste best 10–35 days off roast. Add the date from the bag so rest can be tracked.",
+        "dialIn": "Aim for about 40 g out in 25–40 s, with peak flow around 1.7–2.2 ml/s. If it runs fast or tastes sour, grind finer. If it tastes bitter or dry, grind coarser or drop the temperature 1 °C. Lower the infusion pressure toward 0 if the cup is sharp or underdeveloped, as the author suggests for light roasts.",
+        "rationale": [
+          "The bag has no roast level, process or tasting notes, so a forgiving, scale-driven profile is the safest start. It adapts to your grind while you learn this coffee.",
+          "D-Flow is written for medium-light through dark roasts and holds up well in milk, which fits your milk drinks.",
+          "Guji coffees are typically floral and fruity. D-Flow's ~91 °C and 1:2.2 ratio give sweetness without pushing a possibly light roast into harshness.",
+          "You're comfortable on the machine and have a scale, so weight-based shot advance works well."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "If the bag turns out to be a light, fruity roast, its low, declining temperature gives a clean, sweet, high-extraction cup. It is less milk-friendly."
+          },
+          {
+            "profileTitle": "Adaptive v3",
+            "why": "A sweet, balanced profile that corrects itself shot to shot. Try it if D-Flow tastes flat or you want more clarity."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Ethiopia Guji Gogogu|both": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 93,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start a bit finer than you'd grind a medium roast. Adjust from there based on preinfusion drip and flow.",
+        "restAdvice": "No roast date is known. Light-to-medium Ethiopians usually peak about 10–35 days after roasting. Check the bag for the date, and if it's under 10 days old, give it a few more days.",
+        "dialIn": "Aim for about 1.5 ml/s at Pressurize and about 4 g dripping during preinfusion. If it drips faster or the shot runs under 28 s, grind finer. If it's slower or the shot runs over 36 s, grind coarser. If it tastes sour or thin, raise the temperature 1–2 °C or extend the yield to 1:2.4.",
+        "rationale": [
+          "The roast level, process and tasting notes are unconfirmed. Guji coffees are usually floral, tea-like and fruity, and Adaptive v2 is a forgiving, sweet and clear profile that suits an unknown medium-light roast.",
+          "It adapts to your grind, which helps on a first shot of a new bag with no past shots to go on.",
+          "It works for both milk and straight espresso, and you said you make both.",
+          "The 93 °C start is hot enough for a light-leaning roast, and you can adjust from there once you've tasted it."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Try this if you want a sweeter, cleaner and more fruit-forward straight shot. It uses a low, declining temperature, so it suits a light roast."
+          },
+          {
+            "profileTitle": "A-Flow / default-light",
+            "why": "Try this if the beans turn out to be clearly light and the shot tastes sour or underdeveloped. It runs hotter and longer."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Kenya Rioki Estate|both": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 42,
+        "tempC": 93,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start a bit finer than you'd grind a medium roast, then adjust to hit the preinfusion drip target.",
+        "restAdvice": "No roast date. If it's under 10 days off roast, rest it longer. The best window is about 10–35 days.",
+        "dialIn": "Aim for about 4 g dripping during preinfusion and about 1.5 ml/s at Pressurize. If it drips too fast or the shot runs under 28 s, grind finer. If it chokes or tastes harsh, grind coarser. If it's still sharp, lower the temperature to 92 °C or stretch the yield toward 1:2.4.",
+        "rationale": [
+          "A washed Kenyan peaberry with blackcurrant, citrus and black tea notes needs a forgiving profile that keeps clarity and adds sweetness to balance the acidity.",
+          "Adaptive v2 adjusts to your grind, which helps on a first bag where the roast date and level are unknown.",
+          "It's written for medium-light roasts and works for both straight espresso and milk drinks. A 1:2.3 ratio softens the acidity, as the roaster summary suggests.",
+          "A 93 °C start gives enough extraction for a dense, high-altitude bean without getting harsh."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "The top-ranked profile. Its low, declining temperature gives a sweet, clean shot that keeps the fruit, so try it if Adaptive tastes too sharp."
+          },
+          {
+            "profileTitle": "Rao Allongé",
+            "why": "Try this for a long, fruit-forward, tea-like cup with the Kenya's blackcurrant and bergamot. It suits straight drinking, not milk."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Kenya Rioki Estate|milk": {
+      "recipe": {
+        "profileTitle": "D-Flow / default",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 42,
+        "tempC": 92,
+        "targetTimeS": [
+          28,
+          40
+        ],
+        "grindHint": "Start a bit finer than your medium-roast setting; this is a dense, bright washed Kenyan peaberry.",
+        "restAdvice": "No roast date given. Ideally use it 10–35 days off roast; if it is fresher than that, rest it a few more days. Add the roast date from the bag to track this.",
+        "dialIn": "Use the scale and aim for the first drips at about 8–10 s of the pour, with the shot finishing in roughly 30–38 s at 1:2.3. Lower the infusion pressure toward 0 for this lighter roast. If it tastes sharp or sour, grind finer or raise the temperature 1°C. If it tastes bitter or hollow, grind coarser. Max flow of about 1.7–2 ml/s is a good guide.",
+        "rationale": [
+          "D-Flow is written for medium-light roasts and suits milk drinks. It also adapts to your grind on the first shot with this bag.",
+          "The roaster's notes are blackcurrant, limeade and grapefruit. A slightly longer 1:2.3 ratio softens the acidity, and that is what the summary recommends.",
+          "I raised the temperature a little from 90.5 to 92°C. Dense peaberry beans need heat to extract, and the fruit has to cut through milk.",
+          "There are no past shots, so a forgiving, scale-driven profile is the safest place to start."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Adaptive v3",
+            "why": "It's a sweet, clear profile for medium-light roasts that corrects itself. Try it if you want more clarity from the fruit and the shot is still sharp in milk."
+          },
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Its low, declining temperature gives a clean, sweet cup with strong fruit. It suits this coffee best as a short black or a smaller milk drink."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Peru Adelino Vega Navara|milk": {
+      "recipe": {
+        "profileTitle": "D-Flow / default",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 91,
+        "targetTimeS": [
+          25,
+          40
+        ],
+        "grindHint": "Start a bit finer than you'd grind a medium roast, then adjust by dripping weight and flow.",
+        "restAdvice": "No roast date is recorded. Add it from the bag. Medium-light coffee usually tastes best 10–35 days off roast. If it's under 10 days, rest it a few more days.",
+        "dialIn": "Use the scale and aim for about 40 g out in 25–40 s, with flow around 1.7–2.2 ml/s at peak. If it runs fast or tastes sour, grind finer. If it's bitter or choking, grind coarser. Because the roast level is unconfirmed, lower the infusion pressure a little if it tastes bright and sharp.",
+        "rationale": [
+          "The bag gives no roast level, process or tasting notes, so a forgiving profile suits a coffee we know little about.",
+          "D-Flow advances on dripped weight, so it adapts to your grind while you dial in a new bag.",
+          "It's rated great for milk, which is how you drink it, and it gives body and sweetness.",
+          "It's written for medium-light through dark roasts, so it still works if the roast is darker than the baseline suggests."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "Adaptive v2",
+            "why": "Balanced and sweet. Try it if the coffee turns out light and fruity and you want more clarity, though it's less milk-friendly."
+          },
+          {
+            "profileTitle": "Default",
+            "why": "A gentle flat-pressure shot. Use it if you want a simple, forgiving baseline for milk drinks."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    },
+    "Peru Adelino Vega Navara|both": {
+      "recipe": {
+        "profileTitle": "Adaptive v2",
+        "profileId": null,
+        "doseG": 18,
+        "yieldG": 40,
+        "tempC": 93,
+        "targetTimeS": [
+          28,
+          36
+        ],
+        "grindHint": "Start a bit finer than your medium-roast setting (roughly 1–2 steps), then adjust from the first shot.",
+        "restAdvice": "No roast date was found. Check the bag and add it. If the coffee is under about 10 days off roast, rest it longer. The best window is roughly 10–35 days.",
+        "dialIn": "Aim for about 1.5 ml/s at the Pressurize step and about 4 g dripping during preinfusion. If it drips faster or the shot runs under 28 s, grind finer. If it is slow or over 36 s, grind coarser. If it tastes sour, raise the temperature to 94 °C or lengthen the ratio. If it tastes bitter, drop to 92 °C.",
+        "rationale": [
+          "The bag has no roast level, process or tasting notes, so I'm using a medium-light roast as the baseline. Adaptive v2 is written for medium-light to light roasts.",
+          "It is forgiving and corrects for grind. That helps with an unknown coffee and no past shots.",
+          "It leans sweet and clear, which suits a Peruvian single origin. It also works with milk, so it covers your 'both' preference.",
+          "A scale and comfortable experience mean you can follow the dripping-weight and flow targets."
+        ],
+        "alternatives": [
+          {
+            "profileTitle": "D-Flow / default",
+            "why": "A good milk-friendly option with more body. It advances on dripped weight, and you can lower infusion pressure to behave like Adaptive for a lighter roast."
+          },
+          {
+            "profileTitle": "Extractamundo Dos!",
+            "why": "Try it if the coffee turns out light and fruity and you want a cleaner, sweeter cup. It is best for straight espresso."
+          }
+        ]
+      },
+      "source": "claude-cli"
+    }
+  }
+}

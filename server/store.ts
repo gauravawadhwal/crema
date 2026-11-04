@@ -16,12 +16,65 @@ export interface CremaBeanRecord {
   photo: string | null; // data: URL thumbnail of your own bag photo
   productImage?: string | null; // cached roaster packshot, served at /api/images/…
   art?: "product" | "photo"; // which picture to show
+  bestShotId?: string | null; // pinned reference shot, drawn as a ghost on the live chart
+  finished?: boolean; // bag used up; hidden from the shelf
   addedAt: string;
 }
+
+/** A one-tap favourite: profile, recipe and optionally the coffee. */
+export interface Favourite {
+  name: string;
+  profileTitle: string;
+  doseG: number;
+  yieldG: number;
+  tempC: number;
+  beanId: string | null;
+  grinderSetting: string | null;
+}
+
+export interface Maintenance {
+  backflushEveryShots: number;
+  descaleEveryDays: number;
+  lastBackflush: string | null; // ISO date
+  lastDescale: string | null;
+}
+
+/** Steam, hot water and flush presets, shared by the tablet and the phone. */
+export interface Presets {
+  steam: { label: string; seconds: number }[]; // 0 seconds = run until stopped
+  water: { label: string; ml: number }[];
+  flush: { label: string; seconds: number }[];
+  selected: { steam: number; water: number; flush: number };
+}
+
+export const DEFAULT_PRESETS: Presets = {
+  steam: [
+    { label: "Cortado", seconds: 15 },
+    { label: "Flat white", seconds: 25 },
+    { label: "Latte", seconds: 35 },
+    { label: "Manual", seconds: 0 },
+  ],
+  water: [
+    { label: "Rinse", ml: 60 },
+    { label: "Long black", ml: 120 },
+    { label: "Tea", ml: 250 },
+  ],
+  flush: [
+    { label: "3 s", seconds: 3 },
+    { label: "5 s", seconds: 5 },
+    { label: "8 s", seconds: 8 },
+  ],
+  selected: { steam: 1, water: 1, flush: 1 },
+};
+
+export const DEFAULT_MAINTENANCE: Maintenance = { backflushEveryShots: 100, descaleEveryDays: 90, lastBackflush: null, lastDescale: null };
 
 interface StoreShape {
   beans: Record<string, CremaBeanRecord>;
   preferences?: Preferences;
+  favourites?: (Favourite | null)[];
+  maintenance?: Maintenance;
+  presets?: Presets;
 }
 
 export class Store {
@@ -80,6 +133,43 @@ export class Store {
     this.data.preferences = { ...(this.data.preferences ?? {}), ...p };
     await this.save();
     return this.data.preferences;
+  }
+
+  async getFavourites(): Promise<(Favourite | null)[]> {
+    await this.load();
+    const f = this.data.favourites ?? [];
+    return Array.from({ length: 5 }, (_, i) => f[i] ?? null);
+  }
+
+  async setFavourite(slot: number, fav: Favourite | null) {
+    const all = await this.getFavourites();
+    all[slot] = fav;
+    this.data.favourites = all;
+    await this.save();
+    return all;
+  }
+
+  async getPresets(): Promise<Presets> {
+    await this.load();
+    return this.data.presets ?? DEFAULT_PRESETS;
+  }
+
+  async setPresets(p: Presets) {
+    await this.load();
+    this.data.presets = p;
+    await this.save();
+    return p;
+  }
+
+  async getMaintenance(): Promise<Maintenance> {
+    await this.load();
+    return { ...DEFAULT_MAINTENANCE, ...(this.data.maintenance ?? {}) };
+  }
+
+  async setMaintenance(patch: Partial<Maintenance>) {
+    this.data.maintenance = { ...(await this.getMaintenance()), ...patch };
+    await this.save();
+    return this.data.maintenance;
   }
 
   async patch(beanId: string, patch: Partial<CremaBeanRecord>) {

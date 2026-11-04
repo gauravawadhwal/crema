@@ -67,13 +67,31 @@ You wanted to use your Claude or ChatGPT subscriptions rather than pay per API c
 Caveats:
 - Subscription auth through these CLIs is fine for your own personal tool. It's not meant for serving other people, so if Crema ever becomes something others use, switch to API keys.
 - The CLI routes depend on each tool's current flags. They're wrapped in small adapters (`server/llm/*-cli.ts`) so a flag change is a one-file fix.
-- **Not yet tested against live accounts.** This session had none of your credentials. The first thing to do on the real host is one `curl` per provider (see README).
+- **claude-cli is tested with real calls**: identification with web search (20–43 s per coffee) and recommendations (7–14 s). The first real call found a bug: Claude Code rejected Zod's `$schema` marker, so it's now stripped. In the build sandbox, Claude Code's WebFetch was blocked and only its web search worked, so the sample records come from search results. On your home server, page fetching will work and records should be fuller.
+- **codex-cli and gemini-api are untested.** There was no ChatGPT login or Gemini key in the build environment.
 
 ## 4. How a recipe is chosen
 
-1. **Rules baseline** (`server/recommend/rules.ts`, no AI): roast level sets the base temperature and ratio. Process, altitude, filter versus espresso roasts, decaf and rest status adjust it. It works offline and covers about 80% of the job.
-2. **AI refinement**: the model gets the coffee record, the baseline, your **actual profile library** from the machine, and your past shots of this bag. It must pick a profile title that exists on the machine (this is enforced in code), and it weighs any recipe the roaster publishes.
-3. **Dial-in**: after a shot you give quick taste feedback (sour ↔ bitter, thin ↔ heavy, 1–5 stars). This is saved as a shot annotation in Decaid, and you get back one suggested change for the next shot. There's a rules fallback if the AI is unavailable.
+The strategy is to match what the roaster says about the coffee against what community profiles are designed to do, then let the AI make the final call.
+
+1. **Profile catalog** (`server/profiles/catalog.ts`): 31 community espresso profiles. They're described from their authors' own notes in the profile files Decaid ships (so they're already on the tablet), plus Decent's guidance. Successful users favour Londinium, D-Flow, Adaptive, Extractamundo Dos and Allongé, and Adaptive v2 is the showroom's go-to. Each entry records:
+   - the style (adaptive, blooming, lever, flow, allongé, turbo, low-contact, scale-driven)
+   - the roasts it was written for and whether it suits milk
+   - the traits it brings forward (fruit, florals, clarity, sweetness, body, chocolate)
+   - a typical recipe, difficulty, whether it needs a scale or flat burrs, and popularity
+   - the author's dial-in guidance
+2. **Rules ranking** (`server/profiles/match.ts`): each profile is scored against the coffee and your setup. On the coffee side that means roast fit, the processes it suits, tasting-note traits, blend or single origin, altitude and freshness. On your side it means milk or straight, scale, burrs and experience. Every point comes with a reason or a caution the app shows you. Profiles not installed on the machine are marked.
+3. **Recipe per candidate**: each candidate starts from the profile's own recipe and temperature, shifted about 1.5 °C per roast step (lighter roasts hotter). A roaster's published recipe overrides dose and yield on conventional profiles. Turbo, allongé and low-contact shots keep their own logic.
+4. **AI choice** (`server/recommend/index.ts`): the model reads the roaster's description, the top six installed candidates with their authors' guidance, your setup, and your past shots of the bag. It must return one of those candidates, explain the choice in 2–4 bullets, give coffee-specific dial-in guidance and suggest alternatives. If the AI is unavailable, the top-ranked rule candidate is used.
+5. **Dial-in loop**: taste feedback plus the shot's time against the profile's window gives one next adjustment, using the profile author's guidance.
+
+**Verified with real calls** (claude-cli through a Claude subscription) on nine ONA and Haven coffees (`samples/recipes.json`):
+- ONA Maple (milk) → Londonium. The AI tied the caramel, biscuit and nut notes to Londonium's body.
+- ONA Raspberry Candy (milk) → D-Flow / default at ONA's own 20.5 g → 38 g recipe. It warmed the suggested temperature toward ONA's 93.5 °C.
+- ONA Guji Yabitu Koba G1 (light natural from 2,100–2,350 masl, straight and milk) → Best practice (light roast).
+- Bright, light-to-medium coffees (straight and milk) → Adaptive v2, which the AI often preferred over the rules' first choice, Extractamundo Dos!.
+
+Each AI call took 7–14 seconds.
 
 ## 5. iPhone companion
 
