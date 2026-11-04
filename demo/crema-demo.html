@@ -797,7 +797,7 @@ function makeDemoApi() {
 
 /* ================= utilities ================= */
 const $ = (s, el = document) => el.querySelector(s);
-const $ = (s, el = document) => [...el.querySelectorAll(s)];
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const local = {
   get(k, d) { try { const v = localStorage.getItem("crema:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -826,7 +826,7 @@ function applyTheme(mode, redraw = true) {
   local.set("theme", mode);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", css("--bg") || "#17120f");
-  $("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
+  $$("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
   if (redraw && S.api) route(false);
 }
 
@@ -1127,7 +1127,7 @@ function renderNextShot() {
   if ($("#prevBean")) { $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1); }
   if (!n) return;
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
-  $("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
+  $$("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
   $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b.id}`, n.grind); S.loaded = false; renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
   $("#resetRecipe").onclick = () => { setNextFromRecipe(b); renderNextShot(); };
@@ -1183,8 +1183,8 @@ function renderFavs() {
   $("#favs").innerHTML = S.favourites.map((f, i) => f
     ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmt1(f.doseG)}→${fmt1(f.yieldG)}</span></button><button class="fav-edit" data-favedit="${i}" aria-label="Edit favourite">⋯</button></div>`
     : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("");
-  $("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
-  $("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
+  $$("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
+  $$("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
 }
 async function useFav(i) {
   const f = S.favourites[i];
@@ -1234,8 +1234,8 @@ function renderControls() {
     <div class="ctl"><button class="ctl-btn" data-run="flush" ${disabled || busy ? "disabled" : ""}>Flush<span class="sub">${flush.seconds} s</span></button>${chips("flush", p.flush)}</div>
     <div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap ? "" : "disabled"}>STOP</button>
       ${S.ghc ? '<span class="ghc-note">Your machine starts from the group head controller. Crema sets the recipe and presets; press the group head to start.</span>' : ""}</div>`;
-  $("[data-run]").forEach((b) => (b.onclick = () => startOp(b.dataset.run)));
-  $("[data-preset]").forEach((b) => (b.onclick = async () => {
+  $$("[data-run]").forEach((b) => (b.onclick = () => startOp(b.dataset.run)));
+  $$("[data-preset]").forEach((b) => (b.onclick = async () => {
     const [kind, idx] = b.dataset.preset.split(":");
     S.presets.selected[kind] = Number(idx);
     renderControls();
@@ -1343,7 +1343,7 @@ function showAfterShot(shot, pts) {
     <div class="row"><span class="label">Enjoyment</span><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="false" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
     <div class="row"><button class="btn primary" id="sendTaste">Get the next adjustment</button><button class="btn" id="pinShot">Make this the reference shot</button></div>
     <div id="adviceBox"></div>`;
-  $(".star", p).forEach((b) => (b.onclick = () => { stars = +b.dataset.n; $(".star", p).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.n <= stars))); }));
+  $$(".star", p).forEach((b) => (b.onclick = () => { stars = +b.dataset.n; $$(".star", p).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.n <= stars))); }));
   $("#sendTaste").onclick = async (e) => {
     if (!shot || !S.current) return;
     e.target.disabled = true;
@@ -1421,12 +1421,12 @@ async function renderShelf() {
         ${i.productUrl ? `<a class="btn small ghost" href="${esc(i.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}
       </div></article>`;
   }).join("");
-  $("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
-  $("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
+  $$("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
+  $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
     const b = S.shelf.find((x) => x.id === btn.dataset.freeze);
     await S.api.setBeanState(b.id, { frozen: !b.frozen }); b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
   }));
-  $("[data-finish]").forEach((btn) => (btn.onclick = () => {
+  $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
     const b = S.shelf.find((x) => x.id === btn.dataset.finish);
     openSheet(`<h2>Finished ${esc(b.info.name.value)}?</h2><p class="muted">It moves off your shelf. Its shots stay in your history.</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
     $("#confirmFinish").onclick = async () => {
@@ -1443,8 +1443,8 @@ async function refreshShelf() { S.shelf = await S.api.shelf(); }
 let addMode = "photo", files = [], pending = null, REVIEW_INTRO = "";
 function setMode(m) {
   addMode = m;
-  $("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
-  $("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
+  $$("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
+  $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
 }
 async function thumbnail(file, max = 360) {
   const url = URL.createObjectURL(file);
@@ -1544,7 +1544,7 @@ async function renderProfiles() {
           <div class="scorebar" aria-label="Match score ${c.score}"><div style="width:${clamp((c.score / top) * 100, 5, 100)}%"></div></div>
           <ul>${c.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}${c.cautions.map((r) => `<li class="caution">${esc(r)}</li>`).join("")}</ul>
           <div class="row between"><span class="num small">${fmt1(c.recipe.doseG)}→${fmt1(c.recipe.yieldG)} g · ${fmt1(c.recipe.tempC)} °C</span><button class="btn small" data-use="${esc(c.title)}">Use</button></div></div>`).join("")}</div>`;
-      $("[data-use]", rec).forEach((btn) => (btn.onclick = () => {
+      $$("[data-use]", rec).forEach((btn) => (btn.onclick = () => {
         const c = cands.find((x) => x.title === btn.dataset.use);
         const r = btn.dataset.rec ? b.recipe : { ...b.recipe, profileTitle: c.title, doseG: c.recipe.doseG, yieldG: c.recipe.yieldG, tempC: c.recipe.tempC, targetTimeS: c.recipe.timeS };
         setNextFromRecipe(b, r);
@@ -1569,7 +1569,7 @@ function renderCatalog() {
     `<button class="fchip" data-f="easy" aria-pressed="${f.easy}">Easy to dial</button>`,
     `<button class="fchip" data-f="scale" aria-pressed="${f.scale === false}">No scale needed</button>`,
   ].join("");
-  $("[data-f]").forEach((b) => (b.onclick = () => {
+  $$("[data-f]").forEach((b) => (b.onclick = () => {
     const [k, v] = b.dataset.f.split(":");
     if (k === "roast") f.roast = f.roast === v ? null : v; else if (k === "scale") f.scale = f.scale === false ? null : false; else f[k] = !f[k];
     renderCatalog();
@@ -1582,7 +1582,7 @@ function renderCatalog() {
       <div class="roastbar" aria-label="Roasts: ${p.roasts.join(", ")}">${ROASTS.map((r) => `<span class="${p.roasts.includes(r) ? "on" : ""}"></span>`).join("")}</div>
       <div class="muted small">${esc(p.author)} · ${esc(p.style)} · ${p.difficulty}${p.milk === "great" ? " · milk" : ""}</div>
       <div class="small">${esc(p.character)}</div></button>`).join("");
-  $("[data-p]").forEach((b) => (b.onclick = () => showProfile(b.dataset.p)));
+  $$("[data-p]").forEach((b) => (b.onclick = () => showProfile(b.dataset.p)));
 }
 function showProfile(title) {
   const p = S.catalog.find((x) => x.title === title);
@@ -1615,8 +1615,8 @@ async function renderShots() {
       <button class="open" data-open="${esc(s.id)}"><strong>${esc(s.coffee || "Unknown coffee")}</strong>
         <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span>${s.enjoyment ? "★".repeat(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("");
   requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
-  $("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShots(); }));
-  $("[data-cmp]").forEach((b) => (b.onchange = () => { S.cmpShot = b.checked ? b.dataset.cmp : null; renderShots(); }));
+  $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShots(); }));
+  $$("[data-cmp]").forEach((b) => (b.onchange = () => { S.cmpShot = b.checked ? b.dataset.cmp : null; renderShots(); }));
   renderShotDetail();
 }
 function renderShotDetail() {
@@ -1631,7 +1631,7 @@ function renderShotDetail() {
     <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Reference shot ✓" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>`;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
-  $("#detailStars .star").forEach((b) => (b.onclick = async () => { s.enjoyment = +b.dataset.n; await S.api.annotate(s.id, { enjoyment: s.enjoyment }).catch(() => {}); renderShotDetail(); }));
+  $$("#detailStars .star").forEach((b) => (b.onclick = async () => { s.enjoyment = +b.dataset.n; await S.api.annotate(s.id, { enjoyment: s.enjoyment }).catch(() => {}); renderShotDetail(); }));
   $("#shotNotes").onchange = async (e) => { s.notes = e.target.value; await S.api.annotate(s.id, { espressoNotes: s.notes }).catch(() => {}); toast("Notes saved"); };
   const pin = $("#pinDetail");
   if (pin) pin.onclick = async () => { await S.api.pinBest(bean.id, s.id); bean.bestShotId = s.id; if (S.current?.id === bean.id) await loadGhost(); renderShots(); toast("Reference shot set"); };
@@ -1706,7 +1706,7 @@ async function renderSettings() {
 
   // ---- wire up ----
   const savePrefs = async (patch) => { S.prefs = await S.api.prefs.set(patch); for (const b of S.shelf) b.recipe = null; S.current && (await selectBean(S.current.id, { quiet: true })); toast("Saved. Recommendations updated"); };
-  const segWire = (id, key) => $(`#${id} button`).forEach((b) => (b.onclick = () => { $(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
+  const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
   const num = (id) => parseFloat($(`#${id}`)?.value);
@@ -1728,22 +1728,22 @@ async function renderSettings() {
     const input = $(`#${id}`); if (!input) continue;
     const run = async () => { try { await fn(); if (!id.startsWith("p")) toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); } };
     input.onchange = run;
-    $(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { const d = parseFloat(b.dataset.mini.split(":")[1]); input.value = String(round((parseFloat(input.value) || 0) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
+    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { const d = parseFloat(b.dataset.mini.split(":")[1]); input.value = String(round((parseFloat(input.value) || 0) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
   }
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
   const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
   const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   const br = $("#sBright"); if (br) br.onchange = (e) => m.display.brightness(Number(e.target.value)).catch(() => {});
-  $("[data-theme-set]", el).forEach((b) => (b.onclick = () => { applyTheme(b.dataset.themeSet, false); $("[data-theme-set]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }));
-  $("[data-day]").forEach((b) => (b.onclick = async () => {
+  $$("[data-theme-set]", el).forEach((b) => (b.onclick = () => { applyTheme(b.dataset.themeSet, false); $$("[data-theme-set]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }));
+  $$("[data-day]").forEach((b) => (b.onclick = async () => {
     const [id, d] = b.dataset.day.split(":"); const s = scheds.find((x) => x.id === id);
     const days = s.daysOfWeek.length ? s.daysOfWeek.slice() : [1, 2, 3, 4, 5, 6, 7];
     const i = days.indexOf(+d); i >= 0 ? days.splice(i, 1) : days.push(+d);
     s.daysOfWeek = days.sort(); await m.schedules.update(id, { daysOfWeek: s.daysOfWeek }); renderSettings();
   }));
   scheds.forEach((s) => { const t = $(`#en-${CSS.escape(s.id)}`); if (t) t.onchange = (e) => m.schedules.update(s.id, { enabled: e.target.checked }); });
-  $("[data-del]").forEach((b) => (b.onclick = async () => { await m.schedules.remove(b.dataset.del); renderSettings(); }));
+  $$("[data-del]").forEach((b) => (b.onclick = async () => { await m.schedules.remove(b.dataset.del); renderSettings(); }));
   $("#addWake").onclick = async () => { const t = $("#newWake").value; if (!t) return; await m.schedules.add({ time: t, daysOfWeek: [1, 2, 3, 4, 5], enabled: true }); toast(`Wakes at ${t} on weekdays`); renderSettings(); };
   const db = $("#doneBackflush"); if (db) db.onclick = async () => { await S.api.maintenance.done("backflush"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Backflush recorded"); };
   const dd = $("#doneDescale"); if (dd) dd.onclick = async () => { await S.api.maintenance.done("descale"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Descale recorded"); };
@@ -1758,8 +1758,8 @@ function editPresets() {
     <span class="label">Flush (seconds)</span>${rows("flush", "s", "seconds")}
     <div class="row"><button class="btn primary" id="savePresets">Save presets</button></div>`);
   $("#savePresets").onclick = async () => {
-    $("[data-pl]").forEach((i) => { const [k, n] = i.dataset.pl.split(":"); p[k][n].label = i.value.trim() || p[k][n].label; });
-    $("[data-pv]").forEach((i) => { const [k, n, key] = i.dataset.pv.split(":"); const v = parseFloat(i.value); if (Number.isFinite(v)) p[k][n][key] = v; });
+    $$("[data-pl]").forEach((i) => { const [k, n] = i.dataset.pl.split(":"); p[k][n].label = i.value.trim() || p[k][n].label; });
+    $$("[data-pv]").forEach((i) => { const [k, n, key] = i.dataset.pv.split(":"); const v = parseFloat(i.value); if (Number.isFinite(v)) p[k][n][key] = v; });
     try { S.presets = await S.api.presets.set(p); closeSheet(); renderControls(); toast("Presets saved"); } catch (e) { toast(e.message); }
   };
 }
@@ -1769,7 +1769,7 @@ const VIEWS = ["brew", "shelf", "add", "profiles", "shots", "settings"];
 function route(scroll = true) {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "brew";
   VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
-  $(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
+  $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
   if (v === "shelf") renderShelf();
   if (v === "profiles") renderProfiles();
@@ -1793,7 +1793,7 @@ async function boot() {
   $("#demoBanner").hidden = !S.api.demo;
 
   document.addEventListener("pointerdown", () => S.api.machine.heartbeat(), { passive: true });
-  $("[data-mode]").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  $$("[data-mode]").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
   $("#photoInput").onchange = async (e) => {
     files = [...files, ...e.target.files].slice(0, 4);
     const thumbs = await Promise.all(files.map((f) => thumbnail(f, 200)));
