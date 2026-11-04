@@ -35,6 +35,24 @@ function toast(msg) {
 
 /* ================= theme ================= */
 const HOST_THEME = document.documentElement.getAttribute("data-theme");
+// Fixed-look themes. Crema follows the light/dark setting; the rest set their own.
+const SKINS = [
+  { id: "crema", name: "Crema", note: "Roasted brown and crema gold. Follows light or dark.", pv: ["#211a16", "#e0a458", "#2b231e", "#5cc59a", "#6aa8ea", "#c99a6b"], bg: "#17120f" },
+  { id: "rosso", name: "Rosso", note: "Italian bar machine: red lacquer on polished steel.", pv: ["#f7f8f8", "#c3141b", "#dde0e3", "#1b7a52", "#1d60ad", "#7a5230"], bg: "#e6e8ea" },
+  { id: "acciaio", name: "Acciaio", note: "Industrial black and steel, like the machine.", pv: ["#171a1d", "#e9edf0", "#21252a", "#4fd19a", "#63a9f2", "#c9a27a"], bg: "#0e1012" },
+  { id: "nordic", name: "Nordic", note: "Light-roast café: birch, ink and fjord blue.", pv: ["#fbfbf9", "#2f6a8c", "#e2e6e1", "#2a8a64", "#2f6a8c", "#8a6340"], bg: "#eef0ed" },
+  { id: "verde", name: "Verde", note: "Vintage Italian café: bottle green and brass.", pv: ["#15241e", "#c9a24a", "#1d3128", "#7fd6a6", "#79b4e8", "#d1ab7c"], bg: "#0e1a15" },
+  { id: "notte", name: "Notte", note: "True black and dim amber for the first shot.", pv: ["#0b0b0b", "#b8742e", "#151515", "#3f9c75", "#4b7fb3", "#9b7856"], bg: "#000000" },
+];
+function applySkin(id, redraw = true) {
+  const skin = SKINS.find((x) => x.id === id) ? id : "crema";
+  if (skin === "crema") document.documentElement.removeAttribute("data-skin");
+  else document.documentElement.setAttribute("data-skin", skin);
+  local.set("skin", skin);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", css("--bg") || "#17120f");
+  if (redraw && S.api) route(false);
+}
 function applyTheme(mode, redraw = true) {
   const root = document.documentElement;
   if (mode === "light" || mode === "dark") root.setAttribute("data-theme", mode);
@@ -910,7 +928,10 @@ async function renderSettings() {
   </div>
 
   <div class="panel stack"><h2>Display</h2>
-    <div class="set-row first"><span>Theme</span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
+    <div class="stack" style="gap:8px"><span class="label">Theme</span>
+      <div class="skins">${SKINS.map((k) => `<button type="button" class="skin" data-skin="${k.id}" aria-pressed="${(local.get("skin", "crema")) === k.id}">
+        <span class="pv" style="background:${k.bg}">${k.pv.map((c) => `<i style="background:${c}"></i>`).join("")}</span><b>${k.name}</b><span>${k.note}</span></button>`).join("")}</div></div>
+    <div class="set-row" ${local.get("skin", "crema") === "crema" ? "" : "hidden"} id="modeRow"><span>Light or dark<span class="hint">For the Crema theme</span></span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
     <div class="set-row"><span>Clock when asleep<span class="hint">A dark screen saver while the machine sleeps; tap to wake</span></span>${sw("sSaver", S.saver)}</div>
     ${disp?.platformSupported?.brightness ? `<div class="set-row"><span>Tablet brightness</span><input type="range" id="sBright" min="5" max="100" value="${disp.brightness}" aria-label="Brightness" style="accent-color:var(--accent)"></div>` : ""}
   </div>
@@ -959,6 +980,12 @@ async function renderSettings() {
   const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   const br = $("#sBright"); if (br) br.onchange = (e) => m.display.brightness(Number(e.target.value)).catch(() => {});
+  $$("[data-skin]", el).forEach((b) => (b.onclick = () => {
+    applySkin(b.dataset.skin, false);
+    $$("[data-skin]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    $("#modeRow").hidden = b.dataset.skin !== "crema";
+    toast(`${SKINS.find((k) => k.id === b.dataset.skin).name} theme`);
+  }));
   $$("[data-theme-set]", el).forEach((b) => (b.onclick = () => { applyTheme(b.dataset.themeSet, false); $$("[data-theme-set]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); }));
   $$("[data-day]").forEach((b) => (b.onclick = async () => {
     const [id, d] = b.dataset.day.split(":"); const s = scheds.find((x) => x.id === id);
@@ -1006,6 +1033,7 @@ function route(scroll = true) {
 async function boot() {
   REVIEW_INTRO = $("#reviewPanel").innerHTML;
   applyTheme(local.get("theme", "auto"), false);
+  applySkin(window.CREMA_SKIN || local.get("skin", "crema"), false);
   const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
   if (!forceDemo) {
     try {

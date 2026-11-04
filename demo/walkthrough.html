@@ -64,6 +64,14 @@ a { color: var(--accent); }
 .phone { height: min(70vh, 640px); max-width: 30%; aspect-ratio: 390 / 844; border-radius: 34px; padding: 9px; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 24px 48px rgba(0,0,0,.45); }
 .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 26px; display: block; }
 
+.screen.themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; background: #0a0807; }
+.themes figure { margin: 0; position: relative; min-height: 0; overflow: hidden; border-radius: 6px; }
+.themes img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.themes figcaption { position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(10, 7, 5, .78); color: #efe6dc; font: 600 .74rem var(--font-display); }
+.slide-in .themes figure { animation: pop .5s ease both; }
+.slide-in .themes figure:nth-child(2) { animation-delay: .08s; } .slide-in .themes figure:nth-child(3) { animation-delay: .16s; }
+.slide-in .themes figure:nth-child(4) { animation-delay: .24s; } .slide-in .themes figure:nth-child(5) { animation-delay: .32s; } .slide-in .themes figure:nth-child(6) { animation-delay: .4s; }
+@keyframes pop { from { opacity: .3; transform: scale(.96); } to { opacity: 1; transform: none; } }
 .diagram { display: grid; gap: 16px; align-content: center; height: 100%; padding: 6% 7%; }
 .tier { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .node { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; }
@@ -131,7 +139,7 @@ a { color: var(--accent); }
 <script>
 "use strict";
 const BOXES = {"tablet-home": {"x": 7.76, "y": 6.28, "w": 22.39, "h": 63.2}, "tablet-pulling": {"x": 30.9, "y": 6.28, "w": 52.54, "h": 92.47}, "tablet-after-shot": {"x": 30.9, "y": 55.42, "w": 52.54, "h": 43.33}, "tablet-steam": {"x": 30.6, "y": 31.56, "w": 38.81, "h": 36.88}, "tablet-profiles": {"x": 7.76, "y": 15.09, "w": 91.04, "h": 41.56}, "tablet-shelf": {"x": 7.76, "y": 1.53, "w": 29.65, "h": 50.5}, "tablet-settings": {"x": 7.76, "y": -0.05, "w": 29.65, "h": 52.24}, "tablet-shots": {"x": 50.28, "y": 18.34, "w": 47.56, "h": 44.81}, "tablet-add-coffee": {"x": 53.81, "y": 12.53, "w": 45, "h": 111.65}};
-const DEMO = "https://claude.ai/artifact/Uj5vMc5hsaFvsoMFqXmhrZ";
+const DEMO = window.CREMA_DEMO_URL || "https://claude.ai/artifact/Uj5vMc5hsaFvsoMFqXmhrZ";
 const REPO = "https://github.com/gauravawadhwal/crema";
 
 const SLIDES = [
@@ -165,12 +173,15 @@ const SLIDES = [
   { phones: ["phone-home", "phone-shelf", "phone-profiles"], step: "On your iPhone", title: "The same app on your phone",
     text: "Add it to your home screen from Safari. Photograph a bag at the café, check the water tank, start steam, and look back at your shots. It's one app, so there's nothing extra to install or keep in sync.",
     facts: ["no App Store app", "same data as the tablet"] },
+  { themes: ["crema", "rosso", "acciaio", "nordic", "verde", "notte"], step: "Make it yours", title: "Six themes",
+    text: "Crema is the default and follows light or dark. Rosso is Italian bar-machine red on polished steel. Acciaio is industrial black and steel, like the DE1 itself. Nordic is an airy light-roast café, Verde is vintage café green and brass, and Notte is true black for the first shot of the day.",
+    facts: ["Settings → Display", "remembered per device"] },
   { diagram: true, step: "Under the hood", title: "How it fits together",
     text: "Decaid, Decent's open-source tablet app, talks to the machine. Crema is the interface you see, plus a small server at home that identifies coffees and picks profiles using your Claude or ChatGPT subscription.",
     links: true },
 ];
 
-const DURATION = 7500;
+const DURATION = window.REEL_DURATION || 7500;
 let i = 0, playing = !matchMedia("(prefers-reduced-motion: reduce)").matches, startedAt = 0, elapsedBefore = 0, raf = 0;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -180,6 +191,7 @@ document.querySelectorAll(".bar").forEach((b) => (b.onclick = () => go(+b.datase
 
 function visualHtml(s) {
   if (s.phones) return `<div class="phones">${s.phones.map((p) => `<div class="phone"><img src="shots/${p}.png" alt=""></div>`).join("")}</div>`;
+  if (s.themes) return `<div class="frame"><div class="screen themes">${s.themes.map((t) => `<figure><img src="shots/theme-${t}.png" alt="${t} theme"><figcaption>${t[0].toUpperCase() + t.slice(1)}</figcaption></figure>`).join("")}</div></div>`;
   if (s.diagram) return `<div class="frame"><div class="screen"><div class="diagram">
       <div class="tier"><div class="node ours"><b>Crema on the tablet</b><span>The home screen, shelf, profiles, shots and settings</span></div><div class="node ours"><b>Crema on your iPhone</b><span>The same app, added to the home screen from Safari</span></div></div>
       <div class="arrow">↓ asks for coffee records and recipes · ↓ machine controls</div>
@@ -212,7 +224,7 @@ function render() {
     const layer = stage.querySelector(".layer");
     requestAnimationFrame(() => requestAnimationFrame(() => {
       stage.classList.add("slide-in");
-      if (layer?.dataset.zoom) layer.style.transform = `scale(${layer.dataset.zoom})`;
+      if (layer?.dataset.zoom) { layer.style.transitionDuration = `${Math.round(DURATION * 0.95)}ms`; layer.style.transform = `scale(${layer.dataset.zoom})`; }
     }));
   }, 200);
   document.querySelectorAll(".bar").forEach((b, n) => {

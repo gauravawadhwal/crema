@@ -4,7 +4,9 @@ A custom home screen and companion app for the **Decent DE1** espresso machine.
 
 It runs on the DE1's own tablet in place of the Decent interface, and the same app runs on your iPhone. It identifies coffees from a photo of the bag, picks a community espresso profile to suit each one, and helps you dial it in shot by shot.
 
-![Crema on the DE1 tablet during a shot](docs/screenshots/tablet-pulling.png)
+[![A walkthrough of Crema: the home screen, adding a bag, the matched profile, pulling and rating a shot, steaming milk, the shelf, settings, the iPhone app and the themes](docs/media/walkthrough.webp)](https://gauravawadhwal.github.io/crema/)
+
+**[▶ Play the interactive walkthrough](https://gauravawadhwal.github.io/crema/)** · **[Try the full demo](https://gauravawadhwal.github.io/crema/app/)** (a simulated DE1, right in your browser) · [MP4 video](docs/media/walkthrough.mp4)
 
 ## What it is, in plain terms
 
@@ -36,7 +38,22 @@ All from the demo, on the DE1 tablet's 1340 × 800 screen (Samsung Galaxy Tab A1
 
 Regenerate these with `node scripts/screenshots.cjs` (needs Playwright). `node scripts/check-tablet-fit.cjs` checks that the home screen fits the tablet without scrolling: at 1340 × 800 and the scaled sizes Android may use, with and without the navigation bar, before and after a shot.
 
-**Interactive demo and walkthrough:** [`demo/crema-demo.html`](demo/crema-demo.html) is the whole app running in the browser against a simulated machine. [`demo/walkthrough.html`](demo/walkthrough.html) is a step-by-step tour of a day with it. Both are also published as private Claude artifacts for the repo owner.
+## Themes
+
+Six themes, chosen in Settings → Display and remembered per device. The layout stays flat and the chart colours stay readable in every one.
+
+| | | |
+|---|---|---|
+| ![Crema](docs/screenshots/theme-crema.png) **Crema.** Roasted brown and crema gold. Follows light or dark. | ![Rosso](docs/screenshots/theme-rosso.png) **Rosso.** Italian bar-machine red lacquer on polished steel. | ![Acciaio](docs/screenshots/theme-acciaio.png) **Acciaio.** Industrial black and steel, like the DE1 itself. |
+| ![Nordic](docs/screenshots/theme-nordic.png) **Nordic.** A light-roast café: birch, ink and fjord blue. | ![Verde](docs/screenshots/theme-verde.png) **Verde.** Vintage Italian café green and brass. | ![Notte](docs/screenshots/theme-notte.png) **Notte.** True black and dim amber for the first shot of the day. |
+
+## The demo site
+
+The [GitHub Pages site](https://gauravawadhwal.github.io/crema/) is built from this repo by `.github/workflows/pages.yml` on every push:
+- `/` is the walkthrough (`demo/walkthrough.html`).
+- `/app/` is the full app (`skin/`). With no Crema server to talk to, it runs its built-in demo with a simulated DE1 and scale.
+
+To build it locally, run `node scripts/build-site.mjs`; the site goes in `_site/`. The README animation and the MP4 are recorded from the walkthrough.
 
 ## Features
 
@@ -46,7 +63,8 @@ Regenerate these with `node scripts/screenshots.cjs` (needs Playwright). `node s
 - **Dial in**: rate a shot (sour ↔ bitter, thin ↔ heavy, stars) and get the one change to make next. Shots outside the profile's time window are flagged.
 - **Shelf**: rest window, grams left (from shot doses), reorder nudges, freeze and finish.
 - **Shots**: history with metrics, side-by-side comparison, ratings and notes.
-- **Settings**: your setup, steam, water and flush, machine, wake schedules, display and theme, and descale and backflush reminders.
+- **Settings**: your setup, steam, water and flush, machine, wake schedules, display, and descale and backflush reminders.
+- **Six themes**: Crema, Rosso, Acciaio, Nordic, Verde and Notte (see below).
 
 Research and design decisions: [docs/investigation.md](docs/investigation.md).
 

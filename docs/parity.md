@@ -106,7 +106,7 @@ details still need a pass on the real machine.
 | Wake schedules (time + days) | Decaid | ✅ add, toggle, choose days, remove |
 | Screen saver (clock while asleep; tap wakes) | Streamline | ✅ |
 | Brightness | Streamline | ✅ |
-| Theme (auto/light/dark) | Lumen | ✅ |
+| Themes | Lumen (dark/light/custom) | ✅ six themes (Crema with auto/light/dark, Rosso, Acciaio, Nordic, Verde, Notte) |
 | USB charging, fan threshold, water warning | Stock / Decaid | ✅ |
 | Descale / backflush reminders | Maintenance Tracker plugin | ✅ counts shots and days; "done today" resets |
 | Descale and cleaning workflows | Stock | ⬜ (run from Decaid) |

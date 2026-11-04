@@ -73,6 +73,63 @@
   color-scheme: dark;
 }
 
+
+/* ---------- themes ----------
+   Crema (default) follows the light/dark setting. The others are fixed looks,
+   each built around one coffee-world cue. `html:root[data-skin]` outranks the
+   light/dark blocks above. Telemetry colours keep the Decent convention
+   (pressure green, flow blue, weight brown, temperature red/orange) in every
+   theme, tuned for contrast. */
+html:root[data-skin="rosso"] { /* Italian bar machine: red lacquer on polished steel */
+  --bg: #e6e8ea; --surface: #f7f8f8; --surface-2: #dde0e3; --line: #c5cacf;
+  --fg: #15171a; --muted: #5a626a; --accent: #c3141b; --accent-ink: #ffffff;
+  --pressure: #1b7a52; --flow: #1d60ad; --weight: #7a5230; --temp: #d0621b;
+  --good: #1b7a52; --warn: #a06a00; --bad: #c3141b; --stop: #c3141b;
+  --shadow: 0 1px 0 #ffffff inset, 0 1px 2px rgba(20,24,28,.12), 0 6px 18px rgba(20,24,28,.08);
+  --r: 8px; color-scheme: light;
+}
+html:root[data-skin="acciaio"] { /* Industrial steel: the machine itself */
+  --bg: #0e1012; --surface: #171a1d; --surface-2: #21252a; --line: #2f353b;
+  --fg: #e9edf0; --muted: #8a939b; --accent: #e9edf0; --accent-ink: #0e1012;
+  --pressure: #4fd19a; --flow: #63a9f2; --weight: #c9a27a; --temp: #f07a5a;
+  --good: #4fd19a; --warn: #e8c35a; --bad: #f07a5a; --stop: #e04a3f;
+  --shadow: 0 1px 0 rgba(255,255,255,.04) inset;
+  --r: 6px; color-scheme: dark;
+}
+html:root[data-skin="nordic"] { /* Light-roast café: birch, ink and fjord blue */
+  --bg: #eef0ed; --surface: #fbfbf9; --surface-2: #e2e6e1; --line: #d0d6cf;
+  --fg: #1d2a2f; --muted: #627071; --accent: #2f6a8c; --accent-ink: #ffffff;
+  --pressure: #2a8a64; --flow: #2f6a8c; --weight: #8a6340; --temp: #c4553a;
+  --good: #2a8a64; --warn: #9a6f12; --bad: #c4553a; --stop: #c4553a;
+  --shadow: 0 1px 2px rgba(29,42,47,.06), 0 10px 26px rgba(29,42,47,.06);
+  --r: 18px; color-scheme: light;
+}
+html:root[data-skin="verde"] { /* Vintage Italian café: bottle green and brass */
+  --bg: #0e1a15; --surface: #15241e; --surface-2: #1d3128; --line: #2a4237;
+  --fg: #ede6d4; --muted: #9eae9f; --accent: #c9a24a; --accent-ink: #17140a;
+  --pressure: #7fd6a6; --flow: #79b4e8; --weight: #d1ab7c; --temp: #ec8a6a;
+  --good: #7fd6a6; --warn: #e3c160; --bad: #ec8a6a; --stop: #c8503f;
+  --shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px rgba(0,0,0,.3);
+  --r: 12px; color-scheme: dark;
+}
+html:root[data-skin="notte"] { /* First shot of the day: true black, dim amber, low glare */
+  --bg: #000000; --surface: #0b0b0b; --surface-2: #151515; --line: #232323;
+  --fg: #c8c0b6; --muted: #7b736b; --accent: #b8742e; --accent-ink: #0b0704;
+  --pressure: #3f9c75; --flow: #4b7fb3; --weight: #9b7856; --temp: #b5573f;
+  --good: #3f9c75; --warn: #b5913c; --bad: #b5573f; --stop: #9e3a2f;
+  --shadow: none;
+  --r: 14px; color-scheme: dark;
+}
+.skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.skin { display: grid; gap: 6px; padding: 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; }
+.skin[aria-pressed="true"] { border-color: var(--accent); }
+.skin .pv { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 28px 10px; gap: 3px; padding: 6px; border-radius: 8px; }
+.skin .pv i { border-radius: 4px; }
+.skin .pv i:nth-child(1) { grid-column: 1 / 3; }
+.skin .pv i:nth-child(4), .skin .pv i:nth-child(5), .skin .pv i:nth-child(6) { height: 4px; align-self: end; }
+.skin b { font-family: var(--font-display); font-size: .92rem; }
+.skin span { font-size: .74rem; color: var(--muted); line-height: 1.3; }
+
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
