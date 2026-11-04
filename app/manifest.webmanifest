@@ -1,0 +1,10 @@
+{
+  "name": "Crema",
+  "short_name": "Crema",
+  "description": "Coffee shelf, recipes and live shots for a Decent DE1",
+  "start_url": "/#brew",
+  "display": "standalone",
+  "background_color": "#17120f",
+  "theme_color": "#17120f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

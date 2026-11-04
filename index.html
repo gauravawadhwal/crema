@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Crema: a custom home screen and companion app for the Decent DE1 espresso machine">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<script>window.CREMA_DEMO_URL = "app/";</script>
+</head>
+<body>
+<title>Crema Walkthrough</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a story reel. A tablet frame holds the real screenshot, which slowly
+   zooms toward the part that matters; the caption sits beside it (below on a
+   phone); story-style progress bars along the top. One dark look on purpose,
+   matching the app, which lives next to a machine. */
+:root {
+  --bg: #120e0b;
+  --panel: #1d1612;
+  --line: #34291f;
+  --fg: #efe6dc;
+  --muted: #a4968a;
+  --accent: #e0a458;
+  --accent-ink: #1d140c;
+  --pressure: #5cc59a;
+  --flow: #6aa8ea;
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font-body); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+.reel {
+  min-height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px;
+  padding-block: 16px 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  max-width: 1400px; margin: 0 auto;
+}
+.top { display: grid; gap: 10px; }
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand h1 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; letter-spacing: .02em; color: var(--accent); font-weight: 700; }
+.brand span { color: var(--muted); font-size: .82rem; }
+.bars { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+.bar { height: 22px; padding: 9px 0; border: 0; background: transparent; cursor: pointer; }
+.bar i { display: block; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar i b { display: block; height: 100%; width: 0; background: var(--fg); }
+.bar.done i b { width: 100%; }
+
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 22px; align-items: center; min-height: 0; }
+.frame {
+  position: relative; width: 100%; max-width: 100%; aspect-ratio: 1340 / 800;
+  border-radius: 22px; padding: 14px; background: #0a0807;
+  box-shadow: 0 0 0 1px #2a211a, 0 30px 60px rgba(0,0,0,.45);
+}
+.frame::after { content: ""; position: absolute; left: 50%; top: 5px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #2a211a; }
+.screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 9px; background: #17120f; }
+.layer { position: absolute; inset: 0; transform-origin: 50% 50%; transition: transform 7s cubic-bezier(.25,.1,.25,1); }
+.layer img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.spot { position: absolute; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(10, 7, 5, .42); opacity: 0; transition: opacity .6s ease .5s; pointer-events: none; }
+.slide-in .spot { opacity: 1; }
+
+.phones { display: flex; gap: 18px; justify-content: center; align-items: center; height: 100%; }
+.phone { height: min(70vh, 640px); max-width: 30%; aspect-ratio: 390 / 844; border-radius: 34px; padding: 9px; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 24px 48px rgba(0,0,0,.45); }
+.phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 26px; display: block; }
+
+.screen.themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; background: #0a0807; }
+.themes figure { margin: 0; position: relative; min-height: 0; overflow: hidden; border-radius: 6px; }
+.themes img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.themes figcaption { position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(10, 7, 5, .78); color: #efe6dc; font: 600 .74rem var(--font-display); }
+.slide-in .themes figure { animation: pop .5s ease both; }
+.slide-in .themes figure:nth-child(2) { animation-delay: .08s; } .slide-in .themes figure:nth-child(3) { animation-delay: .16s; }
+.slide-in .themes figure:nth-child(4) { animation-delay: .24s; } .slide-in .themes figure:nth-child(5) { animation-delay: .32s; } .slide-in .themes figure:nth-child(6) { animation-delay: .4s; }
+@keyframes pop { from { opacity: .3; transform: scale(.96); } to { opacity: 1; transform: none; } }
+.diagram { display: grid; gap: 16px; align-content: center; height: 100%; padding: 6% 7%; }
+.tier { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.node { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 12px 14px; display: grid; gap: 2px; }
+.node b { font-family: var(--font-display); font-size: 1.02rem; }
+.node span { color: var(--muted); font-size: .84rem; line-height: 1.4; }
+.node.ours { border-color: var(--accent); }
+.arrow { text-align: center; color: var(--muted); font-family: var(--font-mono); font-size: .8rem; }
+
+.caption { display: grid; gap: 12px; align-content: center; min-width: 0; }
+.step { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); letter-spacing: .04em; }
+.caption h2 { margin: 0; font-family: var(--font-display); font-size: clamp(1.4rem, 2.4vw, 2rem); line-height: 1.12; letter-spacing: -.01em; text-wrap: balance; }
+.caption p { margin: 0; color: #d6cbc0; max-width: 46ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.fact { font-family: var(--font-mono); font-size: .74rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font-weight: 600; text-decoration: none; }
+.links a.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+
+.controls { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.btns { display: flex; gap: 8px; }
+.ctrl { min-width: 44px; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; font-weight: 600; }
+.ctrl:hover { border-color: var(--muted); }
+.hint { color: var(--muted); font-size: .8rem; }
+
+.caption, .visual { transition: opacity .35s ease; }
+.fading .caption, .fading .visual { opacity: 0; }
+
+@media (max-width: 860px) {
+  .stage { grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
+  .frame { border-radius: 14px; padding: 7px; }
+  .frame::after { display: none; }
+  .phone { height: auto; width: 31%; max-width: none; border-radius: 22px; padding: 5px; }
+  .phone img { border-radius: 18px; }
+  .phones { gap: 8px; }
+  .diagram { padding: 4%; gap: 8px; }
+  .node { padding: 8px 10px; }
+  .node span { font-size: .76rem; }
+  .hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .layer { transition: none !important; transform: none !important; }
+  .caption, .visual, .spot { transition: none !important; }
+}
+</style>
+
+<div class="reel" id="reel">
+  <div class="top">
+    <div class="brand"><h1>crema</h1><span>A day with a custom Decent DE1 interface · real screenshots from the demo</span></div>
+    <div class="bars" id="bars" role="tablist" aria-label="Steps"></div>
+  </div>
+  <div class="stage" id="stage" aria-live="polite">
+    <div class="visual" id="visual"></div>
+    <div class="caption" id="caption"></div>
+  </div>
+  <div class="controls">
+    <div class="btns">
+      <button class="ctrl" id="prev" aria-label="Previous step">←</button>
+      <button class="ctrl" id="play" aria-label="Pause">Pause</button>
+      <button class="ctrl" id="next" aria-label="Next step">→</button>
+    </div>
+    <span class="hint">Arrow keys or swipe to move · Space to pause · tap a bar to jump</span>
+  </div>
+</div>
+
+<script>
+"use strict";
+const BOXES = {"tablet-home": {"x": 7.76, "y": 6.28, "w": 22.39, "h": 63.2}, "tablet-pulling": {"x": 30.9, "y": 6.28, "w": 52.54, "h": 92.47}, "tablet-after-shot": {"x": 30.9, "y": 55.42, "w": 52.54, "h": 43.33}, "tablet-steam": {"x": 30.6, "y": 31.56, "w": 38.81, "h": 36.88}, "tablet-profiles": {"x": 7.76, "y": 15.09, "w": 91.04, "h": 41.56}, "tablet-shelf": {"x": 7.76, "y": 1.53, "w": 29.65, "h": 50.5}, "tablet-settings": {"x": 7.76, "y": -0.05, "w": 29.65, "h": 52.24}, "tablet-shots": {"x": 50.28, "y": 18.34, "w": 47.56, "h": 44.81}, "tablet-add-coffee": {"x": 53.81, "y": 12.53, "w": 45, "h": 111.65}};
+const DEMO = window.CREMA_DEMO_URL || "https://claude.ai/artifact/Uj5vMc5hsaFvsoMFqXmhrZ";
+const REPO = "https://github.com/gauravawadhwal/crema";
+
+const SLIDES = [
+  { img: "tablet-home", step: "On the machine", title: "The DE1's new home screen",
+    text: "Crema replaces the Decent home screen on the machine's tablet. On the left is the next shot: today's coffee, ONA Maple, with the profile and recipe matched to it. The live chart is in the middle, and the machine controls are on the right.",
+    facts: ["Galaxy Tab A11 · 1340 × 800", "fits one screen, no scrolling"] },
+  { img: "tablet-add-coffee", step: "New bag", title: "Add a bag in seconds",
+    text: "Photograph the bag, search for it, or paste the roaster's link. Crema reads the roast date from the bag, finds the roaster's page for origin, process and tasting notes, and tags every fact with where it came from: the bag, the web, or a guess to check.",
+    facts: ["bag", "web", "inferred"] },
+  { img: "tablet-profiles", step: "Matching", title: "A profile matched to the coffee",
+    text: "Crema scores 31 community profiles against what the roaster says about the coffee and how you drink it. The AI then picks one and explains why. For Maple, a caramel-and-biscuit milk blend, it chose Londonium for its body.",
+    facts: ["31 community profiles", "real AI run, 8 s"] },
+  { img: "tablet-pulling", step: "Brewing", title: "Pull the shot",
+    text: "Tap Espresso. Pressure, flow, weight and temperature draw live over the profile's targets. The faint curves are your reference shot for this coffee, so you can tell at a glance if this one is on track.",
+    facts: ["stops at 40 g", "dashed = targets"] },
+  { img: "tablet-after-shot", step: "Dialling in", title: "Rate it, get one change",
+    text: "When the shot ends you see the time, first drops, ratio and peak pressure. A shot that ran fast or slow for the profile gets flagged. Tap how it tasted, and Crema suggests the one thing to change next.",
+    facts: ["sour → grind finer", "set as reference"] },
+  { img: "tablet-steam", step: "Milk", title: "Steam the milk",
+    text: "Pick a jug preset and tap Steam. A big timer counts down, and Stop is always one tap away. Hot water and flush work the same way.",
+    facts: ["Cortado 15 s", "Flat white 25 s", "Latte 35 s"] },
+  { img: "tablet-shots", step: "History", title: "Compare shots",
+    text: "Every shot is kept with its curves, rating and notes. Tick a second shot to lay it over the first and see what changed.",
+    facts: ["metrics per shot", "overlay compare"] },
+  { img: "tablet-shelf", step: "Your coffee", title: "Your shelf",
+    text: "Each bag shows where it is in its rest window and how many grams are left after the shots you've pulled. When it's running low, Crema reminds you to reorder. Freeze a bag or mark it finished from here.",
+    facts: ["rest window", "grams left", "reorder nudge"] },
+  { img: "tablet-settings", step: "Settings", title: "Built for every day",
+    text: "Your setup steers the recommendations. Settings also covers steam, hot water and flush, wake schedules so the machine is warm when you get up, a clock while it sleeps, and backflush and descale reminders.",
+    facts: ["wake at 06:45", "backflush every 100 shots"] },
+  { phones: ["phone-home", "phone-shelf", "phone-profiles"], step: "On your iPhone", title: "The same app on your phone",
+    text: "Add it to your home screen from Safari. Photograph a bag at the café, check the water tank, start steam, and look back at your shots. It's one app, so there's nothing extra to install or keep in sync.",
+    facts: ["no App Store app", "same data as the tablet"] },
+  { themes: ["crema", "rosso", "acciaio", "nordic", "verde", "notte"], step: "Make it yours", title: "Six themes",
+    text: "Crema is the default and follows light or dark. Rosso is Italian bar-machine red on polished steel. Acciaio is industrial black and steel, like the DE1 itself. Nordic is an airy light-roast café, Verde is vintage café green and brass, and Notte is true black for the first shot of the day.",
+    facts: ["Settings → Display", "remembered per device"] },
+  { diagram: true, step: "Under the hood", title: "How it fits together",
+    text: "Decaid, Decent's open-source tablet app, talks to the machine. Crema is the interface you see, plus a small server at home that identifies coffees and picks profiles using your Claude or ChatGPT subscription.",
+    links: true },
+];
+
+const DURATION = window.REEL_DURATION || 7500;
+let i = 0, playing = !matchMedia("(prefers-reduced-motion: reduce)").matches, startedAt = 0, elapsedBefore = 0, raf = 0;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+$("bars").innerHTML = SLIDES.map((s, n) => `<button class="bar" role="tab" aria-label="Step ${n + 1}: ${esc(s.title)}" data-n="${n}"><i><b></b></i></button>`).join("");
+document.querySelectorAll(".bar").forEach((b) => (b.onclick = () => go(+b.dataset.n)));
+
+function visualHtml(s) {
+  if (s.phones) return `<div class="phones">${s.phones.map((p) => `<div class="phone"><img src="shots/${p}.png" alt=""></div>`).join("")}</div>`;
+  if (s.themes) return `<div class="frame"><div class="screen themes">${s.themes.map((t) => `<figure><img src="shots/theme-${t}.png" alt="${t} theme"><figcaption>${t[0].toUpperCase() + t.slice(1)}</figcaption></figure>`).join("")}</div></div>`;
+  if (s.diagram) return `<div class="frame"><div class="screen"><div class="diagram">
+      <div class="tier"><div class="node ours"><b>Crema on the tablet</b><span>The home screen, shelf, profiles, shots and settings</span></div><div class="node ours"><b>Crema on your iPhone</b><span>The same app, added to the home screen from Safari</span></div></div>
+      <div class="arrow">↓ asks for coffee records and recipes · ↓ machine controls</div>
+      <div class="tier"><div class="node ours"><b>Crema server</b><span>Runs on your Home Assistant box. Identifies coffees, ranks profiles, keeps favourites and reminders</span></div><div class="node"><b>Claude or ChatGPT</b><span>Your subscription reads bags and roaster pages, then picks a profile</span></div></div>
+      <div class="arrow">↓ REST + WebSocket</div>
+      <div class="tier"><div class="node"><b>Decaid</b><span>Decent's open-source app on the tablet: stores beans, profiles and shots</span></div><div class="node"><b>DE1 + scale</b><span>Over Bluetooth</span></div></div>
+    </div></div></div>`;
+  const box = BOXES[s.img];
+  let style = "";
+  if (box) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const zoom = Math.min(1.32, Math.max(1.06, 62 / Math.max(box.w, box.h * 0.75)));
+    style = `style="transform-origin:${cx}% ${cy}%" data-zoom="${zoom.toFixed(3)}"`;
+  }
+  const spot = box ? `<div class="spot" style="left:${box.x}%;top:${Math.max(0, box.y)}%;width:${box.w}%;height:${Math.min(box.h, 100 - Math.max(0, box.y))}%"></div>` : "";
+  return `<div class="frame"><div class="screen"><div class="layer" ${style}><img src="shots/${s.img}.png" alt="${esc(s.title)}">${spot}</div></div></div>`;
+}
+
+function render() {
+  const s = SLIDES[i];
+  const stage = $("stage");
+  stage.classList.add("fading");
+  setTimeout(() => {
+    $("visual").innerHTML = visualHtml(s);
+    $("caption").innerHTML = `<span class="step">${String(i + 1).padStart(2, "0")} / ${SLIDES.length} · ${esc(s.step)}</span>
+      <h2>${esc(s.title)}</h2><p>${esc(s.text)}</p>
+      ${s.facts ? `<div class="facts">${s.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
+      ${s.links ? `<div class="links"><a href="${DEMO}" target="_blank" rel="noopener">Try the live demo</a><a class="ghost" href="${REPO}" target="_blank" rel="noopener">Code on GitHub</a></div>` : ""}`;
+    stage.classList.remove("fading", "slide-in");
+    const layer = stage.querySelector(".layer");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      stage.classList.add("slide-in");
+      if (layer?.dataset.zoom) { layer.style.transitionDuration = `${Math.round(DURATION * 0.95)}ms`; layer.style.transform = `scale(${layer.dataset.zoom})`; }
+    }));
+  }, 200);
+  document.querySelectorAll(".bar").forEach((b, n) => {
+    b.classList.toggle("done", n < i);
+    b.setAttribute("aria-selected", String(n === i));
+    b.querySelector("b").style.width = n < i ? "100%" : "0";
+  });
+  elapsedBefore = 0; startedAt = performance.now();
+}
+
+function tick(now) {
+  if (playing) {
+    const t = elapsedBefore + (now - startedAt);
+    const bar = document.querySelectorAll(".bar b")[i];
+    if (bar) bar.style.width = `${Math.min(100, (t / DURATION) * 100)}%`;
+    if (t >= DURATION) { if (i < SLIDES.length - 1) go(i + 1); else setPlaying(false); }
+  }
+  raf = requestAnimationFrame(tick);
+}
+function go(n) { i = (n + SLIDES.length) % SLIDES.length; render(); }
+function setPlaying(p) {
+  if (p && !playing) startedAt = performance.now();
+  if (!p && playing) elapsedBefore += performance.now() - startedAt;
+  playing = p;
+  $("play").textContent = p ? "Pause" : "Play";
+  $("play").setAttribute("aria-label", p ? "Pause" : "Play");
+  if (p && i === SLIDES.length - 1 && elapsedBefore >= DURATION) go(0);
+}
+$("prev").onclick = () => go(i - 1);
+$("next").onclick = () => go(i + 1);
+$("play").onclick = () => setPlaying(!playing);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowRight") go(i + 1);
+  else if (e.key === "ArrowLeft") go(i - 1);
+  else if (e.key === " " && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+});
+let touchX = null;
+$("stage").addEventListener("touchstart", (e) => (touchX = e.touches[0].clientX), { passive: true });
+$("stage").addEventListener("touchend", (e) => {
+  if (touchX == null) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) > 40) go(i + (dx < 0 ? 1 : -1));
+});
+setPlaying(playing);
+render();
+raf = requestAnimationFrame(tick);
+</script>
+
+</body>
+</html>
