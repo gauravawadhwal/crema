@@ -1,6 +1,8 @@
 import type { ProviderChain } from "../llm/index.js";
+import { findProfile } from "../profiles/catalog.js";
+import { rankProfiles, type Candidate, type Preferences } from "../profiles/match.js";
 import { DialInAdvice, Recipe, type BeanInfo, type TasteFeedback } from "../schema.js";
-import { baseline, rankProfiles, type Baseline } from "./rules.js";
+import { baseline, type Baseline } from "./rules.js";
 
 export interface PastShot {
   timestamp: string;
@@ -15,79 +17,114 @@ export interface PastShot {
 
 export interface RecommendInput {
   bean: BeanInfo;
-  profileTitles: string[];
+  /** Titles installed on the machine. Undefined = assume the catalog is installed (Decaid ships it). */
+  profileTitles?: string[];
   history?: PastShot[];
-  preferences?: { drink?: "straight" | "milk" | "both"; basketG?: number; grinder?: string };
+  preferences?: Preferences;
   /** Skip the model and return the rules-only recipe. */
   rulesOnly?: boolean;
 }
 
-const SYSTEM = `You are an experienced Decent DE1 barista. Given a coffee, a rules-based baseline, the user's actual profile library and their past shots of this coffee, pick a starting recipe.
+export interface RecommendOutput {
+  recipe: Recipe;
+  baseline: Baseline;
+  candidates: Omit<Candidate, "profile">[];
+  source: string;
+}
 
-- profileTitle MUST be copied exactly from the provided library. If nothing fits well, pick the closest one and say so in rationale.
-- Treat the baseline numbers as a sensible prior. Move away from them only for a reason you can state, such as the roaster's published recipe, a past shot that went well, or the milk preference.
-- If the roaster publishes an espresso recipe, weigh it heavily.
-- If past shots exist, learn from them: repeat what scored well, and correct what didn't.
-- rationale: 2–4 short bullets in plain words. alternatives: up to 2 other library profiles worth trying next.
+const SYSTEM = `You are an experienced Decent DE1 barista choosing an espresso profile and starting recipe for a specific coffee.
+
+You get: the coffee as the roaster and the bag describe it, a rules-based ranking of community profiles with each profile's own description (from its author), a suggested recipe per profile, the user's setup and preferences, and their past shots of this bag.
+
+How to choose:
+- Read the roaster's description (roast level, what it's roasted for, process, tasting notes, blend or single origin, any published recipe) and match it to what each profile is designed to bring out. Trust the profile authors' own guidance over generic rules.
+- The rules ranking is a strong prior, not a verdict. Pick a lower-ranked candidate when the coffee's description clearly fits it better, and say why.
+- Past shots outrank everything: repeat what scored well, and move away from what didn't.
+- profileTitle MUST be one of the candidate titles, copied exactly.
+- Keep dose, yield and temperature close to that candidate's suggested recipe unless you have a reason (a roaster recipe, past shots, the milk preference).
+- dialIn: specific guidance for this coffee on this profile (targets like dripping weight, flow rate or shot time, and which way to grind first).
+- rationale: 2–4 short bullets in plain words that connect the coffee's description to the profile. alternatives: up to 2 other candidates worth trying next, each with a one-line reason.
 - grindHint is relative guidance; you don't know the user's grinder numbers unless past shots include them.`;
 
-export function rulesRecipe(input: RecommendInput, b: Baseline = baseline(input.bean, { doseG: input.preferences?.basketG })): Recipe {
-  const ranked = rankProfiles(input.profileTitles, b.profileKeywords);
-  const pick = ranked[0] ?? input.profileTitles[0] ?? "Default";
-  const roasterRecipe = input.bean.roasterRecipe;
-  const doseG = roasterRecipe?.doseG ?? b.doseG;
-  const yieldG = roasterRecipe?.yieldG ?? b.yieldG;
+function strip({ profile: _p, ...rest }: Candidate) {
+  return rest;
+}
+
+export function rulesRecipe(input: RecommendInput, ranked = rankProfiles(input.bean, input.preferences, input.profileTitles)): Recipe {
+  const b = baseline(input.bean, { doseG: input.preferences?.basketDoseG });
+  const usable = ranked.filter((c) => c.installed);
+  const top = usable[0] ?? ranked[0];
+  const r = top.recipe;
   return {
-    profileTitle: pick,
+    profileTitle: top.title,
     profileId: null,
-    doseG,
-    yieldG,
-    tempC: roasterRecipe?.tempC ?? b.tempC,
-    targetTimeS: b.targetTimeS,
+    doseG: r.doseG,
+    yieldG: r.yieldG,
+    tempC: r.tempC,
+    targetTimeS: r.timeS,
     grindHint: b.grindHint,
     restAdvice: b.rest.advice,
-    rationale: [...b.reasons, ...(roasterRecipe?.doseG ? ["Using the roaster's published dose and yield"] : [])].slice(0, 4),
-    alternatives: ranked.slice(1, 3).map((t) => ({ profileTitle: t, why: "Also suits this roast level" })),
+    dialIn: top.profile.dialIn,
+    rationale: [...top.reasons.slice(0, 3), `Recipe from ${r.basis}`].slice(0, 4),
+    alternatives: usable.slice(1, 3).map((c) => ({ profileTitle: c.title, why: c.reasons[0] ?? c.profile.character })),
   };
 }
 
-export async function recommend(llm: ProviderChain, input: RecommendInput): Promise<{ recipe: Recipe; baseline: Baseline; source: string }> {
-  const b = baseline(input.bean, { doseG: input.preferences?.basketG });
-  if (input.rulesOnly || !input.profileTitles.length) {
-    return { recipe: rulesRecipe(input, b), baseline: b, source: "rules" };
-  }
+export async function recommend(llm: ProviderChain, input: RecommendInput): Promise<RecommendOutput> {
+  const b = baseline(input.bean, { doseG: input.preferences?.basketDoseG });
+  const ranked = rankProfiles(input.bean, input.preferences, input.profileTitles);
+  const candidates = ranked.filter((c) => c.installed).slice(0, 6);
+  const out = (recipe: Recipe, source: string): RecommendOutput => ({ recipe, baseline: b, candidates: ranked.slice(0, 8).map(strip), source });
+
+  if (input.rulesOnly) return out(rulesRecipe(input, ranked), "rules");
+
+  const cards = candidates.map((c, i) => ({
+    rank: i + 1,
+    title: c.title,
+    author: c.profile.author,
+    style: c.profile.style,
+    writtenFor: c.profile.roasts,
+    milk: c.profile.milk,
+    emphasises: c.profile.emphasises,
+    character: c.profile.character,
+    authorGuidance: c.profile.dialIn,
+    rulesScore: c.score,
+    reasons: c.reasons,
+    cautions: c.cautions,
+    suggestedRecipe: c.recipe,
+  }));
   const prompt = [
-    `COFFEE:\n${JSON.stringify(input.bean)}`,
-    `BASELINE (rules):\n${JSON.stringify(b)}`,
-    `PROFILE LIBRARY (choose from these exact titles):\n${input.profileTitles.map((t) => `- ${t}`).join("\n")}`,
-    `PAST SHOTS OF THIS COFFEE:\n${input.history?.length ? JSON.stringify(input.history.slice(0, 15)) : "none yet"}`,
-    `PREFERENCES:\n${JSON.stringify(input.preferences ?? {})}`,
+    `COFFEE (from the roaster and the bag):\n${JSON.stringify(input.bean)}`,
+    `FRESHNESS AND ROAST BASELINE:\n${JSON.stringify({ roast: b.roast, rest: b.rest, grindHint: b.grindHint })}`,
+    `CANDIDATE PROFILES (rules ranking, best first):\n${JSON.stringify(cards, null, 1)}`,
+    `USER SETUP AND PREFERENCES:\n${JSON.stringify(input.preferences ?? {})}`,
+    `PAST SHOTS OF THIS BAG:\n${input.history?.length ? JSON.stringify(input.history.slice(0, 15)) : "none yet"}`,
   ].join("\n\n");
 
   try {
     const recipe = await llm.structured({ system: SYSTEM, prompt, schema: Recipe, schemaName: "Recipe" });
-    // Guard against a made-up profile name.
-    if (!input.profileTitles.includes(recipe.profileTitle)) {
-      const close = input.profileTitles.find((t) => t.toLowerCase() === recipe.profileTitle.toLowerCase());
-      recipe.profileTitle = close ?? rulesRecipe(input, b).profileTitle;
-    }
-    return { recipe, baseline: b, source: llm.lastUsed ?? "llm" };
+    const match = candidates.find((c) => c.title.toLowerCase() === recipe.profileTitle.toLowerCase());
+    if (!match) return out(rulesRecipe(input, ranked), "rules (model chose an unknown profile)");
+    recipe.profileTitle = match.title;
+    recipe.alternatives = recipe.alternatives.filter((a) => candidates.some((c) => c.title === a.profileTitle));
+    return out(recipe, llm.lastUsed ?? "llm");
   } catch (e) {
     console.warn(`recommend: falling back to rules: ${(e as Error).message}`);
-    return { recipe: rulesRecipe(input, b), baseline: b, source: "rules (llm unavailable)" };
+    return out(rulesRecipe(input, ranked), "rules (AI unavailable)");
   }
 }
 
-const DIAL_SYSTEM = `You help dial in espresso on a Decent DE1. Suggest exactly ONE change for the next shot, the one most likely to improve it. Standard logic: sour/thin/fast means under-extracted (grind finer, or raise yield or temperature); bitter/harsh/slow means over-extracted (grind coarser, or lower yield or temperature). Prefer grind changes first, then yield, then temperature. Suggest switching profiles only after several shots that aren't working.`;
+const DIAL_SYSTEM = `You help dial in espresso on a Decent DE1. Suggest exactly ONE change for the next shot, the one most likely to improve it. Use the profile author's own dial-in guidance when it's given. Standard logic: sour/thin/fast means under-extracted (grind finer, or raise yield or temperature); bitter/harsh/slow means over-extracted (grind coarser, or lower yield or temperature). Prefer grind changes first, then yield, then temperature. Suggest switching profiles only after several shots that aren't working.`;
 
 export async function dialIn(
   llm: ProviderChain,
   input: { bean: BeanInfo; recipe: Recipe; shot: PastShot; feedback: TasteFeedback; history?: PastShot[] },
 ): Promise<DialInAdvice> {
   try {
+    const guidance = findProfile(input.recipe.profileTitle)?.dialIn ?? null;
     return await llm.structured({
       system: DIAL_SYSTEM,
-      prompt: JSON.stringify(input),
+      prompt: JSON.stringify({ ...input, profileAuthorGuidance: guidance }),
       schema: DialInAdvice,
       schemaName: "DialInAdvice",
     });
@@ -101,12 +138,12 @@ export function rulesDialIn(f: TasteFeedback, shot: PastShot, recipe: Recipe): D
   const fast = shot.timeS != null && shot.timeS < tMin;
   const slow = shot.timeS != null && shot.timeS > tMax;
   if (f.sourBitter <= -1 || (fast && f.sourBitter <= 0)) {
-    return { change: "Grind finer", grindDelta: f.sourBitter <= -2 || fast ? "much-finer" : "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Sour or fast means under-extracted." };
+    return { change: "Grind finer", grindDelta: f.sourBitter <= -2 || fast ? "much-finer" : "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: fast ? `Ran fast (${shot.timeS}s against ${tMin}–${tMax}s) and tasted sour: under-extracted.` : "Sour means under-extracted. Finer grinding pulls out more sweetness." };
   }
   if (f.sourBitter >= 1 || (slow && f.sourBitter >= 0)) {
-    return { change: "Grind coarser", grindDelta: f.sourBitter >= 2 || slow ? "much-coarser" : "coarser", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Bitter or slow means over-extracted." };
+    return { change: "Grind coarser", grindDelta: f.sourBitter >= 2 || slow ? "much-coarser" : "coarser", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: slow ? `Ran slow (${shot.timeS}s) and tasted bitter: over-extracted.` : "Bitter or harsh means over-extracted." };
   }
-  if (f.body <= -1) return { change: "Shorten the yield by 3g for more body", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced but thin: a tighter ratio adds body." };
-  if (f.body >= 2) return { change: "Lengthen the yield by 3g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced but heavy: a longer ratio opens it up." };
-  return { change: "Keep it. This one's dialled in.", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced taste and body." };
+  if (f.body <= -1) return { change: "Shorten the yield by 3 g for more body", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced but thin: a tighter ratio adds body." };
+  if (f.body >= 2) return { change: "Lengthen the yield by 3 g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced but heavy: a longer ratio opens it up." };
+  return { change: "Keep it. You're dialled in.", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced taste and body." };
 }

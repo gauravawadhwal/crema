@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { toJSONSchema, type z } from "zod";
 
 export interface ImageInput {
   /** Raw bytes of the photo. */
@@ -34,6 +34,15 @@ export class ProviderError extends Error {
   ) {
     super(`[${provider}] ${message}`);
   }
+}
+
+/**
+ * JSON Schema for a Zod schema, without the `$schema` draft marker: Claude
+ * Code's validator and OpenAI's strict mode reject the 2020-12 meta-schema URI.
+ */
+export function jsonSchemaFor(schema: z.ZodType): Record<string, unknown> {
+  const { $schema: _drop, ...rest } = toJSONSchema(schema) as Record<string, unknown>;
+  return rest;
 }
 
 /** Pull the first JSON object out of model text (handles ```json fences). */

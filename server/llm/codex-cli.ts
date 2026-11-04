@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { run, stageImages } from "./cli-util.js";
-import { extractJson, ProviderError, type LlmProvider, type StructuredRequest } from "./types.js";
+import { extractJson, jsonSchemaFor, ProviderError, type LlmProvider, type StructuredRequest } from "./types.js";
 
 /**
  * Uses the OpenAI Codex CLI (`codex exec`), so calls are billed to your
@@ -22,7 +22,7 @@ export class CodexCliProvider implements LlmProvider {
     try {
       const schemaFile = path.join(staged.dir, "schema.json");
       const outFile = path.join(staged.dir, "out.json");
-      await writeFile(schemaFile, JSON.stringify(z.toJSONSchema(req.schema)));
+      await writeFile(schemaFile, JSON.stringify(jsonSchemaFor(req.schema)));
 
       const args = [
         ...(req.web ? ["--search"] : []),

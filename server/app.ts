@@ -6,6 +6,7 @@ import { cacheImage, findProductImage, isSafeUrl, readCachedImage } from "./imag
 import type { ProviderChain } from "./llm/index.js";
 import type { ImageInput } from "./llm/types.js";
 import { dialIn, recommend, type PastShot } from "./recommend/index.js";
+import type { Preferences } from "./profiles/match.js";
 import { baseline } from "./recommend/rules.js";
 import { BeanInfo, Recipe, TasteFeedback } from "./schema.js";
 import type { Store } from "./store.js";
@@ -175,7 +176,9 @@ export function createApp(deps: { llm: ProviderChain; decaid: DecaidClient; stor
   });
 
   app.post("/api/recommend", async (c) => {
-    const { beanId, rulesOnly, preferences } = await c.req.json<{ beanId: string; rulesOnly?: boolean; preferences?: Record<string, unknown> }>();
+    const body = await c.req.json<{ beanId: string; rulesOnly?: boolean; preferences?: Preferences }>();
+    const { beanId, rulesOnly } = body;
+    const preferences = { ...(await store.getPreferences()), ...(body.preferences ?? {}) };
     const rec = await store.get(beanId);
     if (!rec) return c.json({ error: "bean not in Crema's store; add it first" }, 404);
     const [profiles, shots] = await Promise.all([

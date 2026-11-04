@@ -12,8 +12,6 @@ export interface Baseline {
   doseG: number;
   yieldG: number;
   targetTimeS: [number, number];
-  /** Profile-title keywords in order of preference, matched against the library. */
-  profileKeywords: string[];
   grindHint: string;
   rest: { daysOffRoast: number | null; window: [number, number]; status: "resting" | "peak" | "fading" | "unknown"; advice: string };
   reasons: string[];
@@ -21,12 +19,12 @@ export interface Baseline {
 
 const ROAST_ORDER: RoastLevel[] = ["light", "medium-light", "medium", "medium-dark", "dark"];
 
-const BASE: Record<RoastLevel, { temp: number; ratio: number; time: [number, number]; profiles: string[]; rest: [number, number] }> = {
-  light:          { temp: 94, ratio: 2.5, time: [25, 40], profiles: ["adaptive", "blooming", "allongé", "allonge", "extractamundo", "turbo"], rest: [14, 40] },
-  "medium-light": { temp: 93, ratio: 2.2, time: [25, 35], profiles: ["adaptive", "blooming", "flow", "default"], rest: [10, 35] },
-  medium:         { temp: 92, ratio: 2.0, time: [26, 34], profiles: ["adaptive", "default", "best practice", "flow"], rest: [7, 28] },
-  "medium-dark":  { temp: 90, ratio: 2.0, time: [26, 34], profiles: ["londinium", "lever", "cremina", "gentle", "default"], rest: [5, 24] },
-  dark:           { temp: 88, ratio: 1.8, time: [24, 32], profiles: ["londinium", "lever", "cremina", "flat", "gentle", "6 bar"], rest: [4, 21] },
+const BASE: Record<RoastLevel, { temp: number; ratio: number; time: [number, number]; rest: [number, number] }> = {
+  light:          { temp: 94, ratio: 2.5, time: [25, 40], rest: [14, 40] },
+  "medium-light": { temp: 93, ratio: 2.2, time: [25, 35], rest: [10, 35] },
+  medium:         { temp: 92, ratio: 2.0, time: [26, 34], rest: [7, 28] },
+  "medium-dark":  { temp: 90, ratio: 2.0, time: [26, 34], rest: [5, 24] },
+  dark:           { temp: 88, ratio: 1.8, time: [24, 32], rest: [4, 21] },
 };
 
 export function inferRoast(bean: BeanInfo): RoastLevel {
@@ -105,7 +103,6 @@ export function baseline(bean: BeanInfo, opts: { doseG?: number; today?: Date } 
     doseG,
     yieldG: Math.round(doseG * ratio),
     targetTimeS: b.time,
-    profileKeywords: b.profiles,
     grindHint: grindHint(grind),
     rest,
     reasons,
@@ -129,13 +126,3 @@ function grindHint(steps: number): string {
 }
 
 const round = (n: number, step: number) => Math.round(n / step) * step;
-
-/** Rank library profiles by the baseline's keyword preferences. */
-export function rankProfiles(titles: string[], keywords: string[]): string[] {
-  const score = (t: string) => {
-    const lower = t.toLowerCase();
-    const i = keywords.findIndex((k) => lower.includes(k));
-    return i === -1 ? Infinity : i;
-  };
-  return [...titles].filter((t) => score(t) !== Infinity).sort((a, b) => score(a) - score(b));
-}

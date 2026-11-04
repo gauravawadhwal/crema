@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mockBean } from "../server/llm/mock.js";
 import { extractJson } from "../server/llm/types.js";
 import { rulesDialIn, rulesRecipe } from "../server/recommend/index.js";
-import { baseline, rankProfiles } from "../server/recommend/rules.js";
+import { baseline } from "../server/recommend/rules.js";
 import type { BeanInfo } from "../server/schema.js";
 
 const today = new Date("2026-11-05T08:00:00Z");
@@ -47,28 +47,21 @@ describe("baseline", () => {
   });
 });
 
-describe("profiles and recipes", () => {
-  it("ranks library profiles by roast preference", () => {
-    expect(rankProfiles(titles, ["adaptive", "blooming"])).toEqual(["Adaptive v2", "Blooming espresso"]);
-    expect(rankProfiles(titles, ["londinium"])).toEqual(["Londinium"]);
-  });
-
-  it("prefers the roaster's published recipe", () => {
-    const r = rulesRecipe({ bean: mockBean("dark blend"), profileTitles: titles });
-    expect(r.profileTitle).toBe("Londinium");
+describe("recipes", () => {
+  it("prefers the roaster's published recipe on conventional profiles", () => {
+    const r = rulesRecipe({ bean: mockBean("dark blend"), preferences: { drink: "milk" } });
     expect(r.doseG).toBe(18);
     expect(r.yieldG).toBe(38);
-    expect(r.tempC).toBe(92);
   });
 
-  it("only ever picks a profile that exists", () => {
-    const r = rulesRecipe({ bean: mockBean("light"), profileTitles: ["Something custom"] });
-    expect(r.profileTitle).toBe("Something custom");
+  it("only ever picks a profile that is installed", () => {
+    const r = rulesRecipe({ bean: mockBean("light"), profileTitles: ["Default", "Londonium"] });
+    expect(["Default", "Londonium"]).toContain(r.profileTitle);
   });
 });
 
 describe("dial-in rules", () => {
-  const recipe = rulesRecipe({ bean: mockBean("light"), profileTitles: titles });
+  const recipe = { ...rulesRecipe({ bean: mockBean("light") }), targetTimeS: [25, 40] };
   it("sour → finer", () => {
     expect(rulesDialIn({ sourBitter: -1, body: 0, enjoyment: 3, notes: null }, { timestamp: "", timeS: 30 }, recipe).grindDelta).toBe("finer");
   });

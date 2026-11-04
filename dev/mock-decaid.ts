@@ -9,18 +9,15 @@ import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 
+// Titles as bundled with Decaid (assets/defaultProfiles), the espresso ones.
 const PROFILE_TITLES = [
-  "Adaptive v2",
-  "Blooming espresso",
-  "Londinium",
-  "Default",
-  "Best practice",
-  "Extractamundo Dos!",
-  "Gentle and sweet",
-  "Cremina lever machine",
-  "Turbo shot",
-  "Allongé",
-  "Damian's LRv3",
+  "Adaptive v2", "Adaptive v3", "Best practice (light roast)", "Gagné/Adaptive Shot 92C v1.0", "Gagné/Adaptive Allongé 94C v1.0",
+  "Blooming Espresso", "Easy blooming - active pressure decline", "Rao Allongé", "Blooming Allongé", "Extractamundo Dos!",
+  "TurboBloom", "TurboTurbo", "D-Flow / default", "Damian's Q", "A-Flow / default-light", "A-Flow / default-medium",
+  "A-Flow / default-dark", "A-Flow / default-very-dark", "Londonium", "Damian's LRv2", "Damian's LRv3", "Damian's LM Leva",
+  "80's Espresso", "Espresso Forge Dark", "Espresso Forge Light", "Classic Italian espresso", "Default", "Gentle and sweet",
+  "Flow profile for milky drinks", "Flow profile for straight espresso", "Trendy 6 bar low pressure shot", "I got your back",
+  "Cremina lever machine", "Traditional lever machine", "Baseline • Medium Contact • 6 Bar", "7g basket",
 ];
 const profiles = PROFILE_TITLES.map((title, i) => ({
   id: `profile:${(i + 1).toString(16).padStart(16, "0")}`,

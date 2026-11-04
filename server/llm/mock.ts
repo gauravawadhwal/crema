@@ -56,19 +56,23 @@ export function mockBean(prompt: string): BeanInfo {
 
 const mockAnswers: Record<string, (prompt: string) => unknown> = {
   BeanInfo: mockBean,
+  // Picks the top-ranked candidate from the prompt, like a model that agrees with the rules.
   Recipe: (prompt) => {
-    const light = /"roastLevel":\{"value":"(light|medium-light)"/.test(prompt);
+    const cards = prompt.slice(prompt.indexOf("CANDIDATE PROFILES"));
+    const title = cards.match(/"title": "([^"]+)"/)?.[1] ?? "Adaptive v2";
+    const recipe = JSON.parse(cards.match(/"suggestedRecipe": (\{[^}]*\})/)?.[1] ?? '{"doseG":18,"yieldG":36,"tempC":92,"timeS":[25,35]}');
     return {
-      profileTitle: light ? "Adaptive v2" : "Londinium",
+      profileTitle: title,
       profileId: null,
-      doseG: 18,
-      yieldG: light ? 45 : 36,
-      tempC: light ? 94 : 90,
-      targetTimeS: light ? [25, 35] : [28, 34],
-      grindHint: light ? "Start finer than your usual medium roast." : "Start a little coarser than usual.",
-      restAdvice: "Best from about day 10 to day 30 off roast.",
-      rationale: ["(mock) based on the rules baseline"],
-      alternatives: [{ profileTitle: "Blooming espresso", why: "More clarity, lighter body" }],
+      doseG: recipe.doseG,
+      yieldG: recipe.yieldG,
+      tempC: recipe.tempC,
+      targetTimeS: recipe.timeS,
+      grindHint: "Start from your usual setting and adjust by taste.",
+      restAdvice: null,
+      dialIn: "(mock) Follow the profile author's guidance.",
+      rationale: ["(mock) agrees with the rules ranking"],
+      alternatives: [],
     };
   },
   DialInAdvice: () => ({

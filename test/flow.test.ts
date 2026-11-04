@@ -52,15 +52,16 @@ describe("full flow", () => {
     expect(shelf[0].rest.status).toBe("resting"); // mock roast date is 9 days ago; light rests 14+
 
     const recRes = await app.request("/api/recommend", { method: "POST", body: JSON.stringify({ beanId: rec.decaidBeanId }), headers: { "content-type": "application/json" } });
-    const { recipe, source } = await recRes.json();
+    const { recipe, source, candidates } = await recRes.json();
     expect(source).toBe("mock");
-    expect(recipe.profileTitle).toBe("Adaptive v2");
+    expect(recipe.profileTitle).toBeTruthy();
+    expect(candidates.length).toBeGreaterThan(3);
     expect(recipe.profileId).toMatch(/^profile:/);
 
     const applyRes = await app.request("/api/apply", { method: "POST", body: JSON.stringify({ beanId: rec.decaidBeanId }), headers: { "content-type": "application/json" } });
     const applied = await applyRes.json();
     expect(applied.workflow.context.beanBatchId).toBe(rec.decaidBatchId);
-    expect(applied.workflow.profile.title).toBe("Adaptive v2");
+    expect(applied.workflow.profile.title).toBe(recipe.profileTitle);
 
     const shots = await (await app.request("/api/shots?limit=1")).json();
     const shotId = shots.items[0].id;

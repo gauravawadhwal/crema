@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { Preferences } from "./profiles/match.js";
 import type { BeanInfo, Recipe } from "./schema.js";
 
 /**
@@ -20,6 +21,7 @@ export interface CremaBeanRecord {
 
 interface StoreShape {
   beans: Record<string, CremaBeanRecord>;
+  preferences?: Preferences;
 }
 
 export class Store {
@@ -66,6 +68,18 @@ export class Store {
     await this.load();
     this.data.beans[rec.decaidBeanId] = rec;
     await this.save();
+  }
+
+  async getPreferences(): Promise<Preferences> {
+    await this.load();
+    return this.data.preferences ?? {};
+  }
+
+  async setPreferences(p: Preferences) {
+    await this.load();
+    this.data.preferences = { ...(this.data.preferences ?? {}), ...p };
+    await this.save();
+    return this.data.preferences;
   }
 
   async patch(beanId: string, patch: Partial<CremaBeanRecord>) {

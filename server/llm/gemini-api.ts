@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { extractJson, ProviderError, type LlmProvider, type StructuredRequest } from "./types.js";
+import { extractJson, jsonSchemaFor, ProviderError, type LlmProvider, type StructuredRequest } from "./types.js";
 
 /**
  * Google Gemini over its REST API (GEMINI_API_KEY). Grounding with Google
@@ -18,8 +18,7 @@ export class GeminiApiProvider implements LlmProvider {
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
     if (!this.apiKey) throw new ProviderError(this.id, "GEMINI_API_KEY is not set");
-    const { toJSONSchema } = await import("zod");
-    const schemaText = JSON.stringify(toJSONSchema(req.schema));
+    const schemaText = JSON.stringify(jsonSchemaFor(req.schema));
     const body = {
       systemInstruction: { parts: [{ text: req.system }] },
       contents: [

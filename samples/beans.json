@@ -1,0 +1,758 @@
+{
+  "generatedAt": "2026-11-04T14:05:46.458Z",
+  "results": [
+    {
+      "query": "ONA Coffee Maple (espresso blend), onacoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "ONA Coffee",
+          "source": "bag"
+        },
+        "name": {
+          "value": "Maple",
+          "source": "bag"
+        },
+        "country": {
+          "value": "Brazil / Papua New Guinea / Colombia (blend)",
+          "source": "web"
+        },
+        "region": {
+          "value": null,
+          "source": null
+        },
+        "producer": {
+          "value": null,
+          "source": null
+        },
+        "variety": {
+          "value": null,
+          "source": null
+        },
+        "process": {
+          "value": null,
+          "source": null
+        },
+        "processKind": null,
+        "altitudeMasl": {
+          "value": null,
+          "source": null
+        },
+        "roastLevel": {
+          "value": "medium",
+          "source": "inferred"
+        },
+        "roastedFor": "espresso",
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": null,
+        "tastingNotes": {
+          "value": [
+            "caramel",
+            "biscuits",
+            "nuts",
+            "spices"
+          ],
+          "source": "web"
+        },
+        "isBlend": true,
+        "blendComponents": [
+          "Brazil",
+          "Papua New Guinea",
+          "Colombia"
+        ],
+        "roasterRecipe": null,
+        "productUrl": "https://onacoffee.com.au/products/maple",
+        "imageUrl": null,
+        "sources": [
+          "https://onacoffee.com.au/products/maple",
+          "https://onacoffee.com.au/blogs/brewguides/maple",
+          "https://coffeebeliever.com/beans/ona-coffee/maple",
+          "https://eightouncecoffee.ca/products/ona-coffee-maple"
+        ],
+        "confidence": 0.7,
+        "needsConfirmation": [
+          "roastLevel",
+          "country",
+          "roastDate",
+          "process",
+          "weightGrams",
+          "roasterRecipe"
+        ],
+        "summary": "A traditional milk-style espresso blend with caramel, biscuit, nut and spice notes. It should taste smooth and balanced, and it works especially well in flat whites and cappuccinos."
+      },
+      "seconds": 31.454,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "ONA Coffee Raspberry Candy, onacoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "ONA Coffee",
+          "source": "web"
+        },
+        "name": {
+          "value": "Raspberry Candy",
+          "source": "web"
+        },
+        "country": {
+          "value": "Ethiopia",
+          "source": "web"
+        },
+        "region": {
+          "value": "Guji, Limu, Amederaro and others (varies by harvest)",
+          "source": "web"
+        },
+        "producer": {
+          "value": null,
+          "source": null
+        },
+        "variety": {
+          "value": null,
+          "source": null
+        },
+        "process": {
+          "value": "Blend of Guji G1 Natural, Limu G2 Washed, Seattle Supernatural, Amederaro Supernatural, Gargari 1725 Carbonic Maceration Natural",
+          "source": "web"
+        },
+        "processKind": "other",
+        "altitudeMasl": {
+          "value": null,
+          "source": null
+        },
+        "roastLevel": {
+          "value": "medium-light",
+          "source": "inferred"
+        },
+        "roastedFor": "espresso",
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": null,
+        "tastingNotes": {
+          "value": [
+            "sweet berries",
+            "raspberry",
+            "white chocolate"
+          ],
+          "source": "web"
+        },
+        "isBlend": true,
+        "blendComponents": [
+          "Ethiopia Guji G1 Natural",
+          "Ethiopia Limu G2 Washed",
+          "Ethiopia Seattle Supernatural",
+          "Ethiopia Amederaro Supernatural",
+          "Ethiopia Gargari 1725 Carbonic Maceration Natural"
+        ],
+        "roasterRecipe": {
+          "doseG": 20.5,
+          "yieldG": 38,
+          "timeS": 28,
+          "tempC": 93.5,
+          "text": "Dose 20.5–21 g, yield 38–41 g (two shots), 25–30 s, 93.5°C, 120 g milk; best used 16–30 days after roast."
+        },
+        "productUrl": "https://onacoffee.com.au/products/raspberry-candy",
+        "imageUrl": null,
+        "sources": [
+          "https://onacoffee.com.au/products/raspberry-candy",
+          "https://onacoffee.com.au/blogs/brewguides/raspberry-candy",
+          "https://onacoffee.com.au/collections/candy"
+        ],
+        "confidence": 0.85,
+        "needsConfirmation": [
+          "roastLevel",
+          "roastDate",
+          "weightGrams",
+          "variety",
+          "producer",
+          "altitudeMasl"
+        ],
+        "summary": "A fruity, sweet Ethiopian-based milk blend built on the 2015 World Barista Championship coffee. It gives raspberry and berry sweetness with white chocolate, and it cuts through milk well."
+      },
+      "seconds": 43.476,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "ONA Coffee Kaliluni AA Kenya washed espresso, onacoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "ONA Coffee",
+          "source": "bag"
+        },
+        "name": {
+          "value": "Kaliluni AA",
+          "source": "bag"
+        },
+        "country": {
+          "value": "Kenya",
+          "source": "bag"
+        },
+        "region": {
+          "value": "Machakos County",
+          "source": "web"
+        },
+        "producer": {
+          "value": "Kaliluni Farmers' Co-operative Society",
+          "source": "web"
+        },
+        "variety": {
+          "value": [
+            "SL-28",
+            "SL-34"
+          ],
+          "source": "web"
+        },
+        "process": {
+          "value": "Washed",
+          "source": "bag"
+        },
+        "processKind": "washed",
+        "altitudeMasl": {
+          "value": null,
+          "source": null
+        },
+        "roastLevel": {
+          "value": "medium",
+          "source": "web"
+        },
+        "roastedFor": "espresso",
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": 200,
+        "tastingNotes": {
+          "value": [
+            "red currant",
+            "pomegranate",
+            "brown sugar"
+          ],
+          "source": "web"
+        },
+        "isBlend": false,
+        "blendComponents": null,
+        "roasterRecipe": null,
+        "productUrl": null,
+        "imageUrl": null,
+        "sources": [
+          "https://onacoffee.com.au/collections/rare-coffee",
+          "https://onacoffee.com.au/collections/espresso",
+          "https://www.thewaytocoffee.com/beans/kaliluni-aa/"
+        ],
+        "confidence": 0.6,
+        "needsConfirmation": [
+          "roastLevel",
+          "region",
+          "producer",
+          "variety",
+          "altitudeMasl",
+          "roastDate",
+          "weightGrams",
+          "productUrl",
+          "tastingNotes"
+        ],
+        "summary": "A washed Kenyan espresso that should taste bright and juicy, with red currant and pomegranate acidity over a brown sugar sweetness. Details come from search snippets, not ONA's product page, which I couldn't open."
+      },
+      "seconds": 32.464,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "ONA Coffee Guji Yabitu Koba G1, onacoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "ONA Coffee",
+          "source": "bag"
+        },
+        "name": {
+          "value": "Guji Yabitu Koba G1",
+          "source": "web"
+        },
+        "country": {
+          "value": "Ethiopia",
+          "source": "web"
+        },
+        "region": {
+          "value": "Uraga, Guji Zone (near Koba village)",
+          "source": "web"
+        },
+        "producer": {
+          "value": "Smallholder farmers delivering to Yabitu Koba washing station (~709 farmers in 2024–25)",
+          "source": "web"
+        },
+        "variety": {
+          "value": [
+            "Ethiopian heirloom"
+          ],
+          "source": "web"
+        },
+        "process": {
+          "value": "Natural",
+          "source": "web"
+        },
+        "processKind": "natural",
+        "altitudeMasl": {
+          "value": [
+            2100,
+            2350
+          ],
+          "source": "web"
+        },
+        "roastLevel": {
+          "value": "light",
+          "source": "inferred"
+        },
+        "roastedFor": null,
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": null,
+        "tastingNotes": {
+          "value": [
+            "cherry",
+            "chocolate",
+            "raisin"
+          ],
+          "source": "web"
+        },
+        "isBlend": false,
+        "blendComponents": null,
+        "roasterRecipe": null,
+        "productUrl": "https://onacoffee.com.au/products/drip-bag-filter-guji-yabitu-koba-g1-ethiopia-natural",
+        "imageUrl": null,
+        "sources": [
+          "https://onacoffee.com.au/products/drip-bag-filter-guji-yabitu-koba-g1-ethiopia-natural",
+          "https://eightouncecoffee.com/products/ona-coffee-guji-yabitu-koba-g1",
+          "https://www.thewaytocoffee.com/beans/guji-yabitu-koba-g1"
+        ],
+        "confidence": 0.7,
+        "needsConfirmation": [
+          "roastLevel",
+          "roastedFor",
+          "tastingNotes",
+          "productUrl",
+          "roastDate"
+        ],
+        "summary": "A fruit-forward Ethiopian natural: expect cherry, orange/plum and raisin sweetness with a chocolatey finish. It should work best as a lighter-style espresso, with a slightly longer ratio to keep the acidity balanced."
+      },
+      "seconds": 20.215,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "ONA Coffee La Fincona espresso, onacoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "ONA Coffee",
+          "source": "web"
+        },
+        "name": {
+          "value": "La Fincona, Honduras, Washed",
+          "source": "web"
+        },
+        "country": {
+          "value": "Honduras",
+          "source": "web"
+        },
+        "region": {
+          "value": "San Juanilla, Masaguara, Intibucá",
+          "source": "web"
+        },
+        "producer": {
+          "value": "José Mancia",
+          "source": "web"
+        },
+        "variety": {
+          "value": [
+            "Typica"
+          ],
+          "source": "web"
+        },
+        "process": {
+          "value": "Washed",
+          "source": "web"
+        },
+        "processKind": "washed",
+        "altitudeMasl": {
+          "value": [
+            1800
+          ],
+          "source": "web"
+        },
+        "roastLevel": {
+          "value": null,
+          "source": null
+        },
+        "roastedFor": "espresso",
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": null,
+        "tastingNotes": {
+          "value": [
+            "hazelnut",
+            "pear",
+            "mandarin"
+          ],
+          "source": "web"
+        },
+        "isBlend": false,
+        "blendComponents": null,
+        "roasterRecipe": null,
+        "productUrl": "https://onacoffee.com.au/blogs/brewguides/la-fincona-honduras-washed",
+        "imageUrl": null,
+        "sources": [
+          "https://onacoffee.com.au/blogs/brewguides/la-fincona-honduras-washed",
+          "https://eightouncecoffee.ca/products/ona-coffee-la-fincona-espresso",
+          "https://www.thewaytocoffee.com/beans/la-fincona-honduras-washed"
+        ],
+        "confidence": 0.7,
+        "needsConfirmation": [
+          "roastLevel",
+          "roastDate",
+          "altitudeMasl",
+          "variety",
+          "tastingNotes",
+          "productUrl"
+        ],
+        "summary": "A clean, sweet washed Honduran espresso with hazelnut, pear and mandarin notes. Expect gentle fruit acidity and a nutty body."
+      },
+      "seconds": 26.788,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "Haven Coffee Sydney Compass House Blend, havencoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "Haven Coffee",
+          "source": "bag"
+        },
+        "name": {
+          "value": "Compass House Blend",
+          "source": "web"
+        },
+        "country": {
+          "value": "Colombia, Ethiopia",
+          "source": "web"
+        },
+        "region": {
+          "value": null,
+          "source": null
+        },
+        "producer": {
+          "value": null,
+          "source": null
+        },
+        "variety": {
+          "value": null,
+          "source": null
+        },
+        "process": {
+          "value": null,
+          "source": null
+        },
+        "processKind": null,
+        "altitudeMasl": {
+          "value": null,
+          "source": null
+        },
+        "roastLevel": {
+          "value": null,
+          "source": null
+        },
+        "roastedFor": "espresso",
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": 250,
+        "tastingNotes": {
+          "value": [
+            "blackcurrant",
+            "caramel",
+            "milk chocolate"
+          ],
+          "source": "web"
+        },
+        "isBlend": true,
+        "blendComponents": [
+          "Colombia",
+          "Ethiopia"
+        ],
+        "roasterRecipe": null,
+        "productUrl": "https://havencoffee.com.au/products/haven-house-blend-compass-blend",
+        "imageUrl": null,
+        "sources": [
+          "https://havencoffee.com.au/products/haven-house-blend-compass-blend",
+          "https://havencoffee.com.au/collections/coffee",
+          "https://goodcoffeeproject.com.au/collections/blend"
+        ],
+        "confidence": 0.7,
+        "needsConfirmation": [
+          "country",
+          "tastingNotes",
+          "weightGrams",
+          "roastLevel",
+          "roastDate",
+          "roastedFor",
+          "blendComponents"
+        ],
+        "summary": "A smooth, balanced house blend of Colombian and Ethiopian coffee, aimed at espresso and milk drinks. Expect caramel and milk chocolate sweetness with a touch of blackcurrant fruit."
+      },
+      "seconds": 36.819,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "Haven Coffee Sydney Ethiopia Guji Gogogu, havencoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "Haven Coffee",
+          "source": "bag"
+        },
+        "name": {
+          "value": "Ethiopia Guji Gogogu",
+          "source": "bag"
+        },
+        "country": {
+          "value": "Ethiopia",
+          "source": "bag"
+        },
+        "region": {
+          "value": "Guji",
+          "source": "bag"
+        },
+        "producer": {
+          "value": "Gogogu washing station",
+          "source": "inferred"
+        },
+        "variety": {
+          "value": null,
+          "source": null
+        },
+        "process": {
+          "value": null,
+          "source": null
+        },
+        "processKind": null,
+        "altitudeMasl": {
+          "value": null,
+          "source": null
+        },
+        "roastLevel": {
+          "value": null,
+          "source": null
+        },
+        "roastedFor": null,
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": null,
+        "tastingNotes": {
+          "value": null,
+          "source": null
+        },
+        "isBlend": false,
+        "blendComponents": null,
+        "roasterRecipe": null,
+        "productUrl": null,
+        "imageUrl": null,
+        "sources": [
+          "https://havencoffee.com.au/collections/coffee"
+        ],
+        "confidence": 0.4,
+        "needsConfirmation": [
+          "producer",
+          "variety",
+          "process",
+          "processKind",
+          "altitudeMasl",
+          "roastLevel",
+          "roastedFor",
+          "roastDate",
+          "tastingNotes",
+          "productUrl"
+        ],
+        "summary": "Haven lists Ethiopia Guji Gogogu as a new release at $30, but I couldn't open the product page, so the process and flavour details are unconfirmed. Gogogu lots from other roasters are usually floral and tea-like with stone fruit and citrus, but Haven's lot may differ."
+      },
+      "seconds": 37.252,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "Haven Coffee Sydney Kenya Rioki Estate, havencoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "Haven Coffee",
+          "source": "web"
+        },
+        "name": {
+          "value": "Kenya Rioki Estate",
+          "source": "web"
+        },
+        "country": {
+          "value": "Kenya",
+          "source": "web"
+        },
+        "region": {
+          "value": "Kiambu County",
+          "source": "web"
+        },
+        "producer": {
+          "value": "Rioki Estate",
+          "source": "web"
+        },
+        "variety": {
+          "value": [
+            "SL28",
+            "SL24"
+          ],
+          "source": "web"
+        },
+        "process": {
+          "value": "Washed (peaberry)",
+          "source": "web"
+        },
+        "processKind": "washed",
+        "altitudeMasl": {
+          "value": [
+            1500,
+            1800
+          ],
+          "source": "web"
+        },
+        "roastLevel": {
+          "value": null,
+          "source": null
+        },
+        "roastedFor": null,
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": 250,
+        "tastingNotes": {
+          "value": [
+            "blackcurrant",
+            "limeade",
+            "grapefruit",
+            "bergamot",
+            "black tea"
+          ],
+          "source": "web"
+        },
+        "isBlend": false,
+        "blendComponents": null,
+        "roasterRecipe": null,
+        "productUrl": "https://havencoffee.com.au/products/kenya-rioki-estate",
+        "imageUrl": null,
+        "sources": [
+          "https://havencoffee.com.au/products/kenya-rioki-estate",
+          "https://havencoffee.com.au/collections/coffee"
+        ],
+        "confidence": 0.8,
+        "needsConfirmation": [
+          "variety",
+          "roastLevel",
+          "roastedFor",
+          "roastDate",
+          "process",
+          "producer"
+        ],
+        "summary": "A bright, juicy Kenyan peaberry that should give vibrant, high-acid espresso with blackcurrant, citrus and black tea character. Expect it to work best with a slightly longer ratio to soften the acidity."
+      },
+      "seconds": 36.354,
+      "provider": "claude-cli"
+    },
+    {
+      "query": "Haven Coffee Sydney Peru Adelino Vega Navara, havencoffee.com.au",
+      "info": {
+        "roaster": {
+          "value": "Haven Coffee",
+          "source": "bag"
+        },
+        "name": {
+          "value": "Peru Adelino Vega Navara",
+          "source": "bag"
+        },
+        "country": {
+          "value": "Peru",
+          "source": "inferred"
+        },
+        "region": {
+          "value": null,
+          "source": null
+        },
+        "producer": {
+          "value": "Adelino Vega",
+          "source": "inferred"
+        },
+        "variety": {
+          "value": null,
+          "source": null
+        },
+        "process": {
+          "value": null,
+          "source": null
+        },
+        "processKind": null,
+        "altitudeMasl": {
+          "value": null,
+          "source": null
+        },
+        "roastLevel": {
+          "value": null,
+          "source": null
+        },
+        "roastedFor": null,
+        "roastDate": {
+          "value": null,
+          "source": null
+        },
+        "bestBefore": null,
+        "weightGrams": null,
+        "tastingNotes": {
+          "value": null,
+          "source": null
+        },
+        "isBlend": false,
+        "blendComponents": null,
+        "roasterRecipe": null,
+        "productUrl": null,
+        "imageUrl": null,
+        "sources": [
+          "https://havencoffee.com.au/collections/coffee",
+          "https://havencoffee.com.au/collections/shop-all"
+        ],
+        "confidence": 0.5,
+        "needsConfirmation": [
+          "country",
+          "region",
+          "producer",
+          "variety",
+          "process",
+          "processKind",
+          "altitudeMasl",
+          "roastLevel",
+          "roastedFor",
+          "roastDate",
+          "tastingNotes",
+          "productUrl"
+        ],
+        "summary": "A single-origin Peruvian coffee from Haven Coffee in Sydney, listed at $27. I couldn't retrieve the product page, so I can't say how it will taste as espresso."
+      },
+      "seconds": 41.272,
+      "provider": "claude-cli"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { run, stageImages } from "./cli-util.js";
-import { extractJson, ProviderError, type LlmProvider, type StructuredRequest } from "./types.js";
+import { extractJson, jsonSchemaFor, ProviderError, type LlmProvider, type StructuredRequest } from "./types.js";
 
 /**
  * Uses the Claude Code CLI in headless mode (`claude -p`), so calls are billed
@@ -38,7 +38,7 @@ export class ClaudeCliProvider implements LlmProvider {
         "--output-format",
         "json",
         "--json-schema",
-        JSON.stringify(z.toJSONSchema(req.schema)),
+        JSON.stringify(jsonSchemaFor(req.schema)),
         "--system-prompt",
         req.system,
         "--model",

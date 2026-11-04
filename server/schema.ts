@@ -90,6 +90,7 @@ export const Recipe = z.object({
     .string()
     .describe("Relative grind guidance, e.g. 'start 2 steps finer than your medium-roast setting'"),
   restAdvice: z.string().nullable(),
+  dialIn: z.string().describe("How to dial this profile in for this coffee, 1–2 sentences"),
   rationale: z.array(z.string()).describe("Short bullet reasons"),
   alternatives: z.array(
     z.object({ profileTitle: z.string(), why: z.string() }),
