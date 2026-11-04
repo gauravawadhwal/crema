@@ -1,15 +1,52 @@
 # Crema
 
-A custom interface and companion service for a Decent DE1 espresso machine.
+A custom home screen and companion app for the **Decent DE1** espresso machine.
 
-- **A full home screen for the machine.** It has Espresso, Steam, Hot water, Flush and Stop with presets, live pressure, flow, weight and temperature with profile targets, a reference-shot overlay, five favourites, the water tank, the scale, sleep and wake, and "ready in N minutes". See [docs/parity.md](docs/parity.md) for the full comparison with the Decent app.
+It runs on the DE1's own tablet in place of the Decent interface, and the same app runs on your iPhone. It identifies coffees from a photo of the bag, picks a community espresso profile to suit each one, and helps you dial it in shot by shot.
+
+![Crema on the DE1 tablet during a shot](docs/screenshots/tablet-pulling.png)
+
+## What it is, in plain terms
+
+- **The DE1** is an espresso machine with an Android tablet mounted on it. The tablet runs the machine's interface.
+- **Decaid** is Decent's open-source app on that tablet. It talks to the machine and scale over Bluetooth, stores your coffees, profiles and shots, and lets anyone build their own interface as a web page (a "skin").
+- **Crema** is such a skin, plus a small server at home:
+  - The skin is the interface you touch: machine controls, live shot chart, coffee shelf, profiles, shot history and settings. It controls the machine through Decaid.
+  - The server identifies coffees and chooses profiles using your Claude or ChatGPT subscription. It also keeps favourites, presets and maintenance reminders.
+- **On your iPhone** it's the same web app, added to the home screen from Safari. There's no App Store app.
+
+## Screenshots
+
+All from the demo, on the DE1 tablet's 1340 × 800 screen (Samsung Galaxy Tab A11) and an iPhone. The coffees are real ONA and Haven coffees identified by Crema's AI pipeline. The machine is simulated.
+
+| | |
+|---|---|
+| ![Home screen](docs/screenshots/tablet-home.png) **Home screen.** The next shot with its matched profile and recipe, the live chart, and the machine controls. | ![After a shot](docs/screenshots/tablet-after-shot.png) **After a shot.** Metrics, a too-fast/slow check for the profile, taste feedback and the next adjustment. |
+| ![Profiles](docs/screenshots/tablet-profiles.png) **Profiles.** The AI's pick for this coffee with its reasons, the rules' ranking, and 31 community profiles. | ![Add a coffee](docs/screenshots/tablet-add-coffee.png) **Add a coffee.** Every fact is tagged as from the bag, the web, or a guess to check. |
+| ![Shelf](docs/screenshots/tablet-shelf.png) **Shelf.** Rest window, grams left and a reorder nudge for each bag. | ![Shots](docs/screenshots/tablet-shots.png) **Shots.** History with metrics, and one shot overlaid on another. |
+| ![Steam](docs/screenshots/tablet-steam.png) **Steam.** Jug presets, a countdown and a big Stop button. | ![Settings](docs/screenshots/tablet-settings.png) **Settings.** Your setup, steam and water, wake schedules, display and maintenance. |
+
+<p>
+  <img src="docs/screenshots/phone-home.png" width="250" alt="iPhone: home">
+  <img src="docs/screenshots/phone-shelf.png" width="250" alt="iPhone: shelf">
+  <img src="docs/screenshots/phone-profiles.png" width="250" alt="iPhone: profiles">
+</p>
+
+**On the iPhone:** the same app, laid out for the phone.
+
+Regenerate these with `node scripts/screenshots.cjs` (needs Playwright). `node scripts/check-tablet-fit.cjs` checks that the home screen fits the tablet without scrolling: at 1340 × 800 and the scaled sizes Android may use, with and without the navigation bar, before and after a shot.
+
+**Interactive demo and walkthrough:** [`demo/crema-demo.html`](demo/crema-demo.html) is the whole app running in the browser against a simulated machine. [`demo/walkthrough.html`](demo/walkthrough.html) is a step-by-step tour of a day with it. Both are also published as private Claude artifacts for the repo owner.
+
+## Features
+
+- **A full home screen for the machine.** It has Espresso, Steam, Hot water, Flush and Stop with presets, live pressure, flow, weight and temperature with profile targets, a reference-shot overlay, five favourites, the water tank, the scale, sleep and wake, and "ready in N minutes". It fits the DE1 tablet in one screen. See [docs/parity.md](docs/parity.md) for the full comparison with the Decent app.
 - **Add a coffee** by photographing the bag, searching, or pasting the roaster's link. Crema reads the bag (including the roast date), finds the roaster's page and product photo, and tags every fact with where it came from.
 - **Profile recommendations from the coffee's description.** It ranks 31 community profiles (Adaptive, D-Flow, A-Flow, Londonium, Extractamundo Dos, allongés, turbo shots and more, described from their authors' own notes) against what the roaster and bag say. It also takes your setup into account (milk or straight, scale, burrs, experience). The AI then picks one and explains why in plain words.
 - **Dial in**: rate a shot (sour ↔ bitter, thin ↔ heavy, stars) and get the one change to make next. Shots outside the profile's time window are flagged.
 - **Shelf**: rest window, grams left (from shot doses), reorder nudges, freeze and finish.
 - **Shots**: history with metrics, side-by-side comparison, ratings and notes.
 - **Settings**: your setup, steam, water and flush, machine, wake schedules, display and theme, and descale and backflush reminders.
-- **Runs on the DE1 tablet as a skin and on your iPhone** as a home-screen app.
 
 Research and design decisions: [docs/investigation.md](docs/investigation.md).
 

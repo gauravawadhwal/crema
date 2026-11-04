@@ -16,6 +16,7 @@ details still need a pass on the real machine.
 
 | Feature | Where it comes from | Crema |
 |---|---|---|
+| Home screen fits the tablet with no scrolling | Stock | ✅ tested at 1340×800 (Galaxy Tab A11) and scaled sizes down to 1005×552, before and after a shot (`scripts/check-tablet-fit.cjs`) |
 | Espresso, Steam, Hot water, Flush, Stop buttons | Stock, Streamline | ✅ right-hand column (phone: top) |
 | Hide start buttons on group-head-controller machines | Streamline | ✅ "Start from the group head" setting; Stop and presets still work |
 | Sleep / wake button | Stock, Streamline, Lumen | ✅ rail (tablet), top bar (phone) |

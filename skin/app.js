@@ -24,6 +24,7 @@ const DAY = 864e5;
 const daysSince = (iso) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / DAY) : null);
 const round = (n, step) => Math.round(n / step) * step;
 const fmt1 = (n) => (n == null || Number.isNaN(n) ? "–" : Number(n).toFixed(1));
+const fmtC = (n) => (n == null || Number.isNaN(n) ? "–" : Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(1));
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
 function toast(msg) {
@@ -323,14 +324,14 @@ function renderNextShot() {
     </div>
     ${n ? `
     <div class="field-row first"><span class="label">Profile</span>
-      <button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "Tap for recommendations")}</span></span><span class="muted">›</span></button></div>
+      <button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "Tap for recommendations")}</span></span><span class="muted">›</span></button></div>
     <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
     <div class="field-row"><span class="label">Yield</span>${stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
     <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
     <div class="field-row"><span class="label">Grind</span>
       <div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
     <div class="row">
-      <button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.loaded ? "Loaded on the machine ✓" : "Load onto machine"}</button>
+      <button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.loaded ? "Loaded ✓" : "Load onto machine"}</button>
       <button class="btn ghost" id="resetRecipe" title="Back to the recommended recipe">Reset</button>
     </div>
     ${r ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px">
@@ -397,7 +398,7 @@ async function loadGhost() {
 /* ================= favourites ================= */
 function renderFavs() {
   $("#favs").innerHTML = S.favourites.map((f, i) => f
-    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmt1(f.doseG)}→${fmt1(f.yieldG)}</span></button><button class="fav-edit" data-favedit="${i}" aria-label="Edit favourite">⋯</button></div>`
+    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmtC(f.doseG)}→${fmtC(f.yieldG)}</span></button><button class="fav-edit" data-favedit="${i}" aria-label="Edit favourite">⋯</button></div>`
     : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("");
   $$("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
   $$("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
@@ -443,7 +444,7 @@ function renderControls() {
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
   const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
   $("#controls").innerHTML = `
-    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmt1(S.next.doseG)}→${fmt1(S.next.yieldG)} g` : ""}</span></button>
+    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${fmtC(S.next.yieldG)} g` : ""}</span></button>
       ${S.loaded || !S.next ? "" : '<span class="ghc-note">Starting loads the recipe first</span>'}</div>
     <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
     <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
@@ -521,6 +522,7 @@ function onSnapshot(s) {
 function onShotStart() {
   S.live = []; S.opStart = Date.now();
   $("#afterShot").hidden = true;
+  $(".live-col").classList.remove("has-after");
   if (location.hash !== "#brew") location.hash = "#brew";
 }
 async function onShotEnd(finishedId) {
@@ -551,20 +553,26 @@ function showAfterShot(shot, pts) {
   const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
   const [lo, hi] = r?.targetTimeS || [25, 35];
   const timing = timeS == null ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
+  const scale = (id, label, opts) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === 0}" aria-pressed="${v === 0}">${t}</button>`).join("")}</div></div>`;
   p.innerHTML = `
     <div class="row between"><h2>How was it?</h2>${timing}</div>
     ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
-    <div class="slider"><label class="label" for="sb">Taste</label><input type="range" id="sb" min="-2" max="2" step="1" value="0"><div class="ends"><span>Sour</span><span>Balanced</span><span>Bitter</span></div></div>
-    <div class="slider"><label class="label" for="bd">Body</label><input type="range" id="bd" min="-2" max="2" step="1" value="0"><div class="ends"><span>Thin</span><span>Just right</span><span>Heavy</span></div></div>
-    <div class="row"><span class="label">Enjoyment</span><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="false" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
-    <div class="row"><button class="btn primary" id="sendTaste">Get the next adjustment</button><button class="btn" id="pinShot">Make this the reference shot</button></div>
+    ${scale("sb", "Taste", [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]])}
+    ${scale("bd", "Body", [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]])}
+    <div class="row between"><div class="row"><span class="label">Enjoyment</span><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="false" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
+      <div class="row"><button class="btn primary" id="sendTaste">Next adjustment</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
     <div id="adviceBox"></div>`;
+  const val = (id) => Number($(`#${id} [aria-pressed="true"]`)?.dataset.v ?? 0);
+  $$(".seg.tap", p).forEach((g) => $$("button", g).forEach((b) => (b.onclick = () => $$("button", g).forEach((x) => { x.setAttribute("aria-pressed", String(x === b)); x.setAttribute("aria-checked", String(x === b)); }))));
+  $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); renderLive(); };
+  $(".live-col").classList.add("has-after");
+  requestAnimationFrame(renderLive);
   $$(".star", p).forEach((b) => (b.onclick = () => { stars = +b.dataset.n; $$(".star", p).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.n <= stars))); }));
   $("#sendTaste").onclick = async (e) => {
     if (!shot || !S.current) return;
     e.target.disabled = true;
     try {
-      const { advice } = await S.api.feedback(shot.id, S.current.id, { sourBitter: +$("#sb").value, body: +$("#bd").value, enjoyment: stars || 3, notes: null });
+      const { advice } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: stars || 3, notes: null });
       $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div></div>`;
     } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
     e.target.disabled = false;
@@ -985,6 +993,7 @@ const VIEWS = ["brew", "shelf", "add", "profiles", "shots", "settings"];
 function route(scroll = true) {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "brew";
   VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
+  document.body.classList.toggle("on-brew", v === "brew");
   $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
   if (v === "shelf") renderShelf();

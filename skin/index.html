@@ -209,7 +209,7 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .controls { display: grid; gap: 10px; }
 .ctl { display: grid; gap: 6px; padding: 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
 .ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: .98rem; text-align: left; }
-.ctl-btn .sub { margin-left: auto; font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-weight: 400; }
+.ctl-btn .sub { white-space: nowrap; margin-left: auto; font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-weight: 400; }
 .ctl-btn.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .ctl-btn.go .sub { color: var(--accent-ink); opacity: .75; }
 .ctl-btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -221,6 +221,9 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .ghc-note { font-size: .78rem; color: var(--muted); }
 
 .taste { display: grid; gap: 12px; }
+.scale-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; align-items: center; }
+.seg.tap { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; }
+.seg.tap button { padding: 6px 4px; font-size: .78rem; line-height: 1.15; min-height: 40px; }
 .slider { display: grid; gap: 4px; }
 .slider input { width: 100%; accent-color: var(--accent); }
 .slider .ends { display: flex; justify-content: space-between; font-size: .76rem; color: var(--muted); }
@@ -379,6 +382,92 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
   .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (min-width: 761px) { #phoneSleep { display: none; } }
+
+/* ---------- landscape tablet (the DE1's own screen) ----------
+   The home screen fills exactly one screen, like the Decent app. Tested at
+   1340×800 (Galaxy Tab A11 at 1×), with the Android nav bar, and at the
+   scaled sizes down to about 1005×552. Columns scroll only as a last resort. */
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
+  .app { height: 100vh; height: 100dvh; }
+  main { height: 100vh; height: 100dvh; overflow-y: auto; padding-block: 10px; }
+  body.on-brew main { overflow: hidden; }
+  #alerts:empty { display: none; }
+  body.on-brew .wrap { height: 100%; gap: 10px; grid-template-rows: auto minmax(0, 1fr); }
+  body.on-brew .wrap:has(#alerts:not(:empty)) { grid-template-rows: auto auto minmax(0, 1fr); }
+  .chip { min-height: 28px; padding: 2px 10px; font-size: .76rem; }
+  .rail { gap: 2px; padding-top: 10px; }
+  .brand { margin-bottom: 6px; }
+  .tab { padding: 7px 0; }
+  .panel { padding: 12px; }
+  #view-brew { height: 100%; min-height: 0; gap: 10px; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: minmax(0, 1fr); }
+  #view-brew .controls-col { grid-column: auto; }
+  #view-brew > .stack { height: 100%; min-height: 0; overflow-y: auto; gap: 10px; align-content: start; scrollbar-width: thin; }
+  #view-brew .live-col { display: flex; flex-direction: column; overflow: hidden; }
+  #view-brew .live-col > .panel:first-child { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  #view-brew .chart-box { aspect-ratio: auto; flex: 1 1 auto; min-height: 120px; }
+  #view-brew .live-col.has-after .readouts { display: none; }
+  #afterShot { flex: none; gap: 8px; overflow-y: auto; max-height: 64%; }
+  #afterShot h2 { font-size: 1rem; }
+  #afterShot .metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  #afterShot .metrics > div { padding: 5px 8px; }
+  #afterShot .metrics .v { font-size: .92rem; }
+  #afterShot .btn { min-height: 38px; padding: 6px 12px; font-size: .84rem; }
+  #afterShot .star { width: 34px; height: 34px; }
+  .seg.tap button { min-height: 34px; }
+  .readout .v { font-size: 1.2rem; }
+  .clock { font-size: 1.3rem; }
+  .coffee-line { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; }
+  .coffee-line .bag { width: 48px; height: 58px; }
+  .coffee-name { font-size: 1rem; }
+  .field-row { min-height: 40px; padding-top: 6px; grid-template-columns: 58px minmax(0, 1fr); }
+  .stepper { grid-template-columns: 40px minmax(0, 1fr) 40px; }
+  .stepper button { height: 38px; }
+  .stepper .val { font-size: 1rem; }
+  .stepper .val small { font-size: .64rem; }
+  .profile-btn { min-height: 42px; padding: 6px 10px; }
+  .profile-btn .t { font-size: .92rem; }
+  #nextShot .btn { min-height: 40px; }
+  .fav { min-height: 46px; }
+  .controls { gap: 8px; grid-template-columns: 1fr; }
+  .ctl { padding: 8px; gap: 5px; }
+  .ctl-btn { min-height: 44px; font-size: .92rem; padding: 6px 10px; }
+  .preset { min-height: 28px; padding: 3px 8px; font-size: .72rem; }
+  .stop-btn { min-height: 52px; }
+  .ghc-note { font-size: .72rem; }
+  .ctl-btn .sub { font-size: .74rem; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) and (max-width: 1250px) {
+  .demo-banner { display: none; }
+  #view-brew { grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) minmax(160px, 176px); }
+  .readouts { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .readout .v { font-size: 1.02rem; }
+  .readout .label { font-size: .62rem; }
+  .ctl .presets .preset { padding: 3px 6px; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
+  .legend { display: none; }
+  #view-brew .live-col > .panel:first-child { gap: 6px; }
+  .field-row { min-height: 36px; padding-top: 4px; }
+  .stepper button { height: 34px; }
+  .ctl-btn { min-height: 38px; }
+  .ctl { padding: 6px; }
+  .stop-btn { min-height: 44px; }
+  #nextShot details { display: none; }
+  .fav { min-height: 40px; }
+  #afterShot .metrics { display: none; }
+  .pick-src, .fav-hint { display: none; }
+  #nextShot { gap: 8px; }
+  .coffee-line .bag { width: 40px; height: 48px; }
+  .coffee-line { grid-template-columns: 40px minmax(0, 1fr) auto; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 580px) {
+  main { padding-block: 8px; }
+  #view-brew, #view-brew > .stack, body.on-brew .wrap { gap: 8px; }
+  .panel { padding: 10px; }
+  .field-row { min-height: 34px; padding-top: 3px; gap: 8px; }
+  .stepper button { height: 32px; }
+  .fav { min-height: 36px; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -411,7 +500,7 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
         <div class="stack next-col">
           <div class="panel stack" id="nextShot"></div>
           <div class="panel stack">
-            <div class="row between"><span class="label">Favourites</span><span class="muted small">Tap to load · ⋯ to edit</span></div>
+            <div class="row between"><span class="label">Favourites</span><span class="muted small fav-hint">Tap to load · ⋯ to edit</span></div>
             <div class="favs" id="favs"></div>
           </div>
         </div>
