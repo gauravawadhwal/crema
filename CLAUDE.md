@@ -81,7 +81,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 - **Desktop device frame**: opened top-level on a wide window with a mouse, the app shows itself inside a 1340×800 tablet iframe (`showDeviceFrame` in app.js). Scripts that need the bare app add `?full`; the iframe adds `?embed`.
 - **Media queries see the iframe or viewport, not a scaled container.** That's why the device frame uses an iframe, and why the tablet layout is tested at real viewport sizes.
 - **Tablet layout**: the home screen must fit one screen at 1340×800 and the scaled sizes down to 1005×552, before and after a shot. Run `check-tablet-fit.cjs` after any layout or spacing change.
-- **Themes**: theme tokens use `html:root[data-skin=…]` so they outrank the light/dark blocks. Charts read CSS variables at draw time, so call `route(false)` to redraw after a change. See `docs/design.md`.
+- **Themes**: theme tokens use `html:root[data-skin=…]` so they outrank the light/dark blocks. Charts read CSS variables at draw time, so call `route(false)` to redraw after a change. Verde is the default (`DEFAULT_SKIN` in app.js, and `data-skin="verde"` on `<html>` in index.html); keep the two in step. See `docs/design.md`.
 - **Temperature**: DE1 profiles set a temperature per step. Apply a recipe temperature by shifting every step (`withTemperature` in `server/app.ts`); never set only the first step.
 - **Recommendations must name a profile the machine has.** The AI chooses only among installed candidates, and the code enforces it.
 - **The simulators send an `elapsed` field that real Decaid snapshots don't have.** The app falls back to its own clock; keep that fallback.

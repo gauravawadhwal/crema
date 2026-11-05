@@ -64,7 +64,8 @@ function pageUrl() {
       await p.goto(url + "#settings"); await p.waitForTimeout(900);
       await p.click('[data-skin="rosso"]');
       if ((await p.evaluate(() => document.documentElement.dataset.skin)) !== "rosso") throw new Error("theme not applied");
-      await p.click('[data-skin="crema"]');
+      await p.click('[data-skin="verde"]');
+      if ((await p.evaluate(() => document.documentElement.dataset.skin)) !== "verde") throw new Error("default theme not restored");
     });
     await step("add coffee", async () => {
       await p.goto(url + "#add"); await p.waitForTimeout(500);

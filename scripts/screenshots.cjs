@@ -52,7 +52,7 @@ async function mark(p, name, selector) {
   await phone.goto(url + "#profiles"); await phone.waitForTimeout(1200);
   await shot(phone, "phone-profiles");
   // One after-shot home screen per theme, for the README and walkthrough.
-  for (const skin of ["crema", "rosso", "acciaio", "nordic", "verde", "notte"]) {
+  for (const skin of ["verde", "crema", "rosso", "acciaio", "nordic", "notte"]) {
     const p = await b.newPage({ viewport: { width: 1340, height: 800 }, deviceScaleFactor: 0.5, colorScheme: "dark" });
     await p.addInitScript((s) => { window.CREMA_SKIN = s; }, skin);
     await p.goto(url + "#brew"); await p.waitForTimeout(900);
