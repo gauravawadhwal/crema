@@ -189,7 +189,7 @@ function makeDemoApi() {
 
   return {
     demo: true,
-    info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated" },
+    info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null },
     async shelf() { return shelf().map(shelfItem); },
     async identify({ files, query, url }, onStep) {
       const steps = files?.length ? ["Reading the bag", "Finding the roaster's page", "Matching community profiles"] : ["Searching for the coffee", "Reading the roaster's page", "Matching community profiles"];

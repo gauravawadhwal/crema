@@ -1,0 +1,27 @@
+# Publishes the Decaid skin as a GitHub release asset when a version tag is pushed:
+#   git tag v0.1.0 && git push origin v0.1.0
+# On the tablet: Decaid → Launcher → Skins → ⚙ → Install skin → GitHub Release → <owner>/<repo>.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  skin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set version from tag
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
+      - run: node scripts/package-skin.mjs
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/crema-skin.zip --title "Crema $GITHUB_REF_NAME" --generate-notes

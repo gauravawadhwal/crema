@@ -1,0 +1,19 @@
+# Crema server with Docker Compose. Copy .env.example to .env and fill it in, then:
+#   docker compose up -d
+services:
+  crema:
+    build:
+      context: .
+      args:
+        AI_CLIS: ${AI_CLIS:-}
+    image: crema
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    env_file: .env
+    volumes:
+      - crema-data:/data
+      # Codex CLI login, if you use codex-cli (run `codex login` on the host first):
+      # - ~/.codex:/home/node/.codex
+volumes:
+  crema-data:

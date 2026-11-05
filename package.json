@@ -1,7 +1,7 @@
 {
   "name": "crema",
   "version": "0.1.0",
-  "description": "A custom DE1 companion: identify coffees from a photo, search or link, and get recipe recommendations.",
+  "description": "A custom home screen and companion app for the Decent DE1 espresso machine: coffee identification, profile recommendations and day-to-day controls.",
   "scripts": {
     "dev": "tsx watch server/main.ts",
     "start": "tsx server/main.ts",
@@ -14,23 +14,27 @@
     "check:tablet": "node scripts/check-tablet-fit.cjs",
     "build:site": "node scripts/build-site.mjs",
     "screenshots": "node scripts/screenshots.cjs",
-    "record": "node scripts/record-walkthrough.cjs"
+    "record": "node scripts/record-walkthrough.cjs",
+    "package:skin": "node scripts/package-skin.mjs"
   },
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
     "@hono/node-server": "^2.1.6",
     "hono": "^4.13.16",
+    "tsx": "^4.23.15",
     "ws": "^8.22.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
 }

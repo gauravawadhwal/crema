@@ -86,11 +86,13 @@ window.rulesDialIn = function rulesDialIn(fb, timeS, recipe) {
 };
 
 /* ================= live API ================= */
-function makeLiveApi(cfg, health) {
+function makeLiveApi(cfg, health, base = "") {
+  // base is "" when Crema serves this page (phone, browser) and the server's
+  // address when the page is served elsewhere (the Decaid tablet skin).
   const j = async (path, opts = {}) => {
     const init = { ...opts };
     if (opts.body && !(opts.body instanceof FormData)) init.headers = { "content-type": "application/json" };
-    const res = await fetch(path, init);
+    const res = await fetch(path.startsWith("/api/") || path.startsWith("/decaid/") ? base + path : path, init);
     const text = await res.text();
     const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
     if (!res.ok) throw new Error((data && data.error) || `${res.status} ${res.statusText}`);
@@ -98,7 +100,8 @@ function makeLiveApi(cfg, health) {
   };
   const put = (path, body) => j(path, { method: "PUT", body: JSON.stringify(body) });
   const post = (path, body) => j(path, { method: "POST", body: JSON.stringify(body ?? {}) });
-  const D = (p) => `/decaid/api/v1${p}`;
+  // Same origin as Crema: go through its /decaid proxy. Elsewhere (the tablet skin): call Decaid directly.
+  const D = (p) => (base ? `${cfg.decaidUrl.replace(/\/+$/, "")}/api/v1${p}` : `/decaid/api/v1${p}`);
   const wsBase = cfg.decaidWs.replace(/\/ws\/v1\/machine\/snapshot$/, "");
   const shotPoints = (full) => {
     const m = full.measurements || [];
@@ -115,12 +118,12 @@ function makeLiveApi(cfg, health) {
   let heartbeatAt = 0;
   return {
     demo: false,
-    info: { providers: health?.providers ?? [], decaidUrl: cfg.decaidUrl },
+    info: { providers: health?.providers ?? [], decaidUrl: cfg.decaidUrl, server: base || location.origin },
     async shelf() {
       const rows = await j("/api/shelf");
       return rows.filter((r) => r.record).map((r) => ({
         id: r.bean.id, batch: r.record.decaidBatchId, info: r.record.info, recipe: r.record.recipe, recipeSource: r.record.recipe ? "saved" : null,
-        photo: r.record.photo, productImage: r.record.productImage, art: r.record.art, weight: r.batches?.[0]?.weight ?? r.record.info.weightGrams,
+        photo: r.record.photo, productImage: r.record.productImage ? base + r.record.productImage : null, art: r.record.art, weight: r.batches?.[0]?.weight ?? r.record.info.weightGrams,
         remaining: r.remaining, frozen: r.frozen, bestShotId: r.record.bestShotId ?? null, shots: r.usage?.shots ?? 0,
       }));
     },
@@ -946,7 +949,8 @@ async function renderSettings() {
   <div class="panel stack"><h2>AI and integrations</h2>
     <div class="set-row first"><span>AI providers<span class="hint">Tried in order. Set LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "rules only")}</span></div>
     <div class="set-row"><span>Visualizer upload<span class="hint">${viz ? "Decaid's Visualizer plugin uploads shots. Set your account in Decaid's plugin settings" : "Install Decaid's Visualizer plugin to upload shots"}</span></span>${viz ? '<span class="pill good">Available</span>' : '<span class="pill plain">Not found</span>'}</div>
-    <div class="set-row"><span>Machine connection</span><span class="num small">${esc(S.api.info.decaidUrl || "")}</span></div>
+    <div class="set-row"><span>Machine connection<span class="hint">Decaid on the tablet, as set by DECAID_URL on the server</span></span><span class="num small">${esc(S.api.info.decaidUrl || "")}</span></div>
+    <div class="set-row"><span>Crema server<span class="hint">${S.api.demo ? "None: this is the demo" : esc(S.api.info.server || "")}</span></span><button class="btn small" id="changeServer">${S.api.demo ? "Connect" : "Change"}</button></div>
   </div>`;
 
   // ---- wire up ----
@@ -999,6 +1003,7 @@ async function renderSettings() {
   const db = $("#doneBackflush"); if (db) db.onclick = async () => { await S.api.maintenance.done("backflush"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Backflush recorded"); };
   const dd = $("#doneDescale"); if (dd) dd.onclick = async () => { await S.api.maintenance.done("descale"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Descale recorded"); };
   $("#editPresets").onclick = editPresets;
+  $("#changeServer").onclick = () => connectSheet();
 }
 function editPresets() {
   const p = JSON.parse(JSON.stringify(S.presets));
@@ -1061,6 +1066,58 @@ function showDeviceFrame() {
   fit();
 }
 
+/* ================= Crema server address =================
+   The phone app is served by the Crema server, so it uses its own origin.
+   The tablet skin is served by Decaid, so it needs the server's address:
+   from ?server=http://host:8787 (remembered) or entered once in the app. */
+const cleanAddr = (a) => String(a || "").trim().replace(/\/+$/, "").replace(/^(?!https?:\/\/)/, "http://");
+function serverBase() {
+  const q = new URLSearchParams(location.search).get("server");
+  if (q) local.set("server", cleanAddr(q));
+  const saved = local.get("server", "");
+  return saved && saved !== location.origin ? saved : "";
+}
+async function probeServer(base) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 5000);
+  try {
+    const res = await fetch(`${base}/api/config`, { signal: ctl.signal });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return await res.json();
+  } finally { clearTimeout(t); }
+}
+// A real reload (a hash-only change wouldn't reload), without a stale ?server= in the address.
+function reloadClean() {
+  const u = new URL(location.href);
+  u.searchParams.delete("server");
+  history.replaceState(null, "", u);
+  location.reload();
+}
+function connectSheet(message = "") {
+  const current = local.get("server", "");
+  openSheet(`<h2>Connect your Crema server</h2>
+    <p class="muted small">Enter the address of the computer running the Crema server, for example <span class="num">http://192.168.1.20:8787</span>. It's saved on this device.</p>
+    ${message ? `<p class="error small">${esc(message)}</p>` : ""}
+    <div class="field"><label class="label" for="serverAddr">Server address</label><input type="url" id="serverAddr" value="${esc(current)}" placeholder="http://192.168.1.20:8787" autocomplete="off"></div>
+    <div class="row"><button class="btn primary" id="serverConnect">Connect</button>${current ? '<button class="btn ghost" id="serverForget">Forget this server</button>' : ""}</div>
+    <p class="muted small" id="serverStatus"></p>`);
+  $("#serverConnect").onclick = async () => {
+    const addr = cleanAddr($("#serverAddr").value);
+    if (!addr || addr === "http://") return ($("#serverStatus").textContent = "Enter an address first.");
+    $("#serverStatus").textContent = "Checking…";
+    try {
+      await probeServer(addr);
+      local.set("server", addr);
+      $("#serverStatus").textContent = "Connected. Reloading…";
+      reloadClean();
+    } catch (e) {
+      $("#serverStatus").textContent = `Couldn't reach ${addr}. Check the address, that the server is running, and that this device is on the same network.`;
+    }
+  };
+  const f = $("#serverForget");
+  if (f) f.onclick = () => { local.set("server", ""); reloadClean(); };
+}
+
 /* ================= routing + boot ================= */
 const VIEWS = ["brew", "shelf", "add", "profiles", "shots", "settings"];
 function route(scroll = true) {
@@ -1081,16 +1138,24 @@ async function boot() {
   applyTheme(local.get("theme", "auto"), false);
   applySkin(window.CREMA_SKIN || local.get("skin", "crema"), false);
   const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
+  const base = serverBase();
+  let unreachable = null;
   if (!forceDemo) {
     try {
-      const cfg = await fetch("/api/config").then((r) => { if (!r.ok) throw new Error(); return r.json(); });
-      const health = await fetch("/api/health").then((r) => r.json()).catch(() => null);
-      S.api = makeLiveApi(cfg, health);
-    } catch { S.api = null; }
+      const cfg = await probeServer(base);
+      const health = await fetch(`${base}/api/health`).then((r) => r.json()).catch(() => null);
+      S.api = makeLiveApi(cfg, health, base);
+    } catch { S.api = null; if (base) unreachable = base; }
   }
   if (!S.api && wantsDeviceFrame()) return showDeviceFrame();
   if (!S.api) S.api = makeDemoApi();
   $("#demoBanner").hidden = !S.api.demo;
+  // Offer to connect a server when this page could reach one (not the hosted demos).
+  if (S.api.demo && !forceDemo && location.protocol === "http:") {
+    $("#demoBanner").innerHTML = `Demo mode: no Crema server connected. <button class="btn small" id="connectBtn" type="button">Connect a server</button>`;
+    $("#connectBtn").onclick = () => connectSheet();
+    if (unreachable) setTimeout(() => connectSheet(`Couldn't reach the Crema server at ${unreachable}, so this is the demo.`), 300);
+  }
 
   document.addEventListener("pointerdown", () => S.api.machine.heartbeat(), { passive: true });
   $$("[data-mode]").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));

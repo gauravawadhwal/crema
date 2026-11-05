@@ -1,0 +1,22 @@
+# systemd unit for running the Crema server without Docker.
+# Install: copy the repo to /opt/crema, run `npm ci --omit=dev` there, create
+# /etc/crema.env from .env.example, then:
+#   sudo cp deploy/crema.service /etc/systemd/system/
+#   sudo systemctl enable --now crema
+[Unit]
+Description=Crema server (Decent DE1 companion)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crema
+WorkingDirectory=/opt/crema
+EnvironmentFile=/etc/crema.env
+Environment=NODE_ENV=production PORT=8787 CREMA_DATA=/var/lib/crema/crema.json CREMA_IMAGES=/var/lib/crema/images
+StateDirectory=crema
+ExecStart=/usr/bin/env node_modules/.bin/tsx server/main.ts
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
