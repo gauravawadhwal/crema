@@ -8,7 +8,13 @@
     "mock:decaid": "tsx dev/mock-decaid.ts",
     "test": "vitest run",
     "typecheck": "tsc -p .",
-    "build:demo": "node scripts/build-demo.mjs"
+    "build:demo": "node scripts/build-demo.mjs",
+    "e2e": "node scripts/e2e-demo.cjs",
+    "e2e:built": "node scripts/e2e-demo.cjs --built",
+    "check:tablet": "node scripts/check-tablet-fit.cjs",
+    "build:site": "node scripts/build-site.mjs",
+    "screenshots": "node scripts/screenshots.cjs",
+    "record": "node scripts/record-walkthrough.cjs"
   },
   "license": "MIT",
   "dependencies": {

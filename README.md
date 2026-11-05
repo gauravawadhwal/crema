@@ -179,7 +179,18 @@ npm test
 npm run typecheck
 ```
 
-`test/flow.test.ts` runs the whole loop against the mock machine: identify → save → recommend → apply → feedback.
+```bash
+npm run e2e
+```
+
+```bash
+npm run check:tablet
+```
+
+- `test/flow.test.ts` runs the whole loop against the mock machine: identify → save → recommend → apply → feedback.
+- `npm run e2e` clicks through the demo at tablet and phone size. `npm run check:tablet` confirms the home screen fits the DE1 tablet without scrolling. Both need Playwright.
+
+**For contributors and coding agents:** start with [CLAUDE.md](CLAUDE.md), which covers the layout, commands, conventions and known pitfalls. Then read [docs/architecture.md](docs/architecture.md) and [docs/design.md](docs/design.md). Repeatable workflows are in `.claude/skills/`.
 
 ## Roadmap
 
