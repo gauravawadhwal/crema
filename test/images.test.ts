@@ -32,7 +32,7 @@ describe("isSafeUrl", () => {
   );
 });
 
-import { withTemperature } from "../server/app.js";
+import { withTemperature } from "../server/recommend/local.js";
 describe("withTemperature", () => {
   it("shifts every step, keeping the curve", () => {
     const p = withTemperature({ steps: [{ temperature: "83.5" }, { temperature: 83.5 }, { temperature: "67.5" }] }, 86);

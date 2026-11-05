@@ -19,10 +19,11 @@ s = s
   // Function replacers: a replacement *string* would interpret "$$", "$&" and
   // "$'" inside the inlined code (app.js uses $$ as a helper), corrupting it.
   .replace('<script src="demo-data.js"></script>', () => `<script>window.CREMA_FORCE_DEMO = true;\n${inline("demo-data.js")}</script>`)
+  .replace('<script src="engine.js"></script>', () => `<script>${inline("engine.js")}</script>`)
   .replace('<script src="demo.js"></script>', () => `<script>${inline("demo.js")}</script>`)
   .replace('<script src="app.js"></script>', () => `<script>${inline("app.js")}</script>`);
 // The inlined scripts must match the source files byte for byte.
-for (const f of ["demo.js", "app.js"]) if (!s.includes(inline(f))) throw new Error(`${f} was altered while inlining`);
+for (const f of ["engine.js", "demo.js", "app.js"]) if (!s.includes(inline(f))) throw new Error(`${f} was altered while inlining`);
 if (/<script src=/.test(s)) throw new Error("a script was not inlined");
 writeFileSync("demo/crema-demo.html", s);
 console.log(`demo/crema-demo.html: ${(s.length / 1024).toFixed(0)} KB; title at ${s.indexOf("<title>")}`);

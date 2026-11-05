@@ -1,41 +1,71 @@
 # Architecture
 
 ```
- iPhone (Safari, home screen) ─┐
-                               ├─ HTTP ─► Crema server :8787 ──► LLM provider chain
- DE1 tablet (Decaid skin) ─────┘           │  /api/*        claude-cli → codex-cli → anthropic-api → gemini-api
-          │                                │  /decaid/* (proxy)
-          │                                ▼
-          └──────── WebSocket ─────► Decaid :8080 on the tablet ──BLE/USB──► DE1 + scale
+ DE1 tablet (Crema skin in Decaid) ──┐
+                                     ├── REST + WebSocket ──► Decaid :8080 on the tablet ──BLE/USB──► DE1 + scale
+ Phone (home-screen web app) ────────┘                          beans, profiles, workflow, shots,
+          │                                                     key-value store (namespace "crema")
+          │  optional: AI, when switched on
+          └──► Crema server :8787 ──► LLM provider chain: claude-cli → codex-cli → anthropic-api → gemini-api
+                  /api/*, and /decaid/* (proxy) when DECAID_URL is set
 ```
 
-- **Decaid** owns the machine and scale connection. It stores beans, batches, grinders, profiles, the current workflow and shots, and it serves REST and WebSocket APIs. Its docs: `doc/Skins.md` in [tadelv/reaprime](https://github.com/tadelv/reaprime). Its 74 bundled default profiles (`assets/defaultProfiles`) are the source of the profile catalog.
-- **Crema server** (`server/`) adds coffee identification, profile recommendation, dial-in advice and a few stores Decaid lacks. It also proxies Decaid's REST API at `/decaid/*`, so the phone can control the machine from the same origin.
-- **Web app** (`skin/`) is the UI on both devices. It calls the Crema server for `/api/*`, calls Decaid's REST API through `/decaid/*`, and opens Decaid's WebSockets directly.
+- **Decaid** owns the machine and scale connection. It stores beans, batches, grinders, profiles, the current workflow and shots, keeps a key-value store for skins, and serves REST and WebSocket APIs. Its docs: `doc/Skins.md` in [tadelv/reaprime](https://github.com/tadelv/reaprime). Its 74 bundled default profiles (`assets/defaultProfiles`) are the source of the profile catalog.
+- **Web app** (`skin/`) is the UI on the tablet and phones. It talks to Decaid for everything, and to the Crema server only for AI.
+- **Crema server** (`server/`) is optional and stateless. It identifies coffees, makes the AI profile choice and gives AI dial-in advice. When `DECAID_URL` is set, it also serves the app and proxies Decaid's REST API at `/decaid/*`, so a phone can open the app from the server.
+
+## Connections (`discoverConnections` in app.js)
+
+- **Crema server:** this page's own origin if `/api/config` answers with `crema: true`, otherwise the address saved on this device (`?server=…` or Settings → Connections), otherwise none.
+- **Decaid:** through `/decaid` when the page came from a Crema server with `DECAID_URL` set; otherwise the saved address, or the page's own host on port 8080 (right for the skin served by Decaid). WebSockets always go to Decaid directly.
+- If Decaid doesn't answer, the page runs the demo, with a Connect button when it's served over http. On a wide desktop window the demo opens in the device frame.
+- On an https page (such as the hosted demo) with nothing saved, Decaid isn't probed, since a browser blocks http calls from https pages.
+
+## Data
+
+| What | Where |
+|---|---|
+| Beans, batches, profiles, workflow, shots, annotations | Decaid |
+| Crema's record per bean: `info` (BeanInfo), `recipe`, `recipeSource`, `photo`, `productImage`, `art`, `bestShotId`, `finished`, `batchId` | Decaid KV `crema/bean:<beanId>` |
+| `settings` (`aiEnabled`), `preferences`, `favourites[5]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
+| Theme, device frame, saved server and Decaid addresses, group-head mode, screen saver | `localStorage` on each device |
+| Cached roaster product photos | Crema server, `CREMA_IMAGES` |
+
+Defaults for the KV entries are in `server/shared/defaults.ts`.
+
+## The rules engine (`skin/engine.js`)
+
+`server/engine.ts` re-exports the profile catalog, ranking, recipes, dial-in rules and defaults. `scripts/build-engine.mjs` bundles it with esbuild into `skin/engine.js`, a classic script that sets `window.CremaEngine`. The file is committed so the skin has no build step. `npm test` fails if it's stale; rebuild with `npm run build:engine`.
 
 ## The web app's API contract
 
 `skin/app.js` talks to one object, `S.api`, with two implementations:
-- `makeLiveApi(cfg, health)` in `app.js`, backed by the Crema server and Decaid.
+- `makeLiveApi(conn)` in `app.js`, backed by Decaid, the engine and the optional Crema server.
 - `makeDemoApi()` in `demo.js`, backed by an in-browser simulated machine and `demo-data.js`.
 
-The app picks live when `/api/config` answers and demo otherwise (or with `?demo`). Both must provide:
+Both must provide:
 
 | Member | Purpose |
 |---|---|
-| `demo`, `info.providers`, `info.decaidUrl` | Mode and display info |
+| `demo`, `info.{providers, decaidUrl, server, serverError}` | Mode and display info |
+| `ai.{available, enabled, on, healthy}` | A server is connected; the switch is on; both; the last call succeeded |
+| `settings.get()`, `settings.set(patch)` | `{aiEnabled}` |
 | `shelf()` | Coffees on the shelf: `{id, batch, info, recipe, recipeSource, photo, productImage, art, weight, remaining, frozen, bestShotId, shots}` |
-| `identify(input, onStep)` | Photo, search or link → BeanInfo |
+| `identify(input, onStep)` | Photo, search or link → BeanInfo. Throws when AI is off |
 | `saveBean(info, photo, art)` | Returns `{id}` |
 | `setBeanState(id, {frozen?, finished?})`, `pinBest(id, shotId)` | Bag state and reference shot |
-| `recommend(beanId, {rulesOnly})`, `rank(beanId)`, `catalog()` | Recipe, candidate ranking, profile catalog |
+| `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |
+| `rank(beanId)`, `catalog()` | Candidate ranking, profile catalog |
 | `apply(beanId, recipe, grinderSetting)` | Load the recipe onto the machine |
-| `shots(limit)`, `annotate(id, a)`, `feedback(shotId, beanId, fb)` | History (with `points` for charts), ratings and notes, dial-in advice |
-| `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`) |
+| `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes |
+| `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
+| `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `shotSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat` |
 | `subscribe({snapshot, scale, water, ready})` | Live streams |
 
 Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, temperatures and steam temperature. Shot end is detected by `finished` (from the demo) or by espresso → another state (live).
+
+**AI fallback:** every call to the Crema server goes through `cremaCall`. A network error or 5xx marks the server unhealthy and fires a `crema:ai` event; the status bar then shows "AI offline" and the rules answer. The next successful call clears it.
 
 ## Decaid endpoints used
 
@@ -46,6 +76,7 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 | Scale | `PUT /api/v1/scale/tare` |
 | Library | `/api/v1/beans`, `/api/v1/beans/{id}/batches`, `/api/v1/bean-batches/{id}`, `/api/v1/profiles`, `/api/v1/workflow` (profile + dose, yield, grinder setting, bean batch) |
 | Shots | `GET /api/v1/shots?beanBatchId=`, `GET/PUT /api/v1/shots/{id}` (annotations) |
+| Key-value store | `GET /api/v1/store/crema` (keys), `GET/POST/DELETE /api/v1/store/crema/{key}` |
 | Presence and display | `/api/v1/presence/settings`, `/api/v1/presence/schedules[/{id}]`, `/api/v1/display`, `PUT /api/v1/display/brightness` |
 | Plugins | `GET /api/v1/plugins` (Visualizer upload, Time To Ready, Decent Profile Generator) |
 | WebSockets | `ws/v1/machine/snapshot`, `ws/v1/scale/snapshot`, `ws/v1/machine/waterLevels`, `ws/v1/plugins/time-to-ready.reaplugin/timeToReady` |
@@ -54,25 +85,30 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 
 ## Crema server
 
-- **Routes** are listed in the README. `app.ts` handles identification, beans, the shelf, recommendations, applying recipes, shots and feedback. `home.ts` handles the proxy, preferences, favourites, presets, reference shots, bag state, maintenance and the catalog.
-- **Store** (`server/store.ts`): one JSON file (`CREMA_DATA`, default `data/crema.json`), written atomically. Keyed by Decaid bean id, it holds `info` (BeanInfo), `recipe`, `photo`, `productImage`, `art`, `bestShotId` and `finished`, plus `preferences`, `favourites[5]`, `presets` and `maintenance`.
-- **Product photos** (`server/images.ts`) are read from the roaster page's Open Graph, JSON-LD or Twitter metadata and cached in `data/images`. Only public hosts are fetched (no LAN or reserved names).
+- **Routes** (`server/app.ts`) are listed in the README. Every body is validated with Zod; a validation error is a 400. CORS is open on `/api/*` so the skin, served from the tablet, can call it.
+- **Product photos** (`server/images.ts`) are read from the roaster page's Open Graph, JSON-LD or Twitter metadata, and `/api/images/cache` keeps a copy. Only public hosts are fetched (no LAN or reserved names).
 - **LLM chain** (`server/llm/`): each provider implements `structured(req)` and returns Zod-validated output. The chain falls through to the next provider on failure. The CLI providers run the official `claude` and `codex` CLIs headless, so calls bill to whichever account is logged in on the host. That suits a personal installation; shared deployments should use API keys.
 
 ## Recommendation pipeline
 
 ```
-BeanInfo ──► rules baseline (roast, rest, grind hint)
-        └──► rankProfiles(catalog, bean, preferences, installed titles)
-                 score: roast fit, milk/straight, tasting-note traits, process, blend, altitude,
-                        scale/burrs/experience, popularity, installed
-                 per candidate: recipe from the profile's own recipe ± roast temperature offset,
-                                or the roaster's published recipe on conventional profiles
-        └──► LLM picks one of the top 6 installed candidates, with reasons, dial-in and alternatives
-             (falls back to the top-ranked candidate)
+BeanInfo ──► rules baseline (roast, rest, grind hint)                         ┐
+        └──► rankProfiles(catalog, bean, preferences, installed titles)       │ in the browser
+                 score: roast fit, milk/straight, tasting-note traits, process, │ (skin/engine.js)
+                        blend, altitude, scale/burrs/experience, popularity     │
+                 per candidate: recipe from the profile's own recipe ± roast    │
+                        temperature offset, or the roaster's published recipe   ┘
+        └──► with AI on: the server's LLM picks one of the top 6 installed candidates,
+             with reasons, dial-in and alternatives. Otherwise, or if it fails, the top-ranked one.
 ```
 
 `docs/investigation.md` has the reasoning, plus real results for nine ONA and Haven coffees.
+
+## Packaging
+
+- `scripts/package-skin.mjs` → `dist/crema-skin.zip`, with `index.html` at the root and a `manifest.json` (skin id `crema`, version from `package.json`).
+- `.github/workflows/release.yml` builds that ZIP and attaches it to a GitHub release on every `v*` tag.
+- `Dockerfile` and `docker-compose.yml` run the server. See `docs/install.md`.
 
 ## Demo and publishing pipeline
 

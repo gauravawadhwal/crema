@@ -66,7 +66,8 @@ confirming against a real machine.
 | Feature | Where | Crema |
 |---|---|---|
 | Bean and bag records (DYE, Beanie) | Plugins / skins | ✅ stored in Decaid's Beans API |
-| Identify from a bag photo, search or link | — | ✅ Crema's AI pipeline |
+| Identify from a bag photo, search or link | — | ✅ Crema's AI pipeline (with the optional server) |
+| Add a coffee by typing in the bag's details | Decaid / skins | ✅ always available, and the only way when AI is off |
 | Roaster product photo | — | ✅ |
 | Days off roast and rest window | Lumen (bag counts) | ✅ |
 | Grams left and reorder nudge | Community request | ✅ from shot doses |

@@ -1,15 +1,10 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../server/app.js";
-import { DecaidClient } from "../server/decaid.js";
 import { ProviderChain } from "../server/llm/index.js";
-import { Store } from "../server/store.js";
 
-// End-to-end: identify → save → recommend → apply → shot → feedback, against
-// the mock Decaid process and the mock LLM provider.
+// The Crema server is a stateless AI add-on: identify → recommend → dial-in,
+// plus the /decaid proxy, exercised with the mock LLM and the mock machine.
 const PORT = 18080 + Math.floor(Math.random() * 500);
 let mock: ChildProcess;
 
@@ -29,80 +24,54 @@ afterAll(() => {
   mock?.kill();
 });
 
-describe("full flow", () => {
-  it("adds a coffee, recommends, applies, and dials in", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "crema-test-"));
-    const decaid = new DecaidClient(`http://localhost:${PORT}`);
-    const app = createApp({ llm: new ProviderChain(["mock"]), decaid, store: new Store(path.join(dir, "crema.json")) });
+const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 
+describe("Crema server (AI add-on)", () => {
+  const app = createApp({ llm: new ProviderChain(["mock"]), decaidUrl: `http://localhost:${PORT}` });
+
+  it("describes itself", async () => {
+    const cfg = await (await app.request("/api/config")).json();
+    expect(cfg.ai).toBe(true);
+    expect(cfg.providers[0].id).toBe("mock");
+    expect(cfg.decaidWs).toBe(`ws://localhost:${PORT}/ws/v1/machine/snapshot`);
+  });
+
+  it("identifies, recommends and dials in without storing anything", async () => {
     const form = new FormData();
     form.set("query", "Example Roasters Kii AA");
-    const idRes = await app.request("/api/identify", { method: "POST", body: form });
-    expect(idRes.status).toBe(200);
-    const { info } = await idRes.json();
+    const { info } = await (await app.request("/api/identify", { method: "POST", body: form })).json();
     expect(info.name.value).toBe("Kii AA");
 
-    const saveRes = await app.request("/api/beans", { method: "POST", body: JSON.stringify({ info }), headers: { "content-type": "application/json" } });
-    expect(saveRes.status).toBe(201);
-    const rec = await saveRes.json();
-    expect(rec.decaidBatchId).toBeTruthy();
+    const titles = ["Adaptive v2", "Londonium", "Default", "Extractamundo Dos!", "Rao Allongé"];
+    const out = await (await app.request("/api/recommend", json({ bean: info, profileTitles: titles, preferences: { drink: "straight" } }))).json();
+    expect(titles).toContain(out.recipe.profileTitle);
+    expect(out.source).toBe("mock");
+    expect(out.candidates.length).toBeGreaterThan(3);
 
-    const shelf = await (await app.request("/api/shelf")).json();
-    expect(shelf).toHaveLength(1);
-    expect(shelf[0].rest.status).toBe("resting"); // mock roast date is 9 days ago; light rests 14+
-
-    const recRes = await app.request("/api/recommend", { method: "POST", body: JSON.stringify({ beanId: rec.decaidBeanId }), headers: { "content-type": "application/json" } });
-    const { recipe, source, candidates } = await recRes.json();
-    expect(source).toBe("mock");
-    expect(recipe.profileTitle).toBeTruthy();
-    expect(candidates.length).toBeGreaterThan(3);
-    expect(recipe.profileId).toMatch(/^profile:/);
-
-    const applyRes = await app.request("/api/apply", { method: "POST", body: JSON.stringify({ beanId: rec.decaidBeanId }), headers: { "content-type": "application/json" } });
-    const applied = await applyRes.json();
-    expect(applied.workflow.context.beanBatchId).toBe(rec.decaidBatchId);
-    expect(applied.workflow.profile.title).toBe(recipe.profileTitle);
-
-    const shots = await (await app.request("/api/shots?limit=1")).json();
-    const shotId = shots.items[0].id;
-    const fbRes = await app.request(`/api/shots/${shotId}/feedback`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ beanId: rec.decaidBeanId, feedback: { sourBitter: -1, body: -1, enjoyment: 3, notes: "a bit sharp" } }),
-    });
-    const { advice } = await fbRes.json();
+    const { advice } = await (await app.request("/api/dialin", json({
+      bean: info,
+      recipe: out.recipe,
+      shot: { timestamp: new Date().toISOString(), timeS: 22, doseG: 18, yieldG: 40 },
+      feedback: { sourBitter: -1, body: 0, enjoyment: 3, notes: null },
+    }))).json();
     expect(advice.grindDelta).toBe("finer");
-    const shot = await decaid.shot(shotId);
-    expect(shot.annotations?.enjoyment).toBe(3);
-  }, 30000);
+  });
 
-  it("keeps favourites, presets, preferences and maintenance", async () => {
-    const dir = mkdtempSync(path.join(tmpdir(), "crema-test-"));
-    const app = createApp({ llm: new ProviderChain(["mock"]), decaid: new DecaidClient(`http://localhost:${PORT}`), store: new Store(path.join(dir, "crema.json")) });
-    const json = (method: string, body: unknown) => ({ method, body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+  it("rejects malformed requests with 400", async () => {
+    expect((await app.request("/api/recommend", json({ bean: { name: "x" } }))).status).toBe(400);
+    expect((await app.request("/api/images/cache", json({ url: "not a url" }))).status).toBe(400);
+  });
 
-    const fav = { name: "Morning", profileTitle: "Londonium", doseG: 18, yieldG: 40, tempC: 90, beanId: null, grinderSetting: "12" };
-    const favs = await (await app.request("/api/favourites/2", json("PUT", fav))).json();
-    expect(favs).toHaveLength(5);
-    expect(favs[2].name).toBe("Morning");
-    expect((await app.request("/api/favourites/9", json("PUT", fav))).status).toBe(400);
+  it("proxies Decaid for the phone app, and says so when it can't", async () => {
+    const res = await app.request("/decaid/api/v1/machine/state");
+    expect((await res.json()).state.state).toBeTruthy();
+    const noDecaid = createApp({ llm: new ProviderChain(["mock"]) });
+    expect((await noDecaid.request("/decaid/api/v1/machine/state")).status).toBe(503);
+  });
+});
 
-    const presets = await (await app.request("/api/presets")).json();
-    presets.steam[0].seconds = 18;
-    expect((await (await app.request("/api/presets", json("PUT", presets))).json()).steam[0].seconds).toBe(18);
-
-    expect((await (await app.request("/api/preferences", json("PUT", { drink: "milk" }))).json()).drink).toBe("milk");
-    expect((await app.request("/api/preferences", json("PUT", { drink: "tea" }))).status).toBe(400);
-
-    await app.request("/api/maintenance/backflush/done", { method: "POST" });
-    const m = await (await app.request("/api/maintenance")).json();
-    expect(m.shotsSinceBackflush).toBe(0);
-    expect(m.backflushDue).toBe(false);
-
-    const cat = await (await app.request("/api/profiles/catalog")).json();
-    expect(cat.find((p: { title: string }) => p.title === "Londonium").installed).toBe(true);
-
-    const proxied = await app.request("/decaid/api/v1/machine/state");
-    expect((await proxied.json()).state.state).toBeTruthy();
-  }, 30000);
+describe("browser engine bundle", () => {
+  it("skin/engine.js matches server/engine.ts", () => {
+    expect(() => execFileSync("node", ["scripts/build-engine.mjs", "--check"], { stdio: "pipe" })).not.toThrow();
+  });
 });

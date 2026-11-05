@@ -37,6 +37,7 @@ const profiles = PROFILE_TITLES.map((title, i) => ({
 }));
 
 const beans: Json[] = [];
+const kv: Record<string, Record<string, unknown>> = {};
 const batches: Json[] = [];
 const grinders: Json[] = [];
 const shots: Json[] = [];
@@ -299,6 +300,18 @@ const server = createServer(async (req, res) => {
         { id: "time-to-ready.reaplugin", name: "Time To Ready", version: "1.0.4", api: [{ id: "timeToReady", type: "websocket" }] },
         { id: "decent-profile.reaplugin", name: "Decent Profile Generator", version: "1.1.2" },
       ]);
+    }
+    // key-value store (Crema keeps its records and settings here)
+    if ((match = p.match(/^\/api\/v1\/store\/([^/]+)$/)) && m === "GET") {
+      return send(res, 200, Object.keys(kv[decodeURIComponent(match[1])] ?? {}));
+    }
+    if ((match = p.match(/^\/api\/v1\/store\/([^/]+)\/([^/]+)$/))) {
+      const ns = decodeURIComponent(match[1]), key = decodeURIComponent(match[2]);
+      kv[ns] ??= {};
+      if (m === "POST") { kv[ns][key] = await body(req); return send(res, 200, kv[ns][key]); }
+      if (m === "DELETE") { const had = key in kv[ns]; delete kv[ns][key]; return send(res, 200, { deleted: had }); }
+      if (!(key in kv[ns])) return send(res, 404, { error: "not found" });
+      return send(res, 200, kv[ns][key]);
     }
     // library
     if (m === "GET" && p === "/api/v1/profiles") return send(res, 200, profiles);

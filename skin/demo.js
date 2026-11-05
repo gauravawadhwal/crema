@@ -28,6 +28,8 @@ function packshot({ roaster, name, origin, bag, label, ink, accent }) {
 
 function makeDemoApi() {
   const D = window.CREMA_DEMO;
+  const CE = window.CremaEngine;
+  const titles = D.catalog.map((p) => p.title);
   const DAY = 864e5;
   const iso = (daysAgo) => new Date(Date.now() - daysAgo * DAY).toISOString().slice(0, 10);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -42,7 +44,14 @@ function makeDemoApi() {
     info.imageUrl = art;
     return { ...b, info, productImage: art, art: "product", frozen: false, finished: false, bestShotId: null, recipe: null, recipeSource: null };
   });
+  let aiEnabled = true;
+  // The AI recipes in demo-data.js are from real runs. With AI off, or for a coffee typed in by hand, the browser rules decide, as they do live.
+  const rulesFor = (b) => {
+    const ranked = CE.rankProfiles(b.info, prefs, titles);
+    return { recipe: CE.rulesRecipe({ bean: b.info, preferences: prefs, profileTitles: titles }, ranked), source: "rules", candidates: ranked.slice(0, 8).map(CE.strip) };
+  };
   const recipeFor = (b) => {
+    if (!aiEnabled || !b.byDrink) return rulesFor(b);
     const r = b.byDrink[prefs.drink] || b.byDrink.both;
     return { recipe: clone(r.recipe), source: r.source, candidates: r.ranking };
   };
@@ -189,9 +198,15 @@ function makeDemoApi() {
 
   return {
     demo: true,
-    info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null },
+    info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null, serverError: null },
+    ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true },
+    settings: {
+      get: async () => ({ aiEnabled }),
+      set: async (p) => { if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled; return { aiEnabled }; },
+    },
     async shelf() { return shelf().map(shelfItem); },
     async identify({ files, query, url }, onStep) {
+      if (!aiEnabled) throw new Error("AI features are off. Enter the details by hand, or switch AI on in Settings.");
       const steps = files?.length ? ["Reading the bag", "Finding the roaster's page", "Matching community profiles"] : ["Searching for the coffee", "Reading the roaster's page", "Matching community profiles"];
       for (let i = 0; i < steps.length; i++) { onStep(i, steps); await wait(850); }
       const pool = all.filter((b) => !b.shelf || b.finished);
@@ -203,6 +218,14 @@ function makeDemoApi() {
       return info;
     },
     async saveBean(info, photo, art) {
+      if (!info.__demoId) {
+        // Typed in by hand: a new coffee, matched by the rules.
+        const n = all.length + 1;
+        const b = { id: `manual-${n}`, batch: `manual-batch-${n}`, info: clone(info), weight: info.weightGrams ?? 250, used: 0, shelf: true, finished: false, frozen: false,
+          photo: photo || null, productImage: null, art: "photo", bestShotId: null, byDrink: null, recipe: null, recipeSource: null };
+        all.push(b);
+        return { id: b.id };
+      }
       const b = byId(info.__demoId) || all[0];
       delete info.__demoId;
       Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo, art: art || "product", used: 0 });
@@ -231,7 +254,8 @@ function makeDemoApi() {
       const s = shots.find((x) => x.id === shotId); const b = byId(beanId);
       if (s) s.enjoyment = fb.enjoyment;
       await wait(500);
-      return { advice: window.rulesDialIn(fb, s?.timeS ?? 30, b.recipe) };
+      const recipe = b.recipe || recipeFor(b).recipe;
+      return { advice: CE.rulesDialIn(fb, { timestamp: s?.timestamp ?? new Date().toISOString(), timeS: s?.timeS ?? 30 }, recipe), source: "rules" };
     },
     prefs: { get: async () => ({ ...prefs }), set: async (p) => { prefs = { ...prefs, ...p }; for (const b of all) { const r = recipeFor(b); b.recipe = r.recipe; b.recipeSource = r.source; } return prefs; } },
     favourites: { get: async () => favourites.slice(), set: async (slot, fav) => { favourites[slot] = fav; return favourites.slice(); } },

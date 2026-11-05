@@ -324,6 +324,8 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 
 /* ---------- add coffee ---------- */
 .two-col { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+@media (max-width: 520px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
 .seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: 12px; background: var(--surface-2); flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 7px 13px; border-radius: 9px; cursor: pointer; font-weight: 500; color: var(--muted); min-height: 36px; }
 .seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
@@ -599,11 +601,13 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
         <div class="row between"><h1>Add a coffee</h1><a class="btn ghost small" href="#shelf">Back to shelf</a></div>
         <div class="two-col">
           <div class="panel stack">
-            <div class="seg" role="tablist" aria-label="How to add">
+            <div class="seg" role="tablist" aria-label="How to add" id="addModes">
               <button role="tab" id="mode-photo" aria-selected="true" data-mode="photo">Photo of the bag</button>
               <button role="tab" id="mode-search" aria-selected="false" data-mode="search">Search</button>
               <button role="tab" id="mode-link" aria-selected="false" data-mode="link">Paste a link</button>
+              <button role="tab" id="mode-manual" aria-selected="false" data-mode="manual">Type it in</button>
             </div>
+            <p class="muted small" id="addNoAi" hidden></p>
             <form id="addForm" class="stack">
               <div data-pane="photo" class="stack">
                 <label class="drop" for="photoInput">
@@ -622,7 +626,20 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
                 <label class="label" for="urlInput">Product page</label>
                 <input type="url" id="urlInput" placeholder="https://onacoffee.com.au/products/…">
               </div>
-              <label class="row" for="offlineInput" style="gap:8px"><input type="checkbox" id="offlineInput"> <span class="muted">Bag only. Don't look it up online.</span></label>
+              <div data-pane="manual" class="stack" hidden>
+                <div class="form-grid">
+                  <div class="field"><label class="label" for="mRoaster">Roaster</label><input type="text" id="mRoaster" autocomplete="off" maxlength="80"></div>
+                  <div class="field"><label class="label" for="mName">Coffee</label><input type="text" id="mName" autocomplete="off" maxlength="80"></div>
+                  <div class="field"><label class="label" for="mCountry">Country</label><input type="text" id="mCountry" autocomplete="off" maxlength="60"></div>
+                  <div class="field"><label class="label" for="mVariety">Variety</label><input type="text" id="mVariety" autocomplete="off" maxlength="80"></div>
+                  <div class="field"><label class="label" for="mProcess">Process</label><select id="mProcess"><option value="">Not sure</option><option>Washed</option><option>Natural</option><option>Honey</option><option>Anaerobic</option><option>Wet-hulled</option><option>Decaf</option></select></div>
+                  <div class="field"><label class="label" for="mRoast">Roast</label><select id="mRoast"><option value="">Not sure</option><option value="light">Light</option><option value="medium-light">Medium-light</option><option value="medium">Medium</option><option value="medium-dark">Medium-dark</option><option value="dark">Dark</option></select></div>
+                  <div class="field"><label class="label" for="mRoastDate">Roast date</label><input type="date" id="mRoastDate"></div>
+                  <div class="field"><label class="label" for="mWeight">Bag weight (g)</label><input type="number" id="mWeight" inputmode="numeric" min="0" step="1" placeholder="250"></div>
+                </div>
+                <div class="field"><label class="label" for="mNotes">Tasting notes</label><input type="text" id="mNotes" autocomplete="off" placeholder="e.g. plum, cacao, brown sugar" maxlength="160"></div>
+              </div>
+              <label class="row" id="offlineRow" for="offlineInput" style="gap:8px"><input type="checkbox" id="offlineInput"> <span class="muted">Bag only. Don't look it up online.</span></label>
               <div class="row"><button class="btn primary" type="submit" id="identifyBtn">Identify coffee</button></div>
             </form>
           </div>
@@ -672,6 +689,7 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="demo-data.js"></script>
+<script src="engine.js"></script>
 <script src="demo.js"></script>
 <script src="app.js"></script>
 </body>

@@ -3,27 +3,9 @@ import { findProfile } from "../profiles/catalog.js";
 import { rankProfiles, type Candidate, type Preferences } from "../profiles/match.js";
 import { DialInAdvice, Recipe, type BeanInfo, type TasteFeedback } from "../schema.js";
 import { baseline, type Baseline } from "./rules.js";
+import { rulesDialIn, rulesRecipe, strip, type PastShot, type RecommendInput } from "./local.js";
 
-export interface PastShot {
-  timestamp: string;
-  profileTitle?: string;
-  doseG?: number;
-  yieldG?: number;
-  timeS?: number;
-  grinderSetting?: string;
-  enjoyment?: number;
-  notes?: string;
-}
-
-export interface RecommendInput {
-  bean: BeanInfo;
-  /** Titles installed on the machine. Undefined = assume the catalog is installed (Decaid ships it). */
-  profileTitles?: string[];
-  history?: PastShot[];
-  preferences?: Preferences;
-  /** Skip the model and return the rules-only recipe. */
-  rulesOnly?: boolean;
-}
+export { rulesDialIn, rulesRecipe, toPastShot, withTemperature, type PastShot, type RecommendInput } from "./local.js";
 
 export interface RecommendOutput {
   recipe: Recipe;
@@ -45,30 +27,6 @@ How to choose:
 - dialIn: specific guidance for this coffee on this profile (targets like dripping weight, flow rate or shot time, and which way to grind first).
 - rationale: 2–4 short bullets in plain words that connect the coffee's description to the profile. alternatives: up to 2 other candidates worth trying next, each with a one-line reason.
 - grindHint is relative guidance; you don't know the user's grinder numbers unless past shots include them.`;
-
-function strip({ profile: _p, ...rest }: Candidate) {
-  return rest;
-}
-
-export function rulesRecipe(input: RecommendInput, ranked = rankProfiles(input.bean, input.preferences, input.profileTitles)): Recipe {
-  const b = baseline(input.bean, { doseG: input.preferences?.basketDoseG });
-  const usable = ranked.filter((c) => c.installed);
-  const top = usable[0] ?? ranked[0];
-  const r = top.recipe;
-  return {
-    profileTitle: top.title,
-    profileId: null,
-    doseG: r.doseG,
-    yieldG: r.yieldG,
-    tempC: r.tempC,
-    targetTimeS: r.timeS,
-    grindHint: b.grindHint,
-    restAdvice: b.rest.advice,
-    dialIn: top.profile.dialIn,
-    rationale: [...top.reasons.slice(0, 3), `Recipe from ${r.basis}`].slice(0, 4),
-    alternatives: usable.slice(1, 3).map((c) => ({ profileTitle: c.title, why: c.reasons[0] ?? c.profile.character })),
-  };
-}
 
 export async function recommend(llm: ProviderChain, input: RecommendInput): Promise<RecommendOutput> {
   const b = baseline(input.bean, { doseG: input.preferences?.basketDoseG });
@@ -133,17 +91,3 @@ export async function dialIn(
   }
 }
 
-export function rulesDialIn(f: TasteFeedback, shot: PastShot, recipe: Recipe): DialInAdvice {
-  const [tMin, tMax] = recipe.targetTimeS;
-  const fast = shot.timeS != null && shot.timeS < tMin;
-  const slow = shot.timeS != null && shot.timeS > tMax;
-  if (f.sourBitter <= -1 || (fast && f.sourBitter <= 0)) {
-    return { change: "Grind finer", grindDelta: f.sourBitter <= -2 || fast ? "much-finer" : "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: fast ? `Ran fast (${shot.timeS}s against ${tMin}–${tMax}s) and tasted sour: under-extracted.` : "Sour means under-extracted. Finer grinding pulls out more sweetness." };
-  }
-  if (f.sourBitter >= 1 || (slow && f.sourBitter >= 0)) {
-    return { change: "Grind coarser", grindDelta: f.sourBitter >= 2 || slow ? "much-coarser" : "coarser", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: slow ? `Ran slow (${shot.timeS}s) and tasted bitter: over-extracted.` : "Bitter or harsh means over-extracted." };
-  }
-  if (f.body <= -1) return { change: "Shorten the yield by 3 g for more body", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced but thin: a tighter ratio adds body." };
-  if (f.body >= 2) return { change: "Lengthen the yield by 3 g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced but heavy: a longer ratio opens it up." };
-  return { change: "Keep it. You're dialled in.", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Balanced taste and body." };
-}

@@ -12,8 +12,8 @@ services:
       - "8787:8787"
     env_file: .env
     volumes:
-      - crema-data:/data
+      - crema-images:/data
       # Codex CLI login, if you use codex-cli (run `codex login` on the host first):
       # - ~/.codex:/home/node/.codex
 volumes:
-  crema-data:
+  crema-images:

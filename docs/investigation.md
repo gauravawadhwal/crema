@@ -41,7 +41,7 @@ The roast date matters most. It drives the rest window (light roasts often taste
 
 So the model gets the photos plus web search, and every field records where it came from (`bag`, `web` or `inferred`). Guesses are flagged for the user to check. When the bag and the website disagree on a lot-specific fact, the bag wins.
 
-**Product photos** come from the product page's metadata (Open Graph `og:image`, JSON-LD `Product.image` or the Twitter card), which nearly every roaster shop publishes, rather than from a URL the model guesses. The image is downloaded once and cached, so the shelf works offline. The user picks between the roaster's photo and their own, and `POST /api/beans/:id/image` can re-run the lookup or take a specific URL. Lookups only go to public addresses, never the local network.
+**Product photos** come from the product page's metadata (Open Graph `og:image`, JSON-LD `Product.image` or the Twitter card), which nearly every roaster shop publishes, rather than from a URL the model guesses. The image is downloaded once and cached, so the shelf works offline. The user picks between the roaster's photo and their own. Lookups only go to public addresses, never the local network.
 
 Search and paste-a-link use the same pipeline. They help when browsing before buying, re-adding a past coffee, or when the bag isn't to hand.
 
@@ -87,7 +87,7 @@ The approach is to match what the roaster says about the coffee against what com
 4. **AI choice** (`server/recommend/index.ts`):
    - The model reads the roaster's description, the top six installed candidates with their authors' guidance, the setup, and past shots of the bag.
    - It must return one of those candidates, explain the choice in 2–4 bullets, give coffee-specific dial-in guidance and suggest alternatives.
-   - If the AI is unavailable, the top-ranked candidate is used.
+   - If the AI is switched off, there's no server, or the call fails, the top-ranked candidate is used. Steps 1–3 and 5 run in the browser, so this needs no server.
 5. **Dial-in loop**: taste feedback, plus the shot's time against the profile's window, gives one next adjustment, using the profile author's guidance.
 
 **Example results** (`samples/recipes.json`, real `claude-cli` calls on nine publicly listed ONA and Haven coffees):
@@ -100,7 +100,7 @@ The sample records were built from web search results without fetching the roast
 
 ## 5. Phone companion
 
-The phone app is the same web app, served by the Crema server and added to the home screen from Safari (`manifest.webmanifest`, `apple-mobile-web-app-*` meta tags). Below 760 px wide, the layout switches to a bottom tab bar. On the phone you get:
+The phone app is the same web app, opened from the tablet (`http://<tablet-ip>:3000`) or from the Crema server, and added to the home screen from Safari (`manifest.webmanifest`, `apple-mobile-web-app-*` meta tags). Below 760 px wide, the layout switches to a bottom tab bar. On the phone you get:
 
 - the coffee shelf, rest windows and grams left
 - adding a coffee by photo, using the phone camera
@@ -109,7 +109,18 @@ The phone app is the same web app, served by the Crema server and added to the h
 
 Remote access is left to whatever the user already runs (a VPN such as Tailscale, or a reverse proxy). A native app would only be worth building for what a web app does poorly: widgets, Live Activities, and voice shortcuts.
 
-## 6. Sources
+## 6. Where things run
+
+The first version kept Crema's records on the server and sent everything through it, so the tablet stopped working whenever the server did. Now:
+
+- **Decaid holds all the data.** Beans, batches, profiles and shots were already there. Crema's own records (identification details, recipes, photos, favourites, presets, maintenance, settings) go in Decaid's key-value store under the `crema` namespace. The tablet and phones share them, and there's one thing to back up.
+- **The rules run in the browser.** The profile catalog, ranking, recipes and dial-in rules are TypeScript in `server/`, bundled for the browser as `skin/engine.js`, so the server and the app can't disagree.
+- **The server only does AI.** It's stateless apart from a cache of product photos. The app calls it for identify, the AI profile choice and AI dial-in advice when AI is switched on, and falls back to the rules when it fails.
+- **AI is a switch** in Settings, stored in Decaid. Off, the app never calls the server, and coffees are added by typing in the bag's details.
+
+Running the server as an Android app on the tablet was considered and rejected: the subscription CLIs need a Node and shell environment, and an always-on home computer (a NAS, a Pi) is the more common place for one.
+
+## 7. Sources
 
 - Decaid repo and skin/API docs: https://github.com/tadelv/reaprime (`doc/Skins.md`, `doc/Api.md`)
 - Decent's 2025 software update: https://decentespresso.com/blog/decent_software_2025_and_beyond_skins_calibration_dflowmore

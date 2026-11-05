@@ -15,7 +15,9 @@
     "build:site": "node scripts/build-site.mjs",
     "screenshots": "node scripts/screenshots.cjs",
     "record": "node scripts/record-walkthrough.cjs",
-    "package:skin": "node scripts/package-skin.mjs"
+    "package:skin": "node scripts/package-skin.mjs",
+    "build:engine": "node scripts/build-engine.mjs",
+    "e2e:live": "node scripts/e2e-live.cjs"
   },
   "license": "MIT",
   "dependencies": {
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/ws": "^8.18.2",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   },

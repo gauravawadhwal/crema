@@ -1,10 +1,13 @@
 /* Crema web app: the DE1 tablet skin, the iPhone companion and the demo.
 
-   API mode talks to the Crema server (/api/*), to Decaid's REST API through
-   Crema's /decaid proxy, and to Decaid's WebSockets directly. When the server
-   can't be reached, it runs the self-contained demo from demo.js.
+   Live mode talks to Decaid (the tablet app that runs the machine) for
+   everything, and keeps Crema's own records in Decaid's key-value store. The
+   Crema server is an optional AI add-on; without it, or with AI switched off,
+   Crema uses the rules in engine.js. When Decaid can't be reached, the page
+   runs the self-contained demo from demo.js.
 
    API interface (implemented by makeLiveApi below and makeDemoApi in demo.js):
+     info, ai { available, on, healthy }, settings { get, set },
      shelf, identify, saveBean, setBeanState, pinBest, recommend, rank, catalog,
      apply, shots, annotate, feedback, prefs, favourites, presets, maintenance,
      machine { setState, tare, shotSettings, settings, waterThreshold, presence,
@@ -68,7 +71,7 @@ function applyTheme(mode, redraw = true) {
   if (redraw && S.api) route(false);
 }
 
-/* ================= rest + dial-in rules (mirror server/recommend) ================= */
+/* ================= rest window (mirror server/profiles/match) ================= */
 const REST = { light: [14, 40], "medium-light": [10, 35], medium: [7, 28], "medium-dark": [5, 24], dark: [4, 21] };
 function restOf(info) {
   const roast = info?.roastLevel?.value || (info?.isBlend ? "medium" : "medium-light");
@@ -79,33 +82,75 @@ function restOf(info) {
   if (d <= w[1]) return { days: d, window: w, status: "peak", label: "In its window" };
   return { days: d, window: w, status: "fading", label: "Past its best" };
 }
-window.rulesDialIn = function rulesDialIn(fb, timeS, recipe) {
-  const [lo, hi] = recipe.targetTimeS || [25, 35];
-  if (fb.sourBitter <= -1 || (timeS < lo && fb.sourBitter <= 0)) return { change: "Grind finer", reasoning: timeS < lo ? `Ran fast (${timeS} s against ${lo}–${hi} s) and tasted sour: under-extracted.` : "Sour means under-extracted. Finer grinding pulls out more sweetness." };
-  if (fb.sourBitter >= 1 || (timeS > hi && fb.sourBitter >= 0)) return { change: "Grind coarser", reasoning: timeS > hi ? `Ran slow (${timeS} s) and tasted bitter: over-extracted.` : "Bitter or harsh means over-extracted." };
-  if (fb.body <= -1) return { change: "Shorten the yield by 3 g", reasoning: "Balanced but thin. A tighter ratio adds body." };
-  if (fb.body >= 2) return { change: "Lengthen the yield by 3 g", reasoning: "Balanced but heavy. A longer ratio adds clarity." };
-  return { change: "Keep it. You're dialled in.", reasoning: "Balanced taste and body. Note the grind setting." };
-};
+/* ================= live API =================
+   Everything except AI goes straight to Decaid: machine control, beans,
+   batches, profiles, workflow and shots through its REST API, and Crema's own
+   records and settings in Decaid's key-value store (namespace "crema"), so the
+   tablet and phones share them without any other server. Ranking, rules
+   recipes and dial-in rules run here (skin/engine.js).
 
-/* ================= live API ================= */
-function makeLiveApi(cfg, health, base = "") {
-  // base is "" when Crema serves this page (phone, browser) and the server's
-  // address when the page is served elsewhere (the Decaid tablet skin).
-  const j = async (path, opts = {}) => {
+   The Crema server is optional. When it's connected and AI features are on,
+   it identifies coffees, makes the AI profile choice and gives AI dial-in
+   advice. If it's off, unreachable or fails, the rules take over. */
+const E = window.CremaEngine;
+const KV_NS = "crema";
+const isEspresso = (title) => !/clean|flush|descal|rinse|steam/i.test(title || "");
+const PROCESS_KINDS = ["washed", "natural", "honey", "anaerobic", "wet-hulled", "decaf", "experimental"];
+function processKindOf(text) {
+  const t = String(text || "").toLowerCase();
+  return PROCESS_KINDS.find((k) => t.includes(k.replace("-", " ")) || t.includes(k)) || (t ? "other" : null);
+}
+/** A BeanInfo for a bean Crema didn't add itself (for example one created by another skin). */
+function infoFromDecaidBean(b, batch) {
+  const v = (x) => ({ value: x == null || (Array.isArray(x) && !x.length) ? null : x, source: x == null ? null : "bag" });
+  const notes = typeof b.notes === "string" ? b.notes.split(/,\s*/).filter(Boolean) : null;
+  return {
+    roaster: v(b.roaster), name: v(b.name), country: v(b.country ?? null), region: v(b.region ?? null), producer: v(b.producer ?? null),
+    variety: v(b.variety ?? null), process: v(b.processing ?? null), processKind: processKindOf(b.processing), altitudeMasl: v(b.altitude ?? null),
+    roastLevel: v(batch?.roastLevel ?? null), roastedFor: null, roastDate: v(batch?.roastDate ? String(batch.roastDate).slice(0, 10) : null),
+    bestBefore: null, weightGrams: batch?.weight ?? null, tastingNotes: v(notes), isBlend: null, blendComponents: null, roasterRecipe: null,
+    productUrl: null, imageUrl: null, sources: [], confidence: 1, needsConfirmation: [], summary: "",
+  };
+}
+
+function makeLiveApi(conn) {
+  // conn: { decaid: REST base ("/decaid" via the Crema server's proxy, or "http://host:8080"),
+  //         decaidWs: "ws://host:8080", crema: Crema server base ("" same origin, "http://…", or null),
+  //         cremaInfo: its /api/config, cremaError: why a saved server couldn't be reached }
+  const j = async (url, opts = {}) => {
     const init = { ...opts };
     if (opts.body && !(opts.body instanceof FormData)) init.headers = { "content-type": "application/json" };
-    const res = await fetch(path.startsWith("/api/") || path.startsWith("/decaid/") ? base + path : path, init);
+    const res = await fetch(url, init);
     const text = await res.text();
     const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
-    if (!res.ok) throw new Error((data && data.error) || `${res.status} ${res.statusText}`);
+    if (!res.ok) { const e = new Error((data && data.error) || `${res.status} ${res.statusText}`); e.status = res.status; throw e; }
     return data;
   };
-  const put = (path, body) => j(path, { method: "PUT", body: JSON.stringify(body) });
-  const post = (path, body) => j(path, { method: "POST", body: JSON.stringify(body ?? {}) });
-  // Same origin as Crema: go through its /decaid proxy. Elsewhere (the tablet skin): call Decaid directly.
-  const D = (p) => (base ? `${cfg.decaidUrl.replace(/\/+$/, "")}/api/v1${p}` : `/decaid/api/v1${p}`);
-  const wsBase = cfg.decaidWs.replace(/\/ws\/v1\/machine\/snapshot$/, "");
+  const put = (url, body) => j(url, { method: "PUT", body: JSON.stringify(body) });
+  const post = (url, body) => j(url, { method: "POST", body: JSON.stringify(body ?? {}) });
+  const D = (p) => `${conn.decaid}/api/v1${p}`;
+  const C = (p) => `${conn.crema}${p}`;
+  const wsBase = conn.decaidWs;
+
+  // ---- Crema's data in Decaid's key-value store ----
+  const kvUrl = (key) => D(`/store/${KV_NS}/${encodeURIComponent(key)}`);
+  const kvGet = async (key, fallback) => { try { return await j(kvUrl(key)); } catch (e) { if (e.status === 404) return fallback; throw e; } };
+  const kvSet = (key, value) => post(kvUrl(key), value);
+  const recordOf = (beanId) => kvGet(`bean:${beanId}`, null);
+  const patchRecord = async (beanId, patch) => kvSet(`bean:${beanId}`, { ...((await recordOf(beanId)) || {}), ...patch });
+
+  let settings = { ...E.DEFAULT_SETTINGS };
+  const aiOn = () => !!(settings.aiEnabled && conn.crema != null);
+  // Calls to the Crema server: any failure marks it unhealthy (the rules stand in), a success clears it.
+  let healthy = true;
+  const cremaCall = async (fn) => {
+    const was = healthy;
+    try { const out = await fn(); healthy = true; return out; }
+    catch (e) { if (!e.status || e.status >= 500) healthy = false; throw e; }
+    finally { if (was !== healthy) window.dispatchEvent(new Event("crema:ai")); }
+  };
+
+  // ---- shots ----
   const shotPoints = (full) => {
     const m = full.measurements || [];
     const t0 = m.length ? Date.parse(m[0].machine.timestamp) : 0;
@@ -118,42 +163,164 @@ function makeLiveApi(cfg, health, base = "") {
       doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? ctx.targetYield, timeS: points.length ? Math.round(points.at(-1).t) : null,
       enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points };
   };
+  const batchShots = async (batchId, limit = 500) => (batchId ? (await j(D(`/shots?beanBatchId=${encodeURIComponent(batchId)}&limit=${limit}`)).catch(() => ({ items: [] }))).items : []);
+
+  // ---- one coffee, assembled from Decaid + Crema's record ----
+  async function coffee(beanId) {
+    const [bean, rec, batches] = await Promise.all([j(D(`/beans/${beanId}`)), recordOf(beanId), j(D(`/beans/${beanId}/batches?includeArchived=false`)).catch(() => [])]);
+    const batch = batches.find((x) => x.id === rec?.batchId) ?? batches[0] ?? null;
+    return { bean, rec, batch, info: rec?.info ?? infoFromDecaidBean(bean, batch) };
+  }
+  const installedTitles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso").map((p) => p.profile.title);
+
   let heartbeatAt = 0;
-  return {
+  const api = {
     demo: false,
-    info: { providers: health?.providers ?? [], decaidUrl: cfg.decaidUrl, server: base || location.origin },
-    async shelf() {
-      const rows = await j("/api/shelf");
-      return rows.filter((r) => r.record).map((r) => ({
-        id: r.bean.id, batch: r.record.decaidBatchId, info: r.record.info, recipe: r.record.recipe, recipeSource: r.record.recipe ? "saved" : null,
-        photo: r.record.photo, productImage: r.record.productImage ? base + r.record.productImage : null, art: r.record.art, weight: r.batches?.[0]?.weight ?? r.record.info.weightGrams,
-        remaining: r.remaining, frozen: r.frozen, bestShotId: r.record.bestShotId ?? null, shots: r.usage?.shots ?? 0,
-      }));
+    info: {
+      providers: conn.cremaInfo?.providers ?? [],
+      decaidUrl: conn.decaid === "/decaid" ? conn.cremaInfo?.decaidUrl : conn.decaid,
+      server: conn.crema == null ? null : conn.crema || location.origin,
+      serverError: conn.cremaError || null,
     },
+    ai: { get available() { return conn.crema != null; }, get enabled() { return settings.aiEnabled !== false; }, get on() { return aiOn(); }, get healthy() { return healthy; } },
+    settings: {
+      async get() { settings = { ...E.DEFAULT_SETTINGS, ...(await kvGet("settings", {})) }; return { ...settings }; },
+      async set(p) { settings = { ...settings, ...p }; await kvSet("settings", settings); return { ...settings }; },
+    },
+
+    async shelf() {
+      const beans = await j(D("/beans?includeArchived=false"));
+      const rows = await Promise.all(beans.map(async (b) => {
+        const [rec, batches] = await Promise.all([recordOf(b.id).catch(() => null), j(D(`/beans/${b.id}/batches?includeArchived=false`)).catch(() => [])]);
+        if (rec?.finished) return null;
+        const batch = batches.find((x) => x.id === rec?.batchId) ?? batches[0] ?? null;
+        const info = rec?.info ?? infoFromDecaidBean(b, batch);
+        const shots = (await batchShots(batch?.id)).filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name));
+        const grams = shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0);
+        const weight = batch?.weight ?? info.weightGrams ?? null;
+        return {
+          id: b.id, batch: batch?.id ?? null, info, recipe: rec?.recipe ?? null, recipeSource: rec?.recipeSource ?? (rec?.recipe ? "saved" : null),
+          photo: rec?.photo ?? null, productImage: rec?.productImage ?? info.imageUrl ?? null, art: rec?.art,
+          weight, remaining: weight != null ? Math.max(0, Math.round(weight - grams)) : batch?.weightRemaining ?? null,
+          frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: shots.length,
+        };
+      }));
+      return rows.filter(Boolean);
+    },
+
     async identify({ files, query, url, offline }, onStep) {
+      if (!aiOn()) throw new Error(conn.crema == null ? "Identifying needs a Crema server. Enter the details by hand instead." : "AI features are off. Enter the details by hand, or switch AI on in Settings.");
       onStep(0, [files?.length ? "Reading the bag and finding the roaster's page" : "Looking up the coffee", "Building the record"]);
       const fd = new FormData();
       (files || []).forEach((f) => fd.append("images", f));
       if (query) fd.set("query", query); if (url) fd.set("url", url); if (offline) fd.set("offline", "true");
-      return (await j("/api/identify", { method: "POST", body: fd })).info;
+      return (await cremaCall(() => j(C("/api/identify"), { method: "POST", body: fd }))).info;
     },
-    async saveBean(info, photo, art) { const rec = await post("/api/beans", { info, photo, art }); return { id: rec.decaidBeanId }; },
-    setBeanState: (id, patch) => put(`/api/beans/${id}/state`, patch),
-    pinBest: (id, shotId) => put(`/api/beans/${id}/best-shot`, { shotId }),
-    recommend: (beanId, opts = {}) => post("/api/recommend", { beanId, rulesOnly: !!opts.rulesOnly }),
-    rank: (beanId) => j(`/api/profiles/rank/${beanId}`),
-    catalog: () => j("/api/profiles/catalog"),
-    apply: (beanId, recipe, grinderSetting) => post("/api/apply", { beanId, recipe, grinderSetting }),
+
+    async saveBean(info, photo, art) {
+      const all = await j(D("/beans?includeArchived=true"));
+      let bean = all.find((b) => b.roaster === info.roaster.value && b.name === info.name.value);
+      if (!bean) {
+        bean = await post(D("/beans"), {
+          roaster: info.roaster.value || "Unknown roaster", name: info.name.value || "Unknown coffee",
+          country: info.country.value, region: info.region.value, producer: info.producer.value, processing: info.process.value,
+          variety: info.variety.value, altitude: info.altitudeMasl.value, notes: info.tastingNotes.value?.join(", ") ?? null,
+        });
+      } else if (bean.archived) await put(D(`/beans/${bean.id}`), { archived: false });
+      const batch = await post(D(`/beans/${bean.id}/batches`), {
+        roastDate: info.roastDate.value ? `${info.roastDate.value}T00:00:00Z` : null, roastLevel: info.roastLevel.value, weight: info.weightGrams,
+      });
+      // Keep a copy of the roaster's photo on the Crema server when there is one, so it shows offline.
+      let productImage = info.imageUrl || null;
+      if (productImage && conn.crema != null && /^https?:/.test(productImage)) {
+        try { productImage = conn.crema + (await post(C("/api/images/cache"), { url: productImage })).path; } catch {}
+      }
+      await kvSet(`bean:${bean.id}`, { info, recipe: null, recipeSource: null, photo: photo || null, productImage, art: art || (productImage ? "product" : "photo"), bestShotId: null, finished: false, batchId: batch.id, addedAt: new Date().toISOString() });
+      return { id: bean.id };
+    },
+    async setBeanState(id, patch) {
+      const { batch } = await coffee(id);
+      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen });
+      if (patch.finished !== undefined) { await put(D(`/beans/${id}`), { archived: patch.finished }); await patchRecord(id, { finished: patch.finished }); }
+    },
+    pinBest: (id, shotId) => patchRecord(id, { bestShotId: shotId }),
+
+    async recommend(beanId, opts = {}) {
+      const [{ info, batch }, titles, prefs] = await Promise.all([coffee(beanId), installedTitles(), api.prefs.get()]);
+      const history = (await batchShots(batch?.id, 15)).map(E.toPastShot);
+      let out = null, aiFailed = false;
+      if (!opts.rulesOnly && aiOn()) {
+        try { out = await cremaCall(() => post(C("/api/recommend"), { bean: info, profileTitles: titles, history, preferences: prefs })); }
+        catch { aiFailed = true; }
+      }
+      if (!out) {
+        const ranked = E.rankProfiles(info, prefs, titles);
+        out = { recipe: E.rulesRecipe({ bean: info, preferences: prefs, profileTitles: titles }, ranked), candidates: ranked.slice(0, 8).map(E.strip), source: aiFailed ? "rules (AI unavailable)" : "rules" };
+      }
+      await patchRecord(beanId, { info, recipe: out.recipe, recipeSource: out.source, batchId: batch?.id ?? null });
+      return out;
+    },
+    async rank(beanId) {
+      const [{ info }, titles, prefs] = await Promise.all([coffee(beanId), installedTitles(), api.prefs.get()]);
+      return E.rankProfiles(info, prefs, titles).map(E.strip);
+    },
+    async catalog() {
+      const installed = await installedTitles().then((t) => new Set(t.map((x) => x.toLowerCase()))).catch(() => null);
+      return E.CATALOG.map((p) => ({ ...p, installed: installed ? installed.has(p.title.toLowerCase()) : null }));
+    },
+    async apply(beanId, recipe, grinderSetting) {
+      const [{ info, batch }, profiles] = await Promise.all([coffee(beanId), j(D("/profiles?visibility=visible"))]);
+      const profile = profiles.find((p) => p.profile.title === recipe.profileTitle);
+      if (!profile) throw new Error(`The profile "${recipe.profileTitle}" isn't on the machine`);
+      return put(D("/workflow"), {
+        profile: E.withTemperature({ ...profile.profile, target_weight: recipe.yieldG }, recipe.tempC),
+        context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: batch?.id ?? undefined, coffeeName: info.name.value ?? undefined, coffeeRoaster: info.roaster.value ?? undefined, grinderSetting: grinderSetting || undefined },
+      });
+    },
+
     async shots(limit = 15) {
-      const { items } = await j(`/api/shots?limit=${limit}`);
-      return Promise.all(items.map(async (s) => toShot(s, await j(`/api/shots/${encodeURIComponent(s.id)}`).catch(() => null))));
+      const { items } = await j(D(`/shots?limit=${limit}`));
+      return Promise.all(items.map(async (s) => toShot(s, await j(D(`/shots/${encodeURIComponent(s.id)}`)).catch(() => null))));
     },
     annotate: (id, a) => put(D(`/shots/${encodeURIComponent(id)}`), { annotations: a }),
-    feedback: (shotId, beanId, feedback) => post(`/api/shots/${encodeURIComponent(shotId)}/feedback`, { beanId, feedback }),
-    prefs: { get: () => j("/api/preferences"), set: (p) => put("/api/preferences", p) },
-    favourites: { get: () => j("/api/favourites"), set: (slot, fav) => put(`/api/favourites/${slot}`, fav) },
-    presets: { get: () => j("/api/presets"), set: (p) => put("/api/presets", p) },
-    maintenance: { get: () => j("/api/maintenance"), done: (kind) => post(`/api/maintenance/${kind}/done`), set: (p) => put("/api/maintenance", p) },
+    async feedback(shotId, beanId, fb) {
+      const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
+      await put(D(`/shots/${encodeURIComponent(shotId)}`), { annotations: { ...(full.annotations ?? {}), enjoyment: fb.enjoyment, espressoNotes: fb.notes ?? full.annotations?.espressoNotes, extras: { crema: { sourBitter: fb.sourBitter, body: fb.body } } } });
+      const [{ info, batch }, rec] = await Promise.all([coffee(beanId), recordOf(beanId)]);
+      const shot = E.toPastShot(full);
+      const recipe = rec?.recipe ?? E.rulesRecipe({ bean: info });
+      if (aiOn()) {
+        try {
+          const history = (await batchShots(batch?.id, 10)).map(E.toPastShot);
+          const { advice } = await cremaCall(() => post(C("/api/dialin"), { bean: info, recipe, shot, feedback: fb, history }));
+          return { advice, source: "ai" };
+        } catch {}
+      }
+      return { advice: E.rulesDialIn(fb, shot, recipe), source: "rules" };
+    },
+
+    prefs: { get: () => kvGet("preferences", {}), set: async (p) => { const next = { ...(await kvGet("preferences", {})), ...p }; await kvSet("preferences", next); return next; } },
+    favourites: {
+      get: async () => { const f = await kvGet("favourites", []); return Array.from({ length: 5 }, (_, i) => f[i] ?? null); },
+      set: async (slot, fav) => { const f = await api.favourites.get(); f[slot] = fav; await kvSet("favourites", f); return f; },
+    },
+    presets: { get: () => kvGet("presets", E.DEFAULT_PRESETS), set: async (p) => { await kvSet("presets", p); return p; } },
+    maintenance: {
+      async get() {
+        const m = { ...E.DEFAULT_MAINTENANCE, ...(await kvGet("maintenance", {})) };
+        let shotsSinceBackflush = null;
+        try {
+          const { items } = await j(D("/shots?limit=500"));
+          const since = m.lastBackflush ? Date.parse(m.lastBackflush) : 0;
+          shotsSinceBackflush = items.filter((s) => Date.parse(s.timestamp) > since && isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)).length;
+        } catch {}
+        const daysSinceDescale = m.lastDescale ? Math.floor((Date.now() - Date.parse(m.lastDescale)) / DAY) : null;
+        return { ...m, shotsSinceBackflush, daysSinceDescale, backflushDue: shotsSinceBackflush != null && shotsSinceBackflush >= m.backflushEveryShots, descaleDue: daysSinceDescale != null && daysSinceDescale >= m.descaleEveryDays };
+      },
+      async done(kind) { const m = await kvGet("maintenance", {}); m[kind === "backflush" ? "lastBackflush" : "lastDescale"] = new Date().toISOString(); await kvSet("maintenance", m); },
+      async set(p) { await kvSet("maintenance", { ...(await kvGet("maintenance", {})), ...p }); },
+    },
+
     machine: {
       canStart: true,
       info: () => j(D("/machine/info")),
@@ -194,6 +361,7 @@ function makeLiveApi(cfg, health, base = "") {
       open("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", (s) => h.ready?.(s));
     },
   };
+  return api;
 }
 
 /* ================= app state ================= */
@@ -310,11 +478,14 @@ function renderStatus() {
     <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
     ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
     <button class="chip" type="button" id="scaleChip" title="Tap to tare">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</button>
+    ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
     ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`;
   $("#scaleChip").onclick = tare;
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
 }
+// AI is switched on but the Crema server can't be reached: the rules are standing in.
+const aiDown = () => !!(S.api && !S.api.demo && S.api.ai.enabled && (S.api.info.serverError || (S.api.ai.available && !S.api.ai.healthy)));
 function renderAlerts() {
   const st = S.snap?.state?.state;
   const a = [];
@@ -596,8 +767,8 @@ function showAfterShot(shot, pts) {
     if (!shot || !S.current) return;
     e.target.disabled = true;
     try {
-      const { advice } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: stars || 3, notes: null });
-      $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div></div>`;
+      const { advice, source } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: stars || 3, notes: null });
+      $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div><div class="muted small">${source === "ai" ? "Advice from the AI" : "From Crema's dial-in rules"}</div></div>`;
     } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
     e.target.disabled = false;
   };
@@ -689,10 +860,44 @@ async function refreshShelf() { S.shelf = await S.api.shelf(); }
 
 /* ================= add coffee ================= */
 let addMode = "photo", files = [], pending = null, REVIEW_INTRO = "";
+const MANUAL_INTRO = `<h2>Entering a coffee by hand</h2>
+  <ul class="steps">
+    <li class="done"><span class="tick">1</span><span><b>Copy the bag.</b> Roaster, name, process and roast date are enough. The more you add, the better the match.</span></li>
+    <li class="done"><span class="tick">2</span><span><b>Match a profile.</b> Crema ranks the profiles on your machine against the coffee and picks a dose, ratio and temperature.</span></li>
+  </ul>`;
+const introFor = (m) => (m === "manual" ? MANUAL_INTRO : REVIEW_INTRO);
 function setMode(m) {
   addMode = m;
   $$("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
   $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
+  $("#offlineRow").hidden = m === "manual";
+  $("#identifyBtn").textContent = m === "manual" ? "Review" : "Identify coffee";
+  if (!pending) $("#reviewPanel").innerHTML = introFor(m);
+}
+// Without AI (switched off, or no Crema server) the only way in is typing the details.
+function renderAddModes() {
+  const ai = S.api.ai.on;
+  $$("[data-mode]").forEach((b) => (b.hidden = !ai && b.dataset.mode !== "manual"));
+  $("#addModes").hidden = !ai;
+  $("#addNoAi").hidden = ai;
+  $("#addNoAi").textContent = S.api.ai.enabled
+    ? "Identifying from photos, searches and links needs a Crema server. Enter the details from the bag instead."
+    : "AI features are off, so enter the details from the bag. Switch AI on in Settings to identify coffees from photos.";
+  if (!ai && addMode !== "manual") setMode("manual");
+}
+function manualInfo() {
+  const v = (id) => $(`#${id}`).value.trim() || null;
+  const f = (x) => ({ value: x, source: x == null ? null : "bag" });
+  const notes = v("mNotes")?.split(/,\s*/).filter(Boolean) ?? null;
+  const process = v("mProcess");
+  const weight = parseFloat(v("mWeight"));
+  return {
+    roaster: f(v("mRoaster")), name: f(v("mName")), country: f(v("mCountry")), region: f(null), producer: f(null), variety: f(v("mVariety")),
+    process: f(process), processKind: process ? processKindOf(process) : null, altitudeMasl: f(null),
+    roastLevel: f(v("mRoast")), roastedFor: f(null), roastDate: f(v("mRoastDate")), bestBefore: f(null),
+    weightGrams: Number.isFinite(weight) ? weight : null, tastingNotes: f(notes && notes.length ? notes : null), isBlend: null, blendComponents: null,
+    roasterRecipe: null, productUrl: null, imageUrl: null, sources: [], confidence: 1, needsConfirmation: [], summary: "Entered by hand.",
+  };
 }
 async function thumbnail(file, max = 360) {
   const url = URL.createObjectURL(file);
@@ -726,7 +931,7 @@ function renderReview(info, photo) {
   pending = { info, photo };
   $("#reviewPanel").innerHTML = `
     <div class="coffee-line" style="grid-template-columns:76px minmax(0,1fr)">${bagArt({ photo, info, art: "product" }, "xl")}<div style="min-width:0"><div class="label">${esc(info.roaster.value)}</div><h2>${esc(info.name.value)}</h2><div class="muted small">${esc(info.summary)}</div></div></div>
-    <div class="row"><span class="label">Match confidence</span><span class="num">${Math.round((info.confidence ?? 0) * 100)}%</span><span class="prov src-bag">bag</span><span class="prov src-web">web</span><span class="prov src-inferred">inferred</span></div>
+    <div class="row" ${info.summary === "Entered by hand." ? "hidden" : ""}><span class="label">Match confidence</span><span class="num">${Math.round((info.confidence ?? 0) * 100)}%</span><span class="prov src-bag">bag</span><span class="prov src-web">web</span><span class="prov src-inferred">inferred</span></div>
     ${artPicker(info, photo)}
     <div class="facts">${factRows(info)}</div>
     ${info.roasterRecipe?.text ? `<div class="advice"><div class="label">Roaster's recipe</div>${esc(info.roasterRecipe.text)}</div>` : ""}
@@ -739,19 +944,25 @@ function renderReview(info, photo) {
     try {
       const art = document.querySelector('input[name="art"]:checked')?.value ?? (pending.info.imageUrl ? "product" : "photo");
       const saved = await S.api.saveBean(pending.info, pending.photo, art);
-      files = []; $("#thumbs").innerHTML = ""; pending = null; $("#reviewPanel").innerHTML = REVIEW_INTRO;
+      files = []; $("#thumbs").innerHTML = ""; pending = null; $("#reviewPanel").innerHTML = introFor(addMode);
+      $("#addForm").reset();
       await refreshShelf();
       const b = S.shelf.find((x) => x.id === saved.id); if (b) b.recipe = null;
       location.hash = "#profiles";
       await selectBean(saved.id);
     } catch (err) { toast(`Couldn't save: ${err.message}`); e.target.disabled = false; }
   };
-  $("#discardBean").onclick = () => { pending = null; $("#reviewPanel").innerHTML = REVIEW_INTRO; };
+  $("#discardBean").onclick = () => { pending = null; $("#reviewPanel").innerHTML = introFor(addMode); };
 }
 async function onIdentify(e) {
   e.preventDefault();
   const query = $("#queryInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
   const input = addMode === "photo" ? { files } : addMode === "search" ? { query } : { url };
+  if (addMode === "manual") {
+    const info = manualInfo();
+    if (!info.roaster.value || !info.name.value) return toast("Enter at least the roaster and the coffee's name");
+    return renderReview(info, null);
+  }
   if (addMode === "photo" && !files.length) return toast("Add a photo of the bag first");
   if (addMode === "search" && !query) return toast("Type a roaster and coffee name");
   if (addMode === "link" && !url) return toast("Paste a product link");
@@ -896,6 +1107,7 @@ async function renderSettings() {
   const [ss, ms, pres, scheds, disp, plugins, maint] = await Promise.all([m.shotSettings.get().catch(() => null), m.settings.get().catch(() => null), m.presence.get().catch(() => null), m.schedules.list().catch(() => []), m.display.get().catch(() => null), m.plugins().catch(() => []), S.api.maintenance.get().catch(() => null)]);
   S.maint = maint;
   const p = S.prefs, theme = local.get("theme", "auto");
+  const ai = { enabled: (await S.api.settings.get().catch(() => ({ aiEnabled: true }))).aiEnabled !== false };
   const viz = plugins.find((x) => /visualizer/i.test(x.id));
   const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
   el.innerHTML = `
@@ -949,11 +1161,15 @@ async function renderSettings() {
     <div class="set-row"><span>Remind after<span class="hint">Days. Depends on your water</span></span>${mini("mDesc", maint.descaleEveryDays, 15, "days")}</div>` : '<p class="muted">Unavailable.</p>'}
   </div>
 
-  <div class="panel stack"><h2>AI and integrations</h2>
-    <div class="set-row first"><span>AI providers<span class="hint">Tried in order. Set LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "rules only")}</span></div>
+  <div class="panel stack"><h2>AI features</h2>
+    <div class="set-row first"><span>Use AI<span class="hint">${aiHint(ai)}</span></span>${sw("sAi", ai.enabled)}</div>
+    ${ai.enabled && S.api.ai.available ? `<div class="set-row"><span>AI providers<span class="hint">Tried in order. Set with LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "none")}</span></div>` : ""}
+  </div>
+
+  <div class="panel stack"><h2>Connections</h2>
+    <div class="set-row first"><span>Machine<span class="hint">Decaid on the tablet</span></span><span class="num small">${esc(S.api.info.decaidUrl || "")}</span></div>
+    <div class="set-row"><span>Crema server<span class="hint">${S.api.demo ? "Simulated in the demo" : S.api.info.server ? `Connected · ${esc(S.api.info.server)}` : S.api.info.serverError ? `Can't reach ${esc(S.api.info.serverError)}` : "Not connected. Optional, for AI features"}</span></span><button class="btn small" id="changeServer">${S.api.demo ? "Connect" : "Change"}</button></div>
     <div class="set-row"><span>Visualizer upload<span class="hint">${viz ? "Decaid's Visualizer plugin uploads shots. Set your account in Decaid's plugin settings" : "Install Decaid's Visualizer plugin to upload shots"}</span></span>${viz ? '<span class="pill good">Available</span>' : '<span class="pill plain">Not found</span>'}</div>
-    <div class="set-row"><span>Machine connection<span class="hint">Decaid on the tablet, as set by DECAID_URL on the server</span></span><span class="num small">${esc(S.api.info.decaidUrl || "")}</span></div>
-    <div class="set-row"><span>Crema server<span class="hint">${S.api.demo ? "None: this is the demo" : esc(S.api.info.server || "")}</span></span><button class="btn small" id="changeServer">${S.api.demo ? "Connect" : "Change"}</button></div>
   </div>`;
 
   // ---- wire up ----
@@ -1007,6 +1223,18 @@ async function renderSettings() {
   const dd = $("#doneDescale"); if (dd) dd.onclick = async () => { await S.api.maintenance.done("descale"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Descale recorded"); };
   $("#editPresets").onclick = editPresets;
   $("#changeServer").onclick = () => connectSheet();
+  $("#sAi").onchange = async (e) => {
+    try { await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { toast(`Couldn't save: ${err.message}`); }
+    renderStatus(); renderSettings();
+    toast(e.target.checked ? "AI features on" : "AI features off. Crema uses its rules");
+  };
+}
+function aiHint(ai) {
+  if (!ai.enabled) return "Off. Add coffees by typing the details, and Crema picks profiles and dial-in steps with its rules";
+  if (S.api.demo) return "Identifies coffees from photos, searches and links, picks profiles and gives dial-in advice. Simulated in the demo";
+  if (!S.api.ai.available) return "Needs a Crema server, which isn't connected. Crema uses its rules until then";
+  if (!S.api.ai.healthy) return "The Crema server isn't answering, so Crema is using its rules for now";
+  return "Identifies coffees from photos, searches and links, picks profiles and gives dial-in advice. Falls back to the rules if it fails";
 }
 function editPresets() {
   const p = JSON.parse(JSON.stringify(S.presets));
@@ -1069,56 +1297,90 @@ function showDeviceFrame() {
   fit();
 }
 
-/* ================= Crema server address =================
-   The phone app is served by the Crema server, so it uses its own origin.
-   The tablet skin is served by Decaid, so it needs the server's address:
-   from ?server=http://host:8787 (remembered) or entered once in the app. */
+/* ================= connections =================
+   The machine (Decaid) is required for live use; the Crema server is optional.
+   - Decaid: through the Crema server's /decaid proxy when Crema serves this
+     page (the phone app), otherwise directly. By default that's the same host
+     on port 8080, which is right when Decaid serves this page (the tablet skin,
+     or http://<tablet-ip>:3000 on a phone). It can be changed in the app.
+   - Crema server: this page's own origin if it answers, otherwise a saved
+     address (?server=… or entered in the app), otherwise none. */
 const cleanAddr = (a) => String(a || "").trim().replace(/\/+$/, "").replace(/^(?!https?:\/\/)/, "http://");
-function serverBase() {
-  const q = new URLSearchParams(location.search).get("server");
-  if (q) local.set("server", cleanAddr(q));
-  const saved = local.get("server", "");
-  return saved && saved !== location.origin ? saved : "";
-}
-async function probeServer(base) {
+const wsFrom = (http) => http.replace(/^http/, "ws").replace(/\/+$/, "");
+async function probe(url, ms = 4000) {
   const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 5000);
+  const t = setTimeout(() => ctl.abort(), ms);
   try {
-    const res = await fetch(`${base}/api/config`, { signal: ctl.signal });
+    const res = await fetch(url, { signal: ctl.signal });
     if (!res.ok) throw new Error(`${res.status}`);
     return await res.json();
   } finally { clearTimeout(t); }
 }
-// A real reload (a hash-only change wouldn't reload), without a stale ?server= in the address.
+const defaultDecaid = () => (location.protocol.startsWith("http") && location.hostname ? `${location.protocol}//${location.hostname}:8080` : "http://localhost:8080");
+
+async function discoverConnections() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("server")) local.set("server", cleanAddr(q.get("server")));
+  if (q.get("decaid")) local.set("decaid", cleanAddr(q.get("decaid")));
+  const conn = { decaid: null, decaidWs: null, crema: null, cremaInfo: null, cremaError: null, decaidError: null };
+
+  if (location.protocol.startsWith("http")) {
+    try { conn.cremaInfo = await probe("/api/config", 3000); if (conn.cremaInfo?.crema) conn.crema = ""; else conn.cremaInfo = null; } catch {}
+  }
+  const saved = local.get("server", "");
+  if (conn.crema == null && saved) {
+    try { conn.cremaInfo = await probe(`${saved}/api/config`); conn.crema = saved; } catch { conn.cremaError = saved; }
+  }
+
+  const savedDecaid = local.get("decaid", "");
+  if (conn.crema === "" && conn.cremaInfo?.decaidUrl && !savedDecaid) {
+    conn.decaid = "/decaid";
+    conn.decaidWs = wsFrom(conn.cremaInfo.decaidUrl);
+  } else {
+    conn.decaid = savedDecaid || defaultDecaid();
+    conn.decaidWs = wsFrom(conn.decaid);
+  }
+  // Decaid speaks plain http, which an https page (like a hosted demo) can't call, so don't try unless asked to.
+  if (location.protocol === "https:" && !savedDecaid && conn.decaid !== "/decaid") { conn.decaid = null; return conn; }
+  try { await probe(`${conn.decaid}/api/v1/profiles?visibility=visible`); }
+  catch { conn.decaidError = conn.decaid === "/decaid" ? conn.cremaInfo?.decaidUrl : conn.decaid; conn.decaid = null; }
+  return conn;
+}
+
+// A real reload (a hash-only change wouldn't reload), without stale ?server= or ?decaid= in the address.
 function reloadClean() {
   const u = new URL(location.href);
   u.searchParams.delete("server");
+  u.searchParams.delete("decaid");
   history.replaceState(null, "", u);
   location.reload();
 }
+
 function connectSheet(message = "") {
-  const current = local.get("server", "");
-  openSheet(`<h2>Connect your Crema server</h2>
-    <p class="muted small">Enter the address of the computer running the Crema server, for example <span class="num">http://192.168.1.20:8787</span>. It's saved on this device.</p>
+  const server = local.get("server", "");
+  const decaid = local.get("decaid", "") || (S.api && !S.api.demo ? S.api.info.decaidUrl : "") || defaultDecaid();
+  openSheet(`<h2>Connections</h2>
     ${message ? `<p class="error small">${esc(message)}</p>` : ""}
-    <div class="field"><label class="label" for="serverAddr">Server address</label><input type="url" id="serverAddr" value="${esc(current)}" placeholder="http://192.168.1.20:8787" autocomplete="off"></div>
-    <div class="row"><button class="btn primary" id="serverConnect">Connect</button>${current ? '<button class="btn ghost" id="serverForget">Forget this server</button>' : ""}</div>
-    <p class="muted small" id="serverStatus"></p>`);
-  $("#serverConnect").onclick = async () => {
-    const addr = cleanAddr($("#serverAddr").value);
-    if (!addr || addr === "http://") return ($("#serverStatus").textContent = "Enter an address first.");
-    $("#serverStatus").textContent = "Checking…";
-    try {
-      await probeServer(addr);
-      local.set("server", addr);
-      $("#serverStatus").textContent = "Connected. Reloading…";
-      reloadClean();
-    } catch (e) {
-      $("#serverStatus").textContent = `Couldn't reach ${addr}. Check the address, that the server is running, and that this device is on the same network.`;
+    <div class="field"><label class="label" for="decaidAddr">Machine (Decaid on the tablet)</label><input type="url" id="decaidAddr" value="${esc(decaid)}" placeholder="http://192.168.1.50:8080" autocomplete="off">
+      <span class="muted small">Required. On the tablet itself this is <span class="num">http://localhost:8080</span>.</span></div>
+    <div class="field"><label class="label" for="serverAddr">Crema server (optional, for AI features)</label><input type="url" id="serverAddr" value="${esc(server)}" placeholder="http://192.168.1.20:8787" autocomplete="off">
+      <span class="muted small">Leave empty to run without AI. Everything else works without it.</span></div>
+    <div class="row"><button class="btn primary" id="connSave">Save and connect</button></div>
+    <p class="muted small" id="connStatus"></p>`);
+  $("#connSave").onclick = async () => {
+    const d = cleanAddr($("#decaidAddr").value), s = $("#serverAddr").value.trim() ? cleanAddr($("#serverAddr").value) : "";
+    $("#connStatus").textContent = "Checking…";
+    try { await probe(`${d}/api/v1/profiles?visibility=visible`); }
+    catch { $("#connStatus").textContent = `Couldn't reach the machine at ${d}. Check the tablet's address and that Decaid is running.`; return; }
+    if (s) {
+      try { await probe(`${s}/api/config`); }
+      catch { $("#connStatus").textContent = `The machine answered, but the Crema server at ${s} didn't. Check its address, or leave it empty to run without AI.`; return; }
     }
+    local.set("decaid", d === defaultDecaid() ? "" : d);
+    local.set("server", s);
+    $("#connStatus").textContent = "Connected. Reloading…";
+    reloadClean();
   };
-  const f = $("#serverForget");
-  if (f) f.onclick = () => { local.set("server", ""); reloadClean(); };
 }
 
 /* ================= routing + boot ================= */
@@ -1130,6 +1392,7 @@ function route(scroll = true) {
   $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
   if (v === "shelf") renderShelf();
+  if (v === "add") renderAddModes();
   if (v === "profiles") renderProfiles();
   if (v === "shots") renderShots();
   if (v === "settings") renderSettings();
@@ -1141,23 +1404,17 @@ async function boot() {
   applyTheme(local.get("theme", "auto"), false);
   applySkin(window.CREMA_SKIN || local.get("look", DEFAULT_SKIN), false);
   const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
-  const base = serverBase();
-  let unreachable = null;
-  if (!forceDemo) {
-    try {
-      const cfg = await probeServer(base);
-      const health = await fetch(`${base}/api/health`).then((r) => r.json()).catch(() => null);
-      S.api = makeLiveApi(cfg, health, base);
-    } catch { S.api = null; if (base) unreachable = base; }
-  }
-  if (!S.api && wantsDeviceFrame()) return showDeviceFrame();
-  if (!S.api) S.api = makeDemoApi();
+  const conn = forceDemo ? null : await discoverConnections();
+  if (conn?.decaid) S.api = makeLiveApi(conn);
+  else if (wantsDeviceFrame() && !local.get("decaid", "")) return showDeviceFrame();
+  else S.api = makeDemoApi();
+  await S.api.settings.get().catch(() => {});
   $("#demoBanner").hidden = !S.api.demo;
-  // Offer to connect a server when this page could reach one (not the hosted demos).
+  // Offer to connect when this page could reach a machine (not the hosted demos).
   if (S.api.demo && !forceDemo && location.protocol === "http:") {
-    $("#demoBanner").innerHTML = `Demo mode: no Crema server connected. <button class="btn small" id="connectBtn" type="button">Connect a server</button>`;
+    $("#demoBanner").innerHTML = `Demo mode: no machine connected. <button class="btn small" id="connectBtn" type="button">Connect</button>`;
     $("#connectBtn").onclick = () => connectSheet();
-    if (unreachable) setTimeout(() => connectSheet(`Couldn't reach the Crema server at ${unreachable}, so this is the demo.`), 300);
+    if (conn?.decaidError) setTimeout(() => connectSheet(`Couldn't reach the machine at ${conn.decaidError}, so this is the demo.`), 300);
   }
 
   document.addEventListener("pointerdown", () => S.api.machine.heartbeat(), { passive: true });
@@ -1186,6 +1443,7 @@ async function boot() {
     ready: (r) => { S.ready = r; },
   });
   window.addEventListener("hashchange", () => route());
+  window.addEventListener("crema:ai", () => renderStatus());
   window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });
   renderStatus(); renderAlerts();
   route();
