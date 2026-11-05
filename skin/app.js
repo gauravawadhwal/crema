@@ -35,22 +35,25 @@ function toast(msg) {
 
 /* ================= theme ================= */
 const HOST_THEME = document.documentElement.getAttribute("data-theme");
-// Fixed-look themes. Crema follows the light/dark setting; the rest set their own.
+// Fixed-look themes. Verde is the default. Crema follows the light/dark setting; the rest set their own.
+// The choice is saved only when someone picks a theme, so devices that never chose follow DEFAULT_SKIN.
+const DEFAULT_SKIN = "verde";
 const SKINS = [
+  { id: "verde", name: "Verde", note: "Vintage Italian café: bottle green and brass.", pv: ["#15241e", "#c9a24a", "#1d3128", "#7fd6a6", "#79b4e8", "#d1ab7c"], bg: "#0e1a15" },
   { id: "crema", name: "Crema", note: "Roasted brown and crema gold. Follows light or dark.", pv: ["#211a16", "#e0a458", "#2b231e", "#5cc59a", "#6aa8ea", "#c99a6b"], bg: "#17120f" },
   { id: "rosso", name: "Rosso", note: "Italian bar machine: red lacquer on polished steel.", pv: ["#f7f8f8", "#c3141b", "#dde0e3", "#1b7a52", "#1d60ad", "#7a5230"], bg: "#e6e8ea" },
   { id: "acciaio", name: "Acciaio", note: "Industrial black and steel, like the machine.", pv: ["#171a1d", "#e9edf0", "#21252a", "#4fd19a", "#63a9f2", "#c9a27a"], bg: "#0e1012" },
   { id: "nordic", name: "Nordic", note: "Light-roast café: birch, ink and fjord blue.", pv: ["#fbfbf9", "#2f6a8c", "#e2e6e1", "#2a8a64", "#2f6a8c", "#8a6340"], bg: "#eef0ed" },
-  { id: "verde", name: "Verde", note: "Vintage Italian café: bottle green and brass.", pv: ["#15241e", "#c9a24a", "#1d3128", "#7fd6a6", "#79b4e8", "#d1ab7c"], bg: "#0e1a15" },
   { id: "notte", name: "Notte", note: "True black and dim amber for the first shot.", pv: ["#0b0b0b", "#b8742e", "#151515", "#3f9c75", "#4b7fb3", "#9b7856"], bg: "#000000" },
 ];
-function applySkin(id, redraw = true) {
-  const skin = SKINS.find((x) => x.id === id) ? id : "crema";
+function currentSkin() { return document.documentElement.getAttribute("data-skin") || "crema"; }
+function applySkin(id, redraw = true, save = false) {
+  const skin = SKINS.find((x) => x.id === id) ? id : DEFAULT_SKIN;
   if (skin === "crema") document.documentElement.removeAttribute("data-skin");
   else document.documentElement.setAttribute("data-skin", skin);
-  local.set("skin", skin);
+  if (save) local.set("look", skin);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", css("--bg") || "#17120f");
+  if (meta) meta.setAttribute("content", css("--bg") || "#0e1a15");
   if (redraw && S.api) route(false);
 }
 function applyTheme(mode, redraw = true) {
@@ -60,7 +63,7 @@ function applyTheme(mode, redraw = true) {
   else root.removeAttribute("data-theme");
   local.set("theme", mode);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", css("--bg") || "#17120f");
+  if (meta) meta.setAttribute("content", css("--bg") || "#0e1a15");
   $$("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === mode)));
   if (redraw && S.api) route(false);
 }
@@ -932,9 +935,9 @@ async function renderSettings() {
 
   <div class="panel stack"><h2>Display</h2>
     <div class="stack" style="gap:8px"><span class="label">Theme</span>
-      <div class="skins">${SKINS.map((k) => `<button type="button" class="skin" data-skin="${k.id}" aria-pressed="${(local.get("skin", "crema")) === k.id}">
+      <div class="skins">${SKINS.map((k) => `<button type="button" class="skin" data-skin="${k.id}" aria-pressed="${currentSkin() === k.id}">
         <span class="pv" style="background:${k.bg}">${k.pv.map((c) => `<i style="background:${c}"></i>`).join("")}</span><b>${k.name}</b><span>${k.note}</span></button>`).join("")}</div></div>
-    <div class="set-row" ${local.get("skin", "crema") === "crema" ? "" : "hidden"} id="modeRow"><span>Light or dark<span class="hint">For the Crema theme</span></span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
+    <div class="set-row" ${currentSkin() === "crema" ? "" : "hidden"} id="modeRow"><span>Light or dark<span class="hint">For the Crema theme</span></span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
     <div class="set-row"><span>Clock when asleep<span class="hint">A dark screen saver while the machine sleeps; tap to wake</span></span>${sw("sSaver", S.saver)}</div>
     ${disp?.platformSupported?.brightness ? `<div class="set-row"><span>Tablet brightness</span><input type="range" id="sBright" min="5" max="100" value="${disp.brightness}" aria-label="Brightness" style="accent-color:var(--accent)"></div>` : ""}
   </div>
@@ -985,7 +988,7 @@ async function renderSettings() {
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   const br = $("#sBright"); if (br) br.onchange = (e) => m.display.brightness(Number(e.target.value)).catch(() => {});
   $$("[data-skin]", el).forEach((b) => (b.onclick = () => {
-    applySkin(b.dataset.skin, false);
+    applySkin(b.dataset.skin, false, true);
     $$("[data-skin]", el).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     $("#modeRow").hidden = b.dataset.skin !== "crema";
     toast(`${SKINS.find((k) => k.id === b.dataset.skin).name} theme`);
@@ -1059,7 +1062,7 @@ function showDeviceFrame() {
   // Keep the frame's background in step with the theme chosen inside the app.
   window.addEventListener("storage", (e) => {
     try {
-      if (e.key === "crema:skin") applySkin(JSON.parse(e.newValue), false);
+      if (e.key === "crema:look") applySkin(JSON.parse(e.newValue), false);
       if (e.key === "crema:theme") applyTheme(JSON.parse(e.newValue), false);
     } catch {}
   });
@@ -1136,7 +1139,7 @@ function route(scroll = true) {
 async function boot() {
   REVIEW_INTRO = $("#reviewPanel").innerHTML;
   applyTheme(local.get("theme", "auto"), false);
-  applySkin(window.CREMA_SKIN || local.get("skin", "crema"), false);
+  applySkin(window.CREMA_SKIN || local.get("look", DEFAULT_SKIN), false);
   const forceDemo = window.CREMA_FORCE_DEMO || /[?&]demo\b/.test(location.search);
   const base = serverBase();
   let unreachable = null;

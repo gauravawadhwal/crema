@@ -4,7 +4,7 @@
   "description": "Coffee shelf, recipes and live shots for a Decent DE1",
   "start_url": "/#brew",
   "display": "standalone",
-  "background_color": "#17120f",
-  "theme_color": "#17120f",
+  "background_color": "#0e1a15",
+  "theme_color": "#0e1a15",
   "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }

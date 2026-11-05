@@ -40,12 +40,12 @@ Regenerate these with `node scripts/screenshots.cjs` (needs Playwright). `node s
 
 ## Themes
 
-Six themes, chosen in Settings → Display and remembered per device. The layout stays flat and the chart colours stay readable in every one.
+Six themes, chosen in Settings → Display and remembered per device. Verde is the default. The layout stays flat and the chart colours stay readable in every one.
 
 | | | |
 |---|---|---|
-| ![Crema](docs/screenshots/theme-crema.png) **Crema.** Roasted brown and crema gold. Follows light or dark. | ![Rosso](docs/screenshots/theme-rosso.png) **Rosso.** Italian bar-machine red lacquer on polished steel. | ![Acciaio](docs/screenshots/theme-acciaio.png) **Acciaio.** Industrial black and steel, like the DE1 itself. |
-| ![Nordic](docs/screenshots/theme-nordic.png) **Nordic.** A light-roast café: birch, ink and fjord blue. | ![Verde](docs/screenshots/theme-verde.png) **Verde.** Vintage Italian café green and brass. | ![Notte](docs/screenshots/theme-notte.png) **Notte.** True black and dim amber for the first shot of the day. |
+| ![Verde](docs/screenshots/theme-verde.png) **Verde (default).** Vintage Italian café: bottle green and brass. | ![Crema](docs/screenshots/theme-crema.png) **Crema.** Roasted brown and crema gold. Follows light or dark. | ![Rosso](docs/screenshots/theme-rosso.png) **Rosso.** Italian bar-machine red lacquer on polished steel. |
+| ![Acciaio](docs/screenshots/theme-acciaio.png) **Acciaio.** Industrial black and steel, like the DE1 itself. | ![Nordic](docs/screenshots/theme-nordic.png) **Nordic.** A light-roast café: birch, ink and fjord blue. | ![Notte](docs/screenshots/theme-notte.png) **Notte.** True black and dim amber for the first shot of the day. |
 
 ## The demo site
 
@@ -64,7 +64,7 @@ To build it locally, run `node scripts/build-site.mjs`; the site goes in `_site/
 - **Shelf**: rest window, grams left (from shot doses), reorder nudges, freeze and finish.
 - **Shots**: history with metrics, side-by-side comparison, ratings and notes.
 - **Settings**: your setup, steam, water and flush, machine, wake schedules, display, and descale and backflush reminders.
-- **Six themes**: Crema, Rosso, Acciaio, Nordic, Verde and Notte (see below).
+- **Six themes**: Verde (the default), Crema, Rosso, Acciaio, Nordic and Notte (see below).
 
 Research and design decisions: [docs/investigation.md](docs/investigation.md).
 

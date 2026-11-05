@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-skin="verde">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -10,7 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Crema">
-<meta name="theme-color" content="#17120f">
+<meta name="theme-color" content="#0e1a15">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,8 +75,10 @@
 
 
 /* ---------- themes ----------
-   Crema (default) follows the light/dark setting. The others are fixed looks,
-   each built around one coffee-world cue. `html:root[data-skin]` outranks the
+   Verde is the default: the page ships with data-skin="verde" so the first
+   paint is already green. Crema (the tokens on :root above) follows the
+   light/dark setting. The others are fixed looks, each built around one
+   coffee-world cue. `html:root[data-skin]` outranks the
    light/dark blocks above. Telemetry colours keep the Decent convention
    (pressure green, flow blue, weight brown, temperature red/orange) in every
    theme, tuned for contrast. */
@@ -409,7 +411,7 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .dev-brand { font-family: var(--font-display); font-weight: 700; color: var(--accent); margin-right: 6px; }
 .dev-stage { position: relative; min-height: 0; overflow: hidden; }
 .dev { position: absolute; left: 50%; top: 50%; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 30px 70px rgba(0, 0, 0, .45); transform-origin: 50% 50%; }
-.dev iframe { display: block; border: 0; background: #17120f; }
+.dev iframe { display: block; border: 0; background: #0e1a15; }
 .dev-note { text-align: center; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 70; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
 

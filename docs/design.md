@@ -25,18 +25,19 @@ All colour comes from CSS custom properties defined on `:root` in `skin/index.ht
 
 | Id | Name | Idea | Mode | Radius |
 |---|---|---|---|---|
+| `verde` | Verde (default) | Vintage Italian café: bottle green and brass | dark | 12 |
 | `crema` | Crema | Roasted brown and crema gold | follows light/dark | 14 |
 | `rosso` | Rosso | Italian bar machine: red lacquer on polished steel | light | 8 |
 | `acciaio` | Acciaio | Industrial black and steel, like the DE1 | dark | 6 |
 | `nordic` | Nordic | Light-roast café: birch, ink, fjord blue | light | 18 |
-| `verde` | Verde | Vintage Italian café: bottle green and brass | dark | 12 |
 | `notte` | Notte | True black, dim amber, low glare | dark | 14 |
 
 **How it works:**
-- `html[data-skin=…]` selects a theme; Crema has no attribute.
+- `html[data-skin=…]` selects a theme; Crema has no attribute. `index.html` ships with `data-skin="verde"` so the first paint is already the default.
+- The default is `DEFAULT_SKIN` in `app.js` (Verde). Crema's tokens sit on plain `:root`, so they are also the fallback if no theme block matches.
 - `html[data-theme=light|dark]` is the light/dark setting, used only by Crema. An embedding host can also set it.
 - Theme blocks use `html:root[data-skin="…"]` so they outrank the light/dark blocks.
-- The choice is stored per device in `localStorage` (`crema:skin`, `crema:theme`).
+- The choice is stored per device in `localStorage` (`crema:look`, `crema:theme`), and only when someone picks a theme, so a device that never chose follows the default if it changes.
 
 **Adding a theme:**
 1. Add a `html:root[data-skin="id"]` block in `index.html` defining every token above, plus `color-scheme`.

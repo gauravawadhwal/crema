@@ -9,15 +9,15 @@
    phone); story-style progress bars along the top. One dark look on purpose,
    matching the app, which lives next to a machine. */
 :root {
-  --bg: #120e0b;
-  --panel: #1d1612;
-  --line: #34291f;
-  --fg: #efe6dc;
-  --muted: #a4968a;
-  --accent: #e0a458;
-  --accent-ink: #1d140c;
-  --pressure: #5cc59a;
-  --flow: #6aa8ea;
+  --bg: #0b1511;
+  --panel: #15241e;
+  --line: #2a4237;
+  --fg: #ede6d4;
+  --muted: #9eae9f;
+  --accent: #c9a24a;
+  --accent-ink: #17140a;
+  --pressure: #7fd6a6;
+  --flow: #79b4e8;
   --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
@@ -51,23 +51,23 @@ a { color: var(--accent); }
 .frame {
   position: relative; width: 100%; max-width: 100%; aspect-ratio: 1340 / 800;
   border-radius: 22px; padding: 14px; background: #0a0807;
-  box-shadow: 0 0 0 1px #2a211a, 0 30px 60px rgba(0,0,0,.45);
+  box-shadow: 0 0 0 1px #1f2a25, 0 30px 60px rgba(0,0,0,.45);
 }
-.frame::after { content: ""; position: absolute; left: 50%; top: 5px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #2a211a; }
-.screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 9px; background: #17120f; }
+.frame::after { content: ""; position: absolute; left: 50%; top: 5px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #1f2a25; }
+.screen { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 9px; background: #0e1a15; }
 .layer { position: absolute; inset: 0; transform-origin: 50% 50%; transition: transform 7s cubic-bezier(.25,.1,.25,1); }
 .layer img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.spot { position: absolute; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(10, 7, 5, .42); opacity: 0; transition: opacity .6s ease .5s; pointer-events: none; }
+.spot { position: absolute; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(5, 10, 8, .42); opacity: 0; transition: opacity .6s ease .5s; pointer-events: none; }
 .slide-in .spot { opacity: 1; }
 
 .phones { display: flex; gap: 18px; justify-content: center; align-items: center; height: 100%; }
-.phone { height: min(70vh, 640px); max-width: 30%; aspect-ratio: 390 / 844; border-radius: 34px; padding: 9px; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 24px 48px rgba(0,0,0,.45); }
+.phone { height: min(70vh, 640px); max-width: 30%; aspect-ratio: 390 / 844; border-radius: 34px; padding: 9px; background: #0a0807; box-shadow: 0 0 0 1px #1f2a25, 0 24px 48px rgba(0,0,0,.45); }
 .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 26px; display: block; }
 
 .screen.themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; background: #0a0807; }
 .themes figure { margin: 0; position: relative; min-height: 0; overflow: hidden; border-radius: 6px; }
 .themes img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.themes figcaption { position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(10, 7, 5, .78); color: #efe6dc; font: 600 .74rem var(--font-display); }
+.themes figcaption { position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(5, 10, 8, .78); color: #ede6d4; font: 600 .74rem var(--font-display); }
 .slide-in .themes figure { animation: pop .5s ease both; }
 .slide-in .themes figure:nth-child(2) { animation-delay: .08s; } .slide-in .themes figure:nth-child(3) { animation-delay: .16s; }
 .slide-in .themes figure:nth-child(4) { animation-delay: .24s; } .slide-in .themes figure:nth-child(5) { animation-delay: .32s; } .slide-in .themes figure:nth-child(6) { animation-delay: .4s; }
@@ -83,7 +83,7 @@ a { color: var(--accent); }
 .caption { display: grid; gap: 12px; align-content: center; min-width: 0; }
 .step { font-family: var(--font-mono); font-size: .76rem; color: var(--muted); letter-spacing: .04em; }
 .caption h2 { margin: 0; font-family: var(--font-display); font-size: clamp(1.4rem, 2.4vw, 2rem); line-height: 1.12; letter-spacing: -.01em; text-wrap: balance; }
-.caption p { margin: 0; color: #d6cbc0; max-width: 46ch; }
+.caption p { margin: 0; color: #d3d6c8; max-width: 46ch; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px; }
 .fact { font-family: var(--font-mono); font-size: .74rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -179,8 +179,8 @@ const SLIDES = [
   { phones: ["phone-home", "phone-shelf", "phone-profiles"], step: "On your iPhone", title: "The same app on your phone",
     text: "Add it to your home screen from Safari. Photograph a bag at the café, check the water tank, start steam, and look back at your shots. It's one app, so there's nothing extra to install or keep in sync.",
     facts: ["no App Store app", "same data as the tablet"] },
-  { themes: ["crema", "rosso", "acciaio", "nordic", "verde", "notte"], step: "Make it yours", title: "Six themes",
-    text: "Crema is the default and follows light or dark. Rosso is Italian bar-machine red on polished steel. Acciaio is industrial black and steel, like the DE1 itself. Nordic is an airy light-roast café, Verde is vintage café green and brass, and Notte is true black for the first shot of the day.",
+  { themes: ["verde", "crema", "rosso", "acciaio", "nordic", "notte"], step: "Make it yours", title: "Six themes",
+    text: "Verde, vintage café green and brass, is the default. Crema is roasted brown and gold and follows light or dark. Rosso is Italian bar-machine red on polished steel, Acciaio is industrial black and steel like the DE1 itself, Nordic is an airy light-roast café, and Notte is true black for the first shot of the day.",
     facts: ["Settings → Display", "remembered per device"] },
   { diagram: true, step: "Under the hood", title: "How it fits together",
     text: "Decaid, Decent's open-source tablet app, talks to the machine. Crema is the interface you see, plus a small server at home that identifies coffees and picks profiles using your Claude or ChatGPT subscription.",
