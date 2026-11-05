@@ -4,7 +4,7 @@
 const { chromium } = require("playwright");
 const path = require("path");
 
-const url = "file://" + path.resolve(__dirname, "../skin/index.html") + "?demo";
+const url = "file://" + path.resolve(__dirname, "../skin/index.html") + "?demo&full";
 const out = path.resolve(__dirname, "../docs/screenshots");
 const fs = require("fs");
 // Where the key element sits in each screenshot (percent of the image), for the walkthrough's highlights.

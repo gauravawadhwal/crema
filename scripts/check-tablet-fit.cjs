@@ -5,7 +5,7 @@
 const { chromium } = require('playwright');
 const SIZES = [[1340, 800, 'A11 at 1x'], [1340, 752, 'A11 1x with nav bar'], [1206, 720, 'A11 at ~1.1x'], [1005, 600, 'A11 at 1.33x'], [1005, 552, '1.33x with nav bar']];
 (async () => {
-  const b = await chromium.launch(); const out = process.argv[2] || '.'; const url = process.argv[3] || 'file://' + require('path').resolve(__dirname, '../skin/index.html') + '?demo';
+  const b = await chromium.launch(); const out = process.argv[2] || '.'; const url = process.argv[3] || 'file://' + require('path').resolve(__dirname, '../skin/index.html') + '?demo&full';
   for (const [w, h, label] of SIZES) {
     const p = await b.newPage({ viewport: { width: w, height: h }, colorScheme: 'dark' });
     const errs = []; p.on('pageerror', e => errs.push(e.message));

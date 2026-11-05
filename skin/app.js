@@ -1015,6 +1015,52 @@ function editPresets() {
   };
 }
 
+/* ================= device frame (demo on a desktop) =================
+   On a wide desktop window the demo shows inside a frame at the DE1 tablet's
+   exact screen size (or an iPhone's), scaled to fit. The app runs in an iframe
+   of that size, so its own layout rules see the real device dimensions.
+   Phones, tablets and pages that are already embedded are left alone. */
+const DEVICES = {
+  tablet: { w: 1340, h: 800, bezel: 18, radius: 30, label: "DE1 tablet · Galaxy Tab A11 · 1340 × 800" },
+  phone: { w: 390, h: 844, bezel: 12, radius: 52, label: "iPhone · 390 × 844" },
+};
+const wantsDeviceFrame = () =>
+  window.top === window && !/[?&](embed|full)\b/.test(location.search) && matchMedia("(min-width: 1100px) and (pointer: fine)").matches;
+function showDeviceFrame() {
+  const inApp = /\/app\/(index\.html)?$/.test(location.pathname);
+  document.body.innerHTML = `<div class="dev-host">
+    <header class="dev-bar">
+      <div class="row"><span class="dev-brand">crema</span><span class="muted small" id="devLabel"></span></div>
+      <div class="row"><div class="seg" id="devSeg" role="group" aria-label="Device">${Object.keys(DEVICES).map((k) => `<button type="button" data-dev="${k}">${k === "tablet" ? "Tablet" : "iPhone"}</button>`).join("")}</div>
+        <a class="btn small ghost" href="?full${esc(location.hash)}">Full window</a>${inApp ? '<a class="btn small ghost" href="../">Walkthrough</a>' : ""}</div>
+    </header>
+    <div class="dev-stage" id="devStage"><div class="dev" id="dev"><iframe id="devFrame" title="Crema demo"></iframe></div></div>
+    <p class="muted small dev-note">A simulated DE1 and scale with real ONA and Haven coffees. Try Espresso, Steam, the shelf, profiles and themes.</p>
+  </div>`;
+  const frame = $("#devFrame"), dev = $("#dev"), stage = $("#devStage");
+  frame.src = `${location.pathname}?embed&demo${location.hash}`;
+  let mode = local.get("device", "tablet");
+  const fit = () => {
+    const d = DEVICES[mode];
+    const ow = d.w + d.bezel * 2, oh = d.h + d.bezel * 2;
+    const s = Math.min(1, (stage.clientWidth - 24) / ow, (stage.clientHeight - 24) / oh);
+    Object.assign(dev.style, { width: `${ow}px`, height: `${oh}px`, padding: `${d.bezel}px`, borderRadius: `${d.radius}px`, transform: `translate(-50%, -50%) scale(${s})` });
+    Object.assign(frame.style, { width: `${d.w}px`, height: `${d.h}px`, borderRadius: `${Math.max(8, d.radius - d.bezel)}px` });
+    $("#devLabel").textContent = `${d.label}${s < 1 ? ` · shown at ${Math.round(s * 100)}%` : ""}`;
+    $$("[data-dev]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.dev === mode)));
+  };
+  $$("[data-dev]").forEach((b) => (b.onclick = () => { mode = b.dataset.dev; local.set("device", mode); fit(); }));
+  window.addEventListener("resize", fit);
+  // Keep the frame's background in step with the theme chosen inside the app.
+  window.addEventListener("storage", (e) => {
+    try {
+      if (e.key === "crema:skin") applySkin(JSON.parse(e.newValue), false);
+      if (e.key === "crema:theme") applyTheme(JSON.parse(e.newValue), false);
+    } catch {}
+  });
+  fit();
+}
+
 /* ================= routing + boot ================= */
 const VIEWS = ["brew", "shelf", "add", "profiles", "shots", "settings"];
 function route(scroll = true) {
@@ -1042,6 +1088,7 @@ async function boot() {
       S.api = makeLiveApi(cfg, health);
     } catch { S.api = null; }
   }
+  if (!S.api && wantsDeviceFrame()) return showDeviceFrame();
   if (!S.api) S.api = makeDemoApi();
   $("#demoBanner").hidden = !S.api.demo;
 

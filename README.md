@@ -51,7 +51,7 @@ Six themes, chosen in Settings → Display and remembered per device. The layout
 
 The [GitHub Pages site](https://gauravawadhwal.github.io/crema/) is built from this repo by `.github/workflows/pages.yml` on every push:
 - `/` is the walkthrough (`demo/walkthrough.html`).
-- `/app/` is the full app (`skin/`). With no Crema server to talk to, it runs its built-in demo with a simulated DE1 and scale.
+- `/app/` is the full app (`skin/`). With no Crema server to talk to, it runs its built-in demo with a simulated DE1 and scale. On a desktop it opens inside a frame at the DE1 tablet's exact screen size (1340 × 800, scaled to fit), with a toggle for the iPhone layout and a link to open it full window. On a phone it fills the screen as usual.
 
 To build it locally, run `node scripts/build-site.mjs`; the site goes in `_site/`. The README animation and the MP4 are recorded from the walkthrough.
 
