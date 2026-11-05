@@ -204,6 +204,7 @@ npm run check:tablet
 ```
 
 - `test/flow.test.ts` runs the whole loop against the mock machine: identify → save → recommend → apply → feedback.
+- `npm run eval` measures the AI itself: 90 labelled cases for coffee identification, profile recommendation and dial-in advice, run through the real pipeline with any provider and model, with cost, latency and regression checks against committed baselines. See [evals/README.md](evals/README.md).
 - `npm run e2e` clicks through the demo at tablet and phone size. `npm run check:tablet` confirms the home screen fits a 1340 × 800 tablet without scrolling. Both need Playwright.
 
 **For contributors and coding agents:** start with [CLAUDE.md](CLAUDE.md), which covers the layout, commands, conventions and known pitfalls. Then read [docs/architecture.md](docs/architecture.md) and [docs/design.md](docs/design.md). Repeatable workflows are in `.claude/skills/`.

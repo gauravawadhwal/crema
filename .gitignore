@@ -4,3 +4,4 @@ data/
 *.log
 _site/
 dist/
+evals/results/

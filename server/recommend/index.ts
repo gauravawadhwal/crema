@@ -114,7 +114,7 @@ export async function recommend(llm: ProviderChain, input: RecommendInput): Prom
   }
 }
 
-const DIAL_SYSTEM = `You help dial in espresso on a Decent DE1. Suggest exactly ONE change for the next shot, the one most likely to improve it. Use the profile author's own dial-in guidance when it's given. Standard logic: sour/thin/fast means under-extracted (grind finer, or raise yield or temperature); bitter/harsh/slow means over-extracted (grind coarser, or lower yield or temperature). Prefer grind changes first, then yield, then temperature. Suggest switching profiles only after several shots that aren't working.`;
+const DIAL_SYSTEM = `You help dial in espresso on a Decent DE1. Suggest exactly ONE change for the next shot, the one most likely to improve it. Use the profile author's own dial-in guidance when it's given. The taste feedback scales: sourBitter runs from -2 (very sour) through 0 (balanced) to +2 (very bitter); body from -2 (thin) through 0 to +2 (heavy); enjoyment from 1 to 5. Read the notes too. Standard logic: sour/thin/fast means under-extracted (grind finer, or raise yield or temperature); bitter/harsh/slow means over-extracted (grind coarser, or lower yield or temperature). Prefer grind changes first, then yield, then temperature. Suggest switching profiles only after several shots that aren't working.`;
 
 export async function dialIn(
   llm: ProviderChain,

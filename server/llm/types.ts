@@ -15,12 +15,28 @@ export interface StructuredRequest<T extends z.ZodType> {
   images?: ImageInput[];
   /** Allow the model to search and read the web while answering. */
   web?: boolean;
+  /** Called with token and cost figures when the provider reports them (used by the evals); may be called once per model turn. */
+  onUsage?: (usage: Usage) => void;
+}
+
+/** What one call cost, as far as the provider reports it. Any field may be missing. */
+export interface Usage {
+  inputTokens?: number;
+  outputTokens?: number;
+  /** Cache reads and writes, counted separately from inputTokens. */
+  cacheTokens?: number;
+  costUsd?: number;
+  /** The model that actually answered, if the provider says. */
+  model?: string;
+  webSearches?: number;
 }
 
 export interface LlmProvider {
   readonly id: ProviderId;
   /** Human-readable description of how this provider is billed. */
   readonly billing: string;
+  /** The model this provider asks for, when it is configurable. */
+  readonly model?: string;
   structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>>;
 }
 

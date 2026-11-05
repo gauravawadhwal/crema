@@ -13,7 +13,7 @@ export class GeminiApiProvider implements LlmProvider {
 
   constructor(
     private readonly apiKey = process.env.GEMINI_API_KEY,
-    private readonly model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    readonly model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
   ) {}
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
@@ -45,7 +45,17 @@ export class GeminiApiProvider implements LlmProvider {
     if (!res.ok) throw new ProviderError(this.id, `HTTP ${res.status}: ${(await res.text()).slice(0, 1000)}`);
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; cachedContentTokenCount?: number };
+      modelVersion?: string;
     };
+    const um = json.usageMetadata;
+    req.onUsage?.({
+      // promptTokenCount includes cached tokens; report them separately.
+      inputTokens: um?.promptTokenCount != null ? um.promptTokenCount - (um.cachedContentTokenCount ?? 0) : undefined,
+      outputTokens: (um?.candidatesTokenCount ?? 0) + (um?.thoughtsTokenCount ?? 0) || undefined,
+      cacheTokens: um?.cachedContentTokenCount,
+      model: json.modelVersion ?? this.model,
+    });
     const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
     try {
       return req.schema.parse(extractJson(text));
