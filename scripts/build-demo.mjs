@@ -1,6 +1,6 @@
 // Builds demo/crema-demo.html: the web app forced into demo mode, with its
 // scripts inlined, as a page fragment (no <html>/<head>/<body>) suitable for
-// publishing as a Claude artifact. Run scripts/build-demo-data.ts first.
+// embedding or hosting as one HTML file (for example as a Claude artifact). Run scripts/build-demo-data.ts first.
 import { readFileSync, writeFileSync } from "node:fs";
 
 let s = readFileSync("skin/index.html", "utf8");

@@ -1,5 +1,5 @@
-// Takes the README screenshots from the demo: the DE1 tablet (Galaxy Tab A11,
-// 1340×800) and an iPhone. Needs Playwright.
+// Takes the README screenshots from the demo: a 1340×800 landscape tablet
+// (the DE1 tablet size) and an iPhone. Needs Playwright.
 //   node scripts/screenshots.cjs            → docs/screenshots/*.png
 const { chromium } = require("playwright");
 const path = require("path");

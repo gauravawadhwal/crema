@@ -1,9 +1,9 @@
-// Checks that the brew home screen fits the DE1 tablet (Galaxy Tab A11, 1340x800 panel)
+// Checks that the brew home screen fits a 1340x800 landscape tablet (the DE1 tablet size)
 // at 1x and scaled sizes, with and without the Android nav bar, before and after a shot.
 //   node scripts/check-tablet-fit.cjs [screenshotDir] [url]   (needs Playwright)
 // Measures whether the brew home screen fits the tablet without scrolling, before and after a shot.
 const { chromium } = require('playwright');
-const SIZES = [[1340, 800, 'A11 at 1x'], [1340, 752, 'A11 1x with nav bar'], [1206, 720, 'A11 at ~1.1x'], [1005, 600, 'A11 at 1.33x'], [1005, 552, '1.33x with nav bar']];
+const SIZES = [[1340, 800, 'tablet at 1x'], [1340, 752, '1x with nav bar'], [1206, 720, 'tablet at ~1.1x'], [1005, 600, 'tablet at 1.33x'], [1005, 552, '1.33x with nav bar']];
 (async () => {
   const b = await chromium.launch(); const out = process.argv[2] || '.'; const url = process.argv[3] || 'file://' + require('path').resolve(__dirname, '../skin/index.html') + '?demo&full';
   for (const [w, h, label] of SIZES) {

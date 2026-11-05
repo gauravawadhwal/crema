@@ -19,7 +19,7 @@ if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
 
 function pageUrl() {
   if (!built) return "file://" + path.resolve(__dirname, "../skin/index.html") + "?demo&full";
-  // The built demo is a fragment for Claude artifacts; wrap it the way the artifact viewer does.
+  // The built demo is a page fragment; wrap it in a minimal document, as an embedding host would.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "crema-e2e-"));
   const html = fs.readFileSync(path.resolve(__dirname, "../demo/crema-demo.html"), "utf8");
   fs.writeFileSync(path.join(dir, "index.html"), `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>body{margin:0}[hidden]{display:none!important}</style></head><body>${html}</body></html>`);

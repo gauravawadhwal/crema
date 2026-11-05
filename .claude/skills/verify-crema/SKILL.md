@@ -45,6 +45,6 @@ Run what applies, in this order. Each command exits non-zero on failure.
    Check the result with `curl localhost:8080/api/v1/workflow` (recipe, temperatures, grinder setting) and `curl localhost:8080/api/v1/machine/shotSettings`.
 
 Notes:
-- Playwright is required. In Claude cloud sessions Chromium is preinstalled and `require('playwright')` works; don't run `playwright install`.
+- Playwright with Chromium is required. If the environment already provides a Chromium build for Playwright, use it rather than installing another.
 - Bare `?demo` on a wide desktop window opens the device frame. The scripts add `&full` to test the app itself.
 - When stopping background servers, kill by PID. `pkill -f <pattern>` can kill your own shell.

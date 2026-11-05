@@ -34,7 +34,7 @@ All colour comes from CSS custom properties defined on `:root` in `skin/index.ht
 
 **How it works:**
 - `html[data-skin=…]` selects a theme; Crema has no attribute.
-- `html[data-theme=light|dark]` is the light/dark setting, used only by Crema. The Claude artifact host can also set it.
+- `html[data-theme=light|dark]` is the light/dark setting, used only by Crema. An embedding host can also set it.
 - Theme blocks use `html:root[data-skin="…"]` so they outrank the light/dark blocks.
 - The choice is stored per device in `localStorage` (`crema:skin`, `crema:theme`).
 
@@ -56,7 +56,7 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 | Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, then the next shot |
 | Desktop demo, top-level | `showDeviceFrame()` | The app in a 1340×800 (or 390×844) iframe inside a bezel, scaled to fit; `?full` opts out |
 
-**Target device:** the DE1 ships with a Samsung Galaxy Tab A11 (8.7-inch, 1340×800). Android may scale web pages, so the tablet layout is tested at 1340×800, 1340×752 (nav bar), 1206×720, 1005×600 and 1005×552 by `scripts/check-tablet-fit.cjs`.
+**Target device:** a 1340×800 landscape Android tablet, the size the community Lumen skin also targets (for example an 8.7-inch Samsung Galaxy Tab A-series). Android may scale web pages, so the tablet layout is tested at 1340×800, 1340×752 (nav bar), 1206×720, 1005×600 and 1005×552 by `scripts/check-tablet-fit.cjs`.
 
 ## Components
 

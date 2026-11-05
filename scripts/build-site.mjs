@@ -9,7 +9,7 @@ const out = "_site";
 rmSync(out, { recursive: true, force: true });
 mkdirSync(`${out}/shots`, { recursive: true });
 
-// The walkthrough is written as a page fragment (for Claude artifacts); give it a document shell.
+// The walkthrough is written as a page fragment (so it can also be embedded); give it a document shell.
 const fragment = readFileSync("demo/walkthrough.html", "utf8");
 writeFileSync(`${out}/index.html`, `<!doctype html>
 <html lang="en">

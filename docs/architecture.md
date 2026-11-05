@@ -57,7 +57,7 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 - **Routes** are listed in the README. `app.ts` handles identification, beans, the shelf, recommendations, applying recipes, shots and feedback. `home.ts` handles the proxy, preferences, favourites, presets, reference shots, bag state, maintenance and the catalog.
 - **Store** (`server/store.ts`): one JSON file (`CREMA_DATA`, default `data/crema.json`), written atomically. Keyed by Decaid bean id, it holds `info` (BeanInfo), `recipe`, `photo`, `productImage`, `art`, `bestShotId` and `finished`, plus `preferences`, `favourites[5]`, `presets` and `maintenance`.
 - **Product photos** (`server/images.ts`) are read from the roaster page's Open Graph, JSON-LD or Twitter metadata and cached in `data/images`. Only public hosts are fetched (no LAN or reserved names).
-- **LLM chain** (`server/llm/`): each provider implements `structured(req)` and returns Zod-validated output. The chain falls through to the next provider on failure. The CLI providers run the official `claude` and `codex` CLIs headless, so calls bill to the owner's subscription; that's for personal use only.
+- **LLM chain** (`server/llm/`): each provider implements `structured(req)` and returns Zod-validated output. The chain falls through to the next provider on failure. The CLI providers run the official `claude` and `codex` CLIs headless, so calls bill to whichever account is logged in on the host. That suits a personal installation; shared deployments should use API keys.
 
 ## Recommendation pipeline
 
@@ -80,9 +80,9 @@ BeanInfo ──► rules baseline (roast, rest, grind hint)
 scripts/seed-samples.ts  (real AI identify) ──► samples/beans.json
 scripts/seed-recipes.ts  (real AI recommend) ──► samples/recipes.json
 scripts/build-demo-data.ts ──► skin/demo-data.js   (adds bag facts, packshot colours, rankings)
-scripts/build-demo.mjs ──► demo/crema-demo.html    (single-file fragment for Claude artifacts)
+scripts/build-demo.mjs ──► demo/crema-demo.html    (single-file demo, embeddable as one page)
 scripts/screenshots.cjs ──► docs/screenshots/*     (and boxes.json for walkthrough highlights)
-scripts/build-site.mjs ──► _site/  ──(pages.yml on push)──► https://gauravawadhwal.github.io/crema/
+scripts/build-site.mjs ──► _site/  ──(pages.yml on push)──► https://<owner>.github.io/<repo>/
 scripts/record-walkthrough.cjs ──► docs/media/walkthrough.webp (README) and .mp4
 ```
 

@@ -1021,7 +1021,7 @@ function editPresets() {
    of that size, so its own layout rules see the real device dimensions.
    Phones, tablets and pages that are already embedded are left alone. */
 const DEVICES = {
-  tablet: { w: 1340, h: 800, bezel: 18, radius: 30, label: "DE1 tablet · Galaxy Tab A11 · 1340 × 800" },
+  tablet: { w: 1340, h: 800, bezel: 18, radius: 30, label: "Tablet · 1340 × 800 landscape" },
   phone: { w: 390, h: 844, bezel: 12, radius: 52, label: "iPhone · 390 × 844" },
 };
 const wantsDeviceFrame = () =>

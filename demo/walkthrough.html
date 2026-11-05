@@ -139,13 +139,19 @@ a { color: var(--accent); }
 <script>
 "use strict";
 const BOXES = {"tablet-home": {"x": 7.76, "y": 6.28, "w": 22.39, "h": 63.2}, "tablet-pulling": {"x": 30.9, "y": 6.28, "w": 52.54, "h": 92.47}, "tablet-after-shot": {"x": 30.9, "y": 55.42, "w": 52.54, "h": 43.33}, "tablet-steam": {"x": 30.6, "y": 31.56, "w": 38.81, "h": 36.88}, "tablet-profiles": {"x": 7.76, "y": 15.09, "w": 91.04, "h": 41.56}, "tablet-shelf": {"x": 7.76, "y": 1.53, "w": 29.65, "h": 50.5}, "tablet-settings": {"x": 7.76, "y": -0.05, "w": 29.65, "h": 52.24}, "tablet-shots": {"x": 50.28, "y": 18.34, "w": 47.56, "h": 44.81}, "tablet-add-coffee": {"x": 53.81, "y": 12.53, "w": 45, "h": 111.65}};
-const DEMO = window.CREMA_DEMO_URL || "https://gauravawadhwal.github.io/crema/app/";
-const REPO = "https://github.com/gauravawadhwal/crema";
+// Links resolve from where the page is hosted: the site build sets CREMA_DEMO_URL,
+// and on GitHub Pages (<owner>.github.io/<repo>/) the repository is derived from the URL.
+const DEMO = window.CREMA_DEMO_URL || null;
+const REPO = (() => {
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const repo = location.pathname.split("/").filter(Boolean)[0];
+  return m && repo ? `https://github.com/${m[1]}/${repo}` : null;
+})();
 
 const SLIDES = [
   { img: "tablet-home", step: "On the machine", title: "The DE1's new home screen",
     text: "Crema replaces the Decent home screen on the machine's tablet. On the left is the next shot: today's coffee, ONA Maple, with the profile and recipe matched to it. The live chart is in the middle, and the machine controls are on the right.",
-    facts: ["Galaxy Tab A11 · 1340 × 800", "fits one screen, no scrolling"] },
+    facts: ["1340 × 800 tablet", "fits one screen, no scrolling"] },
   { img: "tablet-add-coffee", step: "New bag", title: "Add a bag in seconds",
     text: "Photograph the bag, search for it, or paste the roaster's link. Crema reads the roast date from the bag, finds the roaster's page for origin, process and tasting notes, and tags every fact with where it came from: the bag, the web, or a guess to check.",
     facts: ["bag", "web", "inferred"] },
@@ -195,7 +201,7 @@ function visualHtml(s) {
   if (s.diagram) return `<div class="frame"><div class="screen"><div class="diagram">
       <div class="tier"><div class="node ours"><b>Crema on the tablet</b><span>The home screen, shelf, profiles, shots and settings</span></div><div class="node ours"><b>Crema on your iPhone</b><span>The same app, added to the home screen from Safari</span></div></div>
       <div class="arrow">↓ asks for coffee records and recipes · ↓ machine controls</div>
-      <div class="tier"><div class="node ours"><b>Crema server</b><span>Runs on your Home Assistant box. Identifies coffees, ranks profiles, keeps favourites and reminders</span></div><div class="node"><b>Claude or ChatGPT</b><span>Your subscription reads bags and roaster pages, then picks a profile</span></div></div>
+      <div class="tier"><div class="node ours"><b>Crema server</b><span>Runs on any always-on computer at home. Identifies coffees, ranks profiles, keeps favourites and reminders</span></div><div class="node"><b>Claude or ChatGPT</b><span>Your subscription reads bags and roaster pages, then picks a profile</span></div></div>
       <div class="arrow">↓ REST + WebSocket</div>
       <div class="tier"><div class="node"><b>Decaid</b><span>Decent's open-source app on the tablet: stores beans, profiles and shots</span></div><div class="node"><b>DE1 + scale</b><span>Over Bluetooth</span></div></div>
     </div></div></div>`;
@@ -219,7 +225,7 @@ function render() {
     $("caption").innerHTML = `<span class="step">${String(i + 1).padStart(2, "0")} / ${SLIDES.length} · ${esc(s.step)}</span>
       <h2>${esc(s.title)}</h2><p>${esc(s.text)}</p>
       ${s.facts ? `<div class="facts">${s.facts.map((f) => `<span class="fact">${esc(f)}</span>`).join("")}</div>` : ""}
-      ${s.links ? `<div class="links"><a href="${DEMO}" target="_blank" rel="noopener">Try the live demo</a><a class="ghost" href="${REPO}" target="_blank" rel="noopener">Code on GitHub</a></div>` : ""}`;
+      ${s.links && (DEMO || REPO) ? `<div class="links">${DEMO ? `<a href="${DEMO}" target="_blank" rel="noopener">Try the live demo</a>` : ""}${REPO ? `<a class="ghost" href="${REPO}" target="_blank" rel="noopener">Code on GitHub</a>` : ""}</div>` : ""}`;
     stage.classList.remove("fading", "slide-in");
     const layer = stage.querySelector(".layer");
     requestAnimationFrame(() => requestAnimationFrame(() => {

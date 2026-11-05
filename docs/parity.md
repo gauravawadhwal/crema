@@ -5,10 +5,9 @@ compares it with the stock de1app, Decent's Streamline skin (the Decaid
 reference skin), the Lumen skin, and popular plugins (Describe Your Espresso,
 Visualizer upload, Grind Advisor, Maintenance Tracker).
 
-Sources: the Streamline.js manual and the Lumen skin README (read directly), Decaid's
-API docs and bundled plugins, and Decent's blog via search results.
-decentespresso.com itself couldn't be fetched from the build environment, so stock-app
-details still need a pass on the real machine.
+Sources: the Streamline.js manual, the Lumen skin README, Decaid's API docs and
+bundled plugins, and Decent's published guidance. Stock-app details still need
+confirming against a real machine.
 
 ✅ done · 🟡 partial · ⬜ not yet
 
@@ -16,7 +15,7 @@ details still need a pass on the real machine.
 
 | Feature | Where it comes from | Crema |
 |---|---|---|
-| Home screen fits the tablet with no scrolling | Stock | ✅ tested at 1340×800 (Galaxy Tab A11) and scaled sizes down to 1005×552, before and after a shot (`scripts/check-tablet-fit.cjs`) |
+| Home screen fits the tablet with no scrolling | Stock | ✅ tested at 1340×800 and scaled sizes down to 1005×552, before and after a shot (`scripts/check-tablet-fit.cjs`) |
 | Espresso, Steam, Hot water, Flush, Stop buttons | Stock, Streamline | ✅ right-hand column (phone: top) |
 | Hide start buttons on group-head-controller machines | Streamline | ✅ "Start from the group head" setting; Stop and presets still work |
 | Sleep / wake button | Stock, Streamline, Lumen | ✅ rail (tablet), top bar (phone) |

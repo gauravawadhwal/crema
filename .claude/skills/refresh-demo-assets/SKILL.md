@@ -7,7 +7,7 @@ description: Regenerate Crema's demo assets after a UI or data change. Covers th
 
 Steps 1–2 make real AI calls (cost and time); the rest are free and local. Run only what's stale, in this order.
 
-1. **Sample coffees** (rarely needed): about 30–40 s per coffee through the owner's Claude subscription.
+1. **Sample coffees** (rarely needed): about 30–40 s per coffee, using whichever provider `LLM_PROVIDERS` names (here a logged-in `claude` CLI).
    ```bash
    LLM_PROVIDERS=claude-cli npx tsx scripts/seed-samples.ts
    ```
@@ -23,7 +23,7 @@ Steps 1–2 make real AI calls (cost and time); the rest are free and local. Run
    ```bash
    npx tsx scripts/build-demo-data.ts && node scripts/build-demo.mjs
    ```
-   Then run `node scripts/e2e-demo.cjs --built`. It must pass: the built file is what the Claude artifact shows.
+   Then run `node scripts/e2e-demo.cjs --built`. It must pass: the built file is what gets embedded or hosted as a single page.
 
 4. **Screenshots**:
    ```bash
@@ -37,10 +37,10 @@ Steps 1–2 make real AI calls (cost and time); the rest are free and local. Run
    ```
    Updates `docs/media/walkthrough.webp` (the README animation, about 5–6 MB) and `walkthrough.mp4`. Needs ffmpeg with `libwebp_anim` and `libx264`.
 
-6. **Publish**: push to `main`. `.github/workflows/pages.yml` rebuilds `_site/` and deploys to https://gauravawadhwal.github.io/crema/. Check the run with:
+6. **Publish**: push to `main`. `.github/workflows/pages.yml` rebuilds `_site/` and deploys it to the repository's GitHub Pages site (`https://<owner>.github.io/<repo>/`). Check the run with:
    ```bash
-   gh api "repos/gauravawadhwal/crema/actions/runs?per_page=1"
+   gh run list --workflow pages.yml --limit 1
    ```
-   If the owner keeps Claude artifact copies, republish `demo/crema-demo.html` and `demo/walkthrough.html` (the walkthrough needs its `shots/*.png` files passed alongside).
+   Anywhere else the single-file demo or walkthrough is hosted, republish `demo/crema-demo.html` and `demo/walkthrough.html` there too. The walkthrough needs `docs/screenshots/*.png` served at `shots/`.
 
 Keep the sample data public-safe: roasters' public product information only. No personal data, addresses or account details.
