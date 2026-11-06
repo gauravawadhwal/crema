@@ -122,7 +122,7 @@ Running the server as an Android app on the tablet was considered and rejected: 
 
 ## 7. Sources
 
-- Decaid repo and skin/API docs: https://github.com/tadelv/reaprime (`doc/Skins.md`, `doc/Api.md`)
+- Decaid repo and skin/API docs: https://github.com/decentespresso/decaid (`doc/Skins.md`, `doc/Api.md`)
 - Decent's 2025 software update: https://decentespresso.com/blog/decent_software_2025_and_beyond_skins_calibration_dflowmore
 - Visualizer's AI bag import and Bean Base: https://visualizer.coffee/updates/ai-comes-to-visualizer, https://visualizer.coffee/updates/loffee-labs-meets-coffee-management
 - Bean AI (iOS label scanner): https://mwm.ai/apps/bean-ai/6760227144
