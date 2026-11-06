@@ -13,6 +13,8 @@ and the simulator in this repo (`dev/mock-decaid.ts`), not yet on a real
 machine. Treat real-hardware behaviour as unverified until someone tests it.
 
 Read next, as needed:
+- `docs/implementation-plan.md`: handoff for the November 2026 review recommendations, including Streamline Settings reuse, reliability fixes, compatibility and release checks. This is planned work, not implemented behaviour.
+- `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
 - `docs/design.md`: the design system, layouts, themes, copy style.
@@ -55,6 +57,7 @@ UI checks (need Playwright with Chromium):
 ```bash
 node scripts/e2e-demo.cjs            # click through the demo at tablet and phone size
 node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
+node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
 node scripts/check-tablet-fit.cjs    # home screen fits the DE1 tablet without scrolling
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
 ```

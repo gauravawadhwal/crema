@@ -134,7 +134,8 @@ function makeLiveApi(conn) {
 
   // ---- Crema's data in Decaid's key-value store ----
   const kvUrl = (key) => D(`/store/${KV_NS}/${encodeURIComponent(key)}`);
-  const kvGet = async (key, fallback) => { try { return await j(kvUrl(key)); } catch (e) { if (e.status === 404) return fallback; throw e; } };
+  // Decaid's docs say a missing key is a 404; Decaid 0.9.1 answers 200 with null. Treat both as missing.
+  const kvGet = async (key, fallback) => { try { return (await j(kvUrl(key))) ?? fallback; } catch (e) { if (e.status === 404) return fallback; throw e; } };
   const kvSet = (key, value) => post(kvUrl(key), value);
   const recordOf = (beanId) => kvGet(`bean:${beanId}`, null);
   const patchRecord = async (beanId, patch) => kvSet(`bean:${beanId}`, { ...((await recordOf(beanId)) || {}), ...patch });
@@ -172,6 +173,23 @@ function makeLiveApi(conn) {
     return { bean, rec, batch, info: rec?.info ?? infoFromDecaidBean(bean, batch) };
   }
   const installedTitles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso").map((p) => p.profile.title);
+
+  // Shot settings (steam time, hot-water volume and temperatures). Decaid has no GET
+  // for them: the current values arrive on a stream as soon as it opens. A write
+  // must carry every field (0.9.1 rejects a partial one with a 500), so set()
+  // reads, merges and sends the whole object, one write at a time.
+  const readShotSettings = () => new Promise((resolve, reject) => {
+    let ws;
+    const done = (settle, v) => { clearTimeout(timer); try { ws?.close(); } catch {} settle(v); };
+    const timer = setTimeout(() => done(reject, new Error("the machine didn't report its settings")), 3000);
+    try { ws = new WebSocket(wsBase + "/ws/v1/machine/shotSettings"); } catch (e) { return done(reject, e); }
+    ws.onmessage = (e) => { try { const s = JSON.parse(e.data); if (s && "targetSteamDuration" in s) done(resolve, s); } catch {} };
+    ws.onerror = () => done(reject, new Error("couldn't read the machine's settings"));
+  });
+  let shotSettingsQueue = Promise.resolve();
+  const writeShotSettings = (patch) => (shotSettingsQueue = shotSettingsQueue.catch(() => {}).then(async () => {
+    await post(D("/machine/shotSettings"), { ...(await readShotSettings()), ...patch });
+  }));
 
   let heartbeatAt = 0;
   const api = {
@@ -326,7 +344,7 @@ function makeLiveApi(conn) {
       info: () => j(D("/machine/info")),
       setState: (s) => j(D(`/machine/state/${s}`), { method: "PUT" }),
       tare: () => j(D("/scale/tare"), { method: "PUT" }),
-      shotSettings: { get: () => j(D("/machine/shotSettings")).catch(() => null), set: (p) => post(D("/machine/shotSettings"), p) },
+      shotSettings: { get: () => readShotSettings().catch(() => null), set: writeShotSettings },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
       waterThreshold: (pct) => post(D("/machine/waterLevels"), { warningThresholdPercentage: pct }),
       presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
@@ -370,7 +388,7 @@ const S = {
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
   shelf: [], current: null, next: null, loaded: false,
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
-  live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null,
+  live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
   shots: [], selShot: null, cmpShot: null,
 };
@@ -633,7 +651,7 @@ function editFav(i) {
 function renderControls() {
   const p = S.presets, st = S.snap?.state?.state;
   if (!p) return;
-  const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
+  const busy = ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
   const disabled = S.ghc || !S.snap || st === "sleeping" || st === "needsWater";
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
@@ -644,7 +662,7 @@ function renderControls() {
     <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
     <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
     <div class="ctl"><button class="ctl-btn" data-run="flush" ${disabled || busy ? "disabled" : ""}>Flush<span class="sub">${flush.seconds} s</span></button>${chips("flush", p.flush)}</div>
-    <div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap ? "" : "disabled"}>STOP</button>
+    <div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap || isStarting() ? "" : "disabled"}>STOP</button>
       ${S.ghc ? '<span class="ghc-note">Your machine starts from the group head controller. Crema sets the recipe and presets; press the group head to start.</span>' : ""}</div>`;
   $$("[data-run]").forEach((b) => (b.onclick = () => startOp(b.dataset.run)));
   $$("[data-preset]").forEach((b) => (b.onclick = async () => {
@@ -654,7 +672,7 @@ function renderControls() {
     await S.api.presets.set(S.presets).catch(() => {});
     await pushPresetSettings(kind).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
   }));
-  $("#stopBtn").onclick = () => S.api.machine.setState("idle").catch((e) => toast(e.message));
+  $("#stopBtn").onclick = stopMachine;
 }
 async function pushPresetSettings(kind) {
   const p = S.presets, sel = p.selected;
@@ -662,15 +680,46 @@ async function pushPresetSettings(kind) {
   if (kind === "water") await S.api.machine.shotSettings.set({ targetHotWaterVolume: p.water[sel.water].ml });
   if (kind === "flush") await S.api.machine.settings.set({ flushTimeout: p.flush[sel.flush].seconds });
 }
+// Starting can mean writing settings or loading the recipe before the start
+// command. Each start takes a generation number and Stop moves it on, so a
+// response that arrives after Stop can't start the machine. S.starting blocks a
+// second start until the machine reports the first (or a few seconds pass).
+// A start command is never retried.
+let opGen = 0; // S.starting is { kind, until } while a start is under way
+const isStarting = () => !!S.starting && Date.now() < S.starting.until;
 async function startOp(kind) {
+  if (isStarting()) return;
+  const gen = ++opGen, current = () => gen === opGen;
+  S.starting = { kind, until: Infinity };
+  renderControls();
+  let sent = false;
   try {
     if (kind === "espresso" && !S.loaded) { const ok = await loadOntoMachine(true); if (!ok) return; }
     if (kind === "steam") await pushPresetSettings("steam");
     if (kind === "hotWater") await pushPresetSettings("water");
     if (kind === "flush") await pushPresetSettings("flush");
+    if (!current()) return;
     await S.api.machine.setState(kind);
+    sent = true;
+    // Stop was pressed while the start command was on its way. The two requests
+    // can reach the machine in either order, so stop again now that it has landed.
+    if (!current()) { S.api.machine.setState("idle").catch(() => {}); return; }
     S.api.machine.heartbeat();
-  } catch (e) { toast(`Couldn't start: ${e.message}`); }
+  } catch (e) {
+    if (current()) toast(`Couldn't start: ${e.message}`);
+  } finally {
+    if (current()) {
+      S.starting = sent ? { kind, until: Date.now() + 3000 } : null;
+      if (sent) setTimeout(renderControls, 3100);
+      renderControls();
+    }
+  }
+}
+function cancelStart() { opGen++; S.starting = null; }
+function stopMachine() {
+  cancelStart();
+  renderControls();
+  return S.api.machine.setState("idle").catch((e) => toast(`Couldn't stop: ${e.message}`));
 }
 
 /* ================= live panel + running overlay ================= */
@@ -698,6 +747,7 @@ function onSnapshot(s) {
   const prevState = S.snap?.state?.state;
   S.snap = s;
   const st = s.state?.state;
+  if (st !== prevState && S.starting?.kind === st) S.starting = null; // the machine has picked up the start
   if (st !== prevState) { renderControls(); renderAlerts(); updateSaver(); if (st === "espresso") onShotStart(); opOverlay(); }
   if (st === "espresso") {
     // Decaid's snapshot has no timer; the simulators send one. Ignore a stale
@@ -793,7 +843,7 @@ function opOverlay() {
   $("#opCard").innerHTML = `<span class="label">${title}</span><div class="op-time">${t.toFixed(0)}<small style="font-size:1.4rem" class="muted"> s</small></div>
     ${total ? `<div class="op-bar"><div style="width:${clamp((t / total) * 100, 0, 100)}%"></div></div><div class="muted">${Math.max(0, total - t).toFixed(0)} s left</div>` : '<div class="muted">Runs until you stop it</div>'}
     <div>${esc(detail)}</div><button class="stop-btn active" id="opStop">STOP</button>`;
-  $("#opStop").onclick = () => S.api.machine.setState("idle").catch(() => {});
+  $("#opStop").onclick = stopMachine;
 }
 
 /* ================= screen saver ================= */
@@ -810,6 +860,7 @@ function tickSaver() {
 }
 async function sleepWake() {
   const asleep = S.snap?.state?.state === "sleeping";
+  cancelStart();
   try { await S.api.machine.setState(asleep ? "idle" : "sleeping"); toast(asleep ? "Waking up" : "Going to sleep"); } catch (e) { toast(e.message); }
 }
 

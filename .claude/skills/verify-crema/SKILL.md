@@ -24,6 +24,12 @@ Run what applies, in this order. Each command exits non-zero on failure.
    ```
    Look at a few of the screenshots, not just the exit code.
 
+   For any change to machine controls (`startOp`, `stopMachine`, `renderControls`, presets, the recipe load), also run the control races: Stop during a pending settings write or recipe load, Stop while the start command is in flight, and a double tap.
+   ```bash
+   node scripts/e2e-controls.cjs && node scripts/e2e-controls.cjs --built
+   ```
+   With desktop Decaid running its simulated DE1 and serving `skin/` in live-edit mode, `node scripts/e2e-controls.cjs --url http://localhost:3000/` runs the same cases against real Decaid. It only accepts localhost; never run it against a Decaid connected to a real machine.
+
 4. **Tablet fit**: needed for any CSS, layout or copy-length change on the Brew screen. It fails if the page or any column overflows at the DE1 tablet sizes.
    ```bash
    node scripts/check-tablet-fit.cjs /tmp/crema-fit

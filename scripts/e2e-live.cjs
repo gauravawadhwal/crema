@@ -89,8 +89,33 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 3, notes: null }) : { source: "no shot" }; });
     check(fb.source === "rules" || fb.source === "no shot", `dial-in advice from the rules (${fb.source})`);
+    // Steam and hot water write their preset first. Decaid has no GET for shot
+    // settings and rejects a partial write, so this only works if the app reads
+    // the stream and sends the whole object.
+    const shotSettings = () => new Promise((resolve) => {
+      const ws = new (require("ws"))(`ws://localhost:${MOCK}/ws/v1/machine/shotSettings`);
+      ws.on("message", (m) => { ws.close(); resolve(JSON.parse(m)); });
+    });
+    for (const [kind, preset, field] of [["steam", "steam:1", "targetSteamDuration"], ["hotWater", "water:2", "targetHotWaterVolume"]]) {
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForTimeout(1000);
+      await page.click(`[data-preset="${preset}"]`); await page.waitForTimeout(400);
+      await page.click(`[data-run="${kind}"]`);
+      const ran = await page.waitForFunction((k) => S.snap?.state?.state === k, kind, { timeout: 5000 }).then(() => true, () => false);
+      const want = await page.evaluate((pr) => { const [k, i] = pr.split(":"); const x = S.presets[k][i]; return x.seconds ?? x.ml; }, preset);
+      const ss = await shotSettings();
+      check(ran && ss[field] === want && ss.groupTemp != null, `${kind} starts with its preset (${field} ${ss[field]}, wanted ${want})`);
+      await S(() => stopMachine()); await page.waitForTimeout(800);
+    }
     await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForTimeout(1200);
     check((await page.textContent("#settings")).includes("Not connected"), "Settings shows no Crema server");
+    const steamT = await page.inputValue("#sSteamT").catch(() => "");
+    check(steamT !== "", `Settings shows the steam temperature (${steamT || "missing"})`);
+    if (steamT) {
+      const before = await shotSettings();
+      await page.click('[data-mini="sSteamT:5"]'); await page.waitForTimeout(800);
+      const after = await shotSettings();
+      check(after.targetSteamTemp === before.targetSteamTemp + 5 && after.targetHotWaterVolume === before.targetHotWaterVolume, "changing steam temperature keeps the other shot settings");
+    }
 
     // ---- 2. with the Crema server ----
     const server = await crema();
