@@ -55,6 +55,64 @@ separate supervised step; implement and test locally first.
 | 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Not started |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
 
+## Findings from writing the user setup guide (7 November 2026)
+
+Writing a step-by-step setup guide for the user surfaced these gaps. Each one belongs
+to a phase below, and none has been implemented. `docs/install.md` was corrected
+at the same time (docs only). The user also has a private web version of the guide,
+which isn't in this repo. When behaviour changes, update `docs/install.md` and tell
+the user which parts of the web guide are now out of date.
+
+Upstream details came from Decaid's `doc/Skins.md` on `main` (fetched 7 November 2026).
+The install, skin-exit and port sections of that file were read only as a tool summary,
+not word for word. Confirm them against the Decaid release on the tablet before
+building on them.
+
+1. **No way back to Decaid from Crema (phase 3, "dashboard exit").** Crema has no
+   control that leaves the skin. Skins.md documents `window.decentApp.exitToDashboard()`,
+   which closes the skin and shows Decaid's dashboard in the embedded WebView and does
+   nothing in an external browser. Add a control in Settings (and possibly the rail)
+   that calls it only when `window.decentApp?.exitToDashboard` exists. In a phone
+   browser, hide the control or show guidance instead. Block it during an active machine
+   operation. Install docs currently send users to Decaid's "Skin navigation guide"
+   setting (Settings → General) instead.
+2. **Streamline Settings entry point (phase 3).** Specifics from the plugin's README:
+   - It installs with `POST /api/v1/plugins/install/github-release` and the body
+     `{"repo":"decentespresso/streamline-setting"}`, or from its release ZIP on
+     Decaid's Plugins screen.
+   - To detect it, look for its plugin ID in `GET /api/v1/plugins`.
+   - The page lives on the API port (`:8080`). Each skin is served from its own origin:
+     `:3000` redirects to the selected skin's origin, which uses ports from 24800 up.
+   - Decaid sends `X-Frame-Options: SAMEORIGIN`, so the skin can't show the page in an
+     iframe. Navigate the whole page there instead, with `return=` set to
+     `location.href`. Without `return`, Save and Cancel go to `http://<host>:3000/`.
+   - It stores its own values in the key-value namespace `streamlineSettings`.
+     Language, units and zoom there are Streamline preferences that Crema doesn't read.
+     Decide whether Crema should follow any of them.
+   - Crema's Settings → Machine and Steam sections duplicate some machine settings.
+     Decide which control is the source of truth (see phase 3).
+3. **No GitHub release exists yet (phase 6).** Decaid's "Install skin → GitHub Release"
+   route has nothing to install until a `v*` tag is pushed. `release.yml` packages
+   without running tests or the engine freshness check (R10), so add those gates before
+   or alongside the first release. The user has been told to tag `v0.1.0` from `main`.
+4. **Backup and restore are unverified (phase 6).** `docs/install.md` now gives
+   `GET /api/v1/store/crema?full=1` and `GET /api/v1/profiles/export` for backups,
+   both from Decaid's docs. Neither has been run against real Decaid. No restore
+   procedure exists, and beans and shots depend on Decaid's own export. Verify both
+   commands and write a restore procedure (phase 7, on disposable data).
+5. **Install path labels are unverified (phase 7).** The docs give Launcher → Skins →
+   ⚙ → Install skin → GitHub Release / ZIP file, and say that selecting a skin makes it
+   the default served at `:3000`. Check both on the tablet, with the Decaid version
+   recorded, and correct `docs/install.md`.
+6. **Profile editing and other specialist features (phase 3, ownership audit).** The
+   docs now route profile editing, Visualizer import and hiding built-in profiles to
+   the Streamline skin (switch skins, then switch back). Firmware, calibration,
+   cleaning cycles and eco steam go to Streamline Settings, and scale pairing to
+   Decaid. Treat these as the working assumption for the `docs/parity.md` rewrite,
+   not as verified routes.
+7. **Playwright is installed globally, not declared (phase 0, R11).** The UI scripts
+   only work where `playwright` is installed globally. A fresh checkout can't run them.
+
 ## Phase 0 — compatibility baseline and test setup
 
 ### Findings from desktop Decaid (6 November 2026)
