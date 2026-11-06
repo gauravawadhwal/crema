@@ -10,7 +10,7 @@
                   /api/*, and /decaid/* (proxy) when DECAID_URL is set
 ```
 
-- **Decaid** owns the machine and scale connection. It stores beans, batches, grinders, profiles, the current workflow and shots, keeps a key-value store for skins, and serves REST and WebSocket APIs. Its docs: `doc/Skins.md` in [tadelv/reaprime](https://github.com/tadelv/reaprime). Its 74 bundled default profiles (`assets/defaultProfiles`) are the source of the profile catalog.
+- **Decaid** owns the machine and scale connection. It stores beans, batches, grinders, profiles, the current workflow and shots, keeps a key-value store for skins, and serves REST and WebSocket APIs. Its docs: `doc/Skins.md` in [decentespresso/decaid](https://github.com/decentespresso/decaid). Its 74 bundled default profiles (`assets/defaultProfiles`) are the source of the profile catalog.
 - **Web app** (`skin/`) is the UI on the tablet and phones. It talks to Decaid for everything, and to the Crema server only for AI.
 - **Crema server** (`server/`) is optional and stateless. It identifies coffees, makes the AI profile choice and gives AI dial-in advice. When `DECAID_URL` is set, it also serves the app and proxies Decaid's REST API at `/decaid/*`, so a phone can open the app from the server.
 

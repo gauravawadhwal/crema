@@ -5,7 +5,7 @@ import type { ProcessKind, RoastLevel } from "../schema.js";
  *
  * Sources (in order of weight):
  *  1. The authors' own notes inside each profile file, as bundled with Decaid
- *     (github.com/tadelv/reaprime, assets/defaultProfiles). These ship on the
+ *     (github.com/decentespresso/decaid, assets/defaultProfiles). These ship on the
  *     tablet, so every title here is normally already installed.
  *  2. Decent's guidance: successful users favour Londinium, D-Flow, Adaptive,
  *     Extractamundo Dos and Allongé; Adaptive v2 is the showroom's most-used

@@ -197,7 +197,7 @@ npm run check:tablet
 
 ## Acknowledgements
 
-- [Decent Espresso](https://decentespresso.com) for the DE1 and its open ecosystem, and the [Decaid](https://github.com/tadelv/reaprime) project (GPL-3.0), which Crema talks to over its API. Crema contains no Decaid code.
+- [Decent Espresso](https://decentespresso.com) for the DE1 and its open ecosystem, and the [Decaid](https://github.com/decentespresso/decaid) project (GPL-3.0), which Crema talks to over its API. Crema contains no Decaid code.
 - The community profile authors whose notes the profile catalog is described from: Damian Brakel, Janek, Scott Rao, Jonathan Gagné, Joe D., John Weiss, longpvo, Denis (KafaTek), Luca & Stéphane, Shin and the Decent team.
 - The Streamline and Lumen skins, for the feature set a day-to-day interface needs.
 - ONA Coffee and Haven Coffee, whose public product listings make up the demo's sample coffees.
