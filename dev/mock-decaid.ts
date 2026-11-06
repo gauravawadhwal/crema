@@ -240,9 +240,14 @@ const server = createServer(async (req, res) => {
       if (state === "espresso") run("espresso");
       return send(res, 200, snapshot());
     }
-    if (p === "/api/v1/machine/shotSettings") {
-      if (m === "POST") shotSettings = { ...shotSettings, ...(await body(req)) };
-      return send(res, 200, shotSettings);
+    // Like Decaid 0.9.1: no GET (read ws/v1/machine/shotSettings instead), and a
+    // write must carry every field; a partial one fails with a 500.
+    if (p === "/api/v1/machine/shotSettings" && m === "POST") {
+      const next = (await body(req)) as Json;
+      const missing = Object.keys(shotSettings).filter((k) => next[k] === undefined || next[k] === null);
+      if (missing.length) return send(res, 500, { error: `type 'Null' is not a subtype of type 'String' (missing ${missing.join(", ")})` });
+      shotSettings = { ...next };
+      return send(res, 200, null);
     }
     if (p === "/api/v1/machine/settings") {
       if (m === "POST") settings = { ...settings, ...(await body(req)) };
@@ -310,7 +315,8 @@ const server = createServer(async (req, res) => {
       kv[ns] ??= {};
       if (m === "POST") { kv[ns][key] = await body(req); return send(res, 200, kv[ns][key]); }
       if (m === "DELETE") { const had = key in kv[ns]; delete kv[ns][key]; return send(res, 200, { deleted: had }); }
-      if (!(key in kv[ns])) return send(res, 404, { error: "not found" });
+      // Decaid 0.9.1 answers a missing key with 200 and null, although its docs say 404.
+      if (!(key in kv[ns])) return send(res, 200, null);
       return send(res, 200, kv[ns][key]);
     }
     // library
@@ -399,7 +405,9 @@ server.on("upgrade", (req, socket, head) => {
   if (!stream) return socket.destroy();
   wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
     if (path === "/ws/v1/scale/snapshot") ws.send(JSON.stringify({ status: "connected" }));
-    const iv = setInterval(() => ws.readyState === ws.OPEN && ws.send(JSON.stringify(stream.frame())), 1000 / stream.hz);
+    const tick = () => ws.readyState === ws.OPEN && ws.send(JSON.stringify(stream.frame()));
+    tick(); // Decaid sends the current value as soon as a client connects
+    const iv = setInterval(tick, 1000 / stream.hz);
     ws.on("close", () => clearInterval(iv));
   });
 });
