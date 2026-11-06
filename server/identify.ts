@@ -7,6 +7,13 @@ export interface IdentifyInput {
   images?: ImageInput[];
   /** Free text, e.g. "Square Mile Red Brick" or a barcode number. */
   query?: string;
+  /**
+   * The user describing the bag in their hand, typed or dictated, e.g.
+   * "ONA La Fincona, roasted on the 2nd, 250 grams". May carry speech-to-text errors.
+   */
+  description?: string;
+  /** Today's date (YYYY-MM-DD) for resolving "roasted last Tuesday". Defaults to the server's date. */
+  today?: string;
   /** A roaster product page. */
   url?: string;
   /** Skip the web lookup (faster, bag-only facts). */
@@ -28,15 +35,25 @@ Rules:
 - confidence reflects how sure you are that you found the right coffee, not how complete the record is.
 - productUrl: the roaster's own product page for this coffee, if you found it.
 - imageUrl: the direct URL of the roaster's main product photo (the packshot), only if you actually saw it on the page; otherwise null.
-- summary: one or two plain sentences on how the coffee will taste as espresso.`;
+- summary: one or two plain sentences on how the coffee will taste as espresso.
+
+When the user describes the bag in their own words (often dictated, so expect speech-to-text errors):
+- Lot facts they say they read off the bag (roast date, bag weight, lot, a printed recipe) count as source="bag".
+- Names may be misheard or spelt by sound ("on a coffee" for ONA, "square mile red brick" for Square Mile Red Brick). Match them to a real roaster and coffee that sound alike, and lower confidence if you had to guess.
+- Resolve relative dates ("roasted last Tuesday", "about two weeks ago", "the 2nd") against today's date, never to a date after today. Add "roastDate" to needsConfirmation unless they gave a full date.
+- Ignore filler, false starts and corrections ("no, sorry, I mean"); the last version they said wins.`;
 
 export async function identify(llm: ProviderChain, input: IdentifyInput): Promise<BeanInfo> {
-  if (!input.images?.length && !input.query && !input.url) {
-    throw new Error("provide at least one of images, query or url");
+  if (!input.images?.length && !input.query && !input.description && !input.url) {
+    throw new Error("provide at least one of images, query, description or url");
   }
   const parts: string[] = [];
   if (input.images?.length) parts.push(`I've attached ${input.images.length} photo(s) of a coffee bag I own.`);
   if (input.query) parts.push(`The coffee: "${input.query}".`);
+  if (input.description) {
+    parts.push(`Today is ${input.today ?? new Date().toISOString().slice(0, 10)}.`);
+    parts.push(`How I describe the bag (may be dictated): """${input.description}"""`);
+  }
   if (input.url) parts.push(`The product page: ${input.url}`);
   parts.push(
     input.offline

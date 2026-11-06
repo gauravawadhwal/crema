@@ -330,6 +330,13 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .seg button { border: 0; background: transparent; padding: 7px 13px; border-radius: 9px; cursor: pointer; font-weight: 500; color: var(--muted); min-height: 36px; }
 .seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
 .field { display: grid; gap: 6px; }
+textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); line-height: 1.4; }
+#speakBtn { gap: 6px; }
+#speakBtn .icon { width: 16px; height: 16px; }
+#speakBtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+#speakBtn[aria-pressed="true"] .icon { animation: listen 1.2s ease-in-out infinite; }
+@keyframes listen { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { #speakBtn[aria-pressed="true"] .icon { animation: none; } }
 .input, .field input[type="text"], .field input[type="url"], .field input[type="date"], .field input[type="number"], .field input[type="time"], .field select {
   width: 100%; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); min-height: 44px;
 }
@@ -603,7 +610,7 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
           <div class="panel stack">
             <div class="seg" role="tablist" aria-label="How to add" id="addModes">
               <button role="tab" id="mode-photo" aria-selected="true" data-mode="photo">Photo of the bag</button>
-              <button role="tab" id="mode-search" aria-selected="false" data-mode="search">Search</button>
+              <button role="tab" id="mode-describe" aria-selected="false" data-mode="describe">Describe it</button>
               <button role="tab" id="mode-link" aria-selected="false" data-mode="link">Paste a link</button>
               <button role="tab" id="mode-manual" aria-selected="false" data-mode="manual">Type it in</button>
             </div>
@@ -618,9 +625,11 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
                 <input type="file" id="photoInput" accept="image/*" capture="environment" multiple hidden>
                 <div class="thumbs" id="thumbs"></div>
               </div>
-              <div data-pane="search" class="field" hidden>
-                <label class="label" for="queryInput">Roaster and coffee</label>
-                <input type="text" id="queryInput" placeholder="e.g. ONA La Fincona, Haven Gogogu" autocomplete="off">
+              <div data-pane="describe" class="stack" style="gap:8px" hidden>
+                <div class="row between"><label class="label" for="describeInput">What's on the bag</label>
+                  <button type="button" class="btn small" id="speakBtn" aria-pressed="false" hidden><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span>Speak</span></button></div>
+                <textarea id="describeInput" class="describe" rows="3" maxlength="2000" autocomplete="off" enterkeyhint="search" placeholder="e.g. ONA La Fincona, roasted on the 2nd of November, 250 grams"></textarea>
+                <span class="muted small" id="speakHint">Roaster and name are enough. Add the roast date and weight if you have them.</span>
               </div>
               <div data-pane="link" class="field" hidden>
                 <label class="label" for="urlInput">Product page</label>

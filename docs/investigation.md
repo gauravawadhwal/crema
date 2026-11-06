@@ -43,7 +43,11 @@ So the model gets the photos plus web search, and every field records where it c
 
 **Product photos** come from the product page's metadata (Open Graph `og:image`, JSON-LD `Product.image` or the Twitter card), which nearly every roaster shop publishes, rather than from a URL the model guesses. The image is downloaded once and cached, so the shelf works offline. The user picks between the roaster's photo and their own. Lookups only go to public addresses, never the local network.
 
-Search and paste-a-link use the same pipeline. They help when browsing before buying, re-adding a past coffee, or when the bag isn't to hand.
+Describe-it and paste-a-link use the same pipeline. They help when browsing before buying, re-adding a past coffee, or when the bag isn't to hand.
+
+**Describing the bag** is often quicker than a photo: "ONA La Fincona, roasted on the 2nd, 250 grams" covers what matters, and the roast date comes from the user, read off the bag, so it counts as a `bag` fact. The model is told the text may be dictated, so it matches misheard names to real roasters by sound, resolves relative dates ("last Tuesday") against the tablet's date, and ignores false starts. A plain name works the same way, so this mode replaces the old search box.
+
+Dictation uses the browser's speech recognition (the **Speak** button) where it exists. Chrome and Safari offer it only on https or localhost pages. Chrome sends the audio to Google's speech service, and Safari to Apple's. A phone on the tablet's plain-http address and most Android WebViews don't have it, so the button stays hidden there and the keyboard's own microphone fills the same box. When the speaker pauses for a couple of seconds, Crema looks the coffee up without a tap. Speech goes to text in the browser, so the server needs no audio handling and works with every AI provider.
 
 Ideas not yet built:
 - **Order emails**: roasters' order confirmations name the exact product, so a coffee could be added before the bag arrives, leaving only the roast-date sticker to photograph.

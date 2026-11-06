@@ -226,12 +226,14 @@ function makeLiveApi(conn) {
       return rows.filter(Boolean);
     },
 
-    async identify({ files, query, url, offline }, onStep) {
+    async identify({ files, query, description, url, offline }, onStep) {
       if (!aiOn()) throw new Error(conn.crema == null ? "Identifying needs a Crema server. Enter the details by hand instead." : "AI features are off. Enter the details by hand, or switch AI on in Settings.");
       onStep(0, [files?.length ? "Reading the bag and finding the roaster's page" : "Looking up the coffee", "Building the record"]);
       const fd = new FormData();
       (files || []).forEach((f) => fd.append("images", f));
       if (query) fd.set("query", query); if (url) fd.set("url", url); if (offline) fd.set("offline", "true");
+      // The tablet's own date, so "roasted last Tuesday" resolves in the user's time zone.
+      if (description) { fd.set("description", description); fd.set("today", new Date().toLocaleDateString("en-CA")); }
       return (await cremaCall(() => j(C("/api/identify"), { method: "POST", body: fd }))).info;
     },
 
@@ -918,12 +920,63 @@ const MANUAL_INTRO = `<h2>Entering a coffee by hand</h2>
   </ul>`;
 const introFor = (m) => (m === "manual" ? MANUAL_INTRO : REVIEW_INTRO);
 function setMode(m) {
+  if (m !== "describe") stopListening(false);
   addMode = m;
   $$("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
   $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
   $("#offlineRow").hidden = m === "manual";
   $("#identifyBtn").textContent = m === "manual" ? "Review" : "Identify coffee";
   if (!pending) $("#reviewPanel").innerHTML = introFor(m);
+  if (m === "describe") renderSpeak();
+}
+
+/* Dictation. The browser's speech recognition where it exists (Chrome, Safari; it needs
+   https or localhost). Elsewhere, such as a phone on the tablet's plain-http address or an
+   Android WebView, the keyboard's own microphone fills the same box. */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let speech = null, speechBroken = false;
+const canSpeak = () => !!SpeechRec && window.isSecureContext && !speechBroken;
+function renderSpeak() {
+  const on = !!speech, btn = $("#speakBtn");
+  btn.hidden = !canSpeak();
+  btn.setAttribute("aria-pressed", String(on));
+  btn.querySelector("span").textContent = on ? "Stop" : "Speak";
+  $("#speakHint").textContent = on ? "Listening. Say the roaster and name, plus the roast date and weight if you have them."
+    : canSpeak() ? "Tap Speak and say what's on the bag. Crema looks it up when you stop talking."
+    : "Type it, or dictate with your keyboard's microphone. Roaster and name are enough; add the roast date and weight if you have them.";
+}
+function startListening() {
+  const box = $("#describeInput"), before = box.value.trim();
+  const r = new SpeechRec();
+  r.lang = navigator.language || "en-US"; r.continuous = true; r.interimResults = true;
+  let heard = false, silence = null;
+  r.onresult = (e) => {
+    const said = Array.from(e.results, (x) => x[0].transcript).join("").trim();
+    box.value = [before, said].filter(Boolean).join(" ");
+    heard = !!said;
+    clearTimeout(silence); silence = setTimeout(() => r.stop(), 2500);
+  };
+  r.onerror = (e) => {
+    r.failed = true;
+    if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) {
+      speechBroken = e.error !== "not-allowed";
+      toast(e.error === "not-allowed" ? "Microphone access is blocked. Allow it for this page, or use your keyboard's microphone." : "Speech recognition isn't available here. Use your keyboard's microphone instead.");
+    } else if (e.error === "no-speech") toast("Didn't hear anything. Try again a little closer.");
+    else if (e.error === "network") toast("Speech recognition needs an internet connection. Type it instead.");
+  };
+  r.onend = () => {
+    clearTimeout(silence);
+    if (speech === r) speech = null;
+    renderSpeak();
+    if (heard && !r.failed && !r.cancelled && addMode === "describe" && !$("#view-add").hidden) $("#identifyBtn").click();
+  };
+  try { r.start(); } catch { toast("Couldn't start listening. Type it instead."); return; }
+  speech = r; renderSpeak();
+}
+// go=false cancels: the words stay in the box but nothing is looked up.
+function stopListening(go = true) {
+  if (!speech) return;
+  if (!go) { speech.cancelled = true; speech.abort(); } else speech.stop();
 }
 // Without AI (switched off, or no Crema server) the only way in is typing the details.
 function renderAddModes() {
@@ -1007,15 +1060,16 @@ function renderReview(info, photo) {
 }
 async function onIdentify(e) {
   e.preventDefault();
-  const query = $("#queryInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
-  const input = addMode === "photo" ? { files } : addMode === "search" ? { query } : { url };
+  stopListening(false);
+  const description = $("#describeInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
+  const input = addMode === "photo" ? { files } : addMode === "describe" ? { description } : { url };
   if (addMode === "manual") {
     const info = manualInfo();
     if (!info.roaster.value || !info.name.value) return toast("Enter at least the roaster and the coffee's name");
     return renderReview(info, null);
   }
   if (addMode === "photo" && !files.length) return toast("Add a photo of the bag first");
-  if (addMode === "search" && !query) return toast("Type a roaster and coffee name");
+  if (addMode === "describe" && !description) return toast(canSpeak() ? "Say or type the roaster and coffee name" : "Type the roaster and coffee name");
   if (addMode === "link" && !url) return toast("Paste a product link");
   const btn = $("#identifyBtn"); btn.disabled = true;
   const panel = $("#reviewPanel");
@@ -1024,7 +1078,7 @@ async function onIdentify(e) {
     const info = await S.api.identify({ ...input, offline }, draw);
     renderReview(info, files[0] ? await thumbnail(files[0]) : null);
   } catch (err) {
-    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or search by roaster and name.</p>`;
+    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or describe it again with the roaster's name first.</p>`;
   }
   btn.disabled = false;
 }
@@ -1477,6 +1531,8 @@ async function boot() {
     e.target.value = "";
   };
   $("#addForm").addEventListener("submit", onIdentify);
+  $("#speakBtn").onclick = () => (speech ? stopListening(true) : startListening());
+  $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
   $("#saver").onclick = () => { $("#saver").hidden = true; S.api.machine.setState("idle").catch(() => {}); };
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
@@ -1493,7 +1549,7 @@ async function boot() {
     water: (w) => { S.water = w; renderStatus(); },
     ready: (r) => { S.ready = r; },
   });
-  window.addEventListener("hashchange", () => route());
+  window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());
   window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });
   renderStatus(); renderAlerts();

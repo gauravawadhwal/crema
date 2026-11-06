@@ -8,6 +8,13 @@ import type { ImageInput } from "./llm/types.js";
 import { dialIn, recommend } from "./recommend/index.js";
 import { BeanInfo, Recipe, TasteFeedback } from "./schema.js";
 
+const IdentifyText = z.object({
+  query: z.string().max(300).optional(),
+  description: z.string().max(2000).optional(),
+  url: z.string().max(2000).optional(),
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
 /**
  * The Crema server is an optional AI add-on. It is stateless: the web app keeps
  * its data in Decaid (beans, shots, workflow) and Decaid's key-value store
@@ -85,7 +92,7 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
     });
   });
 
-  /** Photo(s), search text or a URL → BeanInfo. */
+  /** Photo(s), search text, a spoken or typed description, or a URL → BeanInfo. */
   app.post("/api/identify", async (c) => {
     const form = await c.req.parseBody({ all: true });
     const files = ([] as unknown[]).concat(form["images"] ?? []).filter((f): f is File => f instanceof File);
@@ -94,8 +101,9 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
       if (!MEDIA.has(f.type)) return c.json({ error: `unsupported image type ${f.type}` }, 400);
       images.push({ data: Buffer.from(await f.arrayBuffer()), mediaType: f.type as ImageInput["mediaType"] });
     }
-    const str = (k: string) => (typeof form[k] === "string" && form[k] ? (form[k] as string) : undefined);
-    const info = await identify(llm, { images, query: str("query"), url: str("url"), offline: str("offline") === "true" });
+    const str = (k: string) => (typeof form[k] === "string" && form[k] ? (form[k] as string).trim() || undefined : undefined);
+    const text = IdentifyText.parse({ query: str("query"), description: str("description"), url: str("url"), today: str("today") });
+    const info = await identify(llm, { images, ...text, offline: str("offline") === "true" });
     // The roaster's own packshot: prefer what the page's metadata says over a URL the model may have guessed.
     if (info.imageUrl && !isSafeUrl(info.imageUrl)) info.imageUrl = null;
     if (info.productUrl && str("offline") !== "true") {

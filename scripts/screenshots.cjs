@@ -40,7 +40,7 @@ async function mark(p, name, selector) {
   await tablet.click("[data-cmp]:not([disabled]) >> nth=1"); await tablet.waitForTimeout(500);
   await shot(tablet, "tablet-shots"); await mark(tablet, "tablet-shots", "#shotDetail .chart-box");
   await tablet.goto(url + "#add"); await tablet.waitForTimeout(400);
-  await tablet.click("#mode-search"); await tablet.fill("#queryInput", "ONA La Fincona"); await tablet.click("#identifyBtn");
+  await tablet.click("#mode-describe"); await tablet.fill("#describeInput", "ONA La Fincona"); await tablet.click("#identifyBtn");
   await tablet.waitForSelector("#saveBean", { timeout: 10000 });
   await shot(tablet, "tablet-add-coffee"); await mark(tablet, "tablet-add-coffee", "#reviewPanel");
 

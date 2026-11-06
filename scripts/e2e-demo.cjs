@@ -69,7 +69,7 @@ function pageUrl() {
     });
     await step("add coffee", async () => {
       await p.goto(url + "#add"); await p.waitForTimeout(500);
-      await p.click("#mode-search"); await p.fill("#queryInput", "ONA La Fincona"); await p.click("#identifyBtn");
+      await p.click("#mode-describe"); await p.fill("#describeInput", "ONA La Fincona, roasted last week, 250 grams"); await p.click("#identifyBtn");
       await p.waitForSelector("#saveBean", { timeout: 8000 }); await snap("7-review", true);
       await p.click("#saveBean"); await p.waitForTimeout(2000); await snap("8-after-add", true);
     });

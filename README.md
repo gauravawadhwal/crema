@@ -14,7 +14,7 @@ It runs on the DE1's tablet in place of the stock Decent interface, and the same
 - **Decaid** is Decent's open-source app on that tablet. It talks to the machine and scale over Bluetooth, stores your coffees, profiles and shots, and lets anyone build their own interface as a web page (a "skin").
 - **Crema** is such a skin, plus an optional server at home:
   - The skin is the interface you touch: machine controls, live shot chart, coffee shelf, profiles, shot history and settings. It controls the machine through Decaid and keeps its own data in Decaid too, so it works on the tablet alone. Its rules pick a profile, recipe and dial-in changes for each coffee.
-  - The optional server adds AI: it identifies coffees from a bag photo, a search or a link, and makes the profile choice and dial-in advice with an LLM (a Claude or ChatGPT subscription via their CLIs, or an API key). AI can be switched off in Settings, and if the server stops answering, the rules take over.
+  - The optional server adds AI: it identifies coffees from a bag photo, a description you type or say, or a link, and makes the profile choice and dial-in advice with an LLM (a Claude or ChatGPT subscription via their CLIs, or an API key). AI can be switched off in Settings, and if the server stops answering, the rules take over.
 - **On a phone** it's the same web app, added to the home screen from the browser. There's no app store app.
 
 **To install it, see [docs/install.md](docs/install.md).**
@@ -151,7 +151,7 @@ The server is stateless: it answers questions and stores nothing but cached prod
 | Method | Path | Does |
 |---|---|---|
 | `GET` | `/api/config` | provider chain, and the Decaid address when `DECAID_URL` is set |
-| `POST` | `/api/identify` | multipart `images[]`, `query`, `url`, `offline` → coffee record |
+| `POST` | `/api/identify` | multipart `images[]`, `query`, `description` (with `today`, YYYY-MM-DD), `url`, `offline` → coffee record |
 | `POST` | `/api/recommend` | `{bean, profileTitles?, history?, preferences?}` → recipe chosen by the AI among the installed profiles |
 | `POST` | `/api/dialin` | `{bean, recipe, shot, feedback, history?}` → the next adjustment |
 | `POST` | `/api/images/cache` | `{url}` → a cached copy of a roaster's product photo |

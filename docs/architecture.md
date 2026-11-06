@@ -51,7 +51,7 @@ Both must provide:
 | `ai.{available, enabled, on, healthy}` | A server is connected; the switch is on; both; the last call succeeded |
 | `settings.get()`, `settings.set(patch)` | `{aiEnabled}` |
 | `shelf()` | Coffees on the shelf: `{id, batch, info, recipe, recipeSource, photo, productImage, art, weight, remaining, frozen, bestShotId, shots}` |
-| `identify(input, onStep)` | Photo, search or link → BeanInfo. Throws when AI is off |
+| `identify(input, onStep)` | Photos, a typed or spoken description, or a link → BeanInfo. Throws when AI is off |
 | `saveBean(info, photo, art)` | Returns `{id}` |
 | `setBeanState(id, {frozen?, finished?})`, `pinBest(id, shotId)` | Bag state and reference shot |
 | `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |
