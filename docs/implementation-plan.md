@@ -177,11 +177,16 @@ are distinguishable. Existing 38 passing tests are a baseline, not a parity clai
 Primary code: `skin/app.js` (`startOp`, `loadOntoMachine`, `renderControls`,
 `makeLiveApi.subscribe`, `onSnapshot`, boot); matching demo/mock paths.
 
-- [ ] Cancel pending starts when Stop is requested. Use an explicit operation state
+- [x] Cancel pending starts when Stop is requested. Use an explicit operation state
   or generation token so a late settings/profile response cannot start the machine.
   Ensure Stop can be sent while another operation is awaiting a response.
+  *Done: `opGen` in `startOp`/`cancelStart`, covered by `scripts/e2e-controls.cjs`.*
 - [ ] Prevent duplicate starts and overlapping preparation requests. A response
   failure/timeout must not result in an automatic retry of a machine-start command.
+  *Partly done: a second start is ignored while one is preparing or until the machine
+  reports it (`isStarting`), and a failed start only shows a toast; nothing retries
+  (checked in the source, not by a test). Not yet covered: preparation started from
+  other paths, such as Load onto machine or a settings write, overlapping a start.*
 - [ ] Track machine link state independently from the last reading. Handle actual
   socket closure and the case where Decaid stays connected but its machine does not.
   Show stale/disconnected telemetry honestly and prevent new starts until ready.
