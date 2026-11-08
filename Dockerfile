@@ -12,7 +12,12 @@
 FROM node:22-slim
 
 ARG AI_CLIS=""
-RUN if [ -n "$AI_CLIS" ]; then npm install -g $AI_CLIS && npm cache clean --force; fi
+# The slim image has no CA certificates. Node brings its own, but the CLIs are
+# native binaries that use the system's, so without them every HTTPS call fails.
+RUN if [ -n "$AI_CLIS" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+      npm install -g $AI_CLIS && npm cache clean --force; \
+    fi
 
 WORKDIR /app
 COPY package.json package-lock.json ./

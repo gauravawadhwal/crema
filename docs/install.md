@@ -95,6 +95,7 @@ Notes:
 - **Mounting a host folder instead of a volume**: the container runs as the `node` user (uid 1000), so the folder must be writable by that uid, or Codex can't save refreshed tokens.
 - **The volume holds tokens for your ChatGPT account.** Treat it like a password: keep it out of shared backups.
 - An OpenAI API key works too (`codex login --with-api-key`), billed per token instead of to your plan.
+- **"error sending request for url (https://auth.openai.com/…)"** after about 5 seconds usually means the Docker host's DNS doesn't answer IPv6 (AAAA) lookups. Node only asks for IPv4, so the rest of Crema works, but Codex waits for both and gives up. Check with `docker compose run --rm crema node -e 'require("dns").promises.resolve6("auth.openai.com").then(console.log,console.error)'`. If that fails, give the container working DNS servers (`dns:` in `docker-compose.yml`, or the Docker daemon's `dns` setting). Colima on a Mac has this problem; `colima start --dns 1.1.1.1` fixes it.
 
 ### Without Docker
 
