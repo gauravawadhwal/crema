@@ -394,6 +394,11 @@ function makeLiveApi(conn) {
       open("/ws/v1/scale/snapshot", (s) => h.scale?.(s.status ? { connected: s.status === "connected" } : { connected: true, weight: s.weight, batteryLevel: s.batteryLevel }));
       open("/ws/v1/machine/waterLevels", (s) => h.water?.(s));
       open("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", (s) => h.ready?.(s));
+      // Machine link state. A Decaid without this stream leaves it unknown, and
+      // the app behaves as it did before.
+      let devicesSeen = false;
+      open("/ws/v1/devices", (d) => { devicesSeen = true; h.devices?.(d); });
+      j(D("/devices")).then((d) => !devicesSeen && h.devices?.(d)).catch(() => {});
     },
   };
   return api;
@@ -404,6 +409,7 @@ const S = {
   api: null,
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
   shelf: [], current: null, next: null, loaded: false, heldLoad: false,
+  link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
@@ -501,14 +507,42 @@ function restBar(rest) {
 
 /* ================= status + alerts ================= */
 const STATE_LABEL = { idle: "Ready", sleeping: "Asleep", heating: "Warming up", preheating: "Preheating", espresso: "Espresso", steam: "Steaming", hotWater: "Hot water", flush: "Flushing", steamRinse: "Purging steam", cleaning: "Cleaning", descaling: "Descaling", needsWater: "Refill the tank", error: "Error", booting: "Starting" };
+/* ================= machine link (Decaid's ws/v1/devices) ================= */
+// Decaid can stay up while its DE1 drops off Bluetooth or is power-cycled. Its
+// machine sockets then stay open but go quiet, so a last reading isn't proof of a
+// link; Decaid's device list is. The first message sets the baseline; only later
+// changes count as the machine dropping or coming back (a power cycle keeps the
+// same device id, so watch the state, not the id). Approach from Streamline's
+// machine-link.js, reimplemented here.
+const unlinked = () => S.link.connected === false;
+function machineConnectedIn(payload) {
+  const list = Array.isArray(payload) ? payload : Array.isArray(payload?.devices) ? payload.devices : null;
+  if (!list) return null; // a frame without a device list says nothing about the link
+  return list.some((d) => d?.type === "machine" && d.state === "connected");
+}
+function onDevices(payload) {
+  const now = machineConnectedIn(payload), was = S.link.connected;
+  if (now != null) S.link.connected = now;
+  if (payload && !Array.isArray(payload) && payload.connectionStatus) {
+    const err = payload.connectionStatus.error ?? null;
+    // Scale problems are a passing note, once per event; the rest stay as banners.
+    if (err && /^scale/.test(err.kind) && err.timestamp !== S.link.error?.timestamp) toast(err.suggestion ? `${err.message} ${err.suggestion}` : err.message);
+    S.link.error = err;
+  }
+  if (was === true && now === false) S.loaded = false; // what the machine holds is unknown until it's back
+  if (was === false && now === true) toast("The machine is connected again");
+  renderStatus(); renderAlerts(); renderControls();
+  if (!$("#view-brew").hidden) { renderReadouts(); renderNextShot(); renderLive(); }
+}
+
 function renderStatus() {
-  const s = S.snap, st = s?.state?.state || "unknown";
+  const s = unlinked() ? null : S.snap, st = s?.state?.state || "unknown";
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
   const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
   const low = S.water && tank < (S.water.warningThresholdPercentage ?? 20);
   const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
   $("#status").innerHTML = `
-    <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
+    <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
     <span class="chip"><span class="muted">Group</span><span class="num">${fmt1(s?.groupTemperature ?? s?.mixTemperature)}°</span></span>
     <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
     ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
@@ -525,8 +559,15 @@ function renderAlerts() {
   const st = S.snap?.state?.state;
   const a = [];
   if (st === "needsWater") a.push(`<div class="banner bad"><span><b>Refill the water tank.</b> The machine stops until it has water.</span>${S.api.demo ? '<button class="btn small" id="refillBtn">Refill (demo)</button>' : ""}</div>`);
-  if (!S.snap && !S.api.demo) a.push(`<div class="banner bad"><span><b>Can't reach the machine.</b> Check that Decaid is running on the tablet and on the same network.</span></div>`);
+  const err = S.link.error;
+  const exit = S.api.host?.canExit ? '<button class="btn small" data-exit-dash>Open Decaid</button>' : "";
+  if (unlinked()) {
+    a.push(`<div class="banner bad"><span><b>The machine isn't connected.</b> Decaid is running but can't reach the DE1. Check it's switched on, or reconnect it in Decaid.</span>${exit}</div>`);
+  } else if (!S.snap && !S.api.demo) a.push(`<div class="banner bad"><span><b>Can't reach the machine.</b> Check that Decaid is running on the tablet and on the same network.</span></div>`);
+  if (err?.kind === "profileUploadFailed") a.push(`<div class="banner warn"><span><b>The recipe hasn't reached the machine yet.</b> Decaid is trying again. Wait before pulling a shot.</span></div>`);
+  else if (err && !/^(scale|machine)/.test(err.kind) && err.severity === "error") a.push(`<div class="banner bad"><span><b>${esc(err.message)}</b>${err.suggestion ? ` ${esc(err.suggestion)}` : ""}</span>${exit}</div>`);
   $("#alerts").innerHTML = a.join("");
+  $$("[data-exit-dash]").forEach((b) => (b.onclick = exitToDashboard));
   const r = $("#refillBtn"); if (r) r.onclick = () => S.api.machine.refill();
 }
 async function tare() {
@@ -684,7 +725,7 @@ function renderControls() {
   const p = S.presets, st = S.snap?.state?.state;
   if (!p) return;
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
-  const disabled = S.ghc || !S.snap || st === "sleeping" || st === "needsWater";
+  const disabled = S.ghc || !S.snap || unlinked() || st === "sleeping" || st === "needsWater";
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
   const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
@@ -721,6 +762,7 @@ let opGen = 0; // S.starting is { kind, until } while a start is under way
 const isStarting = () => !!S.starting && Date.now() < S.starting.until;
 async function startOp(kind) {
   if (isStarting()) return;
+  if (unlinked()) return toast("The machine isn't connected");
   const gen = ++opGen, current = () => gen === opGen;
   S.starting = { kind, until: Infinity };
   renderControls();
@@ -753,7 +795,8 @@ function cancelStart() { opGen++; S.starting = null; }
 // start). Any other state, or no reading at all, allows it: an offline machine is
 // when Decaid's own screens are most useful.
 const ACTIVE_STATES = ["espresso", "steam", "hotWater", "flush", "steamRinse", "cleaning", "descaling"];
-const exitBlocked = () => isStarting() || ACTIVE_STATES.includes(S.snap?.state?.state);
+// A machine that has dropped off isn't running anything we know of; its last state is stale.
+const exitBlocked = () => isStarting() || (!unlinked() && ACTIVE_STATES.includes(S.snap?.state?.state));
 function syncExitButton() { const b = $("#exitDash"); if (b) b.disabled = exitBlocked(); }
 function exitToDashboard() {
   if (exitBlocked()) return toast("Stop the machine before leaving Crema");
@@ -768,7 +811,7 @@ function stopMachine() {
 /* ================= live panel + running overlay ================= */
 const PHASE = { preinfusion: "Preinfusion", pouring: "Pouring", pouringDone: "Done", preparingForShot: "Preparing" };
 function renderReadouts() {
-  const s = S.snap || {};
+  const s = (!unlinked() && S.snap) || {};
   const w = S.scale.connected ? S.scale.weight : null;
   const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"], ["Steam", s.steamTemperature, "°C", "--muted"]];
   $("#readouts").innerHTML = items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join("");
@@ -781,9 +824,9 @@ function renderLive() {
   drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost });
   const st = S.snap?.state?.state;
   $("#chartEmpty").hidden = pts.length > 0;
-  $("#chartEmpty").textContent = !S.snap ? "Waiting for the machine…" : S.ghc ? "Press the espresso button on the group head." : S.ghost ? "Tap Espresso. The faint curves are your reference shot for this coffee." : "Tap Espresso to pull a shot.";
+  $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : S.ghc ? "Press the espresso button on the group head." : S.ghost ? "Tap Espresso. The faint curves are your reference shot for this coffee." : "Tap Espresso to pull a shot.";
   $("#legend").innerHTML = legendHtml(!!S.ghost);
-  $("#phase").textContent = st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
+  $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
   $("#phaseSub").textContent = st === "espresso" && S.next ? `${S.next.profileTitle} · target ${fmt1(target)} g` : "";
 }
 function onSnapshot(s) {
@@ -1806,6 +1849,7 @@ async function boot() {
     scale: (s) => { S.scale = { ...S.scale, ...s }; renderStatus(); if (!$("#view-brew").hidden) renderReadouts(); },
     water: (w) => { S.water = w; renderStatus(); },
     ready: (r) => { S.ready = r; },
+    devices: onDevices,
   });
   window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());

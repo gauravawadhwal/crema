@@ -285,10 +285,27 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   reports it (`isStarting`), and a failed start only shows a toast; nothing retries
   (checked in the source, not by a test). Not yet covered: preparation started from
   other paths, such as Load onto machine or a settings write, overlapping a start.*
-- [ ] **Link state from `/ws/v1/devices`.** Edge-triggered, first frame a baseline.
+- [x] **Link state from `/ws/v1/devices`.** Edge-triggered, first frame a baseline.
   Show "Machine disconnected" (not stale numbers), block new starts but never Stop,
   and show `profileUploadFailed` while Decaid retries. The simulator needs the stream.
   Keep a liveness fallback only for actual socket closure.
+  *Done: the live adapter opens `ws/v1/devices` (and reads `GET /api/v1/devices` if
+  the socket hasn't answered yet); `S.link` holds the machine's connected state and
+  Decaid's `connectionStatus.error`. While the machine is unlinked the status chip
+  says "Machine disconnected", readouts and the live panel show no stale values, the
+  start buttons are disabled and `startOp` refuses (Stop is untouched), and a banner
+  explains, with Open Decaid inside Decaid. The dashboard exit ignores a stale
+  running state while unlinked. A link drop marks the recipe as not loaded; coming
+  back shows a toast. `profileUploadFailed` shows a banner until Decaid retracts it;
+  scale errors are a toast once per event; other errors (Bluetooth off, permission)
+  are banners with Decaid's own message. A Decaid without the stream leaves the link
+  unknown and the app behaves as before. The simulator now has the stream, the REST
+  list, silent machine sockets while disconnected, 503s for machine commands, and
+  `POST /dev/machine/{disconnect,connect}` and `/dev/connection-error`. `e2e-live.cjs`
+  covers drop, no start sent, recovery, and the upload-failure banner; the
+  disconnected Brew screen fits at 1340×800 and 1005×552. Not done: reopening machine
+  sockets on link-up (only needed if the tablet's Decaid doesn't re-attach them), and
+  the liveness fallback for a socket that closes.*
 - [ ] **Steam, hot water and flush through the workflow.** Replace the `shotSettings`
   read-merge-post queue and the `flushTimeout` write. Confirm on desktop Decaid 0.9.1
   first that the workflow fields reach the machine's shot settings.

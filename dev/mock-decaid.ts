@@ -4,7 +4,8 @@
  * espresso, steam, hot water and flush with live telemetry; a scale with tare;
  * the water tank; machine and shot settings; sleep, wake schedules and
  * presence; display brightness; beans, batches, profiles, workflow and shots;
- * the plugin list, including Time To Ready's WebSocket.
+ * the plugin list, including Time To Ready's WebSocket; and the device list
+ * (REST and ws/v1/devices), with dev routes to drop and reconnect the machine.
  *
  *   npm run mock:decaid      # listens on :8080 like the real thing
  *   curl -X PUT localhost:8080/api/v1/machine/state/espresso
@@ -58,6 +59,10 @@ const sim = {
   water: 58, // mm in the tank, like the DE1's level sensor
   refill: 7,
   scaleConnected: true,
+  // Decaid can be up while its DE1 isn't (Bluetooth drop, power cycle). Then the
+  // machine sockets stay open but send nothing, and ws/v1/devices says so.
+  machineConnected: true,
+  connectionError: null as Json | null,
   scaleWeight: 0,
   scaleOffset: 0,
   scaleBattery: 86,
@@ -219,7 +224,27 @@ const server = createServer(async (req, res) => {
   const m = req.method;
   let match: RegExpMatchArray | null;
   try {
+    // devices
+    if (m === "GET" && p === "/api/v1/devices") return send(res, 200, devices().devices);
+    // dev helpers: drop or reconnect the machine, raise or clear a connection error
+    if (m === "POST" && p === "/dev/machine/disconnect") {
+      if (sim.timer) stop("idle");
+      sim.machineConnected = false;
+      sim.connectionError = connectionError("machineDisconnected", "error", "The DE1 disconnected.", "Retry scan.");
+      return devicesChanged(res);
+    }
+    if (m === "POST" && p === "/dev/machine/connect") {
+      sim.machineConnected = true;
+      sim.connectionError = null;
+      return devicesChanged(res);
+    }
+    if (m === "POST" && p === "/dev/connection-error") {
+      const b = await body(req);
+      sim.connectionError = b.kind ? connectionError(b.kind, b.severity ?? "error", b.message ?? b.kind, b.suggestion ?? null) : null;
+      return devicesChanged(res);
+    }
     // machine
+    if (p.startsWith("/api/v1/machine/") && !sim.machineConnected && m !== "GET") return send(res, 503, { error: "No machine connected" });
     if (m === "GET" && p === "/api/v1/machine/state") return send(res, 200, snapshot());
     if (m === "GET" && p === "/api/v1/machine/info") return send(res, 200, { model: "DE1+ (simulated)", serialNumber: "SIM-0001", GHC: false, firmwareVersion: "1352" });
     if ((match = p.match(/^\/api\/v1\/machine\/state\/(\w+)$/)) && m === "PUT") {
@@ -390,8 +415,27 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// ---------------- devices ----------------
+function connectionError(kind: string, severity: string, message: string, suggestion: string | null) {
+  return { kind, severity, timestamp: new Date().toISOString(), deviceId: kind.startsWith("machine") ? "SIM-DE1" : null, deviceName: kind.startsWith("machine") ? "DE1" : null, message, suggestion, details: null };
+}
+function devices() {
+  const list = [
+    { name: "DE1", id: "SIM-DE1", state: sim.machineConnected ? "connected" : "disconnected", type: "machine", available: sim.machineConnected },
+    ...(sim.scaleConnected ? [{ name: "Decent Scale", id: "SIM-SCALE", state: "connected", type: "scale", available: true, connectionRole: "primary" }] : []),
+  ];
+  return { timestamp: new Date().toISOString(), devices: list, scanning: false, connectionStatus: { phase: sim.machineConnected ? "ready" : "idle", foundMachines: [], foundScales: [], pendingAmbiguity: null, error: sim.connectionError } };
+}
+const devicesSockets = new Set<WebSocket>();
+function devicesChanged(res: ServerResponse) {
+  const frame = JSON.stringify(devices());
+  for (const ws of devicesSockets) if (ws.readyState === ws.OPEN) ws.send(frame);
+  return send(res, 200, devices());
+}
+
 // ---------------- WebSockets ----------------
 const streams: Record<string, { hz: number; frame: () => unknown }> = {
+  "/ws/v1/devices": { hz: 0, frame: () => devices() },
   "/ws/v1/machine/snapshot": { hz: 10, frame: snapshot },
   "/ws/v1/scale/snapshot": { hz: 5, frame: () => ({ timestamp: new Date().toISOString(), weight: +(sim.scaleWeight - sim.scaleOffset).toFixed(1), batteryLevel: sim.scaleBattery }) },
   "/ws/v1/machine/waterLevels": { hz: 1, frame: () => ({ currentLevel: Math.round(sim.water), refillLevel: sim.refill }) },
@@ -409,8 +453,17 @@ server.on("upgrade", (req, socket, head) => {
   const stream = streams[path];
   if (!stream) return socket.destroy();
   wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+    if (path === "/ws/v1/devices") {
+      // Sent on connect and on every change, like Decaid's aggregator; no timer.
+      devicesSockets.add(ws);
+      ws.send(JSON.stringify(devices()));
+      ws.on("close", () => devicesSockets.delete(ws));
+      return;
+    }
     if (path === "/ws/v1/scale/snapshot") ws.send(JSON.stringify({ status: "connected" }));
-    const tick = () => ws.readyState === ws.OPEN && ws.send(JSON.stringify(stream.frame()));
+    // Machine sockets stay open while the machine is gone, but send nothing.
+    const silent = () => path.startsWith("/ws/v1/machine/") && !sim.machineConnected;
+    const tick = () => ws.readyState === ws.OPEN && !silent() && ws.send(JSON.stringify(stream.frame()));
     tick(); // Decaid sends the current value as soon as a client connects
     const iv = setInterval(tick, 1000 / stream.hz);
     ws.on("close", () => clearInterval(iv));

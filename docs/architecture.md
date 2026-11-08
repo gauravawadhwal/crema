@@ -62,7 +62,7 @@ Both must provide:
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `shotSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat` |
-| `subscribe({snapshot, scale, water, ready})` | Live streams |
+| `subscribe({snapshot, scale, water, ready, devices})` | Live streams. `devices` is Decaid's device list (`ws/v1/devices`, first answered by `GET /api/v1/devices`): the machine's link state and connection errors. The demo sends one "connected" frame |
 | `host.{canExit, exitToDashboard()}` | Leave the skin for Decaid's dashboard. Live: `canExit` is true only when Decaid's WebView provides `window.decentApp.exitToDashboard`. Demo: always shown, and only explains itself |
 
 Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, temperatures and steam temperature. Shot end is detected by `finished` (from the demo) or by espresso → another state (live).
@@ -81,7 +81,8 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 | Key-value store | `GET /api/v1/store/crema` (keys), `GET/POST/DELETE /api/v1/store/crema/{key}` |
 | Presence and display | `/api/v1/presence/settings`, `/api/v1/presence/schedules[/{id}]`, `/api/v1/display`, `PUT /api/v1/display/brightness` |
 | Plugins | `GET /api/v1/plugins` (Visualizer upload, Time To Ready, Decent Profile Generator) |
-| WebSockets | `ws/v1/machine/snapshot`, `ws/v1/scale/snapshot`, `ws/v1/machine/waterLevels`, `ws/v1/plugins/time-to-ready.reaplugin/timeToReady` |
+| WebSockets | `ws/v1/machine/snapshot`, `ws/v1/scale/snapshot`, `ws/v1/machine/waterLevels`, `ws/v1/devices`, `ws/v1/plugins/time-to-ready.reaplugin/timeToReady` |
+| Devices | `GET /api/v1/devices` (first answer before the devices socket speaks) |
 
 `dev/mock-decaid.ts` implements all of these, and `demo.js` implements the same behaviour in the browser.
 

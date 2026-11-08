@@ -302,6 +302,9 @@ function makeDemoApi() {
       async plugins() { return [{ id: "visualizer.reaplugin", name: "Visualizer upload" }, { id: "time-to-ready.reaplugin", name: "Time To Ready" }, { id: "decent-profile.reaplugin", name: "Decent Profile Generator" }]; },
       heartbeat() {},
     },
-    subscribe(handlers) { listeners.push(handlers); snapshot(); },
+    subscribe(handlers) {
+      listeners.push(handlers); snapshot();
+      handlers.devices?.({ devices: [{ name: "DE1", id: "demo", state: "connected", type: "machine" }], scanning: false, connectionStatus: { phase: "ready", error: null } });
+    },
   };
 }
