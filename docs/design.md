@@ -65,7 +65,7 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 - **Steppers**: − value + with a sub-label (ratio, units). Grind is a free-text field with ± 0.5.
 - **Machine controls**: each operation gets a big button plus preset chips. Stop is always present and turns red while something runs.
 - **Charts** (`drawChart`): pressure and flow share 0–12; weight on the right axis; temperature in a 70–100 °C band. Targets are dashed and the reference shot is faint. Draw on canvas at device pixel ratio and read colours from tokens at draw time.
-- **Feedback**: taste and body are five-option tap scales (sour → bitter, thin → heavy), not sliders, followed by stars. Advice is one change, shown in an accent-ruled box.
+- **Feedback**: taste and body are five-option tap scales (sour → bitter, thin → heavy), not sliders, followed by a five-star rating in half steps that you tap or drag across (stored as Decaid's 0–10, one point per half star). Advice is one change, shown in an accent-ruled box.
 - **Pills**: rest status (resting / in its window / past its best), timing (in window / fast / slow), provenance tags.
 
 ## Copy

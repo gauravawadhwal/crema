@@ -1,6 +1,7 @@
 # Publishes the Decaid skin as a GitHub release asset when a version tag is pushed:
 #   git tag v0.1.0 && git push origin v0.1.0
 # On the tablet: Decaid → Launcher → Skins → ⚙ → Install skin → GitHub Release → <owner>/<repo>.
+# The CI checks run first on the tagged commit; if any fails, nothing is published.
 name: Release
 
 on:
@@ -11,16 +12,25 @@ permissions:
   contents: write
 
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   skin:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Tag is a version
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::$GITHUB_REF_NAME isn't a version tag like v0.1.0"; exit 1; }
       - name: Set version from tag
         run: npm pkg set version="${GITHUB_REF_NAME#v}"
       - run: node scripts/package-skin.mjs
+      - name: Check the ZIP that will be published
+        run: node scripts/check-skin-zip.mjs "${GITHUB_REF_NAME#v}"
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

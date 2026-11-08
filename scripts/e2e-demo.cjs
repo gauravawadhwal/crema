@@ -43,8 +43,19 @@ function pageUrl() {
       await p.click('[data-run="espresso"]'); await p.waitForTimeout(3000); await snap("2-pulling");
       await p.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 });
     });
+    // Ratings are Decaid's 0–10, shown as half stars: the left part of a star is a half.
+    const starAt = async (sel, n, frac) => { await p.locator(sel).scrollIntoViewIfNeeded(); const b = await p.locator(`${sel} > span:not(.stars-fill) i[data-n="${n}"]`).boundingBox(); return [b.x + b.width * frac, b.y + b.height / 2]; };
+    const rating = (sel) => p.getAttribute(sel, "aria-valuenow");
+    const expectRating = async (sel, v, how) => { const got = await rating(sel); if (got !== v) throw new Error(`${how}: rating ${got}, expected ${v}`); };
+    await step("rate by tap and drag", async () => {
+      await p.mouse.click(...(await starAt("#afterStars", 3, 0.3))); await expectRating("#afterStars", "5", "tap left half of star 3");
+      await p.mouse.move(...(await starAt("#afterStars", 1, 0.8))); await p.mouse.down();
+      await p.mouse.move(...(await starAt("#afterStars", 5, 0.9)), { steps: 6 }); await p.mouse.up(); await expectRating("#afterStars", "10", "drag to the end");
+      await p.focus("#afterStars"); await p.keyboard.press("ArrowLeft"); await expectRating("#afterStars", "9", "arrow key");
+      await p.mouse.click(...(await starAt("#afterStars", 4, 0.85))); await expectRating("#afterStars", "8", "tap right of star 4");
+    });
     await step("taste", async () => {
-      await p.click('#afterShot .star[data-n="4"]'); await p.click('#sb [data-v="-1"]'); await p.click("#sendTaste");
+      await p.click('#sb [data-v="-1"]'); await p.click("#sendTaste");
       await p.waitForSelector("#adviceBox .advice", { timeout: 5000 }); await snap("3-after", true);
     });
     await step("steam", async () => {
@@ -56,6 +67,12 @@ function pageUrl() {
     for (const v of ["profiles", "shelf", "shots", "settings"]) {
       await step(v, async () => { await p.goto(url + "#" + v); await p.waitForTimeout(1300); await snap(`5-${v}`, true); });
     }
+    await step("rating saved", async () => {
+      await p.goto(url + "#shots"); await p.waitForTimeout(800);
+      const label = await p.getAttribute("[data-rating] .stars >> nth=0", "aria-label");
+      if (label !== "4 of 5 stars") throw new Error(`newest shot shows "${label}"`);
+      await expectRating("#detailStars", "8", "shot detail");
+    });
     await step("compare", async () => {
       await p.goto(url + "#shots"); await p.waitForTimeout(800);
       await p.click("[data-cmp]:not([disabled]) >> nth=1"); await p.waitForTimeout(500); await snap("6-compare", true);

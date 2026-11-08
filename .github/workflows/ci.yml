@@ -1,0 +1,40 @@
+# Checks every pull request and push to main. The release and Pages workflows
+# call this first, so a failing check stops a skin release or a site deploy.
+#
+# Not here yet: the Playwright UI checks (e2e-demo, e2e-live, check-tablet-fit),
+# because Playwright isn't a declared dependency. Run them locally (verify-crema skill).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # Unit, server flow against the simulator, evals harness, and skin/engine.js freshness.
+      - run: npm test
+      - name: Web app parses
+        run: for f in skin/*.js; do node --check "$f"; done
+      # The Pages site and the embeddable demo ship demo/crema-demo.html as committed.
+      - name: Built demo matches the source
+        run: |
+          node scripts/build-demo.mjs
+          git diff --exit-code -- demo/crema-demo.html || { echo "::error::demo/crema-demo.html is stale. Run node scripts/build-demo.mjs and commit it."; exit 1; }
+      - name: Skin ZIP is installable
+        run: |
+          node scripts/package-skin.mjs
+          node scripts/check-skin-zip.mjs

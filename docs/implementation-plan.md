@@ -48,11 +48,11 @@ separate supervised step; implement and test locally first.
 |---|---|---|---|
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below |
 | 1 | Machine-control reliability | Minimal test setup from 0 | Started: Stop cancels pending starts, double starts blocked (`scripts/e2e-controls.cjs`) |
-| 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Not started |
+| 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Started: ratings use Decaid's 0–10 directly, shown as half stars |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Not started |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Not started |
-| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Not started |
+| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI job gates releases and Pages; skin ZIP checked before publishing |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
 
 ## Findings from writing the user setup guide (7 November 2026)
@@ -92,9 +92,9 @@ building on them.
    - Crema's Settings → Machine and Steam sections duplicate some machine settings.
      Decide which control is the source of truth (see phase 3).
 3. **No GitHub release exists yet (phase 6).** Decaid's "Install skin → GitHub Release"
-   route has nothing to install until a `v*` tag is pushed. `release.yml` packages
-   without running tests or the engine freshness check (R10), so add those gates before
-   or alongside the first release. The user has been told to tag `v0.1.0` from `main`.
+   route has nothing to install until a `v*` tag is pushed. *Gates added:* `release.yml`
+   now runs the CI checks and checks the ZIP before publishing, so `v0.1.0` can be
+   tagged from `main` once they're merged.
 4. **Backup and restore are unverified (phase 6).** `docs/install.md` now gives
    `GET /api/v1/store/crema?full=1` and `GET /api/v1/profiles/export` for backups,
    both from Decaid's docs. Neither has been run against real Decaid. No restore
@@ -226,11 +226,22 @@ existing profiles are not unexpectedly rewritten.
 
 ### Ratings and shot history
 
-- [ ] Convert between Crema's five-star UI and Decaid's rating scale at the adapter
+- [x] Convert between Crema's five-star UI and Decaid's rating scale at the adapter
   boundary, consistently for detail edits, feedback, reads and AI history inputs.
   Specify handling for fractional ratings and unrated values.
-- [ ] Do not bulk-double historical ratings: existing values cannot be assumed to
+  *Done by removing the conversion: Crema uses Decaid's 0–10 everywhere (app, demo,
+  simulator, server schema, AI prompts, eval datasets) and shows it as five stars in
+  half steps, so one point is half a star. The control is tapped or dragged, or set
+  with arrow keys, and saves as soon as it changes. Fractional values (de1app imports
+  are rescaled from 0–100) show to the nearest half star; 0 or missing is "Not rated";
+  an unrated shot sends `null` to dial-in and writes no rating. The simulator rejects
+  values outside 0–10 like Decaid's `_enjoymentRangeError`. Covered by
+  `scripts/e2e-demo.cjs` (tap, half tap, drag, keys, list and detail after save) and
+  `test/flow.test.ts`.*
+- [x] Do not bulk-double historical ratings: existing values cannot be assumed to
   have come from Crema. Preserve data unless provenance supports a migration.
+  *No migration: stored values are read as they are. Crema hasn't been released, so
+  only test installs can hold old 1–5 ratings, which now show at half their stars.*
 - [ ] Implement bounded pagination for inventory/maintenance and browsing. Fetch
   a pinned reference by its ID instead of searching only the latest 40 shots.
 - [ ] Respect the distinction between shot summaries and full measurements. Avoid
@@ -367,9 +378,18 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
 - [ ] Add a CI verification job and gate skin release/Pages publishing on applicable
   checks. Verify the generated engine before rebuilding it so drift is detected.
   Build and test the exact distributable files, including the extracted skin ZIP.
+  *Partly done: `.github/workflows/ci.yml` runs on pull requests and pushes to `main`
+  (typecheck, `npm test` including engine freshness, skin syntax, built demo matches
+  source, skin ZIP check), and `release.yml` and `pages.yml` call it first. Still
+  missing: the Playwright UI checks, which need Playwright declared (phase 0).*
 - [ ] Preserve root `index.html`, skin metadata, relative asset paths and semantic
   version tags. Include the actual project repository in release metadata where
   appropriate. Do not ship test tooling or credentials inside the skin.
+  *Partly done: `scripts/check-skin-zip.mjs` unzips the package and fails on a missing
+  root `index.html`, a bad manifest id or version (or one that doesn't match the tag),
+  a missing or absolute asset path, a script that doesn't parse, or development files.
+  The release workflow rejects tags that aren't semantic versions. Repository in the
+  manifest: not done.*
 - [ ] Build/smoke-test the optional Docker server using mock AI; assert basic config,
   static skin delivery and permitted local proxy behaviour. Account-dependent AI
   provider smoke tests remain separate from ordinary CI and require no CI secrets.

@@ -110,7 +110,7 @@ const HistoryShot = z
     yieldG: z.number().optional(),
     timeS: z.number().optional(),
     grinderSetting: z.string().optional(),
-    enjoyment: z.number().min(1).max(5).optional(),
+    enjoyment: z.number().min(0).max(10).optional(),
     notes: z.string().optional(),
   })
   .strict();
@@ -296,7 +296,7 @@ export function dialInShot(c: DialInCase, recipe: Recipe, today = new Date()): P
     yieldG: c.input.shot.yieldG ?? recipe.yieldG,
     timeS: c.input.shot.timeS ?? undefined,
     grinderSetting: c.input.shot.grinderSetting,
-    enjoyment: c.input.feedback.enjoyment,
+    enjoyment: c.input.feedback.enjoyment ?? undefined,
     notes: c.input.feedback.notes ?? undefined,
   };
 }

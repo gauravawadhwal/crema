@@ -63,13 +63,13 @@ describe("recipes", () => {
 describe("dial-in rules", () => {
   const recipe = { ...rulesRecipe({ bean: mockBean("light") }), targetTimeS: [25, 40] };
   it("sour → finer", () => {
-    expect(rulesDialIn({ sourBitter: -1, body: 0, enjoyment: 3, notes: null }, { timestamp: "", timeS: 30 }, recipe).grindDelta).toBe("finer");
+    expect(rulesDialIn({ sourBitter: -1, body: 0, enjoyment: 6, notes: null }, { timestamp: "", timeS: 30 }, recipe).grindDelta).toBe("finer");
   });
   it("bitter and slow → much coarser", () => {
-    expect(rulesDialIn({ sourBitter: 1, body: 0, enjoyment: 2, notes: null }, { timestamp: "", timeS: 50 }, recipe).grindDelta).toBe("much-coarser");
+    expect(rulesDialIn({ sourBitter: 1, body: 0, enjoyment: 4, notes: null }, { timestamp: "", timeS: 50 }, recipe).grindDelta).toBe("much-coarser");
   });
   it("balanced → keep it", () => {
-    expect(rulesDialIn({ sourBitter: 0, body: 0, enjoyment: 5, notes: null }, { timestamp: "", timeS: 30 }, recipe).change).toMatch(/Keep/);
+    expect(rulesDialIn({ sourBitter: 0, body: 0, enjoyment: 10, notes: null }, { timestamp: "", timeS: 30 }, recipe).change).toMatch(/Keep/);
   });
 });
 

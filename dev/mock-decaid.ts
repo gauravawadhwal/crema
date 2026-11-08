@@ -375,6 +375,11 @@ const server = createServer(async (req, res) => {
       if (!s) return send(res, 404, { error: "not found" });
       if (m === "PUT") {
         const patch = await body(req);
+        // Like Decaid: enjoyment is a number from 0 to 10 (shots_handler.dart, _enjoymentRangeError).
+        const e = patch.annotations?.enjoyment;
+        if (patch.annotations && "enjoyment" in patch.annotations && (typeof e !== "number" || !(e >= 0 && e <= 10))) {
+          return send(res, 400, { error: `annotations.enjoyment must be between 0 and 10, got ${e}` });
+        }
         s.annotations = { ...s.annotations, ...(patch.annotations ?? {}) };
       }
       return send(res, 200, s);

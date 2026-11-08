@@ -52,9 +52,18 @@ describe("Crema server (AI add-on)", () => {
       bean: info,
       recipe: out.recipe,
       shot: { timestamp: new Date().toISOString(), timeS: 22, doseG: 18, yieldG: 40 },
-      feedback: { sourBitter: -1, body: 0, enjoyment: 3, notes: null },
+      feedback: { sourBitter: -1, body: 0, enjoyment: 6, notes: null },
     }))).json();
     expect(advice.grindDelta).toBe("finer");
+
+    // Ratings are Decaid's 0–10 (half stars); an unrated shot sends null.
+    const dial = (enjoyment: number | null) => app.request("/api/dialin", json({
+      bean: info, recipe: out.recipe, shot: { timestamp: new Date().toISOString(), timeS: 30 },
+      feedback: { sourBitter: 0, body: 0, enjoyment, notes: null },
+    }));
+    expect((await dial(10)).status).toBe(200);
+    expect((await dial(null)).status).toBe(200);
+    expect((await dial(11)).status).toBe(400);
   });
 
   it("rejects malformed requests with 400", async () => {
@@ -68,6 +77,22 @@ describe("Crema server (AI add-on)", () => {
     const noDecaid = createApp({ llm: new ProviderChain(["mock"]) });
     expect((await noDecaid.request("/decaid/api/v1/machine/state")).status).toBe(503);
   });
+});
+
+describe("simulator shot ratings", () => {
+  it("stores 0–10 as given and rejects what real Decaid rejects", async () => {
+    const base = `http://localhost:${PORT}/api/v1`;
+    await fetch(`${base}/machine/state/espresso`, { method: "PUT" });
+    await new Promise((r) => setTimeout(r, 1500));
+    await fetch(`${base}/machine/state/idle`, { method: "PUT" });
+    const shot = await (await fetch(`${base}/shots/latest`)).json();
+    expect(shot?.id).toBeTruthy();
+    const rate = (enjoyment: unknown) => fetch(`${base}/shots/${encodeURIComponent(shot.id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ annotations: { enjoyment } }) });
+    expect((await rate(7)).status).toBe(200);
+    expect((await (await fetch(`${base}/shots/${encodeURIComponent(shot.id)}`)).json()).annotations.enjoyment).toBe(7);
+    expect((await rate(11)).status).toBe(400);
+    expect((await rate(null)).status).toBe(400);
+  }, 10000);
 });
 
 describe("browser engine bundle", () => {

@@ -101,7 +101,7 @@ export type Recipe = z.infer<typeof Recipe>;
 export const TasteFeedback = z.object({
   sourBitter: z.number().min(-2).max(2).describe("-2 very sour .. +2 very bitter"),
   body: z.number().min(-2).max(2).describe("-2 thin .. +2 heavy"),
-  enjoyment: z.number().min(1).max(5),
+  enjoyment: z.number().min(0).max(10).nullable().describe("Decaid's 0..10 scale: one point is half a star, 10 is five stars; null when not rated"),
   notes: z.string().nullable(),
 });
 export type TasteFeedback = z.infer<typeof TasteFeedback>;

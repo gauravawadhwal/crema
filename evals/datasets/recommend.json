@@ -540,10 +540,10 @@
         },
         "preferences": {"drink": "both", "hasScale": true, "experience": "comfortable"},
         "history": [
-          {"daysAgo": 1, "profileTitle": "Extractamundo Dos!", "doseG": 18, "yieldG": 40, "timeS": 29, "grinderSetting": "11", "enjoyment": 5, "notes": "sweet and juicy, best yet"},
-          {"daysAgo": 2, "profileTitle": "Extractamundo Dos!", "doseG": 18, "yieldG": 40, "timeS": 31, "grinderSetting": "11", "enjoyment": 5},
-          {"daysAgo": 3, "profileTitle": "Extractamundo Dos!", "doseG": 18, "yieldG": 40, "timeS": 27, "grinderSetting": "12", "enjoyment": 4},
-          {"daysAgo": 4, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 38, "timeS": 33, "grinderSetting": "12", "enjoyment": 3, "notes": "fine but flat"}
+          {"daysAgo": 1, "profileTitle": "Extractamundo Dos!", "doseG": 18, "yieldG": 40, "timeS": 29, "grinderSetting": "11", "enjoyment": 10, "notes": "sweet and juicy, best yet"},
+          {"daysAgo": 2, "profileTitle": "Extractamundo Dos!", "doseG": 18, "yieldG": 40, "timeS": 31, "grinderSetting": "11", "enjoyment": 10},
+          {"daysAgo": 3, "profileTitle": "Extractamundo Dos!", "doseG": 18, "yieldG": 40, "timeS": 27, "grinderSetting": "12", "enjoyment": 8},
+          {"daysAgo": 4, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 38, "timeS": 33, "grinderSetting": "12", "enjoyment": 6, "notes": "fine but flat"}
         ]
       },
       "expect": {
@@ -563,10 +563,10 @@
         "bean": {"ref": "ethiopia-light"},
         "preferences": {"drink": "straight", "hasScale": true, "experience": "comfortable"},
         "history": [
-          {"daysAgo": 0, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 40, "timeS": 34, "grinderSetting": "7", "enjoyment": 2, "notes": "still sour after grinding finer"},
-          {"daysAgo": 1, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 40, "timeS": 30, "grinderSetting": "8", "enjoyment": 1, "notes": "sour, thin"},
-          {"daysAgo": 1, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 40, "timeS": 27, "grinderSetting": "9", "enjoyment": 2, "notes": "harsh and sour"},
-          {"daysAgo": 2, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 38, "timeS": 25, "grinderSetting": "10", "enjoyment": 1, "notes": "sour"}
+          {"daysAgo": 0, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 40, "timeS": 34, "grinderSetting": "7", "enjoyment": 4, "notes": "still sour after grinding finer"},
+          {"daysAgo": 1, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 40, "timeS": 30, "grinderSetting": "8", "enjoyment": 2, "notes": "sour, thin"},
+          {"daysAgo": 1, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 40, "timeS": 27, "grinderSetting": "9", "enjoyment": 4, "notes": "harsh and sour"},
+          {"daysAgo": 2, "profileTitle": "Adaptive v2", "doseG": 18, "yieldG": 38, "timeS": 25, "grinderSetting": "10", "enjoyment": 2, "notes": "sour"}
         ]
       },
       "expect": {
@@ -595,8 +595,8 @@
         "bean": {"ref": "medium-blend", "roastLevel": "medium-dark"},
         "preferences": {"drink": "milk", "hasScale": true, "experience": "comfortable"},
         "history": [
-          {"daysAgo": 0, "profileTitle": "Londonium", "doseG": 18.5, "yieldG": 40, "timeS": 41, "enjoyment": 3, "notes": "a bit thin in milk"},
-          {"daysAgo": 1, "profileTitle": "Londonium", "doseG": 18, "yieldG": 36, "timeS": 38, "enjoyment": 5, "notes": "great in a flat white"}
+          {"daysAgo": 0, "profileTitle": "Londonium", "doseG": 18.5, "yieldG": 40, "timeS": 41, "enjoyment": 6, "notes": "a bit thin in milk"},
+          {"daysAgo": 1, "profileTitle": "Londonium", "doseG": 18, "yieldG": 36, "timeS": 38, "enjoyment": 10, "notes": "great in a flat white"}
         ]
       },
       "expect": {
@@ -871,9 +871,9 @@
         "bean": {"ref": "medium-blend"},
         "preferences": {"drink": "milk", "hasScale": true, "experience": "comfortable"},
         "history": [
-          {"daysAgo": 0, "profileTitle": "Gentle and sweet", "doseG": 18, "yieldG": 36, "timeS": 33, "enjoyment": 5, "notes": "really sweet in a cappuccino"},
-          {"daysAgo": 1, "profileTitle": "Gentle and sweet", "doseG": 18, "yieldG": 36, "timeS": 30, "enjoyment": 4},
-          {"daysAgo": 2, "profileTitle": "Londonium", "doseG": 18, "yieldG": 40, "timeS": 42, "enjoyment": 2, "notes": "flat and a bit bitter"}
+          {"daysAgo": 0, "profileTitle": "Gentle and sweet", "doseG": 18, "yieldG": 36, "timeS": 33, "enjoyment": 10, "notes": "really sweet in a cappuccino"},
+          {"daysAgo": 1, "profileTitle": "Gentle and sweet", "doseG": 18, "yieldG": 36, "timeS": 30, "enjoyment": 8},
+          {"daysAgo": 2, "profileTitle": "Londonium", "doseG": 18, "yieldG": 40, "timeS": 42, "enjoyment": 4, "notes": "flat and a bit bitter"}
         ]
       },
       "expect": {
@@ -893,9 +893,9 @@
         "bean": {"ref": "dark-blend"},
         "preferences": {"drink": "milk", "hasScale": true, "experience": "comfortable"},
         "history": [
-          {"daysAgo": 0, "profileTitle": "Londonium", "doseG": 18, "yieldG": 38, "timeS": 36, "grinderSetting": "14", "enjoyment": 2, "notes": "ashy and bitter even in milk"},
-          {"daysAgo": 1, "profileTitle": "Londonium", "doseG": 18, "yieldG": 40, "timeS": 33, "grinderSetting": "15", "enjoyment": 1, "notes": "bitter, harsh"},
-          {"daysAgo": 2, "profileTitle": "Londonium", "doseG": 18, "yieldG": 42, "timeS": 40, "grinderSetting": "13", "enjoyment": 2, "notes": "burnt taste"}
+          {"daysAgo": 0, "profileTitle": "Londonium", "doseG": 18, "yieldG": 38, "timeS": 36, "grinderSetting": "14", "enjoyment": 4, "notes": "ashy and bitter even in milk"},
+          {"daysAgo": 1, "profileTitle": "Londonium", "doseG": 18, "yieldG": 40, "timeS": 33, "grinderSetting": "15", "enjoyment": 2, "notes": "bitter, harsh"},
+          {"daysAgo": 2, "profileTitle": "Londonium", "doseG": 18, "yieldG": 42, "timeS": 40, "grinderSetting": "13", "enjoyment": 4, "notes": "burnt taste"}
         ]
       },
       "expect": {

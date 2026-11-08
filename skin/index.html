@@ -286,9 +286,13 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .slider { display: grid; gap: 4px; }
 .slider input { width: 100%; accent-color: var(--accent); }
 .slider .ends { display: flex; justify-content: space-between; font-size: .76rem; color: var(--muted); }
-.stars { display: flex; gap: 4px; }
-.star { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-size: 1.05rem; color: var(--muted); }
-.star[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+/* Rating: five stars in half steps. A muted row with the filled row clipped over it; tap or drag. */
+.stars { position: relative; display: inline-flex; font-size: 1.9rem; line-height: 1; color: color-mix(in srgb, var(--muted) 35%, transparent); cursor: pointer; touch-action: pan-y; user-select: none; -webkit-user-select: none; border-radius: 8px; padding: 2px 0; }
+.stars i { display: inline-block; width: 1.15em; text-align: center; font-style: normal; }
+.stars-fill { position: absolute; inset: 2px auto 2px 0; overflow: hidden; white-space: nowrap; color: var(--accent); pointer-events: none; }
+.stars:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.stars.static { font-size: .9em; cursor: default; padding: 0; vertical-align: -1px; }
+.stars.static .stars-fill { inset: 0 auto 0 0; }
 .advice { border-left: 3px solid var(--accent); padding: 10px 14px; background: var(--surface-2); border-radius: 0 10px 10px 0; }
 .advice strong { font-family: var(--font-display); font-size: 1.02rem; }
 .metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
@@ -489,7 +493,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   #afterShot .metrics > div { padding: 5px 8px; }
   #afterShot .metrics .v { font-size: .92rem; }
   #afterShot .btn { min-height: 38px; padding: 6px 12px; font-size: .84rem; }
-  #afterShot .star { width: 34px; height: 34px; }
+  #afterShot .stars:not(.static) { font-size: 1.6rem; }
   .seg.tap button { min-height: 34px; }
   .readout .v { font-size: 1.2rem; }
   .clock { font-size: 1.3rem; }
