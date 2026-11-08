@@ -150,32 +150,42 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });
     check(fb.source === "rules" || fb.source === "no shot", `dial-in advice from the rules (${fb.source})`);
-    // Steam and hot water write their preset first. Decaid has no GET for shot
-    // settings and rejects a partial write, so this only works if the app reads
-    // the stream and sends the whole object.
+    // Steam, hot water and flush write their preset first, through the workflow's
+    // steamSettings / hotWaterData / rinseData, which Decaid (and the simulator) pass on
+    // to the machine. The machine's own shot settings are checked to see it arrive.
+    const workflowNow = async () => (await fetch(`http://localhost:${MOCK}/api/v1/workflow`)).json();
+    const wfPuts = [];
+    page.on("request", (r) => { if (r.method() === "PUT" && r.url().endsWith("/api/v1/workflow")) wfPuts.push(JSON.parse(r.postData() || "{}")); });
     const shotSettings = () => new Promise((resolve) => {
       const ws = new (require("ws"))(`ws://localhost:${MOCK}/ws/v1/machine/shotSettings`);
       ws.on("message", (m) => { ws.close(); resolve(JSON.parse(m)); });
     });
-    for (const [kind, preset, field] of [["steam", "steam:1", "targetSteamDuration"], ["hotWater", "water:2", "targetHotWaterVolume"]]) {
+    for (const [kind, preset, field, group, wfField] of [["steam", "steam:1", "targetSteamDuration", "steamSettings", "duration"], ["hotWater", "water:2", "targetHotWaterVolume", "hotWaterData", "volume"], ["flush", "flush:2", null, "rinseData", "duration"]]) {
       await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForTimeout(1000);
       await page.click(`[data-preset="${preset}"]`); await page.waitForTimeout(400);
       await page.click(`[data-run="${kind}"]`);
       const ran = await page.waitForFunction((k) => S.snap?.state?.state === k, kind, { timeout: 5000 }).then(() => true, () => false);
       const want = await page.evaluate((pr) => { const [k, i] = pr.split(":"); const x = S.presets[k][i]; return x.seconds ?? x.ml; }, preset);
-      const ss = await shotSettings();
-      check(ran && ss[field] === want && ss.groupTemp != null, `${kind} starts with its preset (${field} ${ss[field]}, wanted ${want})`);
+      const ss = await shotSettings(), wf = await workflowNow();
+      check(ran && wf[group][wfField] === want && (!field || ss[field] === want), `${kind} starts with its preset (workflow ${group}.${wfField} ${wf[group][wfField]}${field ? `, machine ${field} ${ss[field]}` : ""}, wanted ${want})`);
       await S(() => stopMachine()); await page.waitForTimeout(800);
     }
+    check(wfPuts.length >= 3 && wfPuts.every((b) => !("profile" in b) && !("context" in b)), `preset writes carry only steam, hot water or flush, never the profile (${wfPuts.map((b) => Object.keys(b).join("+")).join(", ")})`);
     await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForTimeout(1200);
     check((await page.textContent("#settings")).includes("Not connected"), "Settings shows no Crema server");
     const steamT = await page.inputValue("#sSteamT").catch(() => "");
     check(steamT !== "", `Settings shows the steam temperature (${steamT || "missing"})`);
     if (steamT) {
-      const before = await shotSettings();
+      const before = await shotSettings(), wfBefore = await workflowNow();
       await page.click('[data-mini="sSteamT:5"]'); await page.waitForTimeout(800);
-      const after = await shotSettings();
-      check(after.targetSteamTemp === before.targetSteamTemp + 5 && after.targetHotWaterVolume === before.targetHotWaterVolume, "changing steam temperature keeps the other shot settings");
+      const after = await shotSettings(), wfAfter = await workflowNow();
+      check(wfAfter.steamSettings.targetTemperature === wfBefore.steamSettings.targetTemperature + 5 && after.targetSteamTemp === before.targetSteamTemp + 5, "changing steam temperature reaches the workflow and the machine");
+      check(wfAfter.steamSettings.duration === wfBefore.steamSettings.duration && JSON.stringify(wfAfter.hotWaterData) === JSON.stringify(wfBefore.hotWaterData) && after.targetHotWaterVolume === before.targetHotWaterVolume, "and keeps the other settings");
+      // Decaid takes any number; Crema keeps steam inside the DE1's 135–160 °C.
+      await page.fill("#sSteamT", "200"); await page.dispatchEvent("#sSteamT", "change"); await page.waitForTimeout(800);
+      check((await workflowNow()).steamSettings.targetTemperature === 160, `an out-of-range steam temperature is held at 160 °C (${(await workflowNow()).steamSettings.targetTemperature})`);
+      await page.fill("#sFlushF", "6.25"); await page.dispatchEvent("#sFlushF", "change"); await page.waitForTimeout(800);
+      check((await workflowNow()).rinseData.flow === 6.3, `flows are rounded to 0.1 (${(await workflowNow()).rinseData.flow})`);
     }
 
     // ---- 2. with the Crema server ----

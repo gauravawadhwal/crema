@@ -186,7 +186,25 @@ the Android tablet.
   time. The simulator now has no GET and rejects partial writes, and
   `e2e-live.cjs` checks both presets and a temperature change. On Decaid's
   simulated DE1 the stream shows a write immediately; a real DE1 over Bluetooth
-  is unverified.
+  is unverified. *Superseded 8 November 2026: Crema no longer writes shot settings
+  directly; steam, hot water and flush go through the workflow (phase 1).*
+- **Workflow settings (checked 8 November 2026, same Decaid, `MockDe1`).** A `PUT
+  /api/v1/workflow` carrying only `{"steamSettings": {"duration": 33}}` merges into
+  the stored group and reaches the machine: the shot-settings stream showed 33 at
+  once. Steam temperature and flow, and hot water volume, temperature and flow, reach
+  the shot settings and machine settings the same way. `rinseData.flow` reached
+  `flushFlow`; `rinseData.duration` and `targetTemperature` didn't change
+  `flushTimeout` or `flushTemp`, but a direct `POST /machine/settings {flushTimeout}`
+  didn't either, and Decaid's `_updateFlushSettingsFor` calls `setFlushTimeout`,
+  `setFlushFlow` and `setFlushTemperature` from `rinseData`, so this is `MockDe1` not
+  reflecting flush writes. A direct shot-settings write doesn't flow back into the
+  workflow (the two drift); a recipe load (profile and context only) doesn't revert
+  it. Decaid accepts any number (a volume of −5 was stored and sent); only a wrong
+  type gets a 400. A settings-only PUT logs "Processing shot settings update" and no
+  profile upload. After a `disconnect`/`connect` of `MockDe1` through
+  `ws/v1/devices`, machine readings resumed on the already-open sockets, so 0.9.1
+  re-attaches them (a power cycle of a real DE1 is still unverified). All values
+  were restored afterwards.
 - `GET /api/v1/shots` caps pages at 100 but echoes the requested `limit` (500) in
   its reply, so a truncated result looks complete (R6).
 - Ratings are 0–10 in 0.9.1's docs; out-of-range values are rejected (R5).
@@ -306,16 +324,33 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   disconnected Brew screen fits at 1340×800 and 1005×552. Not done: reopening machine
   sockets on link-up (only needed if the tablet's Decaid doesn't re-attach them), and
   the liveness fallback for a socket that closes.*
-- [ ] **Steam, hot water and flush through the workflow.** Replace the `shotSettings`
+- [x] **Steam, hot water and flush through the workflow.** Replace the `shotSettings`
   read-merge-post queue and the `flushTimeout` write. Confirm on desktop Decaid 0.9.1
   first that the workflow fields reach the machine's shot settings.
+  *Done: confirmed on 0.9.1 (see phase 0 findings). The app's API has
+  `machine.workflowSettings` (both backends), which sends only `steamSettings`,
+  `hotWaterData` and `rinseData`, never the profile, so it's safe mid-shot. Presets
+  and Settings' temperatures and flows use it; the shot-settings stream reader and
+  write queue are gone, and `machine.settings` keeps only fan and USB. Values are
+  clamped and rounded in the app (`WF_LIMITS`): DE1 steam 135–160 °C and hot water
+  flow 1–10 ml/s from Decaid's schema, steam flow ≥ 0.4 and steam ≤ 255 s from
+  Streamline, the rest Crema's own limits; temperatures, durations and volumes are
+  integers, as Decaid's schema requires. The simulator's workflow now carries and
+  applies these groups. Against desktop Decaid 0.9.1 (this branch's skin served
+  locally, pointed at :8080): presets reach the workflow and the machine, Settings
+  shows the workflow's values and a change reaches the machine, and the link-state
+  drop and recovery work; `e2e-controls.cjs --url` passes the steam, flush and Stop
+  cases (its espresso cases now report "skip" when Decaid has no Crema coffee,
+  instead of passing without testing anything).*
 - [ ] **Reconcile the workflow instead of trusting `S.loaded`.** Re-read on boot
   (Decaid reloads a skin after 10 minutes in the background), visibility, focus,
   return from Decaid's dashboard, a slow timer and before a start. Compare the shown
   values; adopt an outside change and say so; don't repaint over an edit made in
   the last few hundred milliseconds; ignore our own echo.
 - [ ] **Socket ownership.** One owner per stream, close and silence before reopening,
-  backoff with jitter, and cleanup so reconnects don't accumulate handlers.
+  backoff with jitter, and cleanup so reconnects don't accumulate handlers. Reopening
+  on link-up isn't needed on Decaid 0.9.1, which re-attached the sockets after a
+  `MockDe1` reconnect; confirm after a real DE1 power cycle.
 - [ ] **Bound API waits** and keep optional AI/recipe discovery from delaying machine
   telemetry and Stop availability. Reproduce before choosing the smallest change.
 - [ ] Handle missing/error/busy states using documented capabilities. Preserve
