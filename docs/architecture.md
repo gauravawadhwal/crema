@@ -67,6 +67,8 @@ Both must provide:
 
 Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, temperatures and steam temperature. Shot end is detected by `finished` (from the demo) or by espresso → another state (live).
 
+**Time limits:** every request has one: 15 s for Decaid, and for the Crema server identify 330 s, recommend and dial-in 120 s, transcribe 60 s. Boot subscribes to the machine streams before loading anything else, so readings and Stop never wait on the shelf or a recipe.
+
 **AI fallback:** every call to the Crema server goes through `cremaCall`. A network error or 5xx marks the server unhealthy and fires a `crema:ai` event; the status bar then shows "AI offline" and the rules answer. The next successful call clears it.
 
 ## Decaid endpoints used

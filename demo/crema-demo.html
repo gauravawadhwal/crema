@@ -2040,17 +2040,26 @@ function makeLiveApi(conn) {
   // conn: { decaid: REST base ("/decaid" via the Crema server's proxy, or "http://host:8080"),
   //         decaidWs: "ws://host:8080", crema: Crema server base ("" same origin, "http://…", or null),
   //         cremaInfo: its /api/config, cremaError: why a saved server couldn't be reached }
+  // Every request has a time limit, so a stuck one can't hold up whatever waits on it.
+  // Decaid answers in milliseconds; the Crema server's AI calls pass longer limits.
   const j = async (url, opts = {}) => {
-    const init = { ...opts };
+    const { timeoutMs = 15000, ...init } = opts;
     if (opts.body && !(opts.body instanceof FormData)) init.headers = { "content-type": "application/json" };
-    const res = await fetch(url, init);
+    init.signal = AbortSignal.timeout(timeoutMs);
+    let res;
+    try { res = await fetch(url, init); }
+    catch (e) { if (e.name === "TimeoutError") throw new Error(`no answer within ${Math.round(timeoutMs / 1000)} s`); throw e; }
     const text = await res.text();
     const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
     if (!res.ok) { const e = new Error((data && data.error) || `${res.status} ${res.statusText}`); e.status = res.status; throw e; }
     return data;
   };
   const put = (url, body) => j(url, { method: "PUT", body: JSON.stringify(body) });
-  const post = (url, body) => j(url, { method: "POST", body: JSON.stringify(body ?? {}) });
+  const post = (url, body, opts = {}) => j(url, { method: "POST", body: JSON.stringify(body ?? {}), ...opts });
+  // The server gives a CLI model up to 300 s per attempt (Gemini 90 s). Identifying a
+  // coffee can search the web, so it gets one attempt's worth; a recipe or dial-in
+  // falls back to the rules, so waiting longer than 2 minutes isn't worth it.
+  const AI_WAIT = { identify: 330000, transcribe: 60000, recommend: 120000, dialin: 120000 };
   const D = (p) => `${conn.decaid}/api/v1${p}`;
   const C = (p) => `${conn.crema}${p}`;
   const wsBase = conn.decaidWs;
@@ -2158,13 +2167,13 @@ function makeLiveApi(conn) {
       if (query) fd.set("query", query); if (url) fd.set("url", url); if (offline) fd.set("offline", "true");
       // The tablet's own date, so "roasted last Tuesday" resolves in the user's time zone.
       if (description) { fd.set("description", description); fd.set("today", new Date().toLocaleDateString("en-CA")); }
-      return (await cremaCall(() => j(C("/api/identify"), { method: "POST", body: fd }))).info;
+      return (await cremaCall(() => j(C("/api/identify"), { method: "POST", body: fd, timeoutMs: AI_WAIT.identify }))).info;
     },
 
     async transcribe(wav) {
       if (!this.ai.voice) throw new Error("Speaking needs a Crema server with a Gemini API key.");
       const fd = new FormData(); fd.append("audio", wav, "voice.wav");
-      return (await cremaCall(() => j(C("/api/transcribe"), { method: "POST", body: fd }))).text;
+      return (await cremaCall(() => j(C("/api/transcribe"), { method: "POST", body: fd, timeoutMs: AI_WAIT.transcribe }))).text;
     },
 
     async saveBean(info, photo, art) {
@@ -2200,7 +2209,7 @@ function makeLiveApi(conn) {
       const history = (await batchShots(batch?.id, 15)).map(E.toPastShot);
       let out = null, aiFailed = false;
       if (!opts.rulesOnly && aiOn()) {
-        try { out = await cremaCall(() => post(C("/api/recommend"), { bean: info, profileTitles: titles, history, preferences: prefs })); }
+        try { out = await cremaCall(() => post(C("/api/recommend"), { bean: info, profileTitles: titles, history, preferences: prefs }, { timeoutMs: AI_WAIT.recommend })); }
         catch { aiFailed = true; }
       }
       if (!out) {
@@ -2242,7 +2251,7 @@ function makeLiveApi(conn) {
       if (aiOn()) {
         try {
           const history = (await batchShots(batch?.id, 10)).map(E.toPastShot);
-          const { advice } = await cremaCall(() => post(C("/api/dialin"), { bean: info, recipe, shot, feedback: fb, history }));
+          const { advice } = await cremaCall(() => post(C("/api/dialin"), { bean: info, recipe, shot, feedback: fb, history }, { timeoutMs: AI_WAIT.dialin }));
           return { advice, source: "ai" };
         } catch {}
       }
@@ -2337,7 +2346,7 @@ function makeLiveApi(conn) {
 const S = {
   api: null,
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
-  shelf: [], current: null, next: null, loaded: false, heldLoad: false,
+  shelf: [], shelfLoaded: false, shelfError: null, current: null, next: null, loaded: false, heldLoad: false,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
@@ -2512,6 +2521,13 @@ function setNextFromRecipe(bean, recipe) {
 function renderNextShot() {
   const el = $("#nextShot");
   const b = S.current;
+  if (!b && !S.shelfLoaded) { el.innerHTML = `<p class="muted">Loading your coffees…</p>`; return; }
+  if (!b && S.shelfError) {
+    // A failed load isn't an empty shelf: don't offer to add a coffee that may be there.
+    el.innerHTML = `<h2>Couldn't load your coffees</h2><p class="muted">Decaid didn't answer (${esc(S.shelfError)}).</p><div><button class="btn primary" id="retryShelf">Try again</button></div>`;
+    $("#retryShelf").onclick = retryShelf;
+    return;
+  }
   if (!b) { el.innerHTML = `<h2>No coffee yet</h2><p class="muted">Add a bag to get a profile and recipe matched to it.</p><div><a class="btn primary" href="#add">Add coffee</a></div>`; return; }
   const i = b.info, n = S.next, r = b.recipe, rest = restOf(i);
   const idx = S.shelf.findIndex((x) => x.id === b.id);
@@ -2710,7 +2726,12 @@ function editFav(i) {
 function renderControls() {
   syncExitButton();
   const p = S.presets, st = S.snap?.state?.state;
-  if (!p) return;
+  if (!p) {
+    // Presets come from Decaid's key-value store; until they arrive, Stop is still here.
+    $("#controls").innerHTML = `<div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${["espresso", "steam", "hotWater", "flush"].includes(st) ? "active" : ""}" id="stopBtn" ${S.snap ? "" : "disabled"}>STOP</button></div>`;
+    $("#stopBtn").onclick = stopMachine;
+    return;
+  }
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
   const disabled = S.ghc || !S.snap || unlinked() || st === "sleeping" || st === "needsWater";
   const sel = p.selected;
@@ -3039,6 +3060,13 @@ async function renderShelf() {
   }));
 }
 async function refreshShelf() { S.shelf = await S.api.shelf(); }
+async function retryShelf() {
+  S.shelfLoaded = false; renderNextShot();
+  await refreshShelf().then(() => (S.shelfError = null), (e) => { S.shelf = []; S.shelfError = e.message; });
+  S.shelfLoaded = true;
+  await selectBean(local.get("current", null) || S.shelf[0]?.id, { quiet: true });
+  await reconcileWorkflow({ boot: true });
+}
 
 /* ================= add coffee ================= */
 let addMode = "photo", files = [], pending = null, REVIEW_INTRO = "";
@@ -3821,6 +3849,17 @@ async function boot() {
   if (conn?.decaid) S.api = makeLiveApi(conn);
   else if (wantsDeviceFrame() && !local.get("decaid", "")) return showDeviceFrame();
   else S.api = makeDemoApi();
+  // Machine streams first: readings and Stop mustn't wait for settings, the shelf or
+  // a recipe (which can mean an AI call).
+  S.api.subscribe({
+    snapshot: onSnapshot,
+    scale: (s) => { S.scale = { ...S.scale, ...s }; renderStatus(); if (!$("#view-brew").hidden) renderReadouts(); },
+    water: (w) => { S.water = w; renderStatus(); },
+    ready: (r) => { S.ready = r; },
+    devices: onDevices,
+  });
+  // Show the Brew screen (readings, Stop) now; the rest of it fills in as data arrives.
+  if (!location.hash || location.hash === "#brew") route(false);
   await S.api.settings.get().catch(() => {});
   $("#demoBanner").hidden = !S.api.demo;
   // Offer to connect when this page could reach a machine (not the hosted demos).
@@ -3848,7 +3887,8 @@ async function boot() {
 
   const [prefs, favs, presets, maint] = await Promise.all([S.api.prefs.get().catch(() => ({})), S.api.favourites.get().catch(() => S.favourites), S.api.presets.get().catch(() => null), S.api.maintenance.get().catch(() => null)]);
   Object.assign(S, { prefs, favourites: favs, presets, maint });
-  await refreshShelf().catch(() => (S.shelf = []));
+  await refreshShelf().then(() => (S.shelfError = null), (e) => { S.shelf = []; S.shelfError = e.message; });
+  S.shelfLoaded = true;
   // Start on the coffee the machine holds, if it's on the shelf, then take its recipe.
   const onMachine = await S.api.machine.recipe?.().catch(() => null);
   const machineBean = onMachine?.batchId && S.shelf.find((b) => b.batch === onMachine.batchId);
@@ -3859,13 +3899,6 @@ async function boot() {
   window.addEventListener("focus", recheck);
   setInterval(recheck, 60000);
 
-  S.api.subscribe({
-    snapshot: onSnapshot,
-    scale: (s) => { S.scale = { ...S.scale, ...s }; renderStatus(); if (!$("#view-brew").hidden) renderReadouts(); },
-    water: (w) => { S.water = w; renderStatus(); },
-    ready: (r) => { S.ready = r; },
-    devices: onDevices,
-  });
   window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());
   window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });

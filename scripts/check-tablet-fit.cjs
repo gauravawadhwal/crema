@@ -49,7 +49,10 @@ const measure = (p) => p.evaluate(() => ({
     };
     try {
       await p.goto(url + "#brew");
-      await p.evaluate(() => document.fonts.ready);
+      // Web fonts come from Google Fonts; measure with them when they arrive in time,
+      // but don't let a stalled download hold the check.
+      const fonts = await p.evaluate(() => Promise.race([document.fonts.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 5000))]));
+      if (!fonts) console.log(`   ${w}x${h}: web fonts didn't load within 5 s; measuring with fallback fonts`);
       await p.waitForTimeout(1200);
       check("home", await measure(p));
       await p.screenshot({ path: `${out}/fit-${w}x${h}-home.png` });
