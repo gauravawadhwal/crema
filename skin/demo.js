@@ -201,6 +201,8 @@ function makeDemoApi() {
     info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null, serverError: null },
     // No Crema server here, so no Gemini voice notes; "Describe it" uses the browser's speech recognition.
     ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true, voice: false },
+    // Shown in the demo so the control can be seen; on the tablet it closes the skin.
+    host: { canExit: true, exitToDashboard() { toast("On the tablet, this closes Crema and shows Decaid's dashboard"); } },
     settings: {
       get: async () => ({ aiEnabled }),
       set: async (p) => { if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled; return { aiEnabled }; },

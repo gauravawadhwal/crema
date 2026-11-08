@@ -63,6 +63,7 @@ Both must provide:
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `shotSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat` |
 | `subscribe({snapshot, scale, water, ready})` | Live streams |
+| `host.{canExit, exitToDashboard()}` | Leave the skin for Decaid's dashboard. Live: `canExit` is true only when Decaid's WebView provides `window.decentApp.exitToDashboard`. Demo: always shown, and only explains itself |
 
 Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, temperatures and steam temperature. Shot end is detected by `finished` (from the demo) or by espresso → another state (live).
 

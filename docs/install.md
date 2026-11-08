@@ -150,7 +150,7 @@ Crema covers day-to-day settings: steam, hot water and flush, sleep and wake sch
 - **The [Streamline Settings](https://github.com/decentespresso/streamline-setting) plugin** (optional): Streamline's full machine settings, including calibration, firmware, cleaning and steam modes. Install it from Decaid's Plugins screen with its release ZIP, or with `curl -X POST http://<tablet-ip>:8080/api/v1/plugins/install/github-release -H 'Content-Type: application/json' -d '{"repo":"decentespresso/streamline-setting"}'`. Then open `http://<tablet-ip>:8080/api/v1/plugins/streamline-settings.reaplugin/ui` in any browser on your network. Its skin preferences (language, units, zoom) apply to Streamline only, not Crema.
 - **The Streamline skin:** profile editing and importing profiles from Visualizer. Switch skins in Decaid, then switch back to Crema; Crema's data stays in Decaid.
 
-Crema doesn't have a button back to Decaid's dashboard yet. Use Decaid's own navigation; its **Skin navigation guide** option (Settings → General) shows how it works on your version. [parity.md](parity.md) lists features against the stock app and other skins.
+To get to Decaid's dashboard from Crema on the tablet, open **Settings → Decaid → Open Decaid**. It calls Decaid's `exitToDashboard()`, which closes the skin. The row appears only inside Decaid (not on a phone or in a desktop browser) and is greyed out while the machine is running. If it's missing on your Decaid version, use Decaid's own navigation; its **Skin navigation guide** option (Settings → General) shows how it works. [parity.md](parity.md) lists features against the stock app and other skins.
 
 None of these routes has been tested from Crema on a real tablet yet.
 
