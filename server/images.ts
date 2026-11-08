@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { isIP } from "node:net";
 import path from "node:path";
+import { isSafeUrl, safeFetch } from "./safe-fetch.js";
 
 /**
  * Roaster product photos. Most roaster shops (Shopify, WooCommerce, Squarespace)
@@ -16,25 +16,8 @@ const TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png",
 
 export const imageDir = () => path.resolve(process.env.CREMA_IMAGES ?? "data/images");
 
-/** Only public http(s) hosts: this runs on your home network. */
-export function isSafeUrl(raw: string): boolean {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
-  const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".lan")) return false;
-  // RFC 2606 reserved names never host real pages (the mock data uses them).
-  if (/(^|\.)example(\.(com|net|org))?$/.test(host) || /\.(test|invalid)$/.test(host)) return false;
-  if (isIP(host)) {
-    if (/^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return false;
-    if (host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80")) return false;
-  }
-  return true;
-}
+// Kept here for the importers that already get it from this module.
+export { isSafeUrl };
 
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
@@ -89,18 +72,9 @@ export function productImageFromHtml(html: string, pageUrl: string): string | nu
 }
 
 async function fetchLimited(url: string, accept: string) {
-  const res = await fetch(url, {
-    headers: { accept, "user-agent": "Mozilla/5.0 (compatible; Crema coffee companion)" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (!res.ok) throw new Error(`${res.status} fetching ${url}`);
-  if (!isSafeUrl(res.url || url)) throw new Error("redirected to a non-public address");
-  const len = Number(res.headers.get("content-length") ?? 0);
-  if (len > MAX_BYTES) throw new Error("too large");
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > MAX_BYTES) throw new Error("too large");
-  return { buf, type: (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase() };
+  const res = await safeFetch(url, { accept, maxBytes: MAX_BYTES, timeoutMs: 12_000 });
+  if (res.status < 200 || res.status >= 300) throw new Error(`${res.status} fetching ${url}`);
+  return { buf: res.body, type: res.type };
 }
 
 /** Look up the product image on a roaster's page. Returns null when there isn't one. */

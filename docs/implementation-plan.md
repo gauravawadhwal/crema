@@ -383,14 +383,32 @@ tests protect old records. A framework migration is not an acceptance criterion.
 
 Primary code: `server/images.ts`, its routes in `server/app.ts`, image tests.
 
-- [ ] Validate public destinations before making each request, including redirects.
+- [x] Validate public destinations before making each request, including redirects.
   Resolve and reject private/reserved IPv4/IPv6 addresses; ensure the connection
   uses the vetted destination rather than re-resolving unsafely.
-- [ ] Bound redirects, time and streamed response bytes; stop reading once the
+  *Done in `server/safe-fetch.ts`, used by `images.ts` (product pages and photos) and
+  `dropDeadLinks` in `identify.ts`. Requests go through `node:http`/`https` with a
+  custom `lookup` that resolves once, refuses the name if any address is reserved,
+  and is the lookup the socket connects with. Redirects are followed by hand, each
+  target checked before it's requested. Reserved ranges are a `BlockList` (IPv4 and
+  IPv6 kept separate) covering private, shared, loopback, link-local, documentation,
+  benchmarking, multicast, IPv4-mapped, NAT64 and 6to4. `isSafeUrl` moved there,
+  also refuses credentials in URLs and single-label names, and is re-exported from
+  `images.ts`. `resolveGroundingLinks` still uses `fetch`: it only requests Google's
+  fixed grounding host, with manual redirects. The Decaid proxy is unchanged (its
+  target is the configured `DECAID_URL`).*
+- [x] Bound redirects, time and streamed response bytes; stop reading once the
   limit is reached even without a trustworthy `Content-Length`.
-- [ ] Test allowed public fetches, redirect-to-private attempts, private DNS results,
+  *Done: 5 redirects (3 for dead-link checks), one deadline across all hops, and the
+  body streamed and abandoned past the limit, counted after decompression.*
+- [x] Test allowed public fetches, redirect-to-private attempts, private DNS results,
   address variants, oversized/chunked bodies and timeouts using controlled fixtures.
   No probing of real private infrastructure is needed.
+  *Done: `test/safe-fetch.test.ts` runs local servers reached through an injected
+  resolver (62 cases, including a gzip bomb and a mixed public/private DNS answer),
+  and `test/identify.test.ts` checks dead links the same way. A manual smoke run
+  against real roaster sites (https, http→https and cross-host redirects, gzip/brotli,
+  Open Graph image) worked; it isn't part of CI.*
 
 Acceptance: rejected destinations receive no outgoing request; oversized downloads
 are aborted while streaming; normal product image caching and fallback still work.
