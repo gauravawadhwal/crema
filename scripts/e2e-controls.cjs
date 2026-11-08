@@ -1,6 +1,7 @@
 // Machine-control races in the demo: Stop must cancel a start that is still
 // waiting on a settings write or a recipe load, a start must not run twice,
-// and Stop pressed while the start command itself is in flight must win.
+// Stop pressed while the start command itself is in flight must win, and a
+// recipe load during a shot must wait for the shot to end.
 // Needs Playwright.
 //
 //   node scripts/e2e-controls.cjs            # the source app
@@ -59,6 +60,10 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     wrap(m.shotSettings, "set", "shotSettings");
     wrap(m.settings, "set", "settings");
     wrap(S.api, "apply", "apply");
+    // Every recipe write, with the machine state at the moment it was sent.
+    window.__applies = [];
+    const apply = S.api.apply;
+    S.api.apply = (id, recipe, grind) => { window.__applies.push({ state: S.snap?.state?.state, dose: recipe.doseG }); return apply(id, recipe, grind); };
   });
   const state = () => p.evaluate(() => S.snap?.state?.state);
   const calls = () => p.evaluate(() => window.__calls.slice());
@@ -128,7 +133,29 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await tap("#stopBtn");
     await release();
 
-    // 6. A normal start still works.
+    // 6. Loading a recipe during a shot waits for the shot to end, and the latest
+    //    choice is the one sent. Decaid would otherwise rewrite the profile steps
+    //    the machine is pouring.
+    await reset();
+    await tap('[data-run="espresso"]');
+    await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
+    await p.evaluate(() => { window.__applies = []; });
+    const dose0 = await p.evaluate(() => S.next.doseG);
+    await tap('[data-step="dose:1"]');
+    await tap("#loadBtn");
+    await tap('[data-step="dose:1"]');
+    await tap("#loadBtn");
+    const during = await p.evaluate(() => ({ applies: window.__applies.slice(), label: document.querySelector("#loadBtn").textContent, toast: document.querySelector("#toast").textContent }));
+    check(during.applies.length === 0, "no recipe is written to the machine during a shot", JSON.stringify(during.applies));
+    check(/after this shot/.test(during.label) && /shot ends/.test(during.toast), "the app says the recipe loads after the shot", `${during.label} / ${during.toast}`);
+    await tap("#stopBtn");
+    await p.waitForFunction(() => window.__applies.length > 0, null, { timeout: 10000 }).catch(() => {});
+    await p.waitForTimeout(500);
+    const after = await p.evaluate(() => ({ applies: window.__applies.slice(), loaded: S.loaded, held: S.heldLoad }));
+    check(after.applies.length === 1 && after.applies[0].state !== "espresso" && after.applies[0].dose === dose0 + 1, "once the shot ends, the latest recipe is loaded once", JSON.stringify(after));
+    check(after.loaded && !after.held, "and it shows as loaded");
+
+    // 7. A normal start still works.
     await reset();
     await tap('[data-run="flush"]');
     await p.waitForFunction(() => S.snap?.state?.state === "flush", null, { timeout: 5000 }).catch(() => {});
