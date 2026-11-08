@@ -60,7 +60,7 @@ function skinServer() {
 }
 
 let failed = false;
-const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); if (!ok) failed = true; };
+const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${label}${ok || !detail ? "" : ` (${detail})`}`); if (!ok) failed = true; };
 
 (async () => {
   await start("npx", ["tsx", "dev/mock-decaid.ts"], { PORT: String(MOCK) }, "mock-decaid on");
@@ -97,6 +97,39 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     check(await page.isHidden("#addModes") && await page.isVisible("#mRoaster") && await page.isVisible("#addNoAi"), "Add offers typing the details only");
     await addByHand("Test Roasters", "Hand Entry");
     check(await S(() => S.current.recipeSource === "rules"), "rules chose the recipe");
+
+    // The machine's recipe vs the screen. Decaid has no workflow stream, so the app
+    // re-reads the workflow: on boot, on focus, on link-up, every minute, before a start.
+    const wfPut = (b) => fetch(`http://localhost:${MOCK}/api/v1/workflow`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(b) });
+    const wfGet = async () => (await fetch(`http://localhost:${MOCK}/api/v1/workflow`)).json();
+    const recheck = async () => { await S(() => window.dispatchEvent(new Event("focus"))); await page.waitForTimeout(600); };
+    await S(() => loadOntoMachine(true));
+    await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForFunction(() => S.next && S.link.connected, null, { timeout: 15000 }); await page.waitForTimeout(800);
+    check(await S(() => S.loaded) && /Loaded/.test(await page.textContent("#loadBtn")), "after a reload, a recipe already on the machine shows as loaded");
+    const dose0 = await S(() => S.next.doseG);
+    await wfPut({ context: { targetDoseWeight: dose0 + 1.5 } }); // another client changes the dose
+    await recheck();
+    const adopted = await S(() => ({ dose: S.next.doseG, loaded: S.loaded, toast: document.querySelector("#toast").textContent }));
+    check(adopted.dose === dose0 + 1.5 && adopted.loaded && /changed elsewhere/.test(adopted.toast), "a change made elsewhere for this coffee is taken and announced", JSON.stringify(adopted));
+    await S(() => step("dose:1")); // an unsaved edit here...
+    const mine = await S(() => S.next.doseG);
+    await wfPut({ context: { targetDoseWeight: 15 } }); // ...and another change elsewhere
+    await recheck();
+    check(await S(() => S.next.doseG) === mine && !(await S(() => S.loaded)), "an unsaved edit on screen isn't overwritten by a change elsewhere");
+    await S(() => loadOntoMachine(true));
+    const otherProfile = await S(async () => (await fetch(`${S.api.info.decaidUrl}/api/v1/profiles?visibility=visible`).then((r) => r.json())).map((x) => x.profile).find((x) => x.title !== S.next.profileTitle));
+    await wfPut({ profile: otherProfile }); // changed elsewhere, not yet noticed here
+    await S(() => startOp("espresso"));
+    await page.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 }).catch(() => {});
+    const started = { machine: (await wfGet()).profile.title, screen: await S(() => S.next.profileTitle) };
+    check(started.machine === started.screen, "starting espresso loads the screen's recipe if the machine has changed", JSON.stringify(started));
+    await S(() => stopMachine()); await page.waitForFunction(() => S.snap?.state?.state !== "espresso", null, { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(600);
+    await wfPut({ context: { beanBatchId: "someone-elses-batch" } });
+    await recheck();
+    const other = await S(() => ({ loaded: S.loaded, toast: document.querySelector("#toast").textContent }));
+    check(!other.loaded && /another recipe/.test(other.toast), "another coffee's recipe on the machine marks this one as not loaded", JSON.stringify(other));
+    await S(() => loadOntoMachine(true));
     // Leaving for Decaid's dashboard: only inside Decaid's WebView, and not mid-operation.
     await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#sGhc", { timeout: 10000 });
     check(await page.locator("#exitDash").count() === 0, "no Decaid exit in an ordinary browser");
@@ -202,6 +235,13 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     const got = await S(() => ({ name: S.current.info.name.value, source: S.current.recipeSource }));
     check(got.name === "Kii AA" && got.source === "mock", `identified by the server and recipe chosen by the AI (${got.name}, ${got.source})`);
     check(await S(() => S.shelf.length >= 2), "both coffees on the shelf");
+    // Boot starts on the coffee the machine holds, not the one last viewed here.
+    const onMachine = await S(() => S.current.id);
+    await S(() => loadOntoMachine(true));
+    const elsewhere = await S(() => S.shelf.find((b) => b.id !== S.current.id).id);
+    await page.evaluate((id) => local.set("current", id), elsewhere);
+    await open(`decaid=http://localhost:${MOCK}&server=http://localhost:${CREMA}`);
+    check(await S(() => S.current.id) === onMachine && await S(() => S.loaded), "on boot, the coffee whose recipe is on the machine is selected and shown as loaded");
 
     // ---- 6. speaking (Gemini path, mock transcriber) ----
     await page.goto(`http://localhost:${SKIN}/?full#add`); await page.waitForTimeout(800);

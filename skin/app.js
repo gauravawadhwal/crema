@@ -10,7 +10,7 @@
      info, ai { available, on, healthy }, settings { get, set },
      shelf, identify, saveBean, setBeanState, pinBest, recommend, rank, catalog,
      apply, shots, annotate, feedback, prefs, favourites, presets, maintenance,
-     machine { setState, tare, workflowSettings, settings, waterThreshold, presence,
+     machine { setState, tare, recipe, workflowSettings, settings, waterThreshold, presence,
                schedules, display, plugins, info, heartbeat }, subscribe */
 "use strict";
 
@@ -354,6 +354,20 @@ function makeLiveApi(conn) {
       setState: (s) => j(D(`/machine/state/${s}`), { method: "PUT" }),
       tare: () => j(D("/scale/tare"), { method: "PUT" }),
       workflowSettings: { get: async () => pickSettings(await j(D("/workflow"))), set: (p) => put(D("/workflow"), pickSettings(p)) },
+      // What the machine holds now, in the next-shot panel's terms. Decaid has no
+      // stream or revision for the workflow, so the app re-reads it (reconcileWorkflow).
+      async recipe() {
+        const w = await j(D("/workflow")), c = w.context ?? {};
+        const n = (v) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+        return {
+          profileTitle: w.profile?.title ?? null,
+          doseG: n(c.targetDoseWeight ?? w.doseData?.doseIn),
+          yieldG: n(c.targetYield ?? w.doseData?.doseOut ?? w.profile?.target_weight),
+          tempC: n(w.profile?.steps?.[0]?.temperature),
+          grind: String(c.grinderSetting ?? w.grinderData?.setting ?? ""),
+          batchId: c.beanBatchId ?? null,
+        };
+      },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
       waterThreshold: (pct) => post(D("/machine/waterLevels"), { warningThresholdPercentage: pct }),
       presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
@@ -522,7 +536,7 @@ function onDevices(payload) {
     S.link.error = err;
   }
   if (was === true && now === false) S.loaded = false; // what the machine holds is unknown until it's back
-  if (was === false && now === true) toast("The machine is connected again");
+  if (was === false && now === true) { toast("The machine is connected again"); reconcileWorkflow(); }
   renderStatus(); renderAlerts(); renderControls();
   if (!$("#view-brew").hidden) { renderReadouts(); renderNextShot(); renderLive(); }
 }
@@ -643,14 +657,72 @@ async function loadOntoMachine(silent = false) {
     return "held";
   }
   S.heldLoad = false;
+  wfWrites++;
   const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
   try {
     await S.api.apply(b.id, recipe, n.grind || undefined);
+    wfWrites++;
     S.loaded = true; renderNextShot();
     if (!silent) toast(`Loaded ${n.profileTitle}: ${n.doseG} g → ${n.yieldG} g at ${n.tempC} °C`);
     return true;
   } catch (e) { toast(`Couldn't load the recipe: ${e.message}`); return false; }
 }
+/* ================= the machine's recipe vs the screen ================= */
+// Decaid publishes no workflow stream and no revision, so a change made elsewhere
+// (another skin, the phone, Decaid itself, or Decaid restoring after a restart) is
+// invisible until the workflow is read again. reconcileWorkflow reads it on boot,
+// when the page comes back into view, on link-up, every minute while visible, and
+// before an espresso start, and compares only what the next-shot panel shows.
+//   - It matches: the recipe is on the machine (S.loaded).
+//   - It differs and the panel had unsaved edits: keep them; a start loads them.
+//   - It differs and the panel matched the machine (an outside change): for the same
+//     coffee, or one with no coffee recorded, take the machine's values and say so;
+//     for another coffee, mark the recipe as not loaded. Nothing is written back.
+//   - Before a start (adopt: false): never take the machine's values; a difference
+//     only clears S.loaded, so the start loads what the screen shows.
+// A read that began before one of our own writes finished is dropped, so it can't
+// undo that write. Approach from Streamline's workflow-watch.js, reimplemented here.
+let wfWrites = 0, wfReading = null;
+const near = (a, b) => a == null || b == null ? a == b : Math.abs(Number(a) - Number(b)) < 0.05;
+// Grind is only a note on the recipe (it never reaches the machine), so a side that
+// has none doesn't count as a difference. Writers format numbers differently ("21",
+// "21.00"), so numbers compare as numbers.
+const sameGrind = (a, b) => {
+  const x = String(a ?? "").trim(), y = String(b ?? "").trim();
+  return x === "" || y === "" || x === y || (Number.isFinite(Number(x)) && Number(x) === Number(y));
+};
+const recipeMatches = (m, n) => !!(m && n) && m.profileTitle === n.profileTitle && near(m.doseG, n.doseG) && near(m.yieldG, n.yieldG) && near(m.tempC, n.tempC) && sameGrind(m.grind, n.grind);
+function reconcileWorkflow({ adopt = true, boot = false } = {}) {
+  if (!S.api?.machine.recipe || shotRunning() || unlinked()) return Promise.resolve(null);
+  if (wfReading) return wfReading;
+  const writesBefore = wfWrites;
+  const timeout = new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 4000));
+  wfReading = Promise.race([S.api.machine.recipe(), timeout]).then((m) => {
+    if (writesBefore !== wfWrites || !m || !S.next || !S.current) return null;
+    // A recipe recorded against another bag is another coffee's, whatever its numbers.
+    const otherCoffee = !!m.batchId && m.batchId !== S.current.batch;
+    if (!otherCoffee && recipeMatches(m, S.next)) {
+      if (!S.loaded) { S.loaded = true; renderNextShot(); }
+      return "same";
+    }
+    const unsaved = !S.loaded && !boot;
+    S.loaded = false;
+    if (!adopt || unsaved) { renderNextShot(); return "differs"; }
+    if (otherCoffee || !m.profileTitle) { if (!boot) toast("The machine has another recipe, set elsewhere. Starting here loads this one"); renderNextShot(); return "other"; }
+    Object.assign(S.next, {
+      profileTitle: m.profileTitle,
+      doseG: m.doseG ?? S.next.doseG, yieldG: m.yieldG ?? S.next.yieldG, tempC: m.tempC ?? S.next.tempC,
+      grind: m.grind || S.next.grind,
+    });
+    if (m.grind) local.set(`grind:${S.current.id}`, m.grind);
+    S.loaded = recipeMatches(m, S.next);
+    renderNextShot();
+    if (!boot) toast(`Recipe changed elsewhere: ${m.profileTitle}, ${fmtC(S.next.doseG)} → ${fmtC(S.next.yieldG)} g`);
+    return "adopted";
+  }).catch(() => null).finally(() => { wfReading = null; });
+  return wfReading;
+}
+
 async function selectBean(id, opts = {}) {
   S.current = S.shelf.find((b) => b.id === id) || S.shelf[0] || null;
   local.set("current", S.current?.id);
@@ -778,6 +850,8 @@ async function startOp(kind) {
   renderControls();
   let sent = false;
   try {
+    if (kind === "espresso" && S.loaded) await reconcileWorkflow({ adopt: false }); // still on the machine?
+    if (!current()) return;
     if (kind === "espresso" && !S.loaded) { const ok = await loadOntoMachine(true); if (!ok) return; }
     if (kind === "steam") await pushPresetSettings("steam");
     if (kind === "hotWater") await pushPresetSettings("water");
@@ -1852,7 +1926,15 @@ async function boot() {
   const [prefs, favs, presets, maint] = await Promise.all([S.api.prefs.get().catch(() => ({})), S.api.favourites.get().catch(() => S.favourites), S.api.presets.get().catch(() => null), S.api.maintenance.get().catch(() => null)]);
   Object.assign(S, { prefs, favourites: favs, presets, maint });
   await refreshShelf().catch(() => (S.shelf = []));
-  await selectBean(local.get("current", null) || S.shelf[0]?.id, { quiet: true });
+  // Start on the coffee the machine holds, if it's on the shelf, then take its recipe.
+  const onMachine = await S.api.machine.recipe?.().catch(() => null);
+  const machineBean = onMachine?.batchId && S.shelf.find((b) => b.batch === onMachine.batchId);
+  await selectBean(machineBean?.id || local.get("current", null) || S.shelf[0]?.id, { quiet: true });
+  await reconcileWorkflow({ boot: true });
+  const recheck = () => document.visibilityState === "visible" && reconcileWorkflow();
+  document.addEventListener("visibilitychange", recheck);
+  window.addEventListener("focus", recheck);
+  setInterval(recheck, 60000);
 
   S.api.subscribe({
     snapshot: onSnapshot,

@@ -256,9 +256,9 @@ function makeDemoApi() {
     },
     async rank(id) { return recipeFor(byId(id)).candidates; },
     async catalog() { return D.catalog.map((p) => ({ ...p, installed: true })); },
-    async apply(id, recipe) {
+    async apply(id, recipe, grinderSetting) {
       const b = byId(id);
-      workflow = { profile: { title: recipe.profileTitle }, context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: b.batch } };
+      workflow = { profile: { title: recipe.profileTitle }, context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: b.batch, grinderSetting: grinderSetting ?? "" }, tempC: recipe.tempC, applied: true };
       sim.group = recipe.tempC;
       await wait(250);
     },
@@ -293,6 +293,11 @@ function makeDemoApi() {
         else run(s);
       },
       async tare() { sim.scaleOffset = sim.scale; },
+      async recipe() {
+        if (!workflow.applied) return null; // the demo's starting workflow is a placeholder, not a load
+        const c = workflow.context;
+        return { profileTitle: workflow.profile.title, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null };
+      },
       workflowSettings: {
         get: async () => clone(wf),
         set: async (p) => { for (const k of Object.keys(wf)) if (p[k]) Object.assign(wf[k], p[k]); },

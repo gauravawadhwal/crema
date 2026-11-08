@@ -342,11 +342,29 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   drop and recovery work; `e2e-controls.cjs --url` passes the steam, flush and Stop
   cases (its espresso cases now report "skip" when Decaid has no Crema coffee,
   instead of passing without testing anything).*
-- [ ] **Reconcile the workflow instead of trusting `S.loaded`.** Re-read on boot
+- [x] **Reconcile the workflow instead of trusting `S.loaded`.** Re-read on boot
   (Decaid reloads a skin after 10 minutes in the background), visibility, focus,
   return from Decaid's dashboard, a slow timer and before a start. Compare the shown
   values; adopt an outside change and say so; don't repaint over an edit made in
   the last few hundred milliseconds; ignore our own echo.
+  *Done: `machine.recipe()` in both backends normalizes the workflow to the panel's
+  terms (profile, dose, yield, first-step temperature, grind, batch).
+  `reconcileWorkflow` runs at boot, on `visibilitychange` and `focus`, on link-up,
+  every 60 s while visible, and before an espresso start; never during a shot or
+  while unlinked; reads time out after 4 s. Boot selects the coffee whose batch the
+  machine holds, if it's on the shelf. A match marks the recipe loaded (a reload no
+  longer asks to load a recipe the machine already has). A difference with unsaved
+  edits on screen keeps them. A difference when the screen matched the machine is an
+  outside change: for the same coffee (or none recorded) the panel takes the
+  machine's values and a toast says so; for another coffee's batch the recipe is
+  marked not loaded. Before a start nothing is adopted, so a difference makes the
+  start load what the screen shows. Grind is a note, so a side without one isn't a
+  difference, and numbers compare as numbers. A read that began before one of our
+  own writes finished is dropped instead of an echo window (the workflow is Decaid's
+  stored document, so there's no machine echo to wait out). `e2e-live.cjs` covers
+  reload, adoption, unsaved edits, a start after an unnoticed change, another
+  coffee, and boot picking the machine's coffee; on desktop Decaid 0.9.1
+  `recipe()` reads the real workflow (its other cases need a Crema coffee there).*
 - [ ] **Socket ownership.** One owner per stream, close and silence before reopening,
   backoff with jitter, and cleanup so reconnects don't accumulate handlers. Reopening
   on link-up isn't needed on Decaid 0.9.1, which re-attached the sockets after a
