@@ -1,6 +1,7 @@
 # Crema implementation handoff
 
-Created: 6 November 2026. Status: **planned; not implemented**.
+Created: 6 November 2026. Status: **in progress** (last updated 8 November 2026). The
+progress table and the ticked items below say what is done; everything else is still planned.
 
 This is the execution plan requested by the user after the project review. It covers
 all review recommendations, including reuse of Streamline Settings. The supporting
@@ -52,8 +53,37 @@ separate supervised step; implement and test locally first.
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Not started |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Not started |
-| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI job gates releases and Pages; skin ZIP checked before publishing |
+| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI job gates releases and Pages (passing on GitHub since PR #6); skin ZIP checked before publishing |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
+
+### Suggested next sessions
+
+Each is a self-contained piece of work that ends in its own PR. Items 2, 3 and 5 don't
+touch the same code and can run in parallel. Items 2 and 4 both edit `skin/app.js`, so
+run them one after the other.
+
+1. **Tag `v0.1.0`** from `main` (the user's call). The release workflow runs CI and
+   checks the ZIP first. Then install it on the tablet through Decaid's GitHub Release
+   route and record the Decaid version (finding 5).
+2. **Dashboard exit** (finding 1, phase 3). A Settings control that calls
+   `window.decentApp.exitToDashboard()` only when it exists, hidden in a browser,
+   disabled during an active operation, with a demo stub and an e2e check. Update
+   `docs/install.md`, which sends users to Decaid's skin navigation setting instead.
+3. **Reproducible UI checks** (phase 0, finding 7; phase 6). Declare Playwright as a
+   dev dependency, document the browser install, and add `e2e-demo` (source and
+   `--built`), `check-tablet-fit` and `e2e-live` to `ci.yml`. Make `check-tablet-fit`
+   exit nonzero on overflow first (phase 6, first item).
+4. **Rest of phase 1**: link state and stale telemetry, workflow reconciliation on
+   boot/resume/return, bounded waits, and preparation overlapping a start. Needed before
+   relying on Crema at the machine every day.
+5. **Image-fetch security** (phase 5). Server only, independent of the skin.
+6. **Rest of phase 2**: installed Decaid profiles as the library, shot pagination and
+   pinned references by ID, then per-batch bag state with a migration.
+7. **Streamline Settings entry and the parity audit** (phase 3), after items 2 and 4.
+8. **Supervised tablet session** (phase 7), once 1–4 are in.
+
+Small follow-up: the README screenshots and walkthrough still show the old boxed
+rating buttons (`refresh-demo-assets` skill; no AI reseeding needed).
 
 ## Findings from writing the user setup guide (7 November 2026)
 
@@ -93,8 +123,8 @@ building on them.
      Decide which control is the source of truth (see phase 3).
 3. **No GitHub release exists yet (phase 6).** Decaid's "Install skin → GitHub Release"
    route has nothing to install until a `v*` tag is pushed. *Gates added:* `release.yml`
-   now runs the CI checks and checks the ZIP before publishing, so `v0.1.0` can be
-   tagged from `main` once they're merged.
+   now runs the CI checks and checks the ZIP before publishing. Merged in PR #6 and
+   passing on GitHub; `v0.1.0` hasn't been tagged yet.
 4. **Backup and restore are unverified (phase 6).** `docs/install.md` now gives
    `GET /api/v1/store/crema?full=1` and `GET /api/v1/profiles/export` for backups,
    both from Decaid's docs. Neither has been run against real Decaid. No restore
@@ -380,8 +410,10 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
   Build and test the exact distributable files, including the extracted skin ZIP.
   *Partly done: `.github/workflows/ci.yml` runs on pull requests and pushes to `main`
   (typecheck, `npm test` including engine freshness, skin syntax, built demo matches
-  source, skin ZIP check), and `release.yml` and `pages.yml` call it first. Still
-  missing: the Playwright UI checks, which need Playwright declared (phase 0).*
+  source, skin ZIP check), and `release.yml` and `pages.yml` call it first. It passed
+  on GitHub for PR #6 and the merge to `main` (8 November 2026); the release path
+  hasn't run yet because no tag exists. Still missing: the Playwright UI checks, which
+  need Playwright declared (phase 0).*
 - [ ] Preserve root `index.html`, skin metadata, relative asset paths and semantic
   version tags. Include the actual project repository in release metadata where
   appropriate. Do not ship test tooling or credentials inside the skin.

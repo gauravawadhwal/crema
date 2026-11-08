@@ -13,7 +13,7 @@ and the simulator in this repo (`dev/mock-decaid.ts`), not yet on a real
 machine. Treat real-hardware behaviour as unverified until someone tests it.
 
 Read next, as needed:
-- `docs/implementation-plan.md`: handoff for the November 2026 review recommendations, including Streamline Settings reuse, reliability fixes, compatibility and release checks. This is planned work, not implemented behaviour.
+- `docs/implementation-plan.md`: handoff for the November 2026 review recommendations, including Streamline Settings reuse, reliability fixes, compatibility and release checks. Partly done: its progress table and ticked items say what is implemented, and "Suggested next sessions" lists what to pick up.
 - `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
