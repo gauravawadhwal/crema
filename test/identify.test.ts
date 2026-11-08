@@ -1,13 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../server/app.js";
-import { identify } from "../server/identify.js";
+import { identify, resolveGroundingLinks } from "../server/identify.js";
+import { mockBean } from "../server/llm/mock.js";
 import { ProviderChain } from "../server/llm/index.js";
 import type { StructuredRequest } from "../server/llm/types.js";
 
 // A provider chain that records what identify() asks for instead of calling a model.
 function recorder() {
   const seen: StructuredRequest<any>[] = [];
-  const llm = { structured: async (req: StructuredRequest<any>) => { seen.push(req); return {}; } } as unknown as ProviderChain;
+  const llm = { structured: async (req: StructuredRequest<any>) => { seen.push(req); return mockBean(""); } } as unknown as ProviderChain;
   return { llm, seen };
 }
 
@@ -48,5 +49,33 @@ describe("identifying from a description", () => {
   it("rejects an over-long description or a malformed date with 400", async () => {
     expect((await post({ description: "x".repeat(2001) })).status).toBe(400);
     expect((await post({ description: "Kii AA", today: "next week" })).status).toBe(400);
+  });
+});
+
+describe("Gemini's grounding links", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const G = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/";
+
+  it("are replaced by the pages they point to, and dead ones dropped", async () => {
+    const targets: Record<string, string | null> = {
+      [`${G}a`]: "https://roaster.example/products/la-fincona",
+      [`${G}b`]: "https://roaster.example/products/la-fincona",
+      [`${G}c`]: null,
+    };
+    const fetch = vi.fn(async (u: string) => new Response(null, targets[u] ? { status: 302, headers: { location: targets[u]! } } : { status: 404 }));
+    vi.stubGlobal("fetch", fetch);
+    const info = { ...mockBean("light"), sources: [`${G}a`, `${G}b`, `${G}c`, "https://other.example/page"], productUrl: `${G}a` };
+    const out = await resolveGroundingLinks(info);
+    expect(out.sources).toEqual(["https://roaster.example/products/la-fincona", "https://other.example/page"]);
+    expect(out.productUrl).toBe("https://roaster.example/products/la-fincona");
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual([`${G}a`, `${G}b`, `${G}c`]);   // only the redirect host
+  });
+
+  it("leave ordinary links alone without a network call", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const info = mockBean("light");
+    expect(await resolveGroundingLinks(info)).toBe(info);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -62,7 +62,7 @@ export async function identify(llm: ProviderChain, input: IdentifyInput): Promis
   );
   parts.push("Return the BeanInfo record.");
 
-  return llm.structured({
+  const info = await llm.structured({
     system: SYSTEM,
     prompt: parts.join("\n"),
     schema: BeanInfo,
@@ -70,4 +70,39 @@ export async function identify(llm: ProviderChain, input: IdentifyInput): Promis
     images: input.images,
     web: !input.offline,
   });
+  return resolveGroundingLinks(info);
+}
+
+const GROUNDING_HOST = "vertexaisearch.cloud.google.com";
+
+/**
+ * Gemini's Google Search grounding cites pages through short-lived redirect
+ * links on vertexaisearch.cloud.google.com rather than the pages themselves.
+ * Follow each one (that host only) to the real address, so the review shows
+ * the roaster's page and the links still work later. Links that don't resolve
+ * are dropped.
+ */
+export async function resolveGroundingLinks(info: BeanInfo): Promise<BeanInfo> {
+  const isGrounding = (u: string | null) => {
+    try { return !!u && new URL(u).hostname === GROUNDING_HOST; } catch { return false; }
+  };
+  const resolve = async (u: string): Promise<string | null> => {
+    try {
+      const res = await fetch(u, { redirect: "manual", signal: AbortSignal.timeout(4000) });
+      const to = res.headers.get("location");
+      return to && /^https?:\/\//.test(to) && !isGrounding(to) ? to : null;
+    } catch {
+      return null;
+    }
+  };
+  const links = [...new Set([...info.sources, info.productUrl, info.imageUrl].filter(isGrounding))] as string[];
+  if (!links.length) return info;
+  const real = new Map(await Promise.all(links.map(async (u) => [u, await resolve(u)] as const)));
+  const fix = (u: string | null) => (isGrounding(u) ? real.get(u!) ?? null : u);
+  return {
+    ...info,
+    sources: [...new Set(info.sources.map(fix).filter((u): u is string => !!u))],
+    productUrl: fix(info.productUrl),
+    imageUrl: fix(info.imageUrl),
+  };
 }
