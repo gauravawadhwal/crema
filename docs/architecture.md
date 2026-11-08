@@ -87,7 +87,7 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 ## Crema server
 
 - **Routes** (`server/app.ts`) are listed in the README. Every body is validated with Zod; a validation error is a 400. CORS is open on `/api/*` so the skin, served from the tablet, can call it.
-- **Product photos** (`server/images.ts`) are read from the roaster page's Open Graph, JSON-LD or Twitter metadata, and `/api/images/cache` keeps a copy. Only public hosts are fetched (no LAN or reserved names).
+- **Product photos** (`server/images.ts`) are read from the roaster page's Open Graph, JSON-LD or Twitter metadata, and `/api/images/cache` keeps a copy. Fetches go through `server/safe-fetch.ts`: only public addresses, checked after DNS resolution and again on every redirect before it's requested, with one 12 s deadline and an 8 MB limit enforced while streaming.
 - **LLM chain** (`server/llm/`): each provider implements `structured(req)` and returns Zod-validated output. The chain falls through to the next provider on failure. The CLI providers run the official `claude` and `codex` CLIs headless, so calls bill to whichever account is logged in on the host. That suits a personal installation; shared deployments should use API keys.
 
 ## Recommendation pipeline
