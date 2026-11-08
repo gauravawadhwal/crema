@@ -8,7 +8,7 @@ Crema has three parts. Only the first two are needed.
 | **The Crema skin** (`skin/`) | Inside Decaid on the tablet, and in a phone's browser | Yes |
 | **The Crema server** (`server/`) | Any always-on computer on your network: a NAS, a home server, a Raspberry Pi | No. Only for the AI features |
 
-Without the server, everything works except identifying coffees from photos, searches and links. You add coffees by typing the details from the bag, and Crema's rules pick the profile, recipe and dial-in changes. With the server connected, the AI does those, and if it stops answering, the rules take over again until it's back.
+Without the server, everything works except identifying coffees from photos, descriptions and links. You add coffees by typing the details from the bag, and Crema's rules pick the profile, recipe and dial-in changes. With the server connected, the AI does those, and if it stops answering, the rules take over again until it's back.
 
 > Crema is built against Decaid's documented API and tested with the simulator in this repo. It hasn't been tested on a real DE1 yet.
 
@@ -100,7 +100,7 @@ Everything is set with environment variables on the server.
 | `CODEX_BIN`, `CODEX_MODEL` | `codex`, the CLI's default | For `codex-cli`, after `codex login`. Billed to your ChatGPT plan |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | none, `claude-opus-5-5` | For `anthropic-api`, billed per token |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token. A key also switches on speaking into "Describe it" (Gemini writes down your voice note), even when `LLM_PROVIDERS` doesn't list `gemini-api` |
-| `GEMINI_VOICE_MODEL` | `GEMINI_MODEL` | The Gemini model that transcribes voice notes |
+| `GEMINI_VOICE_MODEL` | `GEMINI_MODEL` | The Gemini model that transcribes voice notes. Each tablet or phone can switch to its own speech recognition instead, in Settings → AI features |
 | `DECAID_URL` | none | Decaid on the tablet, such as `http://<tablet-ip>:8080`. Only needed to open the app from the server. Use an address phones can reach: they connect to its live streams directly |
 | `PORT`, `HOST` | `8787`, `0.0.0.0` | Where the server listens |
 | `CREMA_IMAGES` | `data/images` | Cached roaster product photos |

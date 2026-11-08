@@ -189,6 +189,20 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     check((await page.textContent("#speakBtn")).trim() === "Speak", "Speak is ready again");
     await page.click("#discardBean");
 
+    // Settings → "Speaking a description": this device instead of Gemini, kept per device.
+    const voiceSetting = async (v) => {
+      await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#sVoice", { timeout: 10000 });
+      await page.click(`#sVoice [data-v="${v}"]`);
+      const hint = await page.textContent("#voiceHint");
+      await page.goto(`http://localhost:${SKIN}/?full#add`); await page.waitForTimeout(800); await page.click("#mode-describe");
+      return { hint, kind: await S(() => voiceKind()), stored: await S(() => localStorage.getItem(Object.keys(localStorage).find((k) => /voice$/.test(k)))) };
+    };
+    const onDevice = await voiceSetting("device");
+    check(onDevice.kind !== "gemini" && /Nothing goes to Gemini/.test(onDevice.hint), `"This device" keeps voice off the server (${onDevice.kind}; ${onDevice.hint})`);
+    check(/device/.test(onDevice.stored || ""), `the choice is saved on this device (${onDevice.stored})`);
+    const backToGemini = await voiceSetting("gemini");
+    check(backToGemini.kind === "gemini" && /goes to Gemini/.test(backToGemini.hint), `"Gemini" sends voice notes to the server again (${backToGemini.kind})`);
+
     // ---- 3. the server stops ----
     stop(server); await new Promise((r) => setTimeout(r, 800));
     const out = await S(() => S.api.recommend(S.current.id));

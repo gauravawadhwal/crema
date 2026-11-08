@@ -939,18 +939,28 @@ function setMode(m) {
   if (m === "describe") renderSpeak();
 }
 
-/* Speaking into "Describe it". Two ways, best first:
+/* Speaking into "Describe it". Two ways, chosen per device in Settings → AI features:
    - Gemini: record a voice note, stop after a pause, send it to the Crema server as 16 kHz mono
      WAV, and Gemini writes it down knowing it's about a coffee bag (roaster names and origins).
-   - The browser's own speech recognition (Chrome, Safari), when the server has no Gemini key.
+     Used when chosen and the server has a Gemini key; otherwise the next one.
+   - This device: the browser's own speech recognition (Chrome, Safari).
    Both need the microphone, which browsers allow only on https or localhost pages. Elsewhere, such
-   as a phone on the tablet's plain-http address, the keyboard's microphone fills the same box. */
+   as a phone on the tablet's plain-http address, the keyboard's microphone fills the same box.
+   Either way the text then takes the same path as typing: /api/identify with LLM_PROVIDERS. */
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let listening = null, speechBroken = false, micBroken = false;
 const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && AudioCtx && window.isSecureContext && !micBroken);
 const canSpeak = () => !!SpeechRec && window.isSecureContext && !speechBroken;
-const voiceKind = () => (S.api.ai.voice && canRecord() ? "gemini" : canSpeak() ? "browser" : null);
+const voicePref = () => (local.get("voice", "gemini") === "device" ? "device" : "gemini");
+const voiceKind = () => (voicePref() === "gemini" && S.api.ai.voice && canRecord() ? "gemini" : canSpeak() ? "browser" : null);
+function voiceHint() {
+  const fallback = canSpeak() ? "this device's speech recognition" : "your keyboard's microphone";
+  if (voicePref() === "device") return `Uses ${fallback}. Nothing goes to Gemini. Set on each device`;
+  if (!S.api.ai.voice) return `Needs a Gemini API key on the Crema server. Until then, uses ${fallback}`;
+  if (!canRecord()) return `This page can't use the microphone (it needs https or the tablet itself), so it uses ${fallback}`;
+  return "Your voice note goes to Gemini through the Crema server, which spells coffee names well. Set on each device";
+}
 function renderSpeak() {
   const btn = $("#speakBtn"), kind = voiceKind(), state = listening?.state;
   btn.hidden = !kind && !listening;
@@ -1137,7 +1147,7 @@ function renderAddModes() {
   $("#addModes").hidden = !ai;
   $("#addNoAi").hidden = ai;
   $("#addNoAi").textContent = S.api.ai.enabled
-    ? "Identifying from photos, searches and links needs a Crema server. Enter the details from the bag instead."
+    ? "Identifying from photos, descriptions and links needs a Crema server. Enter the details from the bag instead."
     : "AI features are off, so enter the details from the bag. Switch AI on in Settings to identify coffees from photos.";
   if (!ai && addMode !== "manual") setMode("manual");
 }
@@ -1421,6 +1431,7 @@ async function renderSettings() {
   <div class="panel stack"><h2>AI features</h2>
     <div class="set-row first"><span>Use AI<span class="hint">${aiHint(ai)}</span></span>${sw("sAi", ai.enabled)}</div>
     ${ai.enabled && S.api.ai.available ? `<div class="set-row"><span>AI providers<span class="hint">Tried in order. Set with LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "none")}</span></div>` : ""}
+    ${ai.enabled ? `<div class="set-row"><span>Speaking a description<span class="hint" id="voiceHint">${esc(voiceHint())}</span></span>${seg("sVoice", [["gemini", "Gemini"], ["device", "This device"]], voicePref())}</div>` : ""}
   </div>
 
   <div class="panel stack"><h2>Connections</h2>
@@ -1459,6 +1470,12 @@ async function renderSettings() {
   const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
   const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
+  $$("#sVoice button").forEach((b) => (b.onclick = () => {
+    local.set("voice", b.dataset.v);
+    $$("#sVoice button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    $("#voiceHint").textContent = voiceHint();
+    toast("Saved on this device");
+  }));
   const br = $("#sBright"); if (br) br.onchange = (e) => m.display.brightness(Number(e.target.value)).catch(() => {});
   $$("[data-skin]", el).forEach((b) => (b.onclick = () => {
     applySkin(b.dataset.skin, false, true);
@@ -1488,10 +1505,10 @@ async function renderSettings() {
 }
 function aiHint(ai) {
   if (!ai.enabled) return "Off. Add coffees by typing the details, and Crema picks profiles and dial-in steps with its rules";
-  if (S.api.demo) return "Identifies coffees from photos, searches and links, picks profiles and gives dial-in advice. Simulated in the demo";
+  if (S.api.demo) return "Identifies coffees from photos, descriptions and links, picks profiles and gives dial-in advice. Simulated in the demo";
   if (!S.api.ai.available) return "Needs a Crema server, which isn't connected. Crema uses its rules until then";
   if (!S.api.ai.healthy) return "The Crema server isn't answering, so Crema is using its rules for now";
-  return "Identifies coffees from photos, searches and links, picks profiles and gives dial-in advice. Falls back to the rules if it fails";
+  return "Identifies coffees from photos, descriptions and links, picks profiles and gives dial-in advice. Falls back to the rules if it fails";
 }
 function editPresets() {
   const p = JSON.parse(JSON.stringify(S.presets));
