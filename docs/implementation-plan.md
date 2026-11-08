@@ -76,9 +76,11 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    Decaid's GitHub Release route, record the Decaid and WebView versions, the install
    path labels (finding 5), whether the key-value store and shot-settings stream behave
    as on desktop, the dashboard exit, and the tablet fit. Not yet for daily brewing.
-4. **Rest of phase 1**: link state and stale telemetry, workflow reconciliation on
-   boot/resume/return, bounded waits, and preparation overlapping a start, informed by
-   item 3. Needed before relying on Crema at the machine every day.
+4. **Rest of phase 1**, reworked after checking Decaid and Streamline (see phase 1,
+   "What to reuse"): profile writes held during a shot (done), then link state from
+   `/ws/v1/devices`, steam/hot water/flush through the workflow, workflow
+   reconciliation, socket ownership and bounded waits. Needed before relying on Crema
+   at the machine every day.
 5. ~~**Image-fetch security**~~ (phase 5). *Done in PR #10.*
 6. **Rest of phase 2**: installed Decaid profiles as the library, shot pagination and
    pinned references by ID, then per-batch bag state with a migration.
@@ -201,7 +203,8 @@ the Android tablet.
   is ignored until the machine reports the first (or 3 s pass). Stop stays enabled
   while a start is pending. `scripts/e2e-controls.cjs` covers this in the demo, the
   built demo and (`--url`) desktop Decaid.
-- Remaining: link state and stale telemetry, workflow reconciliation, bounded waits.
+- Also done: recipe loads are held during a shot (see phase 1).
+- Remaining: see phase 1's task list, reordered after checking Decaid and Streamline.
 
 - [ ] Record the Decaid, Streamline and Streamline Settings release versions/commits
   inspected. Identify minimum supported capabilities from evidence, not guesses.
@@ -229,35 +232,84 @@ are distinguishable. The existing tests (93 passing on 8 November 2026) are a ba
 Primary code: `skin/app.js` (`startOp`, `loadOntoMachine`, `renderControls`,
 `makeLiveApi.subscribe`, `onSnapshot`, boot); matching demo/mock paths.
 
+### What to reuse (decided 8 November 2026)
+
+Before building the rest of this phase we checked what Decaid already provides and
+how Streamline (Decent's own skin for Decaid) solves the same problems. Sources:
+Decaid's `doc/Skins.md` and `assets/api/websocket_v1.yml`, and Streamline's
+`src/modules/` (`machine-link.js`, `profile-send-gate.js`, `workflow-watch.js`,
+`resync-policy.js`, `socket-slot.js`) and `docs/AI_RUNTIME_NOTES.md`, all on `main`
+as of 8 November 2026. Check them against the Decaid version on the tablet.
+
+- **Use Decaid's facilities rather than building our own.** Machine link state comes
+  from `/ws/v1/devices`, which Decaid documents as the authority (a telemetry gap
+  doesn't prove the link is down). Steam, hot water and flush settings belong in the
+  workflow (`steamSettings`, `hotWaterData`, `rinseData`), Decaid's recommended
+  route and the one Streamline uses, instead of Crema's read-merge-post of
+  `shotSettings`. Decaid retries profile uploads itself and reports
+  `profileUploadFailed` on the devices stream; Crema shows it rather than retrying.
+- **Learn from Streamline, don't copy it.** Streamline is GPL-3.0 and Crema is MIT,
+  so its code isn't copied (and its ES modules wouldn't drop into Crema's classic
+  scripts). Its lessons are reimplemented and credited in comments: hold profile
+  writes during a shot; read link state as edges, with the first frame only a
+  baseline (the USB device id is unchanged across a power cycle); re-read the
+  workflow on visibility, focus and a slow timer, since Decaid has no workflow
+  stream or revision; compare only the shown values (grind numerically); adopt
+  outside changes rather than overwrite them; ignore the DE1 echoing an old value
+  for up to 10 s after our own write (Decaid gh-678); one socket per stream, closed
+  and silenced before a replacement opens, with backoff and jitter.
+- **Version caveat.** Streamline's notes describe a Decaid that didn't re-attach
+  machine sockets after a power cycle; Decaid's current docs say it does. Which one
+  the tablet runs decides whether Crema needs to reopen sockets on link-up.
+
+### Tasks, in order
+
 - [x] Cancel pending starts when Stop is requested. Use an explicit operation state
   or generation token so a late settings/profile response cannot start the machine.
   Ensure Stop can be sent while another operation is awaiting a response.
   *Done: `opGen` in `startOp`/`cancelStart`, covered by `scripts/e2e-controls.cjs`.*
+- [x] **Never write a profile mid-shot.** Decaid sends a workflow's profile to the
+  machine as soon as it changes, even during a shot, and the DE1 runs its steps by
+  index from that table, so a write replaces the steps being poured.
+  *Done: `loadOntoMachine` holds the load while the machine reports espresso
+  (`S.heldLoad`), the Load button says "Loads after this shot", a favourite says so
+  too, and the load is sent once when the shot ends, reading the recipe then so the
+  latest choice wins. Steam, hot water and flush don't run profile steps and aren't
+  held. `e2e-controls.cjs` checks no write during a shot (two edits and loads), the
+  message, and exactly one write of the latest recipe after; with the gate removed
+  it fails. Remaining gap: a load already in flight when the machine starts a shot
+  (from the group head) still lands.*
 - [ ] Prevent duplicate starts and overlapping preparation requests. A response
   failure/timeout must not result in an automatic retry of a machine-start command.
   *Partly done: a second start is ignored while one is preparing or until the machine
   reports it (`isStarting`), and a failed start only shows a toast; nothing retries
   (checked in the source, not by a test). Not yet covered: preparation started from
   other paths, such as Load onto machine or a settings write, overlapping a start.*
-- [ ] Track machine link state independently from the last reading. Handle actual
-  socket closure and the case where Decaid stays connected but its machine does not.
-  Show stale/disconnected telemetry honestly and prevent new starts until ready.
-  Do not make Stop unavailable merely because telemetry is stale.
-- [ ] Reconcile the current Decaid workflow on boot, resume, reconnection, return
-  from another screen and before start. Replace the unconditional trust in `S.loaded`.
-  Define how external edits and unsaved local edits are displayed/resolved. Do not
-  silently overwrite an outside change simply to make a local flag true.
+- [ ] **Link state from `/ws/v1/devices`.** Edge-triggered, first frame a baseline.
+  Show "Machine disconnected" (not stale numbers), block new starts but never Stop,
+  and show `profileUploadFailed` while Decaid retries. The simulator needs the stream.
+  Keep a liveness fallback only for actual socket closure.
+- [ ] **Steam, hot water and flush through the workflow.** Replace the `shotSettings`
+  read-merge-post queue and the `flushTimeout` write. Confirm on desktop Decaid 0.9.1
+  first that the workflow fields reach the machine's shot settings.
+- [ ] **Reconcile the workflow instead of trusting `S.loaded`.** Re-read on boot
+  (Decaid reloads a skin after 10 minutes in the background), visibility, focus,
+  return from Decaid's dashboard, a slow timer and before a start. Compare the shown
+  values; adopt an outside change and say so; don't repaint over an edit made in
+  the last few hundred milliseconds; ignore our own echo.
+- [ ] **Socket ownership.** One owner per stream, close and silence before reopening,
+  backoff with jitter, and cleanup so reconnects don't accumulate handlers.
+- [ ] **Bound API waits** and keep optional AI/recipe discovery from delaying machine
+  telemetry and Stop availability. Reproduce before choosing the smallest change.
 - [ ] Handle missing/error/busy states using documented capabilities. Preserve
   group-head-controller use and stop-at-weight responsibility in Decaid.
-- [ ] Bound API waits and keep optional AI/recipe discovery from delaying machine
-  telemetry and Stop availability. This is a resilience check arising from the
-  review; reproduce before choosing the smallest change.
 
 Acceptance tests: delay a settings/profile response, press Stop, release it and
-assert no start; double-tap start; reject/time out a preparation write; disconnect
-the machine while leaving its telemetry socket open; close/reopen sockets; resume
-the page; change workflow from a second client. The UI and effective recipe must
-agree, and abandoned commands must never run after recovery.
+assert no start; double-tap start; load a recipe during a shot and assert nothing is
+written until it ends; reject/time out a preparation write; disconnect the machine
+while leaving its telemetry socket open; close/reopen sockets; resume the page;
+change the workflow from a second client. The UI and effective recipe must agree,
+and abandoned commands must never run after recovery.
 
 ## Phase 2 — profile and data correctness (R4–R7)
 

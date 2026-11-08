@@ -2309,7 +2309,7 @@ function makeLiveApi(conn) {
 const S = {
   api: null,
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
-  shelf: [], current: null, next: null, loaded: false,
+  shelf: [], current: null, next: null, loaded: false, heldLoad: false,
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
@@ -2467,7 +2467,7 @@ function renderNextShot() {
     <div class="field-row"><span class="label">Grind</span>
       <div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
     <div class="row">
-      <button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.loaded ? "Loaded ✓" : "Load onto machine"}</button>
+      <button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine"}</button>
       <button class="btn ghost" id="resetRecipe" title="Back to the recommended recipe">Reset</button>
     </div>
     ${r ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px">
@@ -2500,9 +2500,22 @@ function step(spec) {
   }
   S.loaded = false; renderNextShot();
 }
+// Writing the workflow sends its profile to the machine at once, and Decaid doesn't
+// wait for a shot to finish: the DE1 runs its steps by index from that table, so a
+// write mid-shot replaces the steps it's pouring (Streamline's profile-send-gate
+// notes, Decaid's workflow_device_sync). So during espresso the load is held, and
+// sent when the shot ends. It reads S.next then, so the latest choice wins. Only
+// espresso runs profile steps; steam, hot water and flush don't.
+const shotRunning = () => S.snap?.state?.state === "espresso";
 async function loadOntoMachine(silent = false) {
   const n = S.next, b = S.current;
   if (!n || !b) return false;
+  if (shotRunning()) {
+    S.heldLoad = true; renderNextShot();
+    if (!silent) toast("Loads when this shot ends");
+    return "held";
+  }
+  S.heldLoad = false;
   const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
   try {
     await S.api.apply(b.id, recipe, n.grind || undefined);
@@ -2552,8 +2565,9 @@ async function useFav(i) {
   if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
   S.next = { ...S.next, beanId: S.current?.id, profileTitle: f.profileTitle, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting ?? S.next?.grind ?? "" };
   renderNextShot();
-  await loadOntoMachine(true);
-  toast(`Loaded favourite "${f.name}"`);
+  const loaded = await loadOntoMachine(true);
+  if (loaded === "held") toast(`"${f.name}" loads when this shot ends`);
+  else if (loaded) toast(`Loaded favourite "${f.name}"`);
 }
 function editFav(i) {
   const f = S.favourites[i];
@@ -2696,6 +2710,9 @@ function onSnapshot(s) {
     opOverlay();
   }
   if (s.finished) onShotEnd(s.finished);
+  if (prevState === "espresso" && st !== "espresso" && S.heldLoad) {
+    loadOntoMachine(true).then((ok) => ok === true && toast(`Loaded ${S.next.profileTitle} for the next shot`));
+  }
   renderStatus(); renderReadouts();
   if (st === "espresso" || st !== prevState) { if (!$("#view-brew").hidden) renderLive(); }
 }
