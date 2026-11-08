@@ -1799,6 +1799,8 @@ function makeDemoApi() {
     info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null, serverError: null },
     // No Crema server here, so no Gemini voice notes; "Describe it" uses the browser's speech recognition.
     ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true, voice: false },
+    // Shown in the demo so the control can be seen; on the tablet it closes the skin.
+    host: { canExit: true, exitToDashboard() { toast("On the tablet, this closes Crema and shows Decaid's dashboard"); } },
     settings: {
       get: async () => ({ aiEnabled }),
       set: async (p) => { if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled; return { aiEnabled }; },
@@ -2108,6 +2110,12 @@ function makeLiveApi(conn) {
     ai: { get available() { return conn.crema != null; }, get enabled() { return settings.aiEnabled !== false; }, get on() { return aiOn(); }, get healthy() { return healthy; },
       // The server can turn a voice note into text (Gemini).
       get voice() { return aiOn() && !!conn.cremaInfo?.voice; } },
+    // Decaid's WebView adds window.decentApp to the skin's page; a phone or desktop
+    // browser doesn't have it. Checked each time, not cached, in case it arrives late.
+    host: {
+      get canExit() { return typeof window.decentApp?.exitToDashboard === "function"; },
+      exitToDashboard() { window.decentApp.exitToDashboard(); },
+    },
     settings: {
       async get() { settings = { ...E.DEFAULT_SETTINGS, ...(await kvGet("settings", {})) }; return { ...settings }; },
       async set(p) { settings = { ...settings, ...p }; await kvSet("settings", settings); return { ...settings }; },
@@ -2564,6 +2572,7 @@ function editFav(i) {
 
 /* ================= machine controls (brew home, right) ================= */
 function renderControls() {
+  syncExitButton();
   const p = S.presets, st = S.snap?.state?.state;
   if (!p) return;
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
@@ -2631,6 +2640,17 @@ async function startOp(kind) {
   }
 }
 function cancelStart() { opGen++; S.starting = null; }
+// Leaving for Decaid's dashboard is blocked while Crema is starting something or the
+// machine reports an operation (including cleaning and descaling, which Crema doesn't
+// start). Any other state, or no reading at all, allows it: an offline machine is
+// when Decaid's own screens are most useful.
+const ACTIVE_STATES = ["espresso", "steam", "hotWater", "flush", "steamRinse", "cleaning", "descaling"];
+const exitBlocked = () => isStarting() || ACTIVE_STATES.includes(S.snap?.state?.state);
+function syncExitButton() { const b = $("#exitDash"); if (b) b.disabled = exitBlocked(); }
+function exitToDashboard() {
+  if (exitBlocked()) return toast("Stop the machine before leaving Crema");
+  S.api.host.exitToDashboard();
+}
 function stopMachine() {
   cancelStart();
   renderControls();
@@ -3390,7 +3410,10 @@ async function renderSettings() {
     <div class="set-row first"><span>Machine<span class="hint">Decaid on the tablet</span></span><span class="num small">${esc(S.api.info.decaidUrl || "")}</span></div>
     <div class="set-row"><span>Crema server<span class="hint">${S.api.demo ? "Simulated in the demo" : S.api.info.server ? `Connected · ${esc(S.api.info.server)}` : S.api.info.serverError ? `Can't reach ${esc(S.api.info.serverError)}` : "Not connected. Optional, for AI features"}</span></span><button class="btn small" id="changeServer">${S.api.demo ? "Connect" : "Change"}</button></div>
     <div class="set-row"><span>Visualizer upload<span class="hint">${viz ? "Decaid's Visualizer plugin uploads shots. Set your account in Decaid's plugin settings" : "Install Decaid's Visualizer plugin to upload shots"}</span></span>${viz ? '<span class="pill good">Available</span>' : '<span class="pill plain">Not found</span>'}</div>
-  </div>`;
+  </div>
+  ${S.api.host.canExit ? `<div class="panel stack"><h2>Decaid</h2>
+    <div class="set-row first"><span>Leave Crema<span class="hint">Closes Crema and shows Decaid's dashboard, for scale pairing, plugins and skins. Not while the machine is running</span></span><button class="btn small" id="exitDash" ${exitBlocked() ? "disabled" : ""}>Open Decaid</button></div>
+  </div>` : ""}`;
 
   // ---- wire up ----
   const savePrefs = async (patch) => { S.prefs = await S.api.prefs.set(patch); for (const b of S.shelf) b.recipe = null; S.current && (await selectBean(S.current.id, { quiet: true })); toast("Saved. Recommendations updated"); };
@@ -3451,6 +3474,7 @@ async function renderSettings() {
   const dd = $("#doneDescale"); if (dd) dd.onclick = async () => { await S.api.maintenance.done("descale"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Descale recorded"); };
   $("#editPresets").onclick = editPresets;
   $("#changeServer").onclick = () => connectSheet();
+  const ex = $("#exitDash"); if (ex) ex.onclick = exitToDashboard;
   $("#sAi").onchange = async (e) => {
     try { await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { toast(`Couldn't save: ${err.message}`); }
     renderStatus(); renderSettings();

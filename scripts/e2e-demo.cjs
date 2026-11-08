@@ -77,6 +77,13 @@ function pageUrl() {
       await p.goto(url + "#shots"); await p.waitForTimeout(800);
       await p.click("[data-cmp]:not([disabled]) >> nth=1"); await p.waitForTimeout(500); await snap("6-compare", true);
     });
+    // The demo shows the Decaid exit so it can be seen; it only explains itself.
+    await step("leave for Decaid", async () => {
+      await p.goto(url + "#settings"); await p.waitForSelector("#exitDash", { timeout: 5000 });
+      await p.click("#exitDash");
+      const msg = await p.textContent("#toast");
+      if (!/closes Crema/.test(msg)) throw new Error(`toast says "${msg}"`);
+    });
     await step("theme", async () => {
       await p.goto(url + "#settings"); await p.waitForTimeout(900);
       await p.click('[data-skin="rosso"]');
