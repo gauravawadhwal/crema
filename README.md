@@ -134,7 +134,7 @@ LLM_PROVIDERS=claude-cli,codex-cli npm start
 | Provider | Setup on the host | Billed to |
 |---|---|---|
 | `claude-cli` | `npm i -g @anthropic-ai/claude-code`, then `claude setup-token` and export `CLAUDE_CODE_OAUTH_TOKEN` | Claude Pro/Max |
-| `codex-cli` | `npm i -g @openai/codex`, then `codex login` | ChatGPT Plus/Pro |
+| `codex-cli` | `npm i -g @openai/codex`, then `codex login` (in Docker, `codex login --device-auth` inside the container: see [install](docs/install.md#logging-codex-in)) | ChatGPT Plus/Pro |
 | `anthropic-api` | `ANTHROPIC_API_KEY` | per token |
 | `gemini-api` | `GEMINI_API_KEY` (optional `GEMINI_MODEL`) | per token / free tier |
 

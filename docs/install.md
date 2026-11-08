@@ -66,7 +66,35 @@ docker build -t crema .
 docker run -d --name crema --restart unless-stopped -p 8787:8787 --env-file .env -v crema-images:/data crema
 ```
 
-To use a Claude or ChatGPT subscription, the image needs their CLIs. Set `AI_CLIS` in `.env` (Compose passes it to the build), or build with `--build-arg AI_CLIS="@anthropic-ai/claude-code"`. For `codex-cli`, also mount the host's `~/.codex` login at `/home/node/.codex`.
+To use a Claude or ChatGPT subscription, the image needs their CLIs. Set `AI_CLIS` in `.env` (Compose passes it to the build), or build with `--build-arg AI_CLIS="@anthropic-ai/claude-code @openai/codex"`. Claude needs only `CLAUDE_CODE_OAUTH_TOKEN` in `.env`. Codex needs a login saved in the container, as below.
+
+#### Logging Codex in
+
+Codex saves its login in `/home/node/.codex`, which Compose keeps on the `codex-home` volume, so it survives rebuilds. The server usually has no browser, so use Codex's device code sign-in:
+
+1. In ChatGPT, turn on device code sign-in for Codex. It's in your account's security settings; a workspace admin turns it on for a workspace account.
+2. Log in from the server, once:
+
+   ```bash
+   docker compose run --rm crema codex login --device-auth
+   ```
+
+   It prints a web address and a code. Open the address on your phone or laptop, sign in to ChatGPT and enter the code.
+3. Check it worked:
+
+   ```bash
+   docker compose run --rm crema codex login status
+   ```
+
+Then start or restart the server (`docker compose up -d`). Codex refreshes the login by itself, so it lasts until you sign out or revoke it.
+
+Without Compose, add `-v crema-codex:/home/node/.codex` to `docker run`, and log in with `docker run --rm -it -v crema-codex:/home/node/.codex crema codex login --device-auth`.
+
+Notes:
+- **Log the server in on its own** rather than copying `~/.codex/auth.json` from another computer. A copy shares one login between two machines that each refresh it; a separate login can be revoked by itself. If device code sign-in isn't available, copying works. While the container runs, `docker compose exec -T crema sh -c 'umask 077 && cat > /home/node/.codex/auth.json' < ~/.codex/auth.json` writes it as the container's user.
+- **Mounting a host folder instead of a volume**: the container runs as the `node` user (uid 1000), so the folder must be writable by that uid, or Codex can't save refreshed tokens.
+- **The volume holds tokens for your ChatGPT account.** Treat it like a password: keep it out of shared backups.
+- An OpenAI API key works too (`codex login --with-api-key`), billed per token instead of to your plan.
 
 ### Without Docker
 
