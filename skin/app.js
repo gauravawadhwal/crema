@@ -551,7 +551,7 @@ function restBar(rest) {
 }
 
 /* ================= status + alerts ================= */
-const STATE_LABEL = { idle: "Ready", sleeping: "Asleep", heating: "Warming up", preheating: "Preheating", espresso: "Espresso", steam: "Steaming", hotWater: "Hot water", flush: "Flushing", steamRinse: "Purging steam", cleaning: "Cleaning", descaling: "Descaling", needsWater: "Refill the tank", error: "Error", booting: "Starting" };
+const STATE_LABEL = { idle: "Ready", sleeping: "Asleep", heating: "Warming up", preheating: "Preheating", espresso: "Espresso", steam: "Steaming", hotWater: "Hot water", flush: "Flushing", steamRinse: "Purging steam", cleaning: "Cleaning", descaling: "Descaling", needsWater: "Refill the tank", error: "Error", booting: "Starting", transportMode: "Transport mode", fwUpgrade: "Updating firmware" };
 /* ================= machine link (Decaid's ws/v1/devices) ================= */
 // Decaid can stay up while its DE1 drops off Bluetooth or is power-cycled. Its
 // machine sockets then stay open but go quiet, so a last reading isn't proof of a
@@ -603,6 +603,7 @@ const aiDown = () => !!(S.api && !S.api.demo && S.api.ai.enabled && (S.api.info.
 function renderAlerts() {
   const st = S.snap?.state?.state;
   const a = [];
+  if (st === "error" && !unlinked()) a.push(`<div class="banner bad"><span><b>The machine reports an error.</b> Check the machine, or open Decaid for details.</span>${S.api.host?.canExit ? '<button class="btn small" data-exit-dash>Open Decaid</button>' : ""}</div>`);
   if (st === "needsWater") a.push(`<div class="banner bad"><span><b>Refill the water tank.</b> The machine stops until it has water.</span>${S.api.demo ? '<button class="btn small" id="refillBtn">Refill (demo)</button>' : ""}</div>`);
   const err = S.link.error;
   const exit = S.api.host?.canExit ? '<button class="btn small" data-exit-dash>Open Decaid</button>' : "";
@@ -694,7 +695,20 @@ function step(spec) {
 // sent when the shot ends. It reads S.next then, so the latest choice wins. Only
 // espresso runs profile steps; steam, hot water and flush don't.
 const shotRunning = () => S.snap?.state?.state === "espresso";
-async function loadOntoMachine(silent = false) {
+// Loads run one at a time. A load reads the screen when its turn comes, so the
+// latest choice wins, and one queued behind another is skipped if that one already
+// left the recipe on the machine (Espresso pressed during a manual load waits for it
+// instead of writing twice).
+let loadChain = Promise.resolve(), loadsPending = 0;
+function loadOntoMachine(silent = false) {
+  if (!S.next || !S.current) return Promise.resolve(false);
+  const queued = loadsPending > 0;
+  loadsPending++;
+  const run = loadChain.then(() => loadNow(silent, queued)).finally(() => { loadsPending--; });
+  loadChain = run.catch(() => {});
+  return run;
+}
+async function loadNow(silent, queued) {
   const n = S.next, b = S.current;
   if (!n || !b) return false;
   if (shotRunning()) {
@@ -702,6 +716,7 @@ async function loadOntoMachine(silent = false) {
     if (!silent) toast("Loads when this shot ends");
     return "held";
   }
+  if (queued && S.loaded) return true;
   S.heldLoad = false;
   wfWrites++;
   const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
@@ -840,7 +855,7 @@ function renderControls() {
     return;
   }
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
-  const disabled = S.ghc || !S.snap || unlinked() || st === "sleeping" || st === "needsWater";
+  const disabled = S.ghc || !S.snap || unlinked() || NOT_READY.includes(st);
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
   const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
@@ -893,9 +908,14 @@ async function pushPresetSettings(kind) {
 // A start command is never retried.
 let opGen = 0; // S.starting is { kind, until } while a start is under way
 const isStarting = () => !!S.starting && Date.now() < S.starting.until;
+// Machine states (Decaid's names) in which nothing new should start. Stop is never
+// blocked. Heating and preheating are left alone: the DE1 handles a start while warming.
+const NOT_READY = ["sleeping", "needsWater", "error", "booting", "steamRinse", "cleaning", "descaling", "transportMode", "fwUpgrade"];
 async function startOp(kind) {
   if (isStarting()) return;
   if (unlinked()) return toast("The machine isn't connected");
+  const st = S.snap?.state?.state;
+  if (NOT_READY.includes(st)) return toast(`Not now: the machine says "${STATE_LABEL[st] || st}"`);
   const gen = ++opGen, current = () => gen === opGen;
   S.starting = { kind, until: Infinity };
   renderControls();
