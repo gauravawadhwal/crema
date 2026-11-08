@@ -152,6 +152,10 @@ export function gradeIdentify(expect: IdentifyExpect, out: BeanInfo): Grade {
     const missing = expect.needsConfirmation.filter((f) => !out.needsConfirmation.includes(f));
     add("needsConfirmation", !missing.length, `not flagged: ${show(missing)}; flagged ${show(out.needsConfirmation)}`);
   }
+  if (expect.notFlagged) {
+    const wrong = expect.notFlagged.filter((f) => out.needsConfirmation.includes(f));
+    add("notFlagged", !wrong.length, `flagged though not given by the source: ${show(wrong)}`);
+  }
   if (expect.confidence) {
     const { min = 0, max = 1 } = expect.confidence;
     add("confidence", out.confidence >= min && out.confidence <= max, `got ${out.confidence}, expected ${min}..${max}`);

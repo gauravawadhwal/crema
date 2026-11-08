@@ -155,6 +155,8 @@ export const IdentifyExpect = z
       .nullable()
       .optional(),
     needsConfirmation: z.array(z.string()).optional(),
+    /** Fields that must NOT be flagged: facts the source simply doesn't give, which should show as "Not given". */
+    notFlagged: z.array(z.string()).optional(),
     confidence: z.object({ min: z.number().optional(), max: z.number().optional() }).optional(),
     productUrl: z.string().optional(),
     /** Text that must not appear anywhere in the output (e.g. a prompt-injection payload). */
@@ -171,6 +173,10 @@ export const IdentifyCase = z
     input: z
       .object({
         query: z.string().optional(),
+        /** The user describing the bag, as typed or dictated (may carry speech-to-text errors). */
+        description: z.string().optional(),
+        /** Fixed "today" (YYYY-MM-DD) so relative dates in a description have one right answer. */
+        today: z.string().optional(),
         url: z.string().optional(),
         /** File in evals/fixtures/pages/, passed as already-fetched page text. */
         page: z.string().optional(),
@@ -333,7 +339,7 @@ export function lintCases(task: TaskName, cases: unknown[]): string[] {
       if (ic.input.page && !existsSync(path.join(FIXTURES_DIR, "pages", ic.input.page))) problems.push(`${c.id}: missing page fixture ${ic.input.page}`);
       for (const img of ic.input.images ?? [])
         if (!existsSync(path.join(FIXTURES_DIR, "labels", img))) problems.push(`${c.id}: missing image ${img} (run node evals/fixtures/render-labels.cjs)`);
-      if (!ic.input.query && !ic.input.url && !ic.input.page && !ic.input.images?.length) problems.push(`${c.id}: no input`);
+      if (!ic.input.query && !ic.input.description && !ic.input.url && !ic.input.page && !ic.input.images?.length) problems.push(`${c.id}: no input`);
     }
     if (task === "recommend") {
       const rc = c as RecommendCase;

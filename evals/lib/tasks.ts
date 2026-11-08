@@ -92,6 +92,8 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
     const ic = c as IdentifyCase;
     const input: IdentifyInput = {
       query: ic.input.query,
+      description: ic.input.description,
+      today: ic.input.today,
       url: ic.input.url,
       pageText: ic.input.page ? readFixture("pages", ic.input.page).toString("utf8") : undefined,
       images: ic.input.images?.map((f) => ({ data: readFixture("labels", f), mediaType: MEDIA[path.extname(f).toLowerCase()] ?? "image/jpeg" })),

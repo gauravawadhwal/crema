@@ -404,6 +404,128 @@
       }
     },
     {
+      "id": "id-describe-misheard",
+      "split": "dev",
+      "tags": ["describe", "dictated", "page"],
+      "why": "Dictated description with the roaster and coffee misheard by sound ('tide water', 'guy oh'). The roast date and bag size come from the speaker reading the bag, so they're bag facts. The page has no producer, so producer must not be flagged.",
+      "input": {
+        "description": "um it's the tide water bean co sumatra guy oh highlands, roasted on the 5th of November, the one kilo bag",
+        "today": "2026-11-08",
+        "url": "https://tidewater.example/coffee/sumatra-gayo",
+        "page": "tidewater-gayo.txt"
+      },
+      "expect": {
+        "roaster": "Tidewater",
+        "name": "Gayo",
+        "country": "Indonesia",
+        "processKind": "wet-hulled",
+        "roastDate": "2026-11-05",
+        "roastDateSource": "bag",
+        "weightGrams": 1000,
+        "notFlagged": ["producer"]
+      }
+    },
+    {
+      "id": "id-describe-relative-date",
+      "split": "dev",
+      "tags": ["describe", "dictated", "page", "date"],
+      "why": "'Roasted last Tuesday' with today fixed at Sunday 8 November 2026: the answer is 3 November, and a worked-out date should be flagged for the user to check.",
+      "input": {
+        "description": "little comet las nubes pink bourbon, roasted last tuesday, the 200 gram tin",
+        "today": "2026-11-08",
+        "url": "https://littlecomet.example/products/las-nubes-pink-bourbon",
+        "page": "littlecomet-las-nubes.txt"
+      },
+      "expect": {
+        "roaster": "Little Comet",
+        "name": "Las Nubes",
+        "country": "Colombia",
+        "processKind": "anaerobic",
+        "roastDate": "2026-11-03",
+        "roastDateSource": "bag",
+        "weightGrams": 200,
+        "needsConfirmation": ["roastDate"]
+      }
+    },
+    {
+      "id": "id-describe-self-correction",
+      "split": "dev",
+      "tags": ["describe", "dictated", "page", "date"],
+      "why": "The speaker corrects themselves ('the fourth, no sorry, the sixth'): the last version wins. Numbers are spoken as words.",
+      "input": {
+        "description": "halden and moss el mirador, roasted on the fourth, no sorry, the sixth of November, three forty grams",
+        "today": "2026-11-08",
+        "url": "https://haldenmoss.example/coffee/el-mirador",
+        "page": "halden-el-mirador.txt"
+      },
+      "expect": {
+        "roaster": "Halden",
+        "name": "El Mirador",
+        "country": "Guatemala",
+        "roastDate": "2026-11-06",
+        "roastDateSource": "bag",
+        "weightGrams": 340,
+        "altitudeMasl": [1798, 1951]
+      }
+    },
+    {
+      "id": "id-describe-blend-text-fields",
+      "split": "dev",
+      "tags": ["describe", "page", "blend"],
+      "why": "A three-origin blend. Country, region and process must come back as text, not lists (a list failed the whole lookup on Gemini). No roast date was said, so it's null and flagged.",
+      "input": {
+        "description": "quarry lane foundry espresso blend, the one kilo bag",
+        "today": "2026-11-08",
+        "url": "https://quarrylane.example/shop/foundry-espresso-blend",
+        "page": "quarry-foundry.txt"
+      },
+      "expect": {
+        "roaster": "Quarry Lane",
+        "name": "Foundry",
+        "isBlend": true,
+        "blendIncludes": ["Brazil", "Colombia", "Papua New Guinea"],
+        "roastDate": null,
+        "needsConfirmation": ["roastDate"],
+        "weightGrams": 1000,
+        "notFlagged": ["altitudeMasl", "producer"]
+      }
+    },
+    {
+      "id": "id-describe-offline-sparse",
+      "split": "holdout",
+      "tags": ["describe", "offline", "flags"],
+      "why": "Only a spoken description of a fictional roaster, no page and no web. Nothing about origin is knowable, so those fields stay empty and must not be flagged; only the stated roast date and weight are facts.",
+      "input": {
+        "description": "Ironwood Collective house espresso, roasted on the 1st of November, two fifty grams",
+        "today": "2026-11-08",
+        "offline": true
+      },
+      "expect": {
+        "roaster": "Ironwood",
+        "roastDate": "2026-11-01",
+        "roastDateSource": "bag",
+        "weightGrams": 250,
+        "notFlagged": ["altitudeMasl", "producer", "region", "variety", "tastingNotes", "country"]
+      }
+    },
+    {
+      "id": "id-describe-page-missing-facts",
+      "split": "holdout",
+      "tags": ["describe", "page", "flags"],
+      "why": "The page states no altitude and no producer. Those should be left empty, not flagged, so the review highlights only real doubts.",
+      "input": {
+        "description": "quarry lane foundry",
+        "today": "2026-11-08",
+        "url": "https://quarrylane.example/shop/foundry-espresso-blend",
+        "page": "quarry-foundry.txt"
+      },
+      "expect": {
+        "roaster": "Quarry Lane",
+        "name": "Foundry",
+        "notFlagged": ["altitudeMasl", "producer", "region", "variety"]
+      }
+    },
+    {
       "id": "id-live-ona-maple",
       "split": "dev",
       "tags": ["live", "real"],

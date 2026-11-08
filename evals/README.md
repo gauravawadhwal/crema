@@ -6,7 +6,7 @@ whether the result got better or worse, and by how much it costs.
 
 | Task | Code under test | Output | Cases |
 |---|---|---|---|
-| `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page and/or a query | 21 self-contained + 9 live web |
+| `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page, a typed or dictated description, and/or a query | 27 self-contained + 9 live web |
 | `recommend` | `recommend()` in `server/recommend/index.ts` | `Recipe`: one profile among the installed candidates, plus dose, yield, temperature and guidance | 32 |
 | `dialin` | `dialIn()` in `server/recommend/index.ts` | `DialInAdvice`: the one change to make after a shot | 28 |
 
@@ -105,6 +105,59 @@ What these runs found:
   only a production code, packed and roasted dates on one stamp). The set
   still matters as the floor a cheaper model must clear.
 
+### Cheapest model per provider (8 November 2026)
+
+Haiku, Codex `gpt-6-luna` at low reasoning effort (`CODEX_REASONING_EFFORT=low`) and
+Gemini `gemini-3.5-flash-lite`, each case three times, no judge, self-contained cases
+only. Identify ran with the new prompt (roaster's own site first, describe-it input,
+fewer flags) and the 6 new `id-describe-*` cases; recommend and dial-in prompts are
+unchanged.
+
+Cost is the API list price of the tokens each call used, so the three are comparable.
+What you actually pay differs: through the Claude and Codex CLIs, calls count against
+your Claude or ChatGPT plan's limits rather than being charged per call; Gemini is
+billed per token to the API key. The CLIs also send their own agent instructions with
+every call (about 14–16k tokens, mostly cached), which a direct API call wouldn't.
+Prices per 1M tokens (input / cached / output), checked 8 November 2026: Haiku 5.5
+$0.10 / $0.01 / $0.50 (the CLI's own cost report, which splits cache writes from
+reads); GPT-6-Luna $0.10 / $0.01 / $0.50 (OpenAI standard tier); Gemini 3.5
+Flash-Lite $0.30 / $0.03 / $2.50 (paid tier; Google Search grounding, which live
+lookups use, is 5,000 requests a month free, then $14 per 1,000). Codex's cost comes
+from a separate single-repeat run that recorded its tokens (`codex exec --json`);
+`compare.ts` still shows "–" for Codex and Gemini because only the Claude CLI reports
+a cost itself.
+
+| | Haiku | Codex GPT-6-Luna | Gemini 3.5 Flash-Lite |
+|---|---|---|---|
+| identify: pass (27 cases) | **100%** | 95% | 96% |
+| recommend: pass (32) | 100% | 100% | 99% |
+| recommend: preferred profile | 71% | 68% | **83%** |
+| dial-in: pass (28) | **93%** | 82% | 92% |
+| p50 time (identify / recommend / dial-in) | 12.5 / 9.7 / 5.8 s | 11.0 / 10.7 / 7.0 s | **2.4 / 1.9 / 1.2 s** |
+| cost per call (identify / recommend / dial-in) | 0.20 / 0.13 / 0.064¢ | **0.061 / 0.078 / 0.044¢** | 0.18 / 0.18 / 0.050¢ |
+| 1,000 coffees added (identify + recommend) | $3.33 | **$1.38** | $3.56 |
+
+For scale, Opus 5.5 (the reference above) costs about $98 per 1,000 coffees at list price.
+
+What these runs found:
+
+- **Two provider bugs, fixed before the numbers above.** Codex never received
+  bag photos: `-i` takes several files and swallowed the prompt, so every photo
+  case failed (identify 65% → 95% once fixed). Gemini Flash-Lite sometimes
+  returned malformed JSON or numbers as text; Gemini now enforces the schema
+  when there's no web search, and repairs type slips and retries once when there
+  is (identify 84% → 96%).
+- **Today's identify changes didn't regress anything.** Haiku matches its old
+  identify baseline on all 21 shared cases and passes the 6 new ones.
+- **Gemini Flash-Lite reads US dates day-first.** `id-bag-us-date` fails 3/3:
+  10/03/2026 from a US roaster becomes 10 March, not 3 October. It's otherwise
+  the fastest by 5x and picks the best-fit profile nearly as often as Opus.
+- **Codex Luna at low effort is weakest on dial-in.** It adds yield to a thin
+  shot (`dial-lost-in-milk`, `dial-balanced-thin`, 3/3), and its `change` text
+  sometimes contradicts `grindDelta`; the dial-in schema fields have no
+  descriptions. On identify it ignores the product page when a bag photo is
+  also given (`id-bag-plus-page-enrich`, 3/3).
+
 Mean score includes the judge's checks where a run has them, so compare pass
 rates and headline rows across judged and unjudged runs, not mean score.
 
@@ -112,79 +165,63 @@ rates and headline rows across judged and unjudged runs, not mean score.
 
 **identify**
 
-|  | claude-cli:opus (reference) | claude-cli:sonnet | claude-cli:haiku |
-|---|---|---|---|
-| cases × repeats | 21 × 1 | 21 × 1 | 21 × 3 |
-| pass rate | 100% (85%–100%) | 100% (85%–100%) | 100% (94%–100%) |
-| passed every repeat | 100% | 100% | 100% |
-| mean score | 0.994 | 1.000 | 0.999 |
-| roaster+name right | 100% | 100% | 100% |
-| process right | 100% | 100% | 100% |
-| roast date read right | 100% | 100% | 100% |
-| roast date invented | 0% | 0% | 0% |
-| recipe invented | 0% | 0% | 0% |
-| injection resisted | 100% | 100% | 100% |
-| tasting notes | 100% | 100% | 100% |
-| errors | 0 | 0 | 0 |
-| latency p50 / p95 | 11.1 s / 15.2 s | 7.3 s / 12.6 s | 12.6 s / 18.8 s |
-| cost per run | $0.0369 | $0.0258 | $0.0020 |
-| prompts | b20cff0514 | b20cff0514 | b20cff0514 |
+|  | claude-cli:opus (reference) | claude-cli:sonnet | claude-cli:haiku (describe+roaster-first) | codex-cli:gpt-6-luna (describe+roaster-first, provider fixes) | gemini-api:gemini-3.5-flash-lite (describe+roaster-first, provider fixes) |
+|---|---|---|---|---|---|
+| cases × repeats | 21 × 1 | 21 × 1 | 27 × 3 | 27 × 3 | 27 × 3 |
+| pass rate | 100% (85%–100%) | 100% (85%–100%) | 100% (96%–100%) | 95% (88%–98%) | 96% (90%–99%) |
+| passed every repeat | 100% | 100% | 100% | 93% | 96% |
+| mean score | 0.994 | 1.000 | 0.991 | 0.973 | 0.992 |
+| roaster+name right | 100% | 100% | 100% | 100% | 100% |
+| process right | 100% | 100% | 100% | 98% | 100% |
+| roast date read right | 100% | 100% | 100% | 100% | 91% |
+| roast date invented | 0% | 0% | 0% | 0% | 0% |
+| recipe invented | 0% | 0% | 0% | 0% | 0% |
+| injection resisted | 100% | 100% | 100% | 100% | 100% |
+| tasting notes | 100% | 100% | 100% | 97% | 100% |
+| errors | 0 | 0 | 0 | 0 | 0 |
+| latency p50 / p95 | 11.1 s / 15.2 s | 7.3 s / 12.6 s | 12.5 s / 16.1 s | 11.0 s / 12.5 s | 2.4 s / 3.2 s |
+| cost per run | $0.0369 | $0.0258 | $0.0020 | – | – |
+| prompts | b20cff0514 | b20cff0514 | f6d42c189f | f6d42c189f | f6d42c189f |
 
 **recommend**
 
-|  | claude-cli:opus (reference) | claude-cli:sonnet | claude-cli:haiku | rules |
-|---|---|---|---|---|
-| cases × repeats | 32 × 1 | 32 × 1 | 32 × 3 | 32 × 1 |
-| pass rate | 100% (89%–100%) | 100% (89%–100%) | 100% (96%–100%) | 91% (76%–97%) |
-| passed every repeat | 100% | 100% | 100% | 91% |
-| mean score | 0.937 | 0.949 | 0.947 | 0.948 |
-| model answered | 100% | 100% | 100% | 100% |
-| acceptable profile | 100% | 100% | 100% | 94% |
-| preferred profile | 87% | 78% | 68% | 61% |
-| forbidden profile | 0% | 0% | 0% | 3% |
-| recipe in bounds | 100% | 100% | 100% | 78% |
-| judge: no contradictions | 91% | 94% | 90% | – |
-| judge: no invented figures | 38% | 66% | 82% | – |
-| errors | 0 | 0 | 0 | 0 |
-| latency p50 / p95 | 15.2 s / 25.3 s | 7.3 s / 9.6 s | 10.0 s / 14.6 s | 0.0 s / 0.0 s |
-| cost per run | $0.0615 | $0.0273 | $0.0014 | – |
-| prompts | 7d02f0cf36 | 7d02f0cf36 | 7d02f0cf36 | – |
+|  | claude-cli:opus (reference) | claude-cli:sonnet | claude-cli:haiku | codex-cli:gpt-6-luna (describe+roaster-first) | gemini-api:gemini-3.5-flash-lite (describe+roaster-first) | rules |
+|---|---|---|---|---|---|---|
+| cases × repeats | 32 × 1 | 32 × 1 | 32 × 3 | 32 × 3 | 32 × 3 | 32 × 1 |
+| pass rate | 100% (89%–100%) | 100% (89%–100%) | 100% (96%–100%) | 100% (96%–100%) | 99% (94%–100%) | 91% (76%–97%) |
+| passed every repeat | 100% | 100% | 100% | 100% | 97% | 91% |
+| mean score | 0.937 | 0.949 | 0.947 | 0.977 | 0.986 | 0.948 |
+| model answered | 100% | 100% | 100% | 100% | 100% | 100% |
+| acceptable profile | 100% | 100% | 100% | 100% | 99% | 94% |
+| preferred profile | 87% | 78% | 68% | 68% | 83% | 61% |
+| forbidden profile | 0% | 0% | 0% | 0% | 0% | 3% |
+| recipe in bounds | 100% | 100% | 100% | 100% | 100% | 78% |
+| judge: no contradictions | 91% | 94% | 90% | – | – | – |
+| judge: no invented figures | 38% | 66% | 82% | – | – | – |
+| errors | 0 | 0 | 0 | 0 | 0 | 0 |
+| latency p50 / p95 | 15.2 s / 25.3 s | 7.3 s / 9.6 s | 10.0 s / 14.6 s | 10.7 s / 14.1 s | 1.9 s / 2.1 s | 0.0 s / 0.0 s |
+| cost per run | $0.0615 | $0.0273 | $0.0014 | – | – | – |
+| prompts | 7d02f0cf36 | 7d02f0cf36 | 7d02f0cf36 | 7d02f0cf36 | 7d02f0cf36 | – |
 
 **dialin**
 
-|  | claude-cli:opus (reference) | claude-cli:sonnet | claude-cli:haiku | rules |
-|---|---|---|---|---|
-| cases × repeats | 28 × 1 | 28 × 1 | 28 × 3 | 28 × 1 |
-| pass rate | 100% (88%–100%) | 96% (82%–99%) | 94% (87%–97%) | 86% (69%–94%) |
-| passed every repeat | 100% | 96% | 93% | 86% |
-| mean score | 0.957 | 0.944 | 0.930 | 0.967 |
-| model answered | 100% | 100% | 100% | 100% |
-| right move | 100% | 96% | 94% | 86% |
-| preferred move | 81% | 81% | 75% | 86% |
-| one change | 100% | 100% | 100% | 100% |
-| text matches fields | 100% | 100% | 100% | 100% |
-| judge: no contradictions | 100% | 96% | 95% | – |
-| judge: no invented figures | 100% | 100% | 100% | – |
-| errors | 0 | 0 | 0 | 0 |
-| latency p50 / p95 | 13.1 s / 19.3 s | 5.3 s / 7.6 s | 5.4 s / 8.4 s | 0.0 s / 0.0 s |
-| cost per run | $0.0350 | $0.0137 | $0.0007 | – |
-| prompts | 425434c354 | 425434c354 | 425434c354 | – |
-
-**identify, live web lookups** (9 real ONA and Haven coffees)
-
-|  | claude-cli:opus (live) | claude-cli:haiku (live) |
-|---|---|---|
-| cases × repeats | 9 × 1 | 9 × 1 |
-| pass rate | 100% (70%–100%) | 100% (70%–100%) |
-| passed every repeat | 100% | 100% |
-| mean score | 1.000 | 1.000 |
-| roaster+name right | 100% | 100% |
-| process right | 100% | 100% |
-| roast date invented | 0% | 0% |
-| errors | 0 | 0 |
-| latency p50 / p95 | 36.7 s / 55.2 s | 50.1 s / 57.2 s |
-| cost per run | $0.1357 | $0.0399 |
-| prompts | b20cff0514 | b20cff0514 |
+|  | claude-cli:opus (reference) | claude-cli:sonnet | claude-cli:haiku | codex-cli:gpt-6-luna (describe+roaster-first) | gemini-api:gemini-3.5-flash-lite (describe+roaster-first) | rules |
+|---|---|---|---|---|---|---|
+| cases × repeats | 28 × 1 | 28 × 1 | 28 × 3 | 28 × 3 | 28 × 3 | 28 × 1 |
+| pass rate | 100% (88%–100%) | 96% (82%–99%) | 94% (87%–97%) | 82% (73%–89%) | 92% (84%–96%) | 86% (69%–94%) |
+| passed every repeat | 100% | 96% | 93% | 75% | 86% | 86% |
+| mean score | 0.957 | 0.944 | 0.930 | 0.930 | 0.958 | 0.967 |
+| model answered | 100% | 100% | 100% | 100% | 100% | 100% |
+| right move | 100% | 96% | 94% | 82% | 92% | 86% |
+| preferred move | 81% | 81% | 75% | 75% | 76% | 86% |
+| one change | 100% | 100% | 100% | 100% | 100% | 100% |
+| text matches fields | 100% | 100% | 100% | 98% | 99% | 100% |
+| judge: no contradictions | 100% | 96% | 95% | – | – | – |
+| judge: no invented figures | 100% | 100% | 100% | – | – | – |
+| errors | 0 | 0 | 0 | 0 | 0 | 0 |
+| latency p50 / p95 | 13.1 s / 19.3 s | 5.3 s / 7.6 s | 5.4 s / 8.4 s | 7.0 s / 8.9 s | 1.2 s / 1.4 s | 0.0 s / 0.0 s |
+| cost per run | $0.0350 | $0.0137 | $0.0007 | – | – | – |
+| prompts | 425434c354 | 425434c354 | 425434c354 | 425434c354 | 425434c354 | – |
 
 </details>
 <!-- results:end -->
@@ -209,6 +246,13 @@ Each case has an `id`, a `split`, `tags` for slicing, the `input`, the
   - a collection page listing three coffees
   - customer reviews posing as tasting notes, and a page carrying a
     prompt-injection payload
+  - descriptions as the user would say them into "Describe it": names
+    misheard by sound, "roasted last Tuesday" against a fixed `today`, a
+    self-correction ("the fourth, no sorry, the sixth"), numbers as words,
+    and a blend whose text fields must stay text
+  - facts a page simply doesn't give (no altitude, no producer), which must
+    stay empty and not be flagged: `notFlagged` lists fields that must not
+    appear in `needsConfirmation`
 
   The `live` cases look up the real ONA and Haven coffees on the web, as the
   search box does. They're slow and not reproducible, so they only run with
@@ -336,5 +380,5 @@ different provider; measure each one separately.
 ## Refreshing the tables above
 
 ```bash
-for t in identify recommend dialin; do npx tsx evals/compare.ts --markdown evals/baselines/$t.claude-cli-opus.json evals/baselines/$t.claude-cli-sonnet.json evals/baselines/$t.claude-cli-haiku.json $(ls evals/baselines/$t.rules.json 2>/dev/null); done
+for t in identify recommend dialin; do npx tsx evals/compare.ts --markdown evals/baselines/$t.claude-cli-opus.json evals/baselines/$t.claude-cli-sonnet.json evals/baselines/$t.claude-cli-haiku.json evals/baselines/$t.codex-cli-gpt-6-luna.json evals/baselines/$t.gemini-api-gemini-3.5-flash-lite.json $(ls evals/baselines/$t.rules.json 2>/dev/null); done
 ```
