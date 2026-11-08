@@ -57,7 +57,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     const wrap = (obj, key, name) => { const orig = obj[key].bind(obj); obj[key] = async (...a) => { const g = window.__holds[typeof name === "function" ? name(...a) : name]; if (g) await g; return orig(...a); }; };
     const setState = m.setState.bind(m);
     m.setState = async (s) => { window.__calls.push(s); const g = window.__holds[`state:${s}`]; if (g) await g; return setState(s); };
-    wrap(m.shotSettings, "set", "shotSettings");
+    wrap(m.workflowSettings, "set", "workflowSettings");
     wrap(m.settings, "set", "settings");
     wrap(S.api, "apply", "apply");
     // Every recipe write, with the machine state at the moment it was sent.
@@ -65,6 +65,8 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     const apply = S.api.apply;
     S.api.apply = (id, recipe, grind) => { window.__applies.push({ state: S.snap?.state?.state, dose: recipe.doseG }); return apply(id, recipe, grind); };
   });
+  // The espresso cases need a coffee with a recipe; a fresh Decaid (--url) may have none.
+  const hasRecipe = await p.evaluate(() => !!S.next);
   const state = () => p.evaluate(() => S.snap?.state?.state);
   const calls = () => p.evaluate(() => window.__calls.slice());
   const reset = async () => {
@@ -80,7 +82,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
   try {
     // 1. Stop while steam's settings write is still pending.
     await reset();
-    await hold("shotSettings");
+    await hold("workflowSettings");
     await tap('[data-run="steam"]');
     await tap("#stopBtn");
     await release();
@@ -89,15 +91,18 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     check(!c.includes("steam") && (await state()) !== "steam", "Stop cancels steam that was waiting on its settings", `commands ${c.join(",")}, machine ${await state()}`);
 
     // 2. Stop while espresso is still loading the recipe.
-    await reset();
-    await p.evaluate(() => { S.loaded = false; renderNextShot(); renderControls(); });
-    await hold("apply");
-    await tap('[data-run="espresso"]');
-    await tap("#stopBtn");
-    await release();
-    await p.waitForTimeout(800);
-    c = await calls();
-    check(!c.includes("espresso") && (await state()) !== "espresso", "Stop cancels espresso that was loading the recipe", `commands ${c.join(",")}, machine ${await state()}`);
+    if (!hasRecipe) console.log("skip Stop cancels espresso that was loading the recipe (no coffee on the shelf, so no recipe)");
+    else {
+      await reset();
+      await p.evaluate(() => { S.loaded = false; renderNextShot(); renderControls(); });
+      await hold("apply");
+      await tap('[data-run="espresso"]');
+      await tap("#stopBtn");
+      await release();
+      await p.waitForTimeout(800);
+      c = await calls();
+      check(!c.includes("espresso") && (await state()) !== "espresso", "Stop cancels espresso that was loading the recipe", `commands ${c.join(",")}, machine ${await state()}`);
+    }
 
     // 3. Stop while the start command itself is in flight: the stop can reach the
     //    machine first, so the app has to stop again once the start lands.
@@ -126,7 +131,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
 
     // 5. Stop is available while a start is pending.
     await reset();
-    await hold("shotSettings");
+    await hold("workflowSettings");
     await tap('[data-run="steam"]');
     check(await p.evaluate(() => !document.querySelector("#stopBtn").disabled), "Stop is enabled while a start is pending");
     check(await p.evaluate(() => document.querySelector('[data-run="steam"]').disabled), "start buttons are disabled while a start is pending");
@@ -136,24 +141,27 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     // 6. Loading a recipe during a shot waits for the shot to end, and the latest
     //    choice is the one sent. Decaid would otherwise rewrite the profile steps
     //    the machine is pouring.
-    await reset();
-    await tap('[data-run="espresso"]');
-    await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
-    await p.evaluate(() => { window.__applies = []; });
-    const dose0 = await p.evaluate(() => S.next.doseG);
-    await tap('[data-step="dose:1"]');
-    await tap("#loadBtn");
-    await tap('[data-step="dose:1"]');
-    await tap("#loadBtn");
-    const during = await p.evaluate(() => ({ applies: window.__applies.slice(), label: document.querySelector("#loadBtn").textContent, toast: document.querySelector("#toast").textContent }));
-    check(during.applies.length === 0, "no recipe is written to the machine during a shot", JSON.stringify(during.applies));
-    check(/after this shot/.test(during.label) && /shot ends/.test(during.toast), "the app says the recipe loads after the shot", `${during.label} / ${during.toast}`);
-    await tap("#stopBtn");
-    await p.waitForFunction(() => window.__applies.length > 0, null, { timeout: 10000 }).catch(() => {});
-    await p.waitForTimeout(500);
-    const after = await p.evaluate(() => ({ applies: window.__applies.slice(), loaded: S.loaded, held: S.heldLoad }));
-    check(after.applies.length === 1 && after.applies[0].state !== "espresso" && after.applies[0].dose === dose0 + 1, "once the shot ends, the latest recipe is loaded once", JSON.stringify(after));
-    check(after.loaded && !after.held, "and it shows as loaded");
+    if (!hasRecipe) console.log("skip recipe loads wait for the shot to end (no coffee on the shelf, so no recipe)");
+    else {
+      await reset();
+      await tap('[data-run="espresso"]');
+      await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
+      await p.evaluate(() => { window.__applies = []; });
+      const dose0 = await p.evaluate(() => S.next.doseG);
+      await tap('[data-step="dose:1"]');
+      await tap("#loadBtn");
+      await tap('[data-step="dose:1"]');
+      await tap("#loadBtn");
+      const during = await p.evaluate(() => ({ applies: window.__applies.slice(), label: document.querySelector("#loadBtn").textContent, toast: document.querySelector("#toast").textContent }));
+      check(during.applies.length === 0, "no recipe is written to the machine during a shot", JSON.stringify(during.applies));
+      check(/after this shot/.test(during.label) && /shot ends/.test(during.toast), "the app says the recipe loads after the shot", `${during.label} / ${during.toast}`);
+      await tap("#stopBtn");
+      await p.waitForFunction(() => window.__applies.length > 0, null, { timeout: 10000 }).catch(() => {});
+      await p.waitForTimeout(500);
+      const after = await p.evaluate(() => ({ applies: window.__applies.slice(), loaded: S.loaded, held: S.heldLoad }));
+      check(after.applies.length === 1 && after.applies[0].state !== "espresso" && after.applies[0].dose === dose0 + 1, "once the shot ends, the latest recipe is loaded once", JSON.stringify(after));
+      check(after.loaded && !after.held, "and it shows as loaded");
+    }
 
     // 7. A normal start still works.
     await reset();

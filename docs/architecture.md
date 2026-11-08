@@ -61,7 +61,7 @@ Both must provide:
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
-| `machine.*` | `setState`, `tare`, `shotSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat` |
+| `machine.*` | `setState`, `tare`, `workflowSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat`. `workflowSettings` reads and writes only the workflow's `steamSettings`, `hotWaterData` and `rinseData` (never the profile); `settings` is left with fan and USB |
 | `subscribe({snapshot, scale, water, ready, devices})` | Live streams. `devices` is Decaid's device list (`ws/v1/devices`, first answered by `GET /api/v1/devices`): the machine's link state and connection errors. The demo sends one "connected" frame |
 | `host.{canExit, exitToDashboard()}` | Leave the skin for Decaid's dashboard. Live: `canExit` is true only when Decaid's WebView provides `window.decentApp.exitToDashboard`. Demo: always shown, and only explains itself |
 
@@ -74,7 +74,7 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 | Area | Endpoints |
 |---|---|
 | Machine | `GET /api/v1/machine/state`, `PUT /api/v1/machine/state/{idle\|sleeping\|espresso\|steam\|hotWater\|flush}`, `GET /api/v1/machine/info`, `POST /api/v1/machine/heartbeat` |
-| Settings | `GET/POST /api/v1/machine/shotSettings` (steam temp and duration, hot water temp and volume), `GET/POST /api/v1/machine/settings` (flows, flush time and temp, fan, USB), `POST /api/v1/machine/waterLevels` |
+| Settings | `GET/PUT /api/v1/workflow` with only `steamSettings`, `hotWaterData` or `rinseData` (steam, hot water and flush: temperatures, durations, volume, flows; Decaid passes them to the machine), `GET/POST /api/v1/machine/settings` (fan, USB), `POST /api/v1/machine/waterLevels` |
 | Scale | `PUT /api/v1/scale/tare` |
 | Library | `/api/v1/beans`, `/api/v1/beans/{id}/batches`, `/api/v1/bean-batches/{id}`, `/api/v1/profiles`, `/api/v1/workflow` (profile + dose, yield, grinder setting, bean batch) |
 | Shots | `GET /api/v1/shots?beanBatchId=`, `GET/PUT /api/v1/shots/{id}` (annotations) |

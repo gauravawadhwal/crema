@@ -67,8 +67,14 @@ function makeDemoApi() {
     state: "idle", substate: "idle", group: 92.6, steamTemp: 150, water: 46, refill: 7,
     scale: 0, scaleOffset: 0, battery: 84, live: { p: 0, f: 0, tp: 0, tf: 0, t: 0 }, timer: null, samples: [], heatLeft: 0,
   };
-  let shotSettings = { steamSetting: 0, targetSteamTemp: 150, targetSteamDuration: 25, targetHotWaterTemp: 85, targetHotWaterVolume: 120, targetHotWaterDuration: 60, targetShotVolume: 36, groupTemp: 92 };
-  let settings = { usb: false, fan: 50, flushTemp: 88, flushFlow: 6, flushTimeout: 5, hotWaterFlow: 6, steamFlow: 1.5, tankTemp: 0 };
+  // Steam, hot water and flush, shaped like Decaid's workflow fields. Kept apart from
+  // `workflow` below because loading a recipe replaces that.
+  const wf = {
+    steamSettings: { targetTemperature: 150, duration: 25, flow: 1.5, stopAtTemperature: 0 },
+    hotWaterData: { targetTemperature: 85, duration: 60, volume: 120, flow: 6 },
+    rinseData: { targetTemperature: 88, duration: 5, flow: 6 },
+  };
+  let settings = { usb: false, fan: 50, tankTemp: 0 };
   let presence = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
   const schedules = [{ id: "w1", time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }, { id: "w2", time: "08:30", daysOfWeek: [6, 7], enabled: true }];
   let display = { brightness: 80, platformSupported: { brightness: true } };
@@ -137,7 +143,7 @@ function makeDemoApi() {
     const target = Number(workflow.context.targetYield || 36);
     const lever = isLever(workflow.profile.title);
     const pi = lever ? 9 : 7;
-    const limit = state === "steam" ? (shotSettings.targetSteamDuration || 600) : state === "hotWater" ? shotSettings.targetHotWaterVolume / settings.hotWaterFlow : state === "flush" ? settings.flushTimeout : 120;
+    const limit = state === "steam" ? (wf.steamSettings.duration || 600) : state === "hotWater" ? wf.hotWaterData.volume / wf.hotWaterData.flow : state === "flush" ? wf.rinseData.duration : 120;
     let t = 0;
     if (state === "espresso") sim.scaleOffset = sim.scale;
     const speed = state === "espresso" ? 3 : 1; // espresso runs 3× faster in the demo; steam, water and flush run in real time
@@ -287,7 +293,10 @@ function makeDemoApi() {
         else run(s);
       },
       async tare() { sim.scaleOffset = sim.scale; },
-      shotSettings: { get: async () => ({ ...shotSettings }), set: async (p) => { shotSettings = { ...shotSettings, ...p }; } },
+      workflowSettings: {
+        get: async () => clone(wf),
+        set: async (p) => { for (const k of Object.keys(wf)) if (p[k]) Object.assign(wf[k], p[k]); },
+      },
       settings: { get: async () => ({ ...settings }), set: async (p) => { settings = { ...settings, ...p }; } },
       async waterThreshold(pct) { waterWarning = pct; },
       async refill() { sim.water = 58; if (sim.state === "needsWater") sim.state = "idle"; snapshot(); },

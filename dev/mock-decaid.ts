@@ -42,9 +42,22 @@ const kv: Record<string, Record<string, unknown>> = {};
 const batches: Json[] = [];
 const grinders: Json[] = [];
 const shots: Json[] = [];
-let workflow: Json = { id: randomUUID(), name: "Crema", profile: profiles[0].profile, context: { targetDoseWeight: 18, targetYield: 36 } };
 let shotSettings: Json = { steamSetting: 0, targetSteamTemp: 150, targetSteamDuration: 45, targetHotWaterTemp: 85, targetHotWaterVolume: 120, targetHotWaterDuration: 60, targetShotVolume: 36, groupTemp: 92 };
 let settings: Json = { usb: false, fan: 50, flushTemp: 88, flushFlow: 6.0, flushTimeout: 5, hotWaterFlow: 6.0, steamFlow: 1.5, tankTemp: 0 };
+let workflow: Json = {
+  id: randomUUID(), name: "Crema", profile: profiles[0].profile, context: { targetDoseWeight: 18, targetYield: 36 },
+  // Like Decaid, the workflow carries steam, hot water and flush, and sends them to the
+  // machine when they change (applyWorkflowSettings). A direct shot-settings write
+  // doesn't flow back into the workflow.
+  steamSettings: { targetTemperature: shotSettings.targetSteamTemp, duration: shotSettings.targetSteamDuration, flow: settings.steamFlow, stopAtTemperature: 0 },
+  hotWaterData: { targetTemperature: shotSettings.targetHotWaterTemp, duration: shotSettings.targetHotWaterDuration, volume: shotSettings.targetHotWaterVolume, flow: settings.hotWaterFlow },
+  rinseData: { targetTemperature: settings.flushTemp, duration: settings.flushTimeout, flow: settings.flushFlow },
+};
+function applyWorkflowSettings() {
+  const { steamSettings: st, hotWaterData: hw, rinseData: r } = workflow;
+  shotSettings = { ...shotSettings, targetSteamTemp: st.targetTemperature, targetSteamDuration: st.duration, targetHotWaterTemp: hw.targetTemperature, targetHotWaterVolume: hw.volume, targetHotWaterDuration: hw.duration };
+  settings = { ...settings, steamFlow: st.flow, hotWaterFlow: hw.flow, flushTimeout: r.duration, flushFlow: r.flow, flushTemp: r.targetTemperature };
+}
 let presence: Json = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
 const schedules: Json[] = [{ id: randomUUID(), time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }];
 let display: Json = { wakeLockEnabled: true, wakeLockOverride: false, brightness: 80, requestedBrightness: 80, lowBatteryBrightnessActive: false, platformSupported: { brightness: true, wakeLock: true } };
@@ -384,7 +397,13 @@ const server = createServer(async (req, res) => {
     if (p === "/api/v1/workflow") {
       if (m === "PUT") {
         const patch = await body(req);
+        const groups = ["steamSettings", "hotWaterData", "rinseData"] as const;
+        // Decaid rejects a wrong type with a 400 but accepts any number.
+        for (const g of groups) for (const v of Object.values(patch[g] ?? {})) if (typeof v !== "number") return send(res, 400, { error: `${g} values must be numbers` });
+        const before = workflow;
         workflow = { ...workflow, ...patch, context: { ...workflow.context, ...(patch.context ?? {}) } };
+        for (const g of groups) if (patch[g]) workflow[g] = { ...before[g], ...patch[g] }; // fields merge, like Decaid
+        if (groups.some((g) => patch[g])) applyWorkflowSettings();
       }
       return send(res, 200, workflow);
     }

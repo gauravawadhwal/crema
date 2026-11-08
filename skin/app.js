@@ -10,7 +10,7 @@
      info, ai { available, on, healthy }, settings { get, set },
      shelf, identify, saveBean, setBeanState, pinBest, recommend, rank, catalog,
      apply, shots, annotate, feedback, prefs, favourites, presets, maintenance,
-     machine { setState, tare, shotSettings, settings, waterThreshold, presence,
+     machine { setState, tare, workflowSettings, settings, waterThreshold, presence,
                schedules, display, plugins, info, heartbeat }, subscribe */
 "use strict";
 
@@ -174,22 +174,14 @@ function makeLiveApi(conn) {
   }
   const installedTitles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso").map((p) => p.profile.title);
 
-  // Shot settings (steam time, hot-water volume and temperatures). Decaid has no GET
-  // for them: the current values arrive on a stream as soon as it opens. A write
-  // must carry every field (0.9.1 rejects a partial one with a 500), so set()
-  // reads, merges and sends the whole object, one write at a time.
-  const readShotSettings = () => new Promise((resolve, reject) => {
-    let ws;
-    const done = (settle, v) => { clearTimeout(timer); try { ws?.close(); } catch {} settle(v); };
-    const timer = setTimeout(() => done(reject, new Error("the machine didn't report its settings")), 3000);
-    try { ws = new WebSocket(wsBase + "/ws/v1/machine/shotSettings"); } catch (e) { return done(reject, e); }
-    ws.onmessage = (e) => { try { const s = JSON.parse(e.data); if (s && "targetSteamDuration" in s) done(resolve, s); } catch {} };
-    ws.onerror = () => done(reject, new Error("couldn't read the machine's settings"));
-  });
-  let shotSettingsQueue = Promise.resolve();
-  const writeShotSettings = (patch) => (shotSettingsQueue = shotSettingsQueue.catch(() => {}).then(async () => {
-    await post(D("/machine/shotSettings"), { ...(await readShotSettings()), ...patch });
-  }));
+  // Steam, hot water and flush live in Decaid's workflow (steamSettings, hotWaterData,
+  // rinseData), its recommended route: it sends them to the machine itself, and a
+  // write may carry only the fields that change (Decaid merges them; checked on 0.9.1).
+  // Writing the machine's shot settings directly would leave the workflow, which other
+  // skins read, saying something else. Only these three keys are ever sent, never the
+  // profile, so a write is safe during a shot.
+  const WORKFLOW_SETTINGS = ["steamSettings", "hotWaterData", "rinseData"];
+  const pickSettings = (o) => Object.fromEntries(WORKFLOW_SETTINGS.filter((k) => o?.[k]).map((k) => [k, o[k]]));
 
   let heartbeatAt = 0;
   const api = {
@@ -361,7 +353,7 @@ function makeLiveApi(conn) {
       info: () => j(D("/machine/info")),
       setState: (s) => j(D(`/machine/state/${s}`), { method: "PUT" }),
       tare: () => j(D("/scale/tare"), { method: "PUT" }),
-      shotSettings: { get: () => readShotSettings().catch(() => null), set: writeShotSettings },
+      workflowSettings: { get: async () => pickSettings(await j(D("/workflow"))), set: (p) => put(D("/workflow"), pickSettings(p)) },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
       waterThreshold: (pct) => post(D("/machine/waterLevels"), { warningThresholdPercentage: pct }),
       presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
@@ -747,11 +739,29 @@ function renderControls() {
   }));
   $("#stopBtn").onclick = stopMachine;
 }
+// Ranges for the workflow's steam, hot water and flush fields. Decaid accepts any
+// number (even a negative volume) and wants integers for temperatures, durations
+// and volumes, so Crema keeps values inside these. From Decaid's rest_v1.yml: DE1
+// steam 135–160 °C (lower means steam off), hot water flow 1–10 ml/s. From
+// Streamline: steam flow at least 0.4, steam at most 255 s. The rest are Crema's
+// own sanity limits.
+const WF_LIMITS = {
+  steamSettings: { targetTemperature: [135, 160, 1], duration: [1, 255, 1], flow: [0.4, 2.5, 0.1] },
+  hotWaterData: { targetTemperature: [40, 100, 1], volume: [1, 255, 1], flow: [1, 10, 0.1] },
+  rinseData: { targetTemperature: [20, 100, 1], duration: [1, 255, 1], flow: [1, 10, 0.1] },
+};
+function workflowPatch(group, field, value) {
+  const [lo, hi, stepBy] = WF_LIMITS[group][field];
+  const v = +clamp(round(Number(value), stepBy), lo, hi).toFixed(stepBy < 1 ? 1 : 0);
+  if (!Number.isFinite(v)) throw new Error("that isn't a number");
+  return { [group]: { [field]: v } };
+}
+const setWorkflowSetting = (group, field, value) => S.api.machine.workflowSettings.set(workflowPatch(group, field, value));
 async function pushPresetSettings(kind) {
   const p = S.presets, sel = p.selected;
-  if (kind === "steam") await S.api.machine.shotSettings.set({ targetSteamDuration: p.steam[sel.steam].seconds || 255 });
-  if (kind === "water") await S.api.machine.shotSettings.set({ targetHotWaterVolume: p.water[sel.water].ml });
-  if (kind === "flush") await S.api.machine.settings.set({ flushTimeout: p.flush[sel.flush].seconds });
+  if (kind === "steam") await setWorkflowSetting("steamSettings", "duration", p.steam[sel.steam].seconds || 255); // 0 = until stopped
+  if (kind === "water") await setWorkflowSetting("hotWaterData", "volume", p.water[sel.water].ml);
+  if (kind === "flush") await setWorkflowSetting("rinseData", "duration", p.flush[sel.flush].seconds);
 }
 // Starting can mean writing settings or loading the recipe before the start
 // command. Each start takes a generation number and Stop moves it on, so a
@@ -1497,7 +1507,7 @@ async function renderSettings() {
   const el = $("#settings");
   el.innerHTML = `<p class="muted">Loading…</p>`;
   const m = S.api.machine;
-  const [ss, ms, pres, scheds, disp, plugins, maint] = await Promise.all([m.shotSettings.get().catch(() => null), m.settings.get().catch(() => null), m.presence.get().catch(() => null), m.schedules.list().catch(() => []), m.display.get().catch(() => null), m.plugins().catch(() => []), S.api.maintenance.get().catch(() => null)]);
+  const [wf, ms, pres, scheds, disp, plugins, maint] = await Promise.all([m.workflowSettings.get().catch(() => null), m.settings.get().catch(() => null), m.presence.get().catch(() => null), m.schedules.list().catch(() => []), m.display.get().catch(() => null), m.plugins().catch(() => []), S.api.maintenance.get().catch(() => null)]);
   S.maint = maint;
   const p = S.prefs, theme = local.get("theme", "auto");
   const ai = { enabled: (await S.api.settings.get().catch(() => ({ aiEnabled: true }))).aiEnabled !== false };
@@ -1513,14 +1523,14 @@ async function renderSettings() {
   </div>
 
   <div class="panel stack"><h2>Steam, hot water and flush</h2>
-    ${ss ? `<div class="set-row first"><span>Steam temperature</span>${mini("sSteamT", ss.targetSteamTemp, 5, "°C")}</div>` : ""}
-    ${ms ? `<div class="set-row"><span>Steam flow<span class="hint">ml/s. Higher steams faster</span></span>${mini("sSteamF", ms.steamFlow, 0.1, "ml/s")}</div>` : ""}
-    ${ss ? `<div class="set-row"><span>Hot water temperature</span>${mini("sWaterT", ss.targetHotWaterTemp, 1, "°C")}</div>` : ""}
-    ${ms ? `<div class="set-row"><span>Hot water flow</span>${mini("sWaterF", ms.hotWaterFlow, 0.5, "ml/s")}</div>
-    <div class="set-row"><span>Flush flow</span>${mini("sFlushF", ms.flushFlow, 0.5, "ml/s")}</div>
-    <div class="set-row"><span>Flush temperature</span>${mini("sFlushT", ms.flushTemp, 1, "°C")}</div>` : ""}
+    ${wf?.steamSettings ? `<div class="set-row first"><span>Steam temperature<span class="hint">135–160 °C</span></span>${mini("sSteamT", wf.steamSettings.targetTemperature, 5, "°C")}</div>
+    <div class="set-row"><span>Steam flow<span class="hint">ml/s. Higher steams faster</span></span>${mini("sSteamF", wf.steamSettings.flow, 0.1, "ml/s")}</div>` : ""}
+    ${wf?.hotWaterData ? `<div class="set-row"><span>Hot water temperature</span>${mini("sWaterT", wf.hotWaterData.targetTemperature, 1, "°C")}</div>
+    <div class="set-row"><span>Hot water flow</span>${mini("sWaterF", wf.hotWaterData.flow, 0.5, "ml/s")}</div>` : ""}
+    ${wf?.rinseData ? `<div class="set-row"><span>Flush flow</span>${mini("sFlushF", wf.rinseData.flow, 0.5, "ml/s")}</div>
+    <div class="set-row"><span>Flush temperature</span>${mini("sFlushT", wf.rinseData.targetTemperature, 1, "°C")}</div>` : ""}
     <div class="set-row"><span>Presets<span class="hint">Steam jugs, hot water volumes and flush times on the home screen</span></span><button class="btn small" id="editPresets">Edit presets</button></div>
-    ${!ss && !ms ? '<p class="muted">The machine isn\'t reachable right now.</p>' : ""}
+    ${!wf ? '<p class="muted">The machine isn\'t reachable right now.</p>' : ""}
   </div>
 
   <div class="panel stack"><h2>Machine</h2>
@@ -1577,12 +1587,12 @@ async function renderSettings() {
   const num = (id) => parseFloat($(`#${id}`)?.value);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
-    sSteamT: () => m.shotSettings.set({ targetSteamTemp: num("sSteamT") }),
-    sSteamF: () => m.settings.set({ steamFlow: num("sSteamF") }),
-    sWaterT: () => m.shotSettings.set({ targetHotWaterTemp: num("sWaterT") }),
-    sWaterF: () => m.settings.set({ hotWaterFlow: num("sWaterF") }),
-    sFlushF: () => m.settings.set({ flushFlow: num("sFlushF") }),
-    sFlushT: () => m.settings.set({ flushTemp: num("sFlushT") }),
+    sSteamT: () => setWorkflowSetting("steamSettings", "targetTemperature", num("sSteamT")),
+    sSteamF: () => setWorkflowSetting("steamSettings", "flow", num("sSteamF")),
+    sWaterT: () => setWorkflowSetting("hotWaterData", "targetTemperature", num("sWaterT")),
+    sWaterF: () => setWorkflowSetting("hotWaterData", "flow", num("sWaterF")),
+    sFlushF: () => setWorkflowSetting("rinseData", "flow", num("sFlushF")),
+    sFlushT: () => setWorkflowSetting("rinseData", "targetTemperature", num("sFlushT")),
     sWaterWarn: () => m.waterThreshold(num("sWaterWarn")),
     sFan: () => m.settings.set({ fan: num("sFan") }),
     sSleepMin: () => m.presence.set({ sleepTimeoutMinutes: num("sSleepMin") }),
