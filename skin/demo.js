@@ -199,7 +199,8 @@ function makeDemoApi() {
   return {
     demo: true,
     info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null, serverError: null },
-    ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true },
+    // No Crema server here, so no Gemini voice notes; "Describe it" uses the browser's speech recognition.
+    ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true, voice: false },
     settings: {
       get: async () => ({ aiEnabled }),
       set: async (p) => { if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled; return { aiEnabled }; },
@@ -221,6 +222,7 @@ function makeDemoApi() {
       info.__demoId = hit.id;
       return info;
     },
+    async transcribe() { throw new Error("Speaking to Gemini needs a Crema server. This demo uses the browser's speech recognition."); },
     async saveBean(info, photo, art) {
       if (!info.__demoId) {
         // Typed in by hand: a new coffee, matched by the rules.

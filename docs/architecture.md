@@ -47,11 +47,12 @@ Both must provide:
 
 | Member | Purpose |
 |---|---|
-| `demo`, `info.{providers, decaidUrl, server, serverError}` | Mode and display info |
-| `ai.{available, enabled, on, healthy}` | A server is connected; the switch is on; both; the last call succeeded |
+| `demo`, `info.{providers, voice, decaidUrl, server, serverError}` | Mode and display info |
+| `ai.{available, enabled, on, healthy, voice}` | A server is connected; the switch is on; both; the last call succeeded; the server can transcribe voice notes |
 | `settings.get()`, `settings.set(patch)` | `{aiEnabled}` |
 | `shelf()` | Coffees on the shelf: `{id, batch, info, recipe, recipeSource, photo, productImage, art, weight, remaining, frozen, bestShotId, shots}` |
 | `identify(input, onStep)` | Photos, a typed or spoken description, or a link → BeanInfo. Throws when AI is off |
+| `transcribe(wav)` | A voice note (16 kHz mono WAV) → text, through the server's Gemini. The demo throws: it uses the browser's speech recognition |
 | `saveBean(info, photo, art)` | Returns `{id}` |
 | `setBeanState(id, {frozen?, finished?})`, `pinBest(id, shotId)` | Bag state and reference shot |
 | `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |

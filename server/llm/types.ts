@@ -6,6 +6,18 @@ export interface ImageInput {
   mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 }
 
+export interface AudioInput {
+  /** Raw bytes of a short recording. The app sends 16 kHz mono WAV. */
+  data: Buffer;
+  mediaType: "audio/wav" | "audio/mpeg" | "audio/ogg" | "audio/flac" | "audio/aac";
+}
+
+export interface TranscribeRequest {
+  audio: AudioInput;
+  /** What the recording is about, so the model spells names it expects correctly. */
+  context: string;
+}
+
 export interface StructuredRequest<T extends z.ZodType> {
   system: string;
   prompt: string;
@@ -22,6 +34,8 @@ export interface LlmProvider {
   /** Human-readable description of how this provider is billed. */
   readonly billing: string;
   structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>>;
+  /** Speech to text, for providers whose model takes audio. Returns "" when nothing was said. */
+  transcribe?(req: TranscribeRequest): Promise<string>;
 }
 
 export type ProviderId = "claude-cli" | "codex-cli" | "anthropic-api" | "gemini-api" | "mock";

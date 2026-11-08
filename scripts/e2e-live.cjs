@@ -12,6 +12,8 @@
 //   4. with AI switched off in Settings, the server isn't used even when it's up
 //   5. the phone app served by the Crema server reaches the machine through its
 //      proxy and shares the tablet's coffees and settings
+//   6. speaking into "Describe it": the microphone (a generated stand-in) is recorded, stopped after the pause, sent to the server as
+//      16 kHz WAV, written down (mock transcriber) and looked up
 const { chromium } = require("playwright");
 const { spawn } = require("child_process");
 const http = require("http");
@@ -34,6 +36,16 @@ function start(cmd, args, env, ready) {
   });
 }
 const stop = (p) => { try { process.kill(-p.pid, "SIGTERM"); } catch {} };
+// A stand-in microphone, generated in the page: 1.5 s of syllable-like tone bursts, then
+// silence, so the app hears speech and then a pause. Everything after getUserMedia is the
+// app's own code (recording, pause detection, downsampling, WAV, upload).
+const FAKE_MIC = `navigator.mediaDevices.getUserMedia = async () => {
+  const ac = new AudioContext(), rate = ac.sampleRate, n = Math.round(rate * 6), buf = ac.createBuffer(1, n, rate), x = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) { const t = i / rate, env = t < 1.5 ? Math.max(0, Math.sin(Math.PI * t * 4)) : 0, f = 140 + 40 * Math.sin(2 * Math.PI * 3 * t);
+    x[i] = env * 0.3 * (Math.sin(2 * Math.PI * f * t) + 0.5 * Math.sin(4 * Math.PI * f * t)); }
+  const src = ac.createBufferSource(), out = ac.createMediaStreamDestination(); src.buffer = buf; src.connect(out); src.start();
+  return out.stream;
+};`;
 // Decaid serves skins as plain static files from their own origin.
 function skinServer() {
   const types = { ".html": "text/html", ".js": "text/javascript", ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json" };
@@ -131,6 +143,51 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     const got = await S(() => ({ name: S.current.info.name.value, source: S.current.recipeSource }));
     check(got.name === "Kii AA" && got.source === "mock", `identified by the server and recipe chosen by the AI (${got.name}, ${got.source})`);
     check(await S(() => S.shelf.length >= 2), "both coffees on the shelf");
+
+    // ---- 6. speaking (Gemini path, mock transcriber) ----
+    await page.goto(`http://localhost:${SKIN}/?full#add`); await page.waitForTimeout(800);
+    // When to stop: fed 48 kHz chunks of tone and silence with made-up timestamps.
+    const gate = await S(() => {
+      const chunk = (amp) => Float32Array.from({ length: 2048 }, (_, i) => amp * Math.sin(i / 5));
+      const run = (pattern) => {                         // pattern(t) → amplitude; returns [why, when]
+        const g = voiceGate(0);
+        for (let t = 0; t < 40000; t += 2048 / 48) { g.push(chunk(pattern(t)), t); const why = g.check(t); if (why) return [why, Math.round(t)]; }
+        return [null, 40000];
+      };
+      return { talk: run((t) => (t > 300 && t < 2500 ? 0.2 : 0.002)), quiet: run(() => 0.002), long: run(() => 0.2), noisyRoom: run((t) => (t < 3000 ? 0.03 : 0.03 + (t < 4500 ? 0.2 : 0))) };
+    });
+    check(gate.talk[0] === "pause" && gate.talk[1] > 4000 && gate.talk[1] < 4300, `stops 1.6 s after the speaker pauses (${gate.talk})`);
+    check(gate.quiet[0] === "silent" && gate.quiet[1] >= 8000 && gate.quiet[1] < 8100, `gives up after 8 s with no speech (${gate.quiet})`);
+    check(gate.long[0] === "max" && gate.long[1] >= 30000 && gate.long[1] < 30100, `stops at 30 s (${gate.long})`);
+    check(gate.noisyRoom[0] === "pause" && gate.noisyRoom[1] > 6000 && gate.noisyRoom[1] < 6300, `a steady background noise isn't speech (${gate.noisyRoom})`);
+
+    // The microphone itself. Headless and sandboxed browsers often don't run audio at all (the
+    // audio clock stands still), so the generated stand-in mic is used only where it does;
+    // otherwise only the recording step is replaced, with a WAV the app encodes itself.
+    const audioRuns = await S(async () => { const ac = new AudioContext(); await ac.resume(); const t = ac.currentTime; await new Promise((r) => setTimeout(r, 500)); const ok = ac.currentTime - t > 0.3; ac.close(); return ok; });
+    if (audioRuns) { await page.addInitScript(FAKE_MIC); await page.reload(); await page.waitForTimeout(800); }
+    else {
+      console.log("     (this browser doesn't run audio: recording is replaced, the rest is real)");
+      await S(() => { window.recordVoice = async () => { await new Promise((r) => setTimeout(r, 300)); return encodeWav(downsample([Float32Array.from({ length: 48000 * 2 }, (_, i) => 0.3 * Math.sin(i / 20))], 48000, 16000), 16000); }; });
+    }
+    await page.click("#mode-describe");
+    check(await S(() => S.api.ai.voice), "the server offers voice notes");
+    // Keep a copy of the upload (Playwright doesn't expose multipart blob bodies).
+    await S(() => { const f = window.fetch; window.fetch = (u, o) => { if (String(u).endsWith("/api/transcribe")) window.__sentWav = o.body.get("audio"); return f(u, o); }; });
+    await page.fill("#describeInput", "");
+    await page.click("#speakBtn");
+    check((await page.textContent("#speakBtn")).trim() === "Stop", "Speak turns to Stop while recording");
+    await page.waitForSelector("#saveBean", { timeout: 20000 }).catch(async () => { throw new Error(`voice: ${await page.textContent("#speakHint")} / ${await page.inputValue("#describeInput")}`); });
+    check((await page.inputValue("#describeInput")) === "Example Roasters Kii AA, roasted last Tuesday, 250 grams", "the transcript fills the box and the coffee is looked up without a tap");
+    const wav = await S(async () => {
+      const b = window.__sentWav; if (!b) return null;
+      const v = new DataView(await b.arrayBuffer());
+      return { type: b.type, riff: String.fromCharCode(v.getUint8(0), v.getUint8(1), v.getUint8(2), v.getUint8(3)), rate: v.getUint32(24, true), channels: v.getUint16(22, true), bits: v.getUint16(34, true), seconds: +(v.getUint32(40, true) / 32000).toFixed(2) };
+    });
+    check(wav && wav.type === "audio/wav" && wav.riff === "RIFF" && wav.rate === 16000 && wav.channels === 1 && wav.bits === 16, `sent as 16 kHz mono 16-bit WAV (${JSON.stringify(wav)})`);
+    check(wav && (audioRuns ? wav.seconds > 1.5 && wav.seconds < 6 : wav.seconds === 2), `the recording is the right length (${wav?.seconds} s)`);
+    check((await page.textContent("#speakBtn")).trim() === "Speak", "Speak is ready again");
+    await page.click("#discardBean");
 
     // ---- 3. the server stops ----
     stop(server); await new Promise((r) => setTimeout(r, 800));

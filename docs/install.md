@@ -99,7 +99,8 @@ Everything is set with environment variables on the server.
 | `CLAUDE_BIN`, `CLAUDE_CLI_MODEL` | `claude`, `opus` | Claude Code CLI binary and model |
 | `CODEX_BIN`, `CODEX_MODEL` | `codex`, the CLI's default | For `codex-cli`, after `codex login`. Billed to your ChatGPT plan |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | none, `claude-opus-5-5` | For `anthropic-api`, billed per token |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token. A key also switches on speaking into "Describe it" (Gemini writes down your voice note), even when `LLM_PROVIDERS` doesn't list `gemini-api` |
+| `GEMINI_VOICE_MODEL` | `GEMINI_MODEL` | The Gemini model that transcribes voice notes |
 | `DECAID_URL` | none | Decaid on the tablet, such as `http://<tablet-ip>:8080`. Only needed to open the app from the server. Use an address phones can reach: they connect to its live streams directly |
 | `PORT`, `HOST` | `8787`, `0.0.0.0` | Where the server listens |
 | `CREMA_IMAGES` | `data/images` | Cached roaster product photos |

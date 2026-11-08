@@ -335,6 +335,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 #speakBtn .icon { width: 16px; height: 16px; }
 #speakBtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 #speakBtn[aria-pressed="true"] .icon { animation: listen 1.2s ease-in-out infinite; }
+#speakBtn[aria-pressed="true"] { box-shadow: 0 0 0 calc(var(--level, 0) * 7px) color-mix(in srgb, var(--accent) 35%, transparent); transition: box-shadow .08s linear; }
 @keyframes listen { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { #speakBtn[aria-pressed="true"] .icon { animation: none; } }
 .input, .field input[type="text"], .field input[type="url"], .field input[type="date"], .field input[type="number"], .field input[type="time"], .field select {

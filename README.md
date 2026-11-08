@@ -138,6 +138,8 @@ LLM_PROVIDERS=claude-cli,codex-cli npm start
 | `anthropic-api` | `ANTHROPIC_API_KEY` | per token |
 | `gemini-api` | `GEMINI_API_KEY` (optional `GEMINI_MODEL`) | per token / free tier |
 
+A `GEMINI_API_KEY` also lets you speak into "Describe it": Gemini transcribes the voice note, whichever provider then identifies the coffee.
+
 Subscription CLIs suit a personal installation; use API keys for anything shared.
 
 ## Configuration
@@ -150,8 +152,9 @@ The server is stateless: it answers questions and stores nothing but cached prod
 
 | Method | Path | Does |
 |---|---|---|
-| `GET` | `/api/config` | provider chain, and the Decaid address when `DECAID_URL` is set |
+| `GET` | `/api/config` | provider chain, `voice` (the provider that transcribes, or null), and the Decaid address when `DECAID_URL` is set |
 | `POST` | `/api/identify` | multipart `images[]`, `query`, `description` (with `today`, YYYY-MM-DD), `url`, `offline` → coffee record |
+| `POST` | `/api/transcribe` | multipart `audio` (WAV, up to 4 MB) → `{text, provider}`. Needs `GEMINI_API_KEY`; 501 without one |
 | `POST` | `/api/recommend` | `{bean, profileTitles?, history?, preferences?}` → recipe chosen by the AI among the installed profiles |
 | `POST` | `/api/dialin` | `{bean, recipe, shot, feedback, history?}` → the next adjustment |
 | `POST` | `/api/images/cache` | `{url}` → a cached copy of a roaster's product photo |
