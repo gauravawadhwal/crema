@@ -949,13 +949,21 @@ function setMode(m) {
    Either way the text then takes the same path as typing: /api/identify with LLM_PROVIDERS. */
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let listening = null, speechBroken = false, micBroken = false;
+// A refused microphone hides Speak on this device until the voice setting is changed. Decaid
+// never gives skins the microphone (camera only), so inside Decaid this happens on the first tap.
+let listening = null, speechBroken = local.get("speechDenied", false), micBroken = local.get("micDenied", false);
+function noMicrophone() {
+  micBroken = speechBroken = true;
+  local.set("micDenied", true); local.set("speechDenied", true);
+  toast("The microphone isn't available here, so Speak is hidden. Use your keyboard's microphone instead.");
+}
 const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && AudioCtx && window.isSecureContext && !micBroken);
 const canSpeak = () => !!SpeechRec && window.isSecureContext && !speechBroken;
 const voicePref = () => (local.get("voice", "gemini") === "device" ? "device" : "gemini");
 const voiceKind = () => (voicePref() === "gemini" && S.api.ai.voice && canRecord() ? "gemini" : canSpeak() ? "browser" : null);
 function voiceHint() {
   const fallback = canSpeak() ? "this device's speech recognition" : "your keyboard's microphone";
+  if (micBroken && window.isSecureContext) return "The microphone isn't available to this page (Decaid doesn't give skins one), so use your keyboard's microphone. Choose an option to try again";
   if (voicePref() === "device") return `Uses ${fallback}. Nothing goes to Gemini. Set on each device`;
   if (!S.api.ai.voice) return `Needs a Gemini API key on the Crema server. Until then, uses ${fallback}`;
   if (!canRecord()) return `This page can't use the microphone (it needs https or the tablet itself), so it uses ${fallback}`;
@@ -991,7 +999,7 @@ async function startRecording() {
     wav = await recordVoice(me, (level) => $("#speakBtn").style.setProperty("--level", level.toFixed(2)));
   } catch (err) {
     if (listening === me) listening = null;
-    if (err.name === "NotAllowedError" || err.name === "SecurityError") toast("Microphone access is blocked. Allow it for this page, or use your keyboard's microphone.");
+    if (err.name === "NotAllowedError" || err.name === "SecurityError") noMicrophone();
     else { micBroken = true; toast("Couldn't use the microphone here. Use your keyboard's microphone instead."); }
     return renderSpeak();
   }
@@ -1126,8 +1134,8 @@ function startBrowserSpeech() {
   r.onerror = (e) => {
     me.failed = true;
     if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) {
-      speechBroken = e.error !== "not-allowed";
-      toast(e.error === "not-allowed" ? "Microphone access is blocked. Allow it for this page, or use your keyboard's microphone." : "Speech recognition isn't available here. Use your keyboard's microphone instead.");
+      if (e.error === "not-allowed") noMicrophone();
+      else { speechBroken = true; toast("Speech recognition isn't available here. Use your keyboard's microphone instead."); }
     } else if (e.error === "no-speech") toast("Didn't hear anything. Try again a little closer.");
     else if (e.error === "network") toast("Speech recognition needs an internet connection. Type it instead.");
   };
@@ -1472,6 +1480,8 @@ async function renderSettings() {
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   $$("#sVoice button").forEach((b) => (b.onclick = () => {
     local.set("voice", b.dataset.v);
+    // Choosing again retries a microphone that was refused earlier.
+    local.set("micDenied", false); local.set("speechDenied", false); micBroken = speechBroken = false;
     $$("#sVoice button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     $("#voiceHint").textContent = voiceHint();
     toast("Saved on this device");
