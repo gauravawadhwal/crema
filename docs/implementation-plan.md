@@ -48,7 +48,7 @@ separate supervised step; implement and test locally first.
 | Phase | Work | Dependencies | Status / evidence |
 |---|---|---|---|
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
-| 1 | Machine-control reliability | Minimal test setup from 0 | Started: Stop cancels pending starts, double starts blocked (`scripts/e2e-controls.cjs`) |
+| 1 | Machine-control reliability | Minimal test setup from 0 | Mostly done (PRs #12, #13, #14, #16, #17 and the socket PR): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Left: overlapping preparation paths, busy/error states; all unverified on the tablet |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Started: ratings use Decaid's 0–10 directly, shown as half stars |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
@@ -77,10 +77,12 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    path labels (finding 5), whether the key-value store and shot-settings stream behave
    as on desktop, the dashboard exit, and the tablet fit. Not yet for daily brewing.
 4. **Rest of phase 1**, reworked after checking Decaid and Streamline (see phase 1,
-   "What to reuse"): profile writes held during a shot (done), then link state from
-   `/ws/v1/devices`, steam/hot water/flush through the workflow, workflow
-   reconciliation, socket ownership and bounded waits. Needed before relying on Crema
-   at the machine every day.
+   "What to reuse"). *Done on 8–9 November 2026: profile writes held during a shot
+   (#12), link state from `/ws/v1/devices` (#13), steam/hot water/flush through the
+   workflow (#14), workflow reconciliation (#16), time limits (#17) and socket
+   ownership. Left: preparation from other paths overlapping a start, and
+   busy/error states. Then the tablet session (item 8) to confirm it on real
+   hardware.*
 5. ~~**Image-fetch security**~~ (phase 5). *Done in PR #10.*
 6. **Rest of phase 2**: installed Decaid profiles as the library, shot pagination and
    pinned references by ID, then per-batch bag state with a migration.
@@ -365,10 +367,24 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   reload, adoption, unsaved edits, a start after an unnoticed change, another
   coffee, and boot picking the machine's coffee; on desktop Decaid 0.9.1
   `recipe()` reads the real workflow (its other cases need a Crema coffee there).*
-- [ ] **Socket ownership.** One owner per stream, close and silence before reopening,
+- [x] **Socket ownership.** One owner per stream, close and silence before reopening,
   backoff with jitter, and cleanup so reconnects don't accumulate handlers. Reopening
   on link-up isn't needed on Decaid 0.9.1, which re-attached the sockets after a
   `MockDe1` reconnect; confirm after a real DE1 power cycle.
+  *Done: the live adapter keeps one slot per stream; a replacement opens only after
+  the old socket is closed and its handlers detached (no double frames, no false
+  "disconnected"). Reconnects back off with jitter from 1 s to 15 s, reset after 5 s
+  up. `subscribe` returns `{ close, reopenMachine }` in both backends. A closed
+  machine socket clears the readings (the screen says it can't reach the machine
+  instead of showing the last values); a closed devices socket makes the link
+  unknown. As a fallback for a Decaid that doesn't re-attach, no reading for 15 s
+  while the machine counts as linked reopens the machine sockets, at most every
+  30 s, also checked when the page comes back into view. The simulator can freeze
+  open machine sockets and count open sockets. `e2e-live.cjs` covers a frozen socket
+  being reopened with no extra sockets left (and fails with the watchdog removed),
+  Decaid going away (readings dropped, banner) and coming back (reconnects by itself,
+  one socket per stream). Desktop Decaid 0.9.1's disconnect/reconnect still resumes
+  on the same sockets, so the fallback doesn't fire there.*
 - [x] **Bound API waits** and keep optional AI/recipe discovery from delaying machine
   telemetry and Stop availability. Reproduce before choosing the smallest change.
   *Reproduced: boot loaded settings, the shelf and a recipe (possibly an AI call)

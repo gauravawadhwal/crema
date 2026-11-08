@@ -251,6 +251,16 @@ const server = createServer(async (req, res) => {
       sim.connectionError = null;
       return devicesChanged(res);
     }
+    // Like older Decaid after a machine swap: open machine sockets go quiet, new ones work.
+    if (m === "POST" && p === "/dev/machine/freeze-sockets") {
+      for (const ws of liveSockets) if (ws.path.startsWith("/ws/v1/machine/")) ws.frozen = true;
+      return send(res, 200, { ok: true });
+    }
+    if (m === "GET" && p === "/dev/sockets") {
+      const counts: Record<string, number> = {};
+      for (const ws of liveSockets) counts[ws.path] = (counts[ws.path] ?? 0) + 1;
+      return send(res, 200, counts);
+    }
     if (m === "POST" && p === "/dev/connection-error") {
       const b = await body(req);
       sim.connectionError = b.kind ? connectionError(b.kind, b.severity ?? "error", b.message ?? b.kind, b.suggestion ?? null) : null;
@@ -467,11 +477,15 @@ const streams: Record<string, { hz: number; frame: () => unknown }> = {
   },
 };
 const wss = new WebSocketServer({ noServer: true });
+const liveSockets = new Set<WebSocket & { path: string; frozen?: boolean }>();
 server.on("upgrade", (req, socket, head) => {
   const path = new URL(req.url ?? "/", "http://x").pathname;
   const stream = streams[path];
   if (!stream) return socket.destroy();
-  wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+  wss.handleUpgrade(req, socket, head, (raw: WebSocket) => {
+    const ws = Object.assign(raw, { path, frozen: false });
+    liveSockets.add(ws);
+    ws.on("close", () => liveSockets.delete(ws));
     if (path === "/ws/v1/devices") {
       // Sent on connect and on every change, like Decaid's aggregator; no timer.
       devicesSockets.add(ws);
@@ -481,7 +495,7 @@ server.on("upgrade", (req, socket, head) => {
     }
     if (path === "/ws/v1/scale/snapshot") ws.send(JSON.stringify({ status: "connected" }));
     // Machine sockets stay open while the machine is gone, but send nothing.
-    const silent = () => path.startsWith("/ws/v1/machine/") && !sim.machineConnected;
+    const silent = () => ws.frozen || (path.startsWith("/ws/v1/machine/") && !sim.machineConnected);
     const tick = () => ws.readyState === ws.OPEN && !silent() && ws.send(JSON.stringify(stream.frame()));
     tick(); // Decaid sends the current value as soon as a client connects
     const iv = setInterval(tick, 1000 / stream.hz);

@@ -212,6 +212,45 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await dev("connection-error", {});
     await page.waitForFunction(() => !S.link.error, null, { timeout: 5000 });
     check(!/hasn't reached/.test(await page.textContent("#alerts")), "and cleared when Decaid says so");
+
+    // Sockets: one per stream, recovered when they go quiet, and no stale readings when
+    // Decaid goes away.
+    {
+      const sockets = async (port = MOCK) => (await fetch(`http://localhost:${port}/dev/sockets`)).json();
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForFunction(() => S.snap && S.link.connected, null, { timeout: 15000 });
+      await page.waitForTimeout(1000);
+      const before = (await sockets())["/ws/v1/machine/snapshot"];
+      // Older Decaid kept the machine socket open but quiet after a machine swap.
+      await dev("machine/freeze-sockets");
+      const frozenAt = await S(() => S.snap.timestamp);
+      await page.waitForTimeout(2000);
+      check(await S(() => S.snap.timestamp) === frozenAt, "a frozen machine socket stops sending (simulated)");
+      const back = await page.waitForFunction((t) => S.snap?.timestamp !== t, frozenAt, { timeout: 35000 }).then(() => true, () => false);
+      check(back, "a quiet machine socket is reopened and readings resume");
+      await page.waitForTimeout(1000);
+      const after = (await sockets())["/ws/v1/machine/snapshot"];
+      check(after === before, `reopening doesn't leave extra sockets open (${before} before, ${after} after)`);
+
+      // Decaid goes away entirely, then comes back.
+      const PORT2 = base + 7;
+      let mock2 = await start("npx", ["tsx", "dev/mock-decaid.ts"], { PORT: String(PORT2) }, "mock-decaid on");
+      const gone = await browser.newPage({ viewport: { width: 1340, height: 800 } });
+      gone.on("pageerror", (e) => errs.push(`gone: ${e.message}`));
+      await gone.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${PORT2}#brew`);
+      await gone.waitForFunction(() => S.snap && S.link.connected, null, { timeout: 15000 });
+      stop(mock2);
+      await gone.waitForFunction(() => !S.snap, null, { timeout: 10000 }).catch(() => {});
+      const lost = await gone.evaluate(() => ({ snap: !!S.snap, banner: document.querySelector("#alerts").textContent, status: document.querySelector("#status").textContent }));
+      check(!lost.snap && /Can't reach the machine/.test(lost.banner) && /offline/i.test(lost.status), "when Decaid goes away, readings are dropped and the screen says so", JSON.stringify(lost));
+      mock2 = await start("npx", ["tsx", "dev/mock-decaid.ts"], { PORT: String(PORT2) }, "mock-decaid on");
+      const recovered = await gone.waitForFunction(() => S.snap && S.link.connected, null, { timeout: 30000 }).then(() => true, () => false);
+      check(recovered && !/Can't reach/.test(await gone.textContent("#alerts")), "when Decaid is back, it reconnects by itself");
+      await gone.waitForTimeout(1000);
+      const counts = await sockets(PORT2);
+      check(counts["/ws/v1/machine/snapshot"] === 1 && counts["/ws/v1/devices"] === 1, `one socket per stream after reconnecting (${JSON.stringify(counts)})`);
+      await gone.close();
+      stop(mock2);
+    }
     const kv = await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema`)).json();
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });
