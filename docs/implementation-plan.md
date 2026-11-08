@@ -52,7 +52,7 @@ separate supervised step; implement and test locally first.
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Started: ratings use Decaid's 0–10 directly, shown as half stars |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
-| 5 | Image-fetch security | Independent after 0 | Not started |
+| 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
 | 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI gates releases and Pages, with a `ui` job for the Playwright checks; tablet fit fails on overflow; skin ZIP checked before publishing |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
 
@@ -60,23 +60,26 @@ separate supervised step; implement and test locally first.
 
 Each is a self-contained piece of work that ends in its own PR. Order agreed with the
 user on 8 November 2026: get the UI checks into CI and a way back to Decaid in place,
-then tag a pre-release and take a first, short look on the tablet before the rest of
+then tag a release and take a first, short look on the tablet before the rest of
 phase 1, so real-hardware findings can reshape phases 1–3.
 
 1. ~~**Reproducible UI checks**~~ (phase 0, finding 7; phase 6). *Done: Playwright
    declared, the UI checks run in CI, tablet fit fails on overflow.*
 2. ~~**Dashboard exit**~~ (finding 1, phase 3). *Done in Settings; still to confirm
-   on the tablet (item 3).*
-3. **Tag `v0.1.0` as a GitHub pre-release** from `main`. The release workflow runs CI
-   and checks the ZIP first. Then a short first look on the tablet: install through
+   on the tablet (item 3). PR #9 was merged into #8's branch after #8 had landed, so it
+   reached `main` in a follow-up PR.*
+3. **Tag `v0.1.0` as a normal GitHub release** from `main`. The release workflow runs CI
+   and checks the ZIP first. Not a pre-release: Decaid's GitHub Release install asks for
+   `releases/latest` unless `includePrerelease` is set (`lib/src/util/github_archive.dart`
+   on Decaid's `main`, read 8 November 2026), and GitHub's latest skips pre-releases, so
+   the tablet would find nothing. The `0.x` version and the release notes say it's early. Then a short first look on the tablet: install through
    Decaid's GitHub Release route, record the Decaid and WebView versions, the install
    path labels (finding 5), whether the key-value store and shot-settings stream behave
    as on desktop, the dashboard exit, and the tablet fit. Not yet for daily brewing.
 4. **Rest of phase 1**: link state and stale telemetry, workflow reconciliation on
    boot/resume/return, bounded waits, and preparation overlapping a start, informed by
    item 3. Needed before relying on Crema at the machine every day.
-5. **Image-fetch security** (phase 5). Server only, independent of the skin; can run
-   any time, in parallel with the others.
+5. ~~**Image-fetch security**~~ (phase 5). *Done in PR #10.*
 6. **Rest of phase 2**: installed Decaid profiles as the library, shot pagination and
    pinned references by ID, then per-batch bag state with a migration.
 7. **Streamline Settings entry and the parity audit** (phase 3), after items 2 and 4.
