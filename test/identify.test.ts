@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app.js";
 import { dropDeadLinks, identify, isRoasterSite, preferRoasterPages, resolveGroundingLinks, tidyConfirmations } from "../server/identify.js";
 import { mockBean } from "../server/llm/mock.js";
@@ -153,29 +155,38 @@ describe("Gemini replies for blends", () => {
 });
 
 describe("dead links", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
+  // A local server stands in for the shops: the made-up names resolve to it, and only
+  // its address counts as public. Private literals and reserved names keep the real rules.
   it("drops pages the site says are gone, keeps the rest, and never fetches private addresses", async () => {
-    const replies: Record<string, Response> = {
-      "https://roaster.coffee/product/old": new Response(null, { status: 404 }),
-      "https://roaster.coffee/coffee/moved": new Response(null, { status: 301, headers: { location: "https://shop.roaster.coffee/coffee/moved" } }),
-      "https://shop.roaster.coffee/coffee/moved": new Response(null, { status: 404 }),
-      "https://roaster.coffee/products/real": new Response(null, { status: 429 }),
-      "https://retailer.shop/sneaky": new Response(null, { status: 302, headers: { location: "http://192.168.1.10/admin" } }),
-    };
-    const fetch = vi.fn(async (u: string) => replies[u] ?? new Response("ok"));
-    vi.stubGlobal("fetch", fetch);
+    const seen: string[] = [];
+    const server = createServer((req, res) => {
+      const at = `${req.headers.host?.split(":")[0]}${req.url}`;
+      seen.push(at);
+      const go = (status: number, location?: string) => { res.writeHead(status, location ? { location } : {}); res.end(); };
+      if (at === "roaster.coffee/product/old") return go(404);
+      if (at === "roaster.coffee/coffee/moved") return go(301, `http://shop.roaster.coffee:${port}/coffee/moved`);
+      if (at === "shop.roaster.coffee/coffee/moved") return go(404);
+      if (at === "roaster.coffee/products/real") return go(429);
+      if (at === "retailer.shop/sneaky") return go(302, "http://192.168.1.10/admin");
+      go(200);
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as AddressInfo).port;
+    const at = (host: string, p: string) => `http://${host}:${port}${p}`;
+    const net = { resolve: async () => [{ address: "127.0.0.1", family: 4 }], allowAddress: (ip: string) => ip === "127.0.0.1" };
     const info = {
       ...mockBean("light"),
-      productUrl: "https://roaster.coffee/product/old",
-      sources: ["https://roaster.coffee/products/real", "https://roaster.coffee/coffee/moved", "https://retailer.shop/sneaky", "https://example.com/coffee"],
+      productUrl: at("roaster.coffee", "/product/old"),
+      sources: [at("roaster.coffee", "/products/real"), at("roaster.coffee", "/coffee/moved"), at("retailer.shop", "/sneaky"), "https://example.com/coffee"],
     };
-    const out = await dropDeadLinks(info);
-    expect(out.productUrl).toBeNull();
-    expect(out.sources).toEqual(["https://roaster.coffee/products/real", "https://retailer.shop/sneaky", "https://example.com/coffee"]);
-    const fetched = fetch.mock.calls.map((c) => c[0]);
-    expect(fetched).not.toContain("http://192.168.1.10/admin");
-    expect(fetched).not.toContain("https://example.com/coffee");
+    try {
+      const out = await dropDeadLinks(info, net);
+      expect(out.productUrl).toBeNull();
+      expect(out.sources).toEqual([at("roaster.coffee", "/products/real"), at("retailer.shop", "/sneaky"), "https://example.com/coffee"]);
+      expect(seen.sort()).toEqual(["retailer.shop/sneaky", "roaster.coffee/coffee/moved", "roaster.coffee/product/old", "roaster.coffee/products/real", "shop.roaster.coffee/coffee/moved"]);
+    } finally {
+      server.close();
+    }
   });
 });
 

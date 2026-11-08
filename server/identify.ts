@@ -1,6 +1,6 @@
 import type { ImageInput } from "./llm/types.js";
 import type { ProviderChain } from "./llm/index.js";
-import { isSafeUrl } from "./images.js";
+import { safeFetch, type SafeFetchOptions } from "./safe-fetch.js";
 import { BeanInfo } from "./schema.js";
 
 export interface IdentifyInput {
@@ -121,26 +121,15 @@ export function tidyConfirmations(info: BeanInfo): BeanInfo {
  * with 403 or 429 for pages that are there. Only public addresses are fetched,
  * redirects included; the rest are kept unchecked.
  */
-export async function dropDeadLinks(info: BeanInfo): Promise<BeanInfo> {
-  const gone = async (start: string): Promise<boolean> => {
-    let url = start;
+export async function dropDeadLinks(info: BeanInfo, net: Pick<SafeFetchOptions, "resolve" | "allowAddress"> = {}): Promise<BeanInfo> {
+  const gone = async (url: string): Promise<boolean> => {
     try {
-      for (let hop = 0; hop < 4; hop++) {
-        if (!isSafeUrl(url)) return false;
-        const res = await fetch(url, {
-          redirect: "manual",
-          headers: { "user-agent": "Mozilla/5.0 (compatible; Crema coffee companion)" },
-          signal: AbortSignal.timeout(5000),
-        });
-        await res.body?.cancel().catch(() => {});
-        const to = res.headers.get("location");
-        if (res.status >= 300 && res.status < 400 && to) { url = new URL(to, url).toString(); continue; }
-        return res.status === 404 || res.status === 410;
-      }
+      const res = await safeFetch(url, { ...net, readBody: false, timeoutMs: 5000, maxRedirects: 3 });
+      return res.status === 404 || res.status === 410;
     } catch {
-      /* unreachable or slow: keep it */
+      /* unreachable, slow, or not a public address: keep it */
+      return false;
     }
-    return false;
   };
   const links = [...new Set([...info.sources, info.productUrl].filter((u): u is string => !!u))];
   if (!links.length) return info;
