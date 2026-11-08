@@ -115,6 +115,37 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     await tablet.click("#exitDash");
     check(await tablet.evaluate(() => window.__exits) === 1, "inside Decaid, Open Decaid calls decentApp.exitToDashboard() once the machine is idle");
     await tablet.close();
+    // Machine link from Decaid's ws/v1/devices: Decaid stays up while the DE1 drops off.
+    // Its machine sockets go quiet but stay open, so only the device list tells.
+    const dev = (what, b) => fetch(`http://localhost:${MOCK}/dev/${what}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b ?? {}) });
+    await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForFunction(() => S.link.connected === true && S.snap, null, { timeout: 15000 });
+    check(true, "the device list says the machine is connected");
+    await S(() => { window.__sent = []; const set = S.api.machine.setState; S.api.machine.setState = (st) => { window.__sent.push(st); return set(st); }; });
+    await dev("machine/disconnect");
+    await page.waitForFunction(() => S.link.connected === false, null, { timeout: 5000 });
+    const down = await S(() => ({
+      banner: document.querySelector("#alerts").textContent,
+      status: document.querySelector("#status").textContent,
+      start: document.querySelector('[data-run="espresso"]').disabled,
+      stop: document.querySelector("#stopBtn").disabled,
+      pressure: [...document.querySelectorAll("#readouts .readout")].find((r) => /Pressure/.test(r.textContent))?.querySelector(".v").textContent,
+    }));
+    check(/machine isn't connected/.test(down.banner) && /Machine disconnected/.test(down.status), "a dropped machine is shown as disconnected", `${down.banner} / ${down.status}`);
+    check(down.start && !down.stop, "start buttons are disabled, Stop isn't", JSON.stringify(down));
+    check(/^–/.test(down.pressure || ""), `no stale readings (${down.pressure})`);
+    await S(() => startOp("espresso"));
+    check(await S(() => window.__sent.length === 0), "no start command is sent while it's disconnected");
+    await dev("machine/connect");
+    await page.waitForFunction(() => S.link.connected === true, null, { timeout: 5000 });
+    await page.waitForTimeout(400);
+    const up = await S(() => ({ toast: document.querySelector("#toast").textContent, start: document.querySelector('[data-run="espresso"]').disabled, banner: document.querySelector("#alerts").textContent }));
+    check(/connected again/.test(up.toast) && !up.start && !/isn't connected/.test(up.banner), "it recovers when the machine is back", JSON.stringify(up));
+    await dev("connection-error", { kind: "profileUploadFailed", severity: "warning", message: "Profile upload failed" });
+    await page.waitForFunction(() => S.link.error?.kind === "profileUploadFailed", null, { timeout: 5000 });
+    check(/hasn't reached the machine/.test(await page.textContent("#alerts")), "a recipe Decaid is still retrying is shown");
+    await dev("connection-error", {});
+    await page.waitForFunction(() => !S.link.error, null, { timeout: 5000 });
+    check(!/hasn't reached/.test(await page.textContent("#alerts")), "and cleared when Decaid says so");
     const kv = await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema`)).json();
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });
