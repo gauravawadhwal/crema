@@ -95,9 +95,28 @@ If there is no speech, or only noise, return an empty string. Never invent words
     };
     const text = await this.generate(this.model, body);
     try {
-      return req.schema.parse(extractJson(text));
+      const raw = extractJson(text);
+      const first = req.schema.safeParse(raw);
+      if (first.success) return first.data;
+      // With search grounding the schema is only described, not enforced, and Gemini sometimes
+      // answers a text field with a list (a blend's countries). Join those and try once more.
+      return req.schema.parse(joinListsWhereTextExpected(raw, first.error.issues));
     } catch (e) {
       throw new ProviderError(this.id, `could not parse reply: ${(e as Error).message}`, e);
     }
   }
+}
+
+/** For each "expected string, received array" issue whose array holds only strings, join it with ", ". */
+export function joinListsWhereTextExpected(raw: unknown, issues: readonly z.core.$ZodIssue[]): unknown {
+  const copy = structuredClone(raw) as Record<string, unknown>;
+  for (const issue of issues) {
+    if (issue.code !== "invalid_type" || issue.expected !== "string" || !issue.path.length) continue;
+    let parent: any = copy;
+    for (const key of issue.path.slice(0, -1)) parent = parent?.[key as keyof typeof parent];
+    const last = issue.path.at(-1) as string | number;
+    const value = parent?.[last];
+    if (Array.isArray(value) && value.every((x) => typeof x === "string")) parent[last] = value.join(", ");
+  }
+  return copy;
 }

@@ -1,5 +1,6 @@
 import type { ImageInput } from "./llm/types.js";
 import type { ProviderChain } from "./llm/index.js";
+import { isSafeUrl } from "./images.js";
 import { BeanInfo } from "./schema.js";
 
 export interface IdentifyInput {
@@ -24,16 +25,25 @@ const SYSTEM = `You identify specialty coffees for a home espresso setup and ret
 
 Use two kinds of evidence:
 1. THE BAG (photos, if given). This is the only source for lot-specific facts: the roast date (often a handwritten or stamped sticker, and easy to confuse with a best-before date), lot or batch numbers, the bag weight, and any recipe printed on it. Mark these source="bag".
-2. THE ROASTER'S OWN PRODUCT PAGE (if you can search the web). Find the exact product the bag or query refers to, preferring the roaster's own site over retailers. Use it to fill in origin, producer, variety, process, altitude, tasting notes, roast level, what the roast is for (espresso/filter/omni), and any espresso recipe they recommend. Mark these source="web" and list every URL you used in sources.
+2. THE ROASTER'S OWN PRODUCT PAGE (if you can search the web). Use it to fill in origin, producer, variety, process, altitude, tasting notes, roast level, what the roast is for (espresso/filter/omni), and any espresso recipe they recommend. Mark these source="web".
+
+How to search, in this order:
+a. Find the roaster's official website: their own domain, not a retailer, marketplace, subscription service, café, review site, blog or social media page.
+b. Search that site for this exact coffee (for example "site:<their domain> <coffee name>") and open the product page.
+c. Take web facts from the roaster's own pages only. Their brew guides and blog posts about this coffee count as their own pages.
+d. Only if the roaster's site doesn't list this coffee (sold out, or a small roaster with no shop), use the next best source in this order: the producer or importer, then a single retailer that names the same coffee. Lower confidence when you do, and say so in summary.
+Never mix in facts from a different coffee, a different roaster's lot of the same farm, or a review of another year's harvest.
 
 Rules:
+- sources: the pages you actually took facts from, the roaster's own pages first, at most four. Don't list pages you only skimmed.
 - When the bag and the website disagree on a lot fact, trust the bag. The website may describe a newer or older lot.
 - Use source="inferred" only for things you reasoned out, e.g. a roast level judged from the bean colour in a photo or from the words "omni roast". Put those field names in needsConfirmation.
 - Never make up a roast date. If you can't read one, set it to null and add "roastDate" to needsConfirmation.
 - Dates are ISO YYYY-MM-DD. When a printed date is ambiguous (03/04), assume the roaster's country's date format and flag it.
+- A blend: set isBlend, list its components in blendComponents, and still write country, region, producer and process as single lines of text ("Brazil, Colombia"), never lists.
 - processKind is a normalized bucket; process keeps the roaster's own wording (e.g. "Anaerobic natural, 72h").
 - confidence reflects how sure you are that you found the right coffee, not how complete the record is.
-- productUrl: the roaster's own product page for this coffee, if you found it.
+- productUrl: the roaster's own product page for this coffee. Use a retailer's page only when the roaster has none.
 - imageUrl: the direct URL of the roaster's main product photo (the packshot), only if you actually saw it on the page; otherwise null.
 - summary: one or two plain sentences on how the coffee will taste as espresso.
 
@@ -58,7 +68,7 @@ export async function identify(llm: ProviderChain, input: IdentifyInput): Promis
   parts.push(
     input.offline
       ? "Don't search the web. Record only what you can see or confidently know."
-      : "Look up the roaster's product page and fill in the rest.",
+      : "Find the roaster's own website, then this coffee's page on it, and fill in the rest.",
   );
   parts.push("Return the BeanInfo record.");
 
@@ -70,7 +80,101 @@ export async function identify(llm: ProviderChain, input: IdentifyInput): Promis
     images: input.images,
     web: !input.offline,
   });
-  return resolveGroundingLinks(info);
+  return preferRoasterPages(await dropDeadLinks(await resolveGroundingLinks(info)));
+}
+
+/**
+ * Models sometimes give a believable link that doesn't exist (an old product
+ * path, a guessed slug). Check each one and drop those the site says are gone
+ * (404 or 410). Anything else is kept: shops often answer automated requests
+ * with 403 or 429 for pages that are there. Only public addresses are fetched,
+ * redirects included; the rest are kept unchecked.
+ */
+export async function dropDeadLinks(info: BeanInfo): Promise<BeanInfo> {
+  const gone = async (start: string): Promise<boolean> => {
+    let url = start;
+    try {
+      for (let hop = 0; hop < 4; hop++) {
+        if (!isSafeUrl(url)) return false;
+        const res = await fetch(url, {
+          redirect: "manual",
+          headers: { "user-agent": "Mozilla/5.0 (compatible; Crema coffee companion)" },
+          signal: AbortSignal.timeout(5000),
+        });
+        await res.body?.cancel().catch(() => {});
+        const to = res.headers.get("location");
+        if (res.status >= 300 && res.status < 400 && to) { url = new URL(to, url).toString(); continue; }
+        return res.status === 404 || res.status === 410;
+      }
+    } catch {
+      /* unreachable or slow: keep it */
+    }
+    return false;
+  };
+  const links = [...new Set([...info.sources, info.productUrl].filter((u): u is string => !!u))];
+  if (!links.length) return info;
+  const dead = new Set((await Promise.all(links.map(async (u) => ((await gone(u)) ? u : null)))).filter(Boolean));
+  if (!dead.size) return info;
+  return {
+    ...info,
+    sources: info.sources.filter((u) => !dead.has(u)),
+    productUrl: info.productUrl && dead.has(info.productUrl) ? null : info.productUrl,
+  };
+}
+
+// Words that say what a roaster is rather than who it is ("ONA Coffee" → "ona").
+const GENERIC = new Set(["the", "coffee", "coffees", "roaster", "roasters", "roastery", "roasting", "roastworks", "co", "company", "specialty", "speciality", "and"]);
+// Second-level suffixes such as com.au and co.uk, so the name label is found under them.
+const SECOND_LEVEL = new Set(["com", "co", "net", "org", "gov", "edu", "ac", "ltd", "plc"]);
+
+const tokens = (s: string) =>
+  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").split(/[^a-z0-9]+/).filter(Boolean);
+
+/**
+ * Whether a URL is on the roaster's own website, judged from the domain name:
+ * the site's name label (onacoffee in shop.onacoffee.com.au) must start with
+ * the roaster's distinctive words in order (ONA Coffee → ona; Square Mile →
+ * square, mile; The Barn → barn, allowing a leading "the").
+ */
+export function isRoasterSite(url: string, roaster: string | null): boolean {
+  if (!roaster) return false;
+  const words = tokens(roaster).filter((w) => !GENERIC.has(w));
+  if (!words.length) return false;
+  let host: string;
+  try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ""); } catch { return false; }
+  const labels = host.split(".");
+  const at = labels.length >= 3 && SECOND_LEVEL.has(labels.at(-2)!) && labels.at(-1)!.length === 2 ? labels.length - 3 : labels.length - 2;
+  let label = (labels[at] ?? "").replace(/[^a-z0-9]/g, "");
+  if (words[0] !== "the") label = label.replace(/^the(?=.)/, "");
+  if (!label.startsWith(words[0])) return false;
+  let rest = label.slice(words[0].length);
+  for (const w of words.slice(1)) {
+    const i = rest.indexOf(w);
+    if (i < 0) return false;
+    rest = rest.slice(i + w.length);
+  }
+  return true;
+}
+
+const PRODUCT_PATH = /\/(products?|shop|store|coffees?|beans?)\//i;
+
+/**
+ * The model is asked to use the roaster's own site, but doesn't always (search
+ * results often lead with retailers and blogs). So: the roaster's pages go
+ * first, at most two other pages are kept, and when the product link is a
+ * retailer but the roaster's own product page was found, that page is used.
+ */
+export function preferRoasterPages(info: BeanInfo): BeanInfo {
+  const roaster = info.roaster.value;
+  const own = info.sources.filter((u) => isRoasterSite(u, roaster));
+  const other = info.sources.filter((u) => !isRoasterSite(u, roaster));
+  let productUrl = info.productUrl;
+  if (productUrl && !isRoasterSite(productUrl, roaster)) {
+    const ownProduct = own.find((u) => PRODUCT_PATH.test(new URL(u).pathname + "/"));
+    if (ownProduct) productUrl = ownProduct;
+  }
+  if (productUrl && isRoasterSite(productUrl, roaster) && !own.includes(productUrl)) own.unshift(productUrl);
+  return { ...info, productUrl, sources: [...own, ...other.slice(0, own.length ? 2 : 4)] };
 }
 
 const GROUNDING_HOST = "vertexaisearch.cloud.google.com";

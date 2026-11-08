@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../server/app.js";
-import { identify, resolveGroundingLinks } from "../server/identify.js";
+import { dropDeadLinks, identify, isRoasterSite, preferRoasterPages, resolveGroundingLinks } from "../server/identify.js";
 import { mockBean } from "../server/llm/mock.js";
 import { ProviderChain } from "../server/llm/index.js";
 import type { StructuredRequest } from "../server/llm/types.js";
@@ -77,5 +77,104 @@ describe("Gemini's grounding links", () => {
     const info = mockBean("light");
     expect(await resolveGroundingLinks(info)).toBe(info);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("the roaster's own site comes first", () => {
+  it.each([
+    ["https://onacoffee.com.au/product/la-fincona-honduras-washed/", "ONA Coffee", true],
+    ["https://shop.onacoffee.com.au/x", "ONA", true],
+    ["https://www.squaremilecoffee.com/shop/coffee/red-brick-espresso/", "Square Mile", true],
+    ["https://thebarn.de/products/x", "The Barn", true],
+    ["https://onyxcoffeelab.com/products/x", "Onyx Coffee Lab", true],
+    ["https://www.lacabra.com/x", "La Cabra", true],
+    ["https://specialitycoffee.ca/products/ona-coffee-la-fincona", "ONA Coffee", false],
+    ["https://nationalcoffee.com/ona", "ONA Coffee", false],
+    ["https://www.amazon.com.au/square-mile-red-brick", "Square Mile", false],
+    ["https://squarespace.com/mile", "Square Mile", false],
+    ["https://onacoffee.com.au/x", null, false],
+  ])("%s is %s's site: %s", (url, roaster, own) => {
+    expect(isRoasterSite(url, roaster)).toBe(own);
+  });
+
+  it("orders sources, trims other pages, and swaps a retailer product link for the roaster's", () => {
+    const info = {
+      ...mockBean("light"),
+      roaster: { value: "ONA Coffee", source: "bag" as const },
+      productUrl: "https://specialitycoffee.ca/products/ona-coffee-la-fincona",
+      sources: [
+        "https://specialitycoffee.ca/products/ona-coffee-la-fincona",
+        "https://someblog.example/la-fincona-review",
+        "https://onacoffee.com.au/blogs/brewguides/la-fincona-honduras-washed",
+        "https://another.example/ona",
+        "https://onacoffee.com.au/product/la-fincona-honduras-washed/",
+      ],
+    };
+    const out = preferRoasterPages(info);
+    expect(out.productUrl).toBe("https://onacoffee.com.au/product/la-fincona-honduras-washed/");
+    expect(out.sources).toEqual([
+      "https://onacoffee.com.au/blogs/brewguides/la-fincona-honduras-washed",
+      "https://onacoffee.com.au/product/la-fincona-honduras-washed/",
+      "https://specialitycoffee.ca/products/ona-coffee-la-fincona",
+      "https://someblog.example/la-fincona-review",
+    ]);
+  });
+
+  it("keeps a retailer when the roaster has no page, and up to four sources", () => {
+    const sources = ["https://a.example/1", "https://b.example/2", "https://c.example/3", "https://d.example/4", "https://e.example/5"];
+    const info = { ...mockBean("light"), roaster: { value: "Tiny Roasters", source: "bag" as const }, productUrl: sources[0], sources };
+    const out = preferRoasterPages(info);
+    expect(out.productUrl).toBe(sources[0]);
+    expect(out.sources).toEqual(sources.slice(0, 4));
+  });
+
+  it("asks the model to search the roaster's own site first", async () => {
+    const { llm, seen } = recorder();
+    await identify(llm, { query: "ONA La Fincona" });
+    expect(seen[0].system).toMatch(/official website/);
+    expect(seen[0].system).toMatch(/site:<their domain>/);
+    expect(seen[0].prompt).toMatch(/roaster's own website/);
+  });
+});
+
+describe("Gemini replies for blends", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("joins a list given where text is expected, instead of failing the lookup", async () => {
+    const { GeminiApiProvider } = await import("../server/llm/gemini-api.js");
+    const { BeanInfo } = await import("../server/schema.js");
+    const bean = { ...mockBean("blend"), country: { value: ["Brazil", "Colombia"], source: "web" }, process: { value: ["Natural", "Washed"], source: "web" } };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(bean) }] } }] }))));
+    const out = await new GeminiApiProvider("k").structured({ system: "", prompt: "", schema: BeanInfo, schemaName: "BeanInfo", web: true });
+    expect(out.country.value).toBe("Brazil, Colombia");
+    expect(out.process.value).toBe("Natural, Washed");
+    expect(out.variety.value).toEqual(bean.variety.value);   // real lists stay lists
+  });
+});
+
+describe("dead links", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("drops pages the site says are gone, keeps the rest, and never fetches private addresses", async () => {
+    const replies: Record<string, Response> = {
+      "https://roaster.coffee/product/old": new Response(null, { status: 404 }),
+      "https://roaster.coffee/coffee/moved": new Response(null, { status: 301, headers: { location: "https://shop.roaster.coffee/coffee/moved" } }),
+      "https://shop.roaster.coffee/coffee/moved": new Response(null, { status: 404 }),
+      "https://roaster.coffee/products/real": new Response(null, { status: 429 }),
+      "https://retailer.shop/sneaky": new Response(null, { status: 302, headers: { location: "http://192.168.1.10/admin" } }),
+    };
+    const fetch = vi.fn(async (u: string) => replies[u] ?? new Response("ok"));
+    vi.stubGlobal("fetch", fetch);
+    const info = {
+      ...mockBean("light"),
+      productUrl: "https://roaster.coffee/product/old",
+      sources: ["https://roaster.coffee/products/real", "https://roaster.coffee/coffee/moved", "https://retailer.shop/sneaky", "https://example.com/coffee"],
+    };
+    const out = await dropDeadLinks(info);
+    expect(out.productUrl).toBeNull();
+    expect(out.sources).toEqual(["https://roaster.coffee/products/real", "https://retailer.shop/sneaky", "https://example.com/coffee"]);
+    const fetched = fetch.mock.calls.map((c) => c[0]);
+    expect(fetched).not.toContain("http://192.168.1.10/admin");
+    expect(fetched).not.toContain("https://example.com/coffee");
   });
 });
