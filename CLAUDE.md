@@ -39,7 +39,7 @@ Read next, as needed:
 | `evals/` | AI eval suite: labelled cases for identify, recommend and dial-in, fixtures, graders, runner, committed baselines (see `evals/README.md`) |
 | `demo/` | `crema-demo.html` (built single-file demo, embeddable as one HTML file), `walkthrough.html` (story reel) |
 | `docs/` | Docs, `screenshots/`, `media/` (README animation) |
-| `.github/workflows/` | `ci.yml` checks pull requests and `main`; `pages.yml` deploys `_site/` to GitHub Pages on push to `main`; `release.yml` attaches the skin ZIP to `v*` releases. Both run `ci.yml` first |
+| `.github/workflows/` | `ci.yml` checks pull requests and `main` (a `verify` job, and a `ui` job running the Playwright checks); `pages.yml` deploys `_site/` to GitHub Pages on push to `main`; `release.yml` attaches the skin ZIP to `v*` releases. Both run `ci.yml` first |
 | `Dockerfile`, `docker-compose.yml`, `.env.example` | Running the optional server |
 
 ## Commands
@@ -54,13 +54,13 @@ npm run mock:decaid         # simulated machine on :8080
 DECAID_URL=http://localhost:8080 LLM_PROVIDERS=mock npm start   # server on :8787, serves skin/
 ```
 
-UI checks (need Playwright with Chromium):
+UI checks (Playwright is a dev dependency; `npx playwright install chromium` once for the browser). CI runs all of these on every pull request:
 
 ```bash
 node scripts/e2e-demo.cjs            # click through the demo at tablet and phone size
 node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
 node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
-node scripts/check-tablet-fit.cjs    # home screen fits the DE1 tablet without scrolling
+node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
 ```
 

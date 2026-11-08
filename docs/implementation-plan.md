@@ -47,40 +47,44 @@ separate supervised step; implement and test locally first.
 
 | Phase | Work | Dependencies | Status / evidence |
 |---|---|---|---|
-| 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below |
+| 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
 | 1 | Machine-control reliability | Minimal test setup from 0 | Started: Stop cancels pending starts, double starts blocked (`scripts/e2e-controls.cjs`) |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Started: ratings use Decaid's 0–10 directly, shown as half stars |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Not started |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Not started |
-| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI job gates releases and Pages (passing on GitHub since PR #6); skin ZIP checked before publishing |
+| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI gates releases and Pages, with a `ui` job for the Playwright checks; tablet fit fails on overflow; skin ZIP checked before publishing |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
 
 ### Suggested next sessions
 
-Each is a self-contained piece of work that ends in its own PR. Items 2, 3 and 5 don't
-touch the same code and can run in parallel. Items 2 and 4 both edit `skin/app.js`, so
-run them one after the other.
+Each is a self-contained piece of work that ends in its own PR. Order agreed with the
+user on 8 November 2026: get the UI checks into CI and a way back to Decaid in place,
+then tag a pre-release and take a first, short look on the tablet before the rest of
+phase 1, so real-hardware findings can reshape phases 1–3.
 
-1. **Tag `v0.1.0`** from `main` (the user's call). The release workflow runs CI and
-   checks the ZIP first. Then install it on the tablet through Decaid's GitHub Release
-   route and record the Decaid version (finding 5).
+1. ~~**Reproducible UI checks**~~ (phase 0, finding 7; phase 6). *Done: Playwright
+   declared, the UI checks run in CI, tablet fit fails on overflow.*
 2. **Dashboard exit** (finding 1, phase 3). A Settings control that calls
    `window.decentApp.exitToDashboard()` only when it exists, hidden in a browser,
    disabled during an active operation, with a demo stub and an e2e check. Update
    `docs/install.md`, which sends users to Decaid's skin navigation setting instead.
-3. **Reproducible UI checks** (phase 0, finding 7; phase 6). Declare Playwright as a
-   dev dependency, document the browser install, and add `e2e-demo` (source and
-   `--built`), `check-tablet-fit` and `e2e-live` to `ci.yml`. Make `check-tablet-fit`
-   exit nonzero on overflow first (phase 6, first item).
+3. **Tag `v0.1.0` as a GitHub pre-release** from `main`. The release workflow runs CI
+   and checks the ZIP first. Then a short first look on the tablet: install through
+   Decaid's GitHub Release route, record the Decaid and WebView versions, the install
+   path labels (finding 5), whether the key-value store and shot-settings stream behave
+   as on desktop, the dashboard exit, and the tablet fit. Not yet for daily brewing.
 4. **Rest of phase 1**: link state and stale telemetry, workflow reconciliation on
-   boot/resume/return, bounded waits, and preparation overlapping a start. Needed before
-   relying on Crema at the machine every day.
-5. **Image-fetch security** (phase 5). Server only, independent of the skin.
+   boot/resume/return, bounded waits, and preparation overlapping a start, informed by
+   item 3. Needed before relying on Crema at the machine every day.
+5. **Image-fetch security** (phase 5). Server only, independent of the skin; can run
+   any time, in parallel with the others.
 6. **Rest of phase 2**: installed Decaid profiles as the library, shot pagination and
    pinned references by ID, then per-batch bag state with a migration.
 7. **Streamline Settings entry and the parity audit** (phase 3), after items 2 and 4.
-8. **Supervised tablet session** (phase 7), once 1–4 are in.
+8. **Supervised tablet session** (phase 7), once 2–4 are in.
+
+Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 
 Small follow-up: the README screenshots and walkthrough still show the old boxed
 rating buttons (`refresh-demo-assets` skill; no AI reseeding needed).
@@ -142,6 +146,7 @@ building on them.
    not as verified routes.
 7. **Playwright is installed globally, not declared (phase 0, R11).** The UI scripts
    only work where `playwright` is installed globally. A fresh checkout can't run them.
+   *Fixed: Playwright is a dev dependency and CI's `ui` job runs the UI checks.*
 
 ## Phase 0 — compatibility baseline and test setup
 
@@ -190,8 +195,13 @@ the Android tablet.
   inspected. Identify minimum supported capabilities from evidence, not guesses.
   Record the actual tablet/Android WebView versions when accessible; do not block
   local implementation on obtaining them.
-- [ ] Make browser tests reproducible from the repository: declare Playwright,
+- [x] Make browser tests reproducible from the repository: declare Playwright,
   document browser installation, and use a Node version supported by all test tools.
+  *Done: `playwright` is a dev dependency (locked in `package-lock.json`); README,
+  `CLAUDE.md` and the verify skill give `npx playwright install chromium`. CI's `ui` job
+  installs Chromium on Node 22 (the `engines` minimum) and runs `e2e-demo` (source and
+  `--built`), `e2e-controls` (both), `check-tablet-fit` and `e2e-live`; locally they
+  also pass on Node 25.*
 - [ ] Capture small, anonymized upstream fixtures or schema-based contract tests
   for workflow, machine/device/scale streams, profiles, shots and store values.
   Note each fixture's upstream version. Do not create fixtures solely from Crema's mock.
@@ -200,7 +210,7 @@ the Android tablet.
 
 Acceptance: a fresh checkout can install dependencies and run the documented local
 checks; fixtures identify their provenance; supported and unverified combinations
-are distinguishable. Existing 38 passing tests are a baseline, not a parity claim.
+are distinguishable. The existing tests (93 passing on 8 November 2026) are a baseline, not a parity claim.
 
 ## Phase 1 — machine-control reliability (R1–R3)
 
@@ -398,9 +408,12 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
 
 ## Phase 6 — verification and distribution (R10–R12)
 
-- [ ] Make tablet-fit checks exit nonzero for page/column overflow, horizontal
+- [x] Make tablet-fit checks exit nonzero for page/column overflow, horizontal
   scrolling and page errors. Check both before and after a shot. Correct the
   verification skill's claim once the behaviour is actually enforced.
+  *Done: `check-tablet-fit.cjs` lists every problem and exits 1. Checked against a copy
+  of the skin with a column padded to overflow (fails at all five sizes) and against
+  `main` (passes). It also waits for web fonts before measuring.*
 - [ ] Extend live browser tests to pull/stop a shot and verify the recorded workflow,
   rating and reference. Add phase 1 failure/race cases, API-contract cases, two-client
   changes, multiple bags and settings round trips. Remove success-on-missing-data
@@ -412,8 +425,8 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
   (typecheck, `npm test` including engine freshness, skin syntax, built demo matches
   source, skin ZIP check), and `release.yml` and `pages.yml` call it first. It passed
   on GitHub for PR #6 and the merge to `main` (8 November 2026); the release path
-  hasn't run yet because no tag exists. Still missing: the Playwright UI checks, which
-  need Playwright declared (phase 0).*
+  hasn't run yet because no tag exists. The Playwright UI checks run in a parallel
+  `ui` job and upload screenshots when one fails.*
 - [ ] Preserve root `index.html`, skin metadata, relative asset paths and semantic
   version tags. Include the actual project repository in release metadata where
   appropriate. Do not ship test tooling or credentials inside the skin.

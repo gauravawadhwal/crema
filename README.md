@@ -185,7 +185,7 @@ npm run check:tablet
 
 - `npm test` covers the server (identify → recommend → dial-in with the mock LLM, and the proxy) and checks `skin/engine.js` is up to date with `server/`. Rebuild it with `npm run build:engine`.
 - `npm run eval` measures the AI itself: 90 labelled cases for coffee identification, profile recommendation and dial-in advice, run through the real pipeline with any provider and model, with cost, latency and regression checks against committed baselines. See [evals/README.md](evals/README.md).
-- `npm run e2e` clicks through the demo at tablet and phone size. `npm run e2e:live` runs the app against the simulator with no server, with the server, with the server stopped, with AI switched off, and from a phone through the server. `npm run check:tablet` confirms the home screen fits a 1340 × 800 tablet without scrolling. All three need Playwright.
+- `npm run e2e` clicks through the demo at tablet and phone size. `npm run e2e:live` runs the app against the simulator with no server, with the server, with the server stopped, with AI switched off, and from a phone through the server. `npm run check:tablet` fails if the home screen doesn't fit a 1340 × 800 tablet without scrolling. Playwright is a dev dependency; run `npx playwright install chromium` once to download its browser. CI runs all of these on every pull request.
 
 **For contributors and coding agents:** start with [CLAUDE.md](CLAUDE.md), which covers the layout, commands, conventions and known pitfalls. Then read [docs/architecture.md](docs/architecture.md) and [docs/design.md](docs/design.md). Repeatable workflows are in `.claude/skills/`.
 

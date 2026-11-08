@@ -1,8 +1,8 @@
 # Checks every pull request and push to main. The release and Pages workflows
 # call this first, so a failing check stops a skin release or a site deploy.
 #
-# Not here yet: the Playwright UI checks (e2e-demo, e2e-live, check-tablet-fit),
-# because Playwright isn't a declared dependency. Run them locally (verify-crema skill).
+# Two jobs run side by side: `verify` (types, unit and server tests, generated files,
+# the skin ZIP) and `ui` (the Playwright checks in a real Chromium).
 name: CI
 
 on:
@@ -38,3 +38,44 @@ jobs:
         run: |
           node scripts/package-skin.mjs
           node scripts/check-skin-zip.mjs
+
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The browser build is tied to the Playwright version in package-lock.json.
+      - name: Cache Playwright's Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium's system libraries
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: Click-through, source app
+        run: node scripts/e2e-demo.cjs --shots ui-shots/demo
+      - name: Click-through, built single-file demo
+        run: node scripts/e2e-demo.cjs --built
+      - name: Stop and start races
+        run: node scripts/e2e-controls.cjs && node scripts/e2e-controls.cjs --built
+      - name: Home screen fits the tablet
+        run: node scripts/check-tablet-fit.cjs ui-shots/fit
+      - name: Live mode against the simulator
+        run: node scripts/e2e-live.cjs
+      - name: Keep screenshots when a check fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: ui-shots/
+          retention-days: 7
