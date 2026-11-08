@@ -97,7 +97,7 @@ Everything is set with environment variables on the server.
 | `LLM_PROVIDERS` | `claude-cli,codex-cli` | AI providers, tried in order: `claude-cli`, `codex-cli`, `anthropic-api`, `gemini-api`, `mock` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | none | For `claude-cli`: run `claude setup-token` on any computer to get one. Billed to your Claude plan |
 | `CLAUDE_BIN`, `CLAUDE_CLI_MODEL` | `claude`, `opus` | Claude Code CLI binary and model |
-| `CODEX_BIN`, `CODEX_MODEL` | `codex`, the CLI's default | For `codex-cli`, after `codex login`. Billed to your ChatGPT plan |
+| `CODEX_BIN`, `CODEX_MODEL`, `CODEX_REASONING_EFFORT` | `codex`, the CLI's defaults | For `codex-cli`, after `codex login`. Billed to your ChatGPT plan. Effort is `low`, `medium` or `high`; coffee identification needs little, so `low` keeps it fast and cheap |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | none, `claude-opus-5-5` | For `anthropic-api`, billed per token |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token. A key also switches on speaking into "Describe it" (Gemini writes down your voice note), even when `LLM_PROVIDERS` doesn't list `gemini-api` |
 | `GEMINI_VOICE_MODEL` | `GEMINI_MODEL` | The Gemini model that transcribes voice notes. Each tablet or phone can switch to its own speech recognition instead, in Settings → AI features |

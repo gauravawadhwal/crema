@@ -85,48 +85,54 @@ If there is no speech, or only noise, return an empty string. Never invent words
   }
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
-    const schemaText = JSON.stringify(jsonSchemaFor(req.schema));
-    const body = {
-      systemInstruction: { parts: [{ text: req.system }] },
-      contents: [
-        {
-          role: "user",
-          parts: [
-            ...(req.images ?? []).map((img) => ({
-              inline_data: { mime_type: img.mediaType, data: img.data.toString("base64") },
-            })),
-            {
-              text: `${req.prompt}\n\nReply with only a JSON object matching this JSON Schema (${req.schemaName}):\n${schemaText}`,
-            },
-          ],
-        },
-      ],
-      tools: req.web ? [{ google_search: {} }] : undefined,
-    };
-    const text = await this.generate(this.model, body, req.onUsage);
-    try {
-      const raw = extractJson(text);
-      const first = req.schema.safeParse(raw);
-      if (first.success) return first.data;
-      // With search grounding the schema is only described, not enforced, and Gemini sometimes
-      // answers a text field with a list (a blend's countries). Join those and try once more.
-      return req.schema.parse(joinListsWhereTextExpected(raw, first.error.issues));
-    } catch (e) {
-      throw new ProviderError(this.id, `could not parse reply: ${(e as Error).message}`, e);
+    const jsonSchema = jsonSchemaFor(req.schema);
+    const images = (req.images ?? []).map((img) => ({ inline_data: { mime_type: img.mediaType, data: img.data.toString("base64") } }));
+    // Without search, Gemini enforces the schema itself, so the reply is always well-formed JSON.
+    // With search grounding the schema can only be described in the prompt, so the reply is
+    // repaired where it slips and, if it still won't parse, asked for once more.
+    const body = req.web
+      ? {
+          systemInstruction: { parts: [{ text: req.system }] },
+          contents: [{ role: "user", parts: [...images, { text: `${req.prompt}\n\nReply with only a JSON object matching this JSON Schema (${req.schemaName}):\n${JSON.stringify(jsonSchema)}` }] }],
+          tools: [{ google_search: {} }],
+        }
+      : {
+          systemInstruction: { parts: [{ text: req.system }] },
+          contents: [{ role: "user", parts: [...images, { text: req.prompt }] }],
+          generationConfig: { responseMimeType: "application/json", responseJsonSchema: jsonSchema },
+        };
+    let last: unknown;
+    for (let attempt = 0; attempt < (req.web ? 2 : 1); attempt++) {
+      const text = await this.generate(this.model, body, req.onUsage);
+      try {
+        const raw = extractJson(text);
+        const first = req.schema.safeParse(raw);
+        if (first.success) return first.data;
+        // Harmless type slips: a list for a text field (a blend's countries), a number as text ("1400").
+        return req.schema.parse(repairTypes(raw, first.error.issues));
+      } catch (e) {
+        last = e;
+      }
     }
+    throw new ProviderError(this.id, `could not parse reply: ${(last as Error).message}`, last);
   }
 }
 
-/** For each "expected string, received array" issue whose array holds only strings, join it with ", ". */
-export function joinListsWhereTextExpected(raw: unknown, issues: readonly z.core.$ZodIssue[]): unknown {
+/**
+ * Fixes two harmless type slips, issue by issue: a list of strings where text is
+ * expected is joined with ", ", and text holding a plain number where a number is
+ * expected becomes that number. Anything else is left for the schema to reject.
+ */
+export function repairTypes(raw: unknown, issues: readonly z.core.$ZodIssue[]): unknown {
   const copy = structuredClone(raw) as Record<string, unknown>;
   for (const issue of issues) {
-    if (issue.code !== "invalid_type" || issue.expected !== "string" || !issue.path.length) continue;
+    if (issue.code !== "invalid_type" || !issue.path.length) continue;
     let parent: any = copy;
     for (const key of issue.path.slice(0, -1)) parent = parent?.[key as keyof typeof parent];
     const last = issue.path.at(-1) as string | number;
     const value = parent?.[last];
-    if (Array.isArray(value) && value.every((x) => typeof x === "string")) parent[last] = value.join(", ");
+    if (issue.expected === "string" && Array.isArray(value) && value.every((x) => typeof x === "string")) parent[last] = value.join(", ");
+    else if (issue.expected === "number" && typeof value === "string" && /^\s*-?[\d,]*\.?\d+\s*$/.test(value)) parent[last] = Number(value.replace(/[,\s]/g, ""));
   }
   return copy;
 }

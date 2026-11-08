@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../server/app.js";
-import { dropDeadLinks, identify, isRoasterSite, preferRoasterPages, resolveGroundingLinks } from "../server/identify.js";
+import { dropDeadLinks, identify, isRoasterSite, preferRoasterPages, resolveGroundingLinks, tidyConfirmations } from "../server/identify.js";
 import { mockBean } from "../server/llm/mock.js";
 import { ProviderChain } from "../server/llm/index.js";
 import type { StructuredRequest } from "../server/llm/types.js";
@@ -176,5 +176,49 @@ describe("dead links", () => {
     const fetched = fetch.mock.calls.map((c) => c[0]);
     expect(fetched).not.toContain("http://192.168.1.10/admin");
     expect(fetched).not.toContain("https://example.com/coffee");
+  });
+});
+
+describe("fields flagged for checking", () => {
+  it("keeps guesses, drops fields that were simply not found, and always asks for a missing roast date", () => {
+    const base = mockBean("light");
+    const info = {
+      ...base,
+      name: { value: "La Fincona", source: "inferred" as const },          // corrected from "lafing kona"
+      altitudeMasl: { value: null, source: null },                          // not found
+      producer: { value: null, source: null },                              // not found
+      roastLevel: { value: "light" as const, source: "web" as const },
+      roastDate: { value: null, source: null },
+      weightGrams: null,
+      needsConfirmation: ["altitudeMasl", "producer", "weightGrams", "roastLevel", "notAField"],
+    };
+    expect(tidyConfirmations(info).needsConfirmation).toEqual(["roastLevel", "name", "roastDate"]);
+  });
+
+  it("keeps a flagged roast date even when one was worked out", () => {
+    const info = { ...mockBean("light"), roastDate: { value: "2026-11-02", source: "bag" as const }, needsConfirmation: ["roastDate"] };
+    expect(tidyConfirmations(info).needsConfirmation).toEqual(["roastDate", "roastLevel"]);
+  });
+});
+
+describe("Gemini replies with numbers as text", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("turns plain numeric text into numbers, and leaves real text alone", async () => {
+    const { GeminiApiProvider } = await import("../server/llm/gemini-api.js");
+    const { BeanInfo } = await import("../server/schema.js");
+    const bean = { ...mockBean("light"), altitudeMasl: { value: ["1,400", "1600"], source: "web" }, weightGrams: "250" };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(bean) }] } }] }))));
+    const out = await new GeminiApiProvider("k").structured({ system: "", prompt: "", schema: BeanInfo, schemaName: "BeanInfo", web: true });
+    expect(out.altitudeMasl.value).toEqual([1400, 1600]);
+    expect(out.weightGrams).toBe(250);
+  });
+
+  it("still rejects text that isn't a number", async () => {
+    const { GeminiApiProvider } = await import("../server/llm/gemini-api.js");
+    const { BeanInfo } = await import("../server/schema.js");
+    const bean = { ...mockBean("light"), weightGrams: "about a quarter kilo" };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(bean) }] } }] }))));
+    await expect(new GeminiApiProvider("k").structured({ system: "", prompt: "", schema: BeanInfo, schemaName: "BeanInfo", web: true })).rejects.toThrow(/could not parse/);
   });
 });
