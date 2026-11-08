@@ -14,7 +14,7 @@ It runs on the DE1's tablet in place of the stock Decent interface, and the same
 - **Decaid** is Decent's open-source app on that tablet. It talks to the machine and scale over Bluetooth, stores your coffees, profiles and shots, and lets anyone build their own interface as a web page (a "skin").
 - **Crema** is such a skin, plus an optional server at home:
   - The skin is the interface you touch: machine controls, live shot chart, coffee shelf, profiles, shot history and settings. It controls the machine through Decaid and keeps its own data in Decaid too, so it works on the tablet alone. Its rules pick a profile, recipe and dial-in changes for each coffee.
-  - The optional server adds AI: it identifies coffees from a bag photo, a search or a link, and makes the profile choice and dial-in advice with an LLM (a Claude or ChatGPT subscription via their CLIs, or an API key). AI can be switched off in Settings, and if the server stops answering, the rules take over.
+  - The optional server adds AI: it identifies coffees from a bag photo, a description you type or say, or a link, and makes the profile choice and dial-in advice with an LLM (a Claude or ChatGPT subscription via their CLIs, or an API key). AI can be switched off in Settings, and if the server stops answering, the rules take over.
 - **On a phone** it's the same web app, added to the home screen from the browser. There's no app store app.
 
 **To install it, see [docs/install.md](docs/install.md).**
@@ -134,9 +134,11 @@ LLM_PROVIDERS=claude-cli,codex-cli npm start
 | Provider | Setup on the host | Billed to |
 |---|---|---|
 | `claude-cli` | `npm i -g @anthropic-ai/claude-code`, then `claude setup-token` and export `CLAUDE_CODE_OAUTH_TOKEN` | Claude Pro/Max |
-| `codex-cli` | `npm i -g @openai/codex`, then `codex login` | ChatGPT Plus/Pro |
+| `codex-cli` | `npm i -g @openai/codex`, then `codex login` (in Docker, `codex login --device-auth` inside the container: see [install](docs/install.md#logging-codex-in)) | ChatGPT Plus/Pro |
 | `anthropic-api` | `ANTHROPIC_API_KEY` | per token |
 | `gemini-api` | `GEMINI_API_KEY` (optional `GEMINI_MODEL`) | per token / free tier |
+
+A `GEMINI_API_KEY` also lets you speak into "Describe it": Gemini transcribes the voice note, whichever provider then identifies the coffee.
 
 Subscription CLIs suit a personal installation; use API keys for anything shared.
 
@@ -150,8 +152,9 @@ The server is stateless: it answers questions and stores nothing but cached prod
 
 | Method | Path | Does |
 |---|---|---|
-| `GET` | `/api/config` | provider chain, and the Decaid address when `DECAID_URL` is set |
-| `POST` | `/api/identify` | multipart `images[]`, `query`, `url`, `offline` → coffee record |
+| `GET` | `/api/config` | provider chain, `voice` (the provider that transcribes, or null), and the Decaid address when `DECAID_URL` is set |
+| `POST` | `/api/identify` | multipart `images[]`, `query`, `description` (with `today`, YYYY-MM-DD), `url`, `offline` → coffee record |
+| `POST` | `/api/transcribe` | multipart `audio` (WAV, up to 4 MB) → `{text, provider}`. Needs `GEMINI_API_KEY`; 501 without one |
 | `POST` | `/api/recommend` | `{bean, profileTitles?, history?, preferences?}` → recipe chosen by the AI among the installed profiles |
 | `POST` | `/api/dialin` | `{bean, recipe, shot, feedback, history?}` → the next adjustment |
 | `POST` | `/api/images/cache` | `{url}` → a cached copy of a roaster's product photo |
@@ -181,6 +184,7 @@ npm run check:tablet
 ```
 
 - `npm test` covers the server (identify → recommend → dial-in with the mock LLM, and the proxy) and checks `skin/engine.js` is up to date with `server/`. Rebuild it with `npm run build:engine`.
+- `npm run eval` measures the AI itself: 90 labelled cases for coffee identification, profile recommendation and dial-in advice, run through the real pipeline with any provider and model, with cost, latency and regression checks against committed baselines. See [evals/README.md](evals/README.md).
 - `npm run e2e` clicks through the demo at tablet and phone size. `npm run e2e:live` runs the app against the simulator with no server, with the server, with the server stopped, with AI switched off, and from a phone through the server. `npm run check:tablet` confirms the home screen fits a 1340 × 800 tablet without scrolling. All three need Playwright.
 
 **For contributors and coding agents:** start with [CLAUDE.md](CLAUDE.md), which covers the layout, commands, conventions and known pitfalls. Then read [docs/architecture.md](docs/architecture.md) and [docs/design.md](docs/design.md). Repeatable workflows are in `.claude/skills/`.

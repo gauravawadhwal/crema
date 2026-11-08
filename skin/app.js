@@ -196,11 +196,14 @@ function makeLiveApi(conn) {
     demo: false,
     info: {
       providers: conn.cremaInfo?.providers ?? [],
+      voice: conn.cremaInfo?.voice ?? null,
       decaidUrl: conn.decaid === "/decaid" ? conn.cremaInfo?.decaidUrl : conn.decaid,
       server: conn.crema == null ? null : conn.crema || location.origin,
       serverError: conn.cremaError || null,
     },
-    ai: { get available() { return conn.crema != null; }, get enabled() { return settings.aiEnabled !== false; }, get on() { return aiOn(); }, get healthy() { return healthy; } },
+    ai: { get available() { return conn.crema != null; }, get enabled() { return settings.aiEnabled !== false; }, get on() { return aiOn(); }, get healthy() { return healthy; },
+      // The server can turn a voice note into text (Gemini).
+      get voice() { return aiOn() && !!conn.cremaInfo?.voice; } },
     settings: {
       async get() { settings = { ...E.DEFAULT_SETTINGS, ...(await kvGet("settings", {})) }; return { ...settings }; },
       async set(p) { settings = { ...settings, ...p }; await kvSet("settings", settings); return { ...settings }; },
@@ -226,13 +229,21 @@ function makeLiveApi(conn) {
       return rows.filter(Boolean);
     },
 
-    async identify({ files, query, url, offline }, onStep) {
+    async identify({ files, query, description, url, offline }, onStep) {
       if (!aiOn()) throw new Error(conn.crema == null ? "Identifying needs a Crema server. Enter the details by hand instead." : "AI features are off. Enter the details by hand, or switch AI on in Settings.");
       onStep(0, [files?.length ? "Reading the bag and finding the roaster's page" : "Looking up the coffee", "Building the record"]);
       const fd = new FormData();
       (files || []).forEach((f) => fd.append("images", f));
       if (query) fd.set("query", query); if (url) fd.set("url", url); if (offline) fd.set("offline", "true");
+      // The tablet's own date, so "roasted last Tuesday" resolves in the user's time zone.
+      if (description) { fd.set("description", description); fd.set("today", new Date().toLocaleDateString("en-CA")); }
       return (await cremaCall(() => j(C("/api/identify"), { method: "POST", body: fd }))).info;
+    },
+
+    async transcribe(wav) {
+      if (!this.ai.voice) throw new Error("Speaking needs a Crema server with a Gemini API key.");
+      const fd = new FormData(); fd.append("audio", wav, "voice.wav");
+      return (await cremaCall(() => j(C("/api/transcribe"), { method: "POST", body: fd }))).text;
     },
 
     async saveBean(info, photo, art) {
@@ -918,12 +929,224 @@ const MANUAL_INTRO = `<h2>Entering a coffee by hand</h2>
   </ul>`;
 const introFor = (m) => (m === "manual" ? MANUAL_INTRO : REVIEW_INTRO);
 function setMode(m) {
+  if (m !== "describe") stopListening(false);
   addMode = m;
   $$("[data-mode]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
   $$("[data-pane]").forEach((p) => (p.hidden = p.dataset.pane !== m));
   $("#offlineRow").hidden = m === "manual";
   $("#identifyBtn").textContent = m === "manual" ? "Review" : "Identify coffee";
   if (!pending) $("#reviewPanel").innerHTML = introFor(m);
+  if (m === "describe") renderSpeak();
+}
+
+/* Speaking into "Describe it". Two ways, chosen per device in Settings → AI features:
+   - Gemini: record a voice note, stop after a pause, send it to the Crema server as 16 kHz mono
+     WAV, and Gemini writes it down knowing it's about a coffee bag (roaster names and origins).
+     Used when chosen and the server has a Gemini key; otherwise the next one.
+   - This device: the browser's own speech recognition (Chrome, Safari).
+   Both need the microphone, which browsers allow only on https or localhost pages. Elsewhere, such
+   as a phone on the tablet's plain-http address, the keyboard's microphone fills the same box.
+   Either way the text then takes the same path as typing: /api/identify with LLM_PROVIDERS. */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+// A refused microphone hides Speak on this device until the voice setting is changed. Decaid
+// never gives skins the microphone (camera only), so inside Decaid this happens on the first tap.
+let listening = null, speechBroken = local.get("speechDenied", false), micBroken = local.get("micDenied", false);
+function noMicrophone() {
+  micBroken = speechBroken = true;
+  local.set("micDenied", true); local.set("speechDenied", true);
+  toast("The microphone isn't available here, so Speak is hidden. Use your keyboard's microphone instead.");
+}
+const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && AudioCtx && window.isSecureContext && !micBroken);
+const canSpeak = () => !!SpeechRec && window.isSecureContext && !speechBroken;
+const voicePref = () => (local.get("voice", "gemini") === "device" ? "device" : "gemini");
+const voiceKind = () => (voicePref() === "gemini" && S.api.ai.voice && canRecord() ? "gemini" : canSpeak() ? "browser" : null);
+function voiceHint() {
+  const fallback = canSpeak() ? "this device's speech recognition" : "your keyboard's microphone";
+  if (micBroken && window.isSecureContext) return "The microphone isn't available to this page (Decaid doesn't give skins one), so use your keyboard's microphone. Choose an option to try again";
+  if (voicePref() === "device") return `Uses ${fallback}. Nothing goes to Gemini. Set on each device`;
+  if (!S.api.ai.voice) return `Needs a Gemini API key on the Crema server. Until then, uses ${fallback}`;
+  if (!canRecord()) return `This page can't use the microphone (it needs https or the tablet itself), so it uses ${fallback}`;
+  return "Your voice note goes to Gemini through the Crema server, which spells coffee names well. Set on each device";
+}
+function renderSpeak() {
+  const btn = $("#speakBtn"), kind = voiceKind(), state = listening?.state;
+  btn.hidden = !kind && !listening;
+  btn.disabled = state === "writing";
+  btn.setAttribute("aria-pressed", String(state === "listening"));
+  btn.querySelector("span").textContent = state === "listening" ? "Stop" : state === "writing" ? "Writing…" : "Speak";
+  if (state !== "listening") btn.style.removeProperty("--level");
+  $("#speakHint").textContent = state === "listening" ? "Listening. Say the roaster and name, plus the roast date and weight if you have them."
+    : state === "writing" ? "Writing down what you said…"
+    : kind ? "Tap Speak and say what's on the bag. Crema looks it up when you stop talking."
+    : "Type it, or dictate with your keyboard's microphone. Roaster and name are enough; add the roast date and weight if you have them.";
+}
+const describeAndGo = () => { if (addMode === "describe" && !$("#view-add").hidden) $("#identifyBtn").click(); };
+const appendToBox = (text) => { const box = $("#describeInput"); box.value = [box.value.trim(), text.trim()].filter(Boolean).join(" "); };
+function startListening() { return voiceKind() === "gemini" ? startRecording() : startBrowserSpeech(); }
+// go=false cancels: nothing is sent or looked up.
+function stopListening(go = true) {
+  if (listening?.state === "listening") listening.stop(go);
+  else if (!go && listening?.state === "writing") { listening = null; renderSpeak(); }   // its transcript is dropped
+}
+
+async function startRecording() {
+  // Until the microphone is open, Stop cancels; recordVoice replaces this.
+  const me = { kind: "gemini", state: "listening", stop: () => { me.cancelled = true; if (listening === me) listening = null; renderSpeak(); } };
+  listening = me; renderSpeak();
+  let wav;
+  try {
+    wav = await recordVoice(me, (level) => $("#speakBtn").style.setProperty("--level", level.toFixed(2)));
+  } catch (err) {
+    if (listening === me) listening = null;
+    if (err.name === "NotAllowedError" || err.name === "SecurityError") noMicrophone();
+    else { micBroken = true; toast("Couldn't use the microphone here. Use your keyboard's microphone instead."); }
+    return renderSpeak();
+  }
+  if (listening !== me) return;                          // cancelled
+  if (!wav) { listening = null; renderSpeak(); return toast("Didn't hear anything. Try again a little closer."); }
+  me.state = "writing"; renderSpeak();
+  try {
+    const text = await S.api.transcribe(wav);
+    if (listening !== me) return;
+    listening = null; renderSpeak();
+    if (!text) return toast("Didn't catch any words. Try again a little closer.");
+    appendToBox(text);
+    describeAndGo();
+  } catch (err) {
+    if (listening === me) listening = null;
+    renderSpeak();
+    toast(`Couldn't write that down: ${err.message}. Type it instead.`);
+  }
+}
+
+/* Records until the speaker pauses (or Stop, or 30 s) and returns a WAV blob, or null when
+   nobody spoke. ctl.stop(go) ends it early; go=false throws the recording away. */
+async function recordVoice(ctl, onLevel) {
+  const ac = new AudioCtx();                             // made inside the tap, so iOS lets it run
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (e) { ac.close(); throw e; }
+  if (ctl.cancelled) { stream.getTracks().forEach((t) => t.stop()); ac.close(); return null; }
+  await ac.resume();
+  const src = ac.createMediaStreamSource(stream), mute = ac.createGain(); mute.gain.value = 0;
+  const chunks = [], gate = voiceGate(performance.now());
+  let tap;
+  return new Promise((resolve) => {
+    let done = false, timer = null;
+    const finish = (keep) => {
+      if (done) return; done = true;
+      clearInterval(timer);
+      try { tap.disconnect(); src.disconnect(); } catch {}
+      stream.getTracks().forEach((t) => t.stop()); ac.close();
+      resolve(keep && gate.heard ? encodeWav(downsample(chunks, ac.sampleRate, 16000), 16000) : null);
+    };
+    ctl.stop = (go = true) => { if (!go && listening === ctl) listening = null; finish(go); renderSpeak(); };
+    const onChunk = (buf) => {
+      if (done) return;
+      chunks.push(buf);
+      onLevel(gate.push(buf, performance.now()));
+    };
+    // Checked on a clock, not per chunk, so it still ends if the microphone stops sending.
+    timer = setInterval(() => { if (gate.check(performance.now())) finish(true); }, 100);
+    stream.getAudioTracks()[0]?.addEventListener("ended", () => finish(true));
+    // An AudioWorklet where there is one; the older ScriptProcessor otherwise.
+    (async () => {
+      if (ac.audioWorklet && window.AudioWorkletNode) {
+        try {
+          const code = `registerProcessor("crema-tap", class extends AudioWorkletProcessor {
+            constructor() { super(); this.buf = new Float32Array(2048); this.n = 0; }
+            process(inputs) { const ch = inputs[0] && inputs[0][0]; if (ch) for (let i = 0; i < ch.length; i++) { this.buf[this.n++] = ch[i]; if (this.n === this.buf.length) { this.port.postMessage(this.buf.slice()); this.n = 0; } } return true; } });`;
+          const url = URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
+          await ac.audioWorklet.addModule(url); URL.revokeObjectURL(url);
+          if (done) return;
+          tap = new AudioWorkletNode(ac, "crema-tap");
+          tap.port.onmessage = (e) => onChunk(e.data);
+        } catch { tap = null; }
+      }
+      if (done) return;
+      if (!tap) { tap = ac.createScriptProcessor(2048, 1, 1); tap.onaudioprocess = (e) => onChunk(new Float32Array(e.inputBuffer.getChannelData(0))); }
+      if (done) return;
+      src.connect(tap); tap.connect(mute); mute.connect(ac.destination);
+    })().catch(() => finish(false));
+  });
+}
+/* When to stop recording: after a 1.6 s pause once someone has spoken, after 8 s if nobody
+   has, or at 30 s. Speech is anything well above the room's noise floor (the quietest moment
+   so far, drifting up slowly), so a fan or the machine's pump doesn't count. */
+function voiceGate(t0) {
+  let floor = null, quietSince = null;
+  const g = {
+    heard: false,
+    push(buf, now) {                                     // → level for the meter, 0–1
+      let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / buf.length);
+      floor = floor == null ? rms : Math.min(rms, floor * 1.002);
+      // Capped, so a voice that starts the moment recording does still counts as speech.
+      if (rms > Math.max(0.012, Math.min(floor * 3, 0.06))) { g.heard = true; quietSince = null; } else if (quietSince == null) quietSince = now;
+      return Math.min(1, rms / 0.12);
+    },
+    check(now) {                                         // → why to stop, or null
+      if (g.heard && quietSince != null && now - quietSince > 1600) return "pause";
+      if (!g.heard && now - t0 > 8000) return "silent";
+      if (now - t0 > 30000) return "max";
+      return null;
+    },
+  };
+  return g;
+}
+// Averages each output sample's span of input: a crude low-pass that's plenty for speech.
+function downsample(chunks, from, to) {
+  const len = chunks.reduce((n, c) => n + c.length, 0), all = new Float32Array(len);
+  let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
+  if (from <= to) return all;
+  const ratio = from / to, out = new Float32Array(Math.floor(len / ratio));
+  for (let i = 0; i < out.length; i++) {
+    const a = Math.floor(i * ratio), b = Math.min(len, Math.floor((i + 1) * ratio));
+    let sum = 0; for (let k = a; k < b; k++) sum += all[k];
+    out[i] = sum / Math.max(1, b - a);
+  }
+  return out;
+}
+function encodeWav(samples, rate) {
+  const v = new DataView(new ArrayBuffer(44 + samples.length * 2));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + samples.length * 2, true); str(8, "WAVE");
+  str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) { const x = Math.max(-1, Math.min(1, samples[i])); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true); }
+  return new Blob([v], { type: "audio/wav" });
+}
+
+function startBrowserSpeech() {
+  const box = $("#describeInput"), before = box.value.trim();
+  const r = new SpeechRec();
+  r.lang = navigator.language || "en-US"; r.continuous = true; r.interimResults = true;
+  const me = { kind: "browser", state: "listening", stop: (go) => { if (!go) { me.cancelled = true; r.abort(); } else r.stop(); } };
+  let heard = false, silence = null;
+  r.onresult = (e) => {
+    const said = Array.from(e.results, (x) => x[0].transcript).join("").trim();
+    box.value = [before, said].filter(Boolean).join(" ");
+    heard = !!said;
+    clearTimeout(silence); silence = setTimeout(() => r.stop(), 2500);
+  };
+  r.onerror = (e) => {
+    me.failed = true;
+    if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) {
+      if (e.error === "not-allowed") noMicrophone();
+      else { speechBroken = true; toast("Speech recognition isn't available here. Use your keyboard's microphone instead."); }
+    } else if (e.error === "no-speech") toast("Didn't hear anything. Try again a little closer.");
+    else if (e.error === "network") toast("Speech recognition needs an internet connection. Type it instead.");
+  };
+  r.onend = () => {
+    clearTimeout(silence);
+    if (listening === me) listening = null;
+    renderSpeak();
+    if (heard && !me.failed && !me.cancelled) describeAndGo();
+  };
+  try { r.start(); } catch { toast("Couldn't start listening. Type it instead."); return; }
+  listening = me; renderSpeak();
 }
 // Without AI (switched off, or no Crema server) the only way in is typing the details.
 function renderAddModes() {
@@ -932,7 +1155,7 @@ function renderAddModes() {
   $("#addModes").hidden = !ai;
   $("#addNoAi").hidden = ai;
   $("#addNoAi").textContent = S.api.ai.enabled
-    ? "Identifying from photos, searches and links needs a Crema server. Enter the details from the bag instead."
+    ? "Identifying from photos, descriptions and links needs a Crema server. Enter the details from the bag instead."
     : "AI features are off, so enter the details from the bag. Switch AI on in Settings to identify coffees from photos.";
   if (!ai && addMode !== "manual") setMode("manual");
 }
@@ -1007,15 +1230,16 @@ function renderReview(info, photo) {
 }
 async function onIdentify(e) {
   e.preventDefault();
-  const query = $("#queryInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
-  const input = addMode === "photo" ? { files } : addMode === "search" ? { query } : { url };
+  stopListening(false);
+  const description = $("#describeInput").value.trim(), url = $("#urlInput").value.trim(), offline = $("#offlineInput").checked;
+  const input = addMode === "photo" ? { files } : addMode === "describe" ? { description } : { url };
   if (addMode === "manual") {
     const info = manualInfo();
     if (!info.roaster.value || !info.name.value) return toast("Enter at least the roaster and the coffee's name");
     return renderReview(info, null);
   }
   if (addMode === "photo" && !files.length) return toast("Add a photo of the bag first");
-  if (addMode === "search" && !query) return toast("Type a roaster and coffee name");
+  if (addMode === "describe" && !description) return toast(canSpeak() ? "Say or type the roaster and coffee name" : "Type the roaster and coffee name");
   if (addMode === "link" && !url) return toast("Paste a product link");
   const btn = $("#identifyBtn"); btn.disabled = true;
   const panel = $("#reviewPanel");
@@ -1024,7 +1248,7 @@ async function onIdentify(e) {
     const info = await S.api.identify({ ...input, offline }, draw);
     renderReview(info, files[0] ? await thumbnail(files[0]) : null);
   } catch (err) {
-    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or search by roaster and name.</p>`;
+    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or describe it again with the roaster's name first.</p>`;
   }
   btn.disabled = false;
 }
@@ -1215,6 +1439,7 @@ async function renderSettings() {
   <div class="panel stack"><h2>AI features</h2>
     <div class="set-row first"><span>Use AI<span class="hint">${aiHint(ai)}</span></span>${sw("sAi", ai.enabled)}</div>
     ${ai.enabled && S.api.ai.available ? `<div class="set-row"><span>AI providers<span class="hint">Tried in order. Set with LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "none")}</span></div>` : ""}
+    ${ai.enabled ? `<div class="set-row"><span>Speaking a description<span class="hint" id="voiceHint">${esc(voiceHint())}</span></span>${seg("sVoice", [["gemini", "Gemini"], ["device", "This device"]], voicePref())}</div>` : ""}
   </div>
 
   <div class="panel stack"><h2>Connections</h2>
@@ -1253,6 +1478,14 @@ async function renderSettings() {
   const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
   const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
+  $$("#sVoice button").forEach((b) => (b.onclick = () => {
+    local.set("voice", b.dataset.v);
+    // Choosing again retries a microphone that was refused earlier.
+    local.set("micDenied", false); local.set("speechDenied", false); micBroken = speechBroken = false;
+    $$("#sVoice button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    $("#voiceHint").textContent = voiceHint();
+    toast("Saved on this device");
+  }));
   const br = $("#sBright"); if (br) br.onchange = (e) => m.display.brightness(Number(e.target.value)).catch(() => {});
   $$("[data-skin]", el).forEach((b) => (b.onclick = () => {
     applySkin(b.dataset.skin, false, true);
@@ -1282,10 +1515,10 @@ async function renderSettings() {
 }
 function aiHint(ai) {
   if (!ai.enabled) return "Off. Add coffees by typing the details, and Crema picks profiles and dial-in steps with its rules";
-  if (S.api.demo) return "Identifies coffees from photos, searches and links, picks profiles and gives dial-in advice. Simulated in the demo";
+  if (S.api.demo) return "Identifies coffees from photos, descriptions and links, picks profiles and gives dial-in advice. Simulated in the demo";
   if (!S.api.ai.available) return "Needs a Crema server, which isn't connected. Crema uses its rules until then";
   if (!S.api.ai.healthy) return "The Crema server isn't answering, so Crema is using its rules for now";
-  return "Identifies coffees from photos, searches and links, picks profiles and gives dial-in advice. Falls back to the rules if it fails";
+  return "Identifies coffees from photos, descriptions and links, picks profiles and gives dial-in advice. Falls back to the rules if it fails";
 }
 function editPresets() {
   const p = JSON.parse(JSON.stringify(S.presets));
@@ -1477,6 +1710,8 @@ async function boot() {
     e.target.value = "";
   };
   $("#addForm").addEventListener("submit", onIdentify);
+  $("#speakBtn").onclick = () => (listening ? stopListening(true) : startListening());
+  $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
   $("#saver").onclick = () => { $("#saver").hidden = true; S.api.machine.setState("idle").catch(() => {}); };
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
@@ -1493,7 +1728,7 @@ async function boot() {
     water: (w) => { S.water = w; renderStatus(); },
     ready: (r) => { S.ready = r; },
   });
-  window.addEventListener("hashchange", () => route());
+  window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());
   window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });
   renderStatus(); renderAlerts();

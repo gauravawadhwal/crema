@@ -4,9 +4,16 @@ import { z, ZodError } from "zod";
 import { identify } from "./identify.js";
 import { cacheImage, findProductImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
-import type { ImageInput } from "./llm/types.js";
+import type { AudioInput, ImageInput } from "./llm/types.js";
 import { dialIn, recommend } from "./recommend/index.js";
 import { BeanInfo, Recipe, TasteFeedback } from "./schema.js";
+
+const IdentifyText = z.object({
+  query: z.string().max(300).optional(),
+  description: z.string().max(2000).optional(),
+  url: z.string().max(2000).optional(),
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
 
 /**
  * The Crema server is an optional AI add-on. It is stateless: the web app keeps
@@ -20,6 +27,9 @@ import { BeanInfo, Recipe, TasteFeedback } from "./schema.js";
  */
 
 const MEDIA = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const AUDIO = new Set(["audio/wav", "audio/mpeg", "audio/ogg", "audio/flac", "audio/aac"]);
+/** About two minutes of the 16 kHz mono WAV the app sends; the app stops at 30 s. */
+const MAX_AUDIO = 4 * 1024 * 1024;
 
 const PastShot = z.object({
   timestamp: z.string(),
@@ -80,12 +90,30 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
       crema: true,
       ai: true,
       providers: llm.providers.map((p) => ({ id: p.id, billing: p.billing })),
+      // Which provider turns speech into text, or null when none can (no GEMINI_API_KEY).
+      voice: llm.transcribers[0]?.id ?? null,
       decaidUrl,
       decaidWs,
     });
   });
 
-  /** Photo(s), search text or a URL → BeanInfo. */
+  /** A short voice note describing a coffee bag → text, for the "Describe it" box. */
+  app.post("/api/transcribe", async (c) => {
+    if (!llm.transcribers.length) return c.json({ error: "Speaking needs a Gemini API key on the Crema server (GEMINI_API_KEY)." }, 501);
+    const form = await c.req.parseBody();
+    const f = form["audio"];
+    if (!(f instanceof File)) return c.json({ error: "send the recording as the audio field" }, 400);
+    const type = f.type.split(";")[0] as AudioInput["mediaType"];
+    if (!AUDIO.has(type)) return c.json({ error: `unsupported audio type ${f.type || "(none)"}` }, 400);
+    if (f.size > MAX_AUDIO) return c.json({ error: "recording too long" }, 413);
+    const out = await llm.transcribe({
+      audio: { data: Buffer.from(await f.arrayBuffer()), mediaType: type },
+      context: "The speaker is describing a bag of specialty coffee they own: the roaster, the coffee's name, and maybe the origin, process, roast date, bag weight or tasting notes.",
+    });
+    return c.json(out);
+  });
+
+  /** Photo(s), search text, a spoken or typed description, or a URL → BeanInfo. */
   app.post("/api/identify", async (c) => {
     const form = await c.req.parseBody({ all: true });
     const files = ([] as unknown[]).concat(form["images"] ?? []).filter((f): f is File => f instanceof File);
@@ -94,8 +122,9 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
       if (!MEDIA.has(f.type)) return c.json({ error: `unsupported image type ${f.type}` }, 400);
       images.push({ data: Buffer.from(await f.arrayBuffer()), mediaType: f.type as ImageInput["mediaType"] });
     }
-    const str = (k: string) => (typeof form[k] === "string" && form[k] ? (form[k] as string) : undefined);
-    const info = await identify(llm, { images, query: str("query"), url: str("url"), offline: str("offline") === "true" });
+    const str = (k: string) => (typeof form[k] === "string" && form[k] ? (form[k] as string).trim() || undefined : undefined);
+    const text = IdentifyText.parse({ query: str("query"), description: str("description"), url: str("url"), today: str("today") });
+    const info = await identify(llm, { images, ...text, offline: str("offline") === "true" });
     // The roaster's own packshot: prefer what the page's metadata says over a URL the model may have guessed.
     if (info.imageUrl && !isSafeUrl(info.imageUrl)) info.imageUrl = null;
     if (info.productUrl && str("offline") !== "true") {

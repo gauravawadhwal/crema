@@ -1,0 +1,2450 @@
+{
+ "meta": {
+  "task": "dialin",
+  "subject": "rules",
+  "provider": "rules",
+  "model": null,
+  "judge": null,
+  "startedAt": "2026-11-05T05:35:39.798Z",
+  "git": {
+   "commit": "d85421014ac012b9239fcf41df589d1ac738dfa4",
+   "dirty": true
+  },
+  "repeats": 1,
+  "filter": null,
+  "prompts": {}
+ },
+ "summary": {
+  "cases": 28,
+  "runs": 28,
+  "errors": 0,
+  "passRate": 0.857,
+  "passCI": [
+   0.685,
+   0.943
+  ],
+  "passAllRepeats": 0.857,
+  "meanScore": 0.967,
+  "headline": {
+   "model answered": 1,
+   "right move": 0.857,
+   "preferred move": 0.857,
+   "one change": 1,
+   "text matches fields": 1,
+   "judge: faithful": null
+  },
+  "checks": {
+   "modelAnswered": {
+    "pass": 28,
+    "n": 28
+   },
+   "acceptableMove": {
+    "pass": 24,
+    "n": 28
+   },
+   "oneChange": {
+    "pass": 28,
+    "n": 28
+   },
+   "magnitude": {
+    "pass": 9,
+    "n": 9
+   },
+   "validSwitch": {
+    "pass": 28,
+    "n": 28
+   },
+   "saneDeltas": {
+    "pass": 28,
+    "n": 28
+   },
+   "textMatchesFields": {
+    "pass": 28,
+    "n": 28
+   },
+   "noEmoji": {
+    "pass": 28,
+    "n": 28
+   },
+   "preferredMove": {
+    "pass": 18,
+    "n": 21
+   }
+  },
+  "tags": {
+   "sour": {
+    "pass": 14,
+    "n": 15
+   },
+   "allonge": {
+    "pass": 1,
+    "n": 1
+   },
+   "notes-only": {
+    "pass": 0,
+    "n": 1
+   },
+   "body": {
+    "pass": 3,
+    "n": 3
+   },
+   "balanced": {
+    "pass": 1,
+    "n": 1
+   },
+   "bitter": {
+    "pass": 6,
+    "n": 7
+   },
+   "fast": {
+    "pass": 5,
+    "n": 6
+   },
+   "conflict": {
+    "pass": 0,
+    "n": 2
+   },
+   "slow": {
+    "pass": 2,
+    "n": 3
+   },
+   "dark": {
+    "pass": 1,
+    "n": 1
+   },
+   "decaf": {
+    "pass": 1,
+    "n": 1
+   },
+   "blooming": {
+    "pass": 1,
+    "n": 1
+   },
+   "low-contact": {
+    "pass": 1,
+    "n": 1
+   },
+   "temperature": {
+    "pass": 1,
+    "n": 1
+   },
+   "history": {
+    "pass": 1,
+    "n": 2
+   },
+   "adversarial": {
+    "pass": 1,
+    "n": 1
+   },
+   "milk": {
+    "pass": 1,
+    "n": 1
+   },
+   "natural": {
+    "pass": 1,
+    "n": 1
+   },
+   "missing-data": {
+    "pass": 1,
+    "n": 1
+   },
+   "first-shot": {
+    "pass": 1,
+    "n": 1
+   },
+   "rest": {
+    "pass": 2,
+    "n": 2
+   },
+   "nuance": {
+    "pass": 1,
+    "n": 1
+   },
+   "switch": {
+    "pass": 0,
+    "n": 1
+   },
+   "turbo": {
+    "pass": 1,
+    "n": 1
+   }
+  },
+  "splits": {
+   "dev": {
+    "pass": 18,
+    "n": 20
+   },
+   "holdout": {
+    "pass": 6,
+    "n": 8
+   }
+  },
+  "latencyMs": {
+   "p50": 0,
+   "p95": 1,
+   "max": 1
+  },
+  "cost": {
+   "usdTotal": null,
+   "usdPerRun": null,
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "calls": 0
+  },
+  "judgeCostUsd": null
+ },
+ "records": [
+  {
+   "caseId": "dial-allonge-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "allonge"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"temp-up\",\"yield-up\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "finer, expected a small step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-astringent-notes",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "notes-only"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Keep it. You're dialled in.",
+    "grindDelta": "same",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Balanced taste and body."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": false,
+      "detail": "move keep; acceptable [\"coarser\",\"yield-down\",\"temp-down\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "0 changes: grind same, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Keep it. You're dialled in.\" vs grind same",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.857,
+    "pass": false,
+    "labels": {
+     "move": "keep",
+     "grindDelta": "same",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-balanced-heavy",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "body"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Lengthen the yield by 3 g for more clarity",
+    "grindDelta": "same",
+    "yieldDeltaG": 3,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Balanced but heavy: a longer ratio opens it up."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move yield-up; acceptable [\"yield-up\",\"coarser\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move yield-up; preferred yield-up",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind same, yield 3, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 3 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Lengthen the yield by 3 g for more clarity\" vs grind same",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "yield-up",
+     "grindDelta": "same",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-balanced-keep",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "balanced"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Keep it. You're dialled in.",
+    "grindDelta": "same",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Balanced taste and body."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move keep; acceptable [\"keep\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move keep; preferred keep",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "0 changes: grind same, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Keep it. You're dialled in.\" vs grind same",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "keep",
+     "grindDelta": "same",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-balanced-thin",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "body"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Shorten the yield by 3 g for more body",
+    "grindDelta": "same",
+    "yieldDeltaG": -3,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Balanced but thin: a tighter ratio adds body."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move yield-down; acceptable [\"yield-down\",\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move yield-down; preferred yield-down",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind same, yield -3, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield -3 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Shorten the yield by 3 g for more body\" vs grind same",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "yield-down",
+     "grindDelta": "same",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-bitter-but-fast",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "bitter",
+    "fast",
+    "conflict"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Bitter or harsh means over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": false,
+      "detail": "move coarser; acceptable [\"finer\",\"temp-down\",\"yield-down\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": false,
+      "detail": "move coarser; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.75,
+    "pass": false,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-bitter-in-window",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "bitter"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Bitter or harsh means over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move coarser; acceptable [\"coarser\",\"temp-down\",\"yield-down\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move coarser; preferred coarser",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "coarser, expected a small step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-bitter-slow",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "bitter",
+    "slow"
+   ],
+   "ms": 1,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "much-coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran slow (44s) and tasted bitter: over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move coarser; acceptable [\"coarser\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move coarser; preferred coarser",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "much-coarser, expected a large step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind much-coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "much-coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-dark-sour-fast",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "fast",
+    "dark"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran fast (24s against 30–45s) and tasted sour: under-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-decaf-bitter",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "bitter",
+    "decaf"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "much-coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Bitter or harsh means over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move coarser; acceptable [\"coarser\",\"temp-down\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move coarser; preferred coarser",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind much-coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "much-coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-easy-blooming-sour",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "sour",
+    "blooming"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"yield-up\",\"finer\",\"temp-up\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": false,
+      "detail": "move finer; preferred yield-up",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.875,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-extractamundo-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "low-contact"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"yield-up\",\"temp-up\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-hot-dark-bitter",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "bitter",
+    "temperature"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Bitter or harsh means over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move coarser; acceptable [\"temp-down\",\"coarser\",\"yield-down\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-improving-trend",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "history",
+    "sour"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"yield-up\",\"temp-up\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "finer, expected a small step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-injection-in-notes",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "adversarial",
+    "sour",
+    "fast"
+   ],
+   "ms": 1,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran fast (21s against 28–36s) and tasted sour: under-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-lost-in-milk",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "body",
+    "milk"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Shorten the yield by 3 g for more body",
+    "grindDelta": "same",
+    "yieldDeltaG": -3,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Balanced but thin: a tighter ratio adds body."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move yield-down; acceptable [\"yield-down\",\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move yield-down; preferred yield-down",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind same, yield -3, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield -3 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Shorten the yield by 3 g for more body\" vs grind same",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "yield-down",
+     "grindDelta": "same",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-natural-bitter",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "bitter",
+    "natural"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Bitter or harsh means over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move coarser; acceptable [\"coarser\",\"temp-down\",\"yield-down\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move coarser; preferred coarser",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-no-shot-time",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "missing-data"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"temp-up\",\"yield-up\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-no-switch-first-shot",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "sour",
+    "first-shot"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "much-finer, expected a large step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-old-coffee-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "fast",
+    "rest"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran fast (26s against 28–36s) and tasted sour: under-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-salty-sour-fast",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "fast"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran fast (19s against 28–36s) and tasted sour: under-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "much-finer, expected a large step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-slightly-bright",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "nuance"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"yield-up\",\"temp-up\",\"keep\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "finer, expected a small step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-sour-but-slow",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "slow",
+    "conflict"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": false,
+      "detail": "move finer; acceptable [\"coarser\",\"temp-up\",\"yield-up\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.857,
+    "pass": false,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-sour-fast",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "fast"
+   ],
+   "ms": 1,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran fast (20s against 28–36s) and tasted sour: under-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move finer; preferred finer",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "much-finer, expected a large step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-switch-after-many",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "history",
+    "switch"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": false,
+      "detail": "move finer; acceptable [\"switch\",\"temp-up\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": false,
+      "detail": "move finer; preferred switch",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.75,
+    "pass": false,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-turbo-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "sour",
+    "turbo"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Sour means under-extracted. Finer grinding pulls out more sweetness."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"temp-up\",\"yield-up\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "finer",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-very-bitter-choked",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "bitter",
+    "slow"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind coarser",
+    "grindDelta": "much-coarser",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran slow (52s) and tasted bitter: over-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move coarser; acceptable [\"coarser\"]",
+      "critical": true
+     },
+     {
+      "name": "preferredMove",
+      "pass": true,
+      "detail": "move coarser; preferred coarser",
+      "critical": false
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-coarser, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "magnitude",
+      "pass": true,
+      "detail": "much-coarser, expected a large step",
+      "critical": false
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind coarser\" vs grind much-coarser",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "grindDelta": "much-coarser",
+     "fellBack": false
+    }
+   }
+  },
+  {
+   "caseId": "dial-very-fresh-gassy",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "sour",
+    "rest"
+   ],
+   "ms": 0,
+   "output": {
+    "change": "Grind finer",
+    "grindDelta": "much-finer",
+    "yieldDeltaG": 0,
+    "tempDeltaC": 0,
+    "switchProfile": null,
+    "reasoning": "Ran fast (25s against 28–36s) and tasted sour: under-extracted."
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "the model failed and Crema fell back to its rules",
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "detail": "move finer; acceptable [\"finer\",\"keep\",\"temp-up\"]",
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "detail": "1 changes: grind much-finer, yield 0, temp 0, switch null",
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "detail": "switchProfile null is not a known profile",
+      "critical": true
+     },
+     {
+      "name": "saneDeltas",
+      "pass": true,
+      "detail": "yield 0 g, temp 0 °C",
+      "critical": true
+     },
+     {
+      "name": "textMatchesFields",
+      "pass": true,
+      "detail": "\"Grind finer\" vs grind much-finer",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "grindDelta": "much-finer",
+     "fellBack": false
+    }
+   }
+  }
+ ]
+}

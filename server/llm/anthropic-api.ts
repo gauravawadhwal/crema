@@ -12,7 +12,7 @@ export class AnthropicApiProvider implements LlmProvider {
   readonly billing = "Anthropic API key (pay per token)";
   private readonly client = new Anthropic();
 
-  constructor(private readonly model = process.env.ANTHROPIC_MODEL ?? "claude-opus-5-5") {}
+  constructor(readonly model = process.env.ANTHROPIC_MODEL ?? "claude-opus-5-5") {}
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
     const content: Anthropic.Beta.BetaContentBlockParam[] = [
@@ -45,6 +45,13 @@ export class AnthropicApiProvider implements LlmProvider {
           fallbacks: "default",
         });
 
+        req.onUsage?.({
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          cacheTokens: (response.usage.cache_read_input_tokens ?? 0) + (response.usage.cache_creation_input_tokens ?? 0),
+          model: response.model,
+          webSearches: response.usage.server_tool_use?.web_search_requests,
+        });
         if (response.stop_reason === "pause_turn") {
           messages.push({ role: "assistant", content: response.content as Anthropic.Beta.BetaContentBlockParam[] });
           continue;

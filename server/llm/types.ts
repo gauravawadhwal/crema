@@ -6,6 +6,18 @@ export interface ImageInput {
   mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 }
 
+export interface AudioInput {
+  /** Raw bytes of a short recording. The app sends 16 kHz mono WAV. */
+  data: Buffer;
+  mediaType: "audio/wav" | "audio/mpeg" | "audio/ogg" | "audio/flac" | "audio/aac";
+}
+
+export interface TranscribeRequest {
+  audio: AudioInput;
+  /** What the recording is about, so the model spells names it expects correctly. */
+  context: string;
+}
+
 export interface StructuredRequest<T extends z.ZodType> {
   system: string;
   prompt: string;
@@ -15,13 +27,31 @@ export interface StructuredRequest<T extends z.ZodType> {
   images?: ImageInput[];
   /** Allow the model to search and read the web while answering. */
   web?: boolean;
+  /** Called with token and cost figures when the provider reports them (used by the evals); may be called once per model turn. */
+  onUsage?: (usage: Usage) => void;
+}
+
+/** What one call cost, as far as the provider reports it. Any field may be missing. */
+export interface Usage {
+  inputTokens?: number;
+  outputTokens?: number;
+  /** Cache reads and writes, counted separately from inputTokens. */
+  cacheTokens?: number;
+  costUsd?: number;
+  /** The model that actually answered, if the provider says. */
+  model?: string;
+  webSearches?: number;
 }
 
 export interface LlmProvider {
   readonly id: ProviderId;
   /** Human-readable description of how this provider is billed. */
   readonly billing: string;
+  /** The model this provider asks for, when it is configurable. */
+  readonly model?: string;
   structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>>;
+  /** Speech to text, for providers whose model takes audio. Returns "" when nothing was said. */
+  transcribe?(req: TranscribeRequest): Promise<string>;
 }
 
 export type ProviderId = "claude-cli" | "codex-cli" | "anthropic-api" | "gemini-api" | "mock";

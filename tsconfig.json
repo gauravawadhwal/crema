@@ -10,5 +10,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["server/**/*.ts", "dev/**/*.ts"]
+  "include": ["server/**/*.ts", "dev/**/*.ts", "evals/**/*.ts"]
 }

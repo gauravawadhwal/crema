@@ -1,0 +1,4864 @@
+{
+ "meta": {
+  "task": "recommend",
+  "subject": "rules",
+  "provider": "rules",
+  "model": null,
+  "judge": null,
+  "startedAt": "2026-11-05T05:35:39.798Z",
+  "git": {
+   "commit": "d85421014ac012b9239fcf41df589d1ac738dfa4",
+   "dirty": true
+  },
+  "repeats": 1,
+  "filter": null,
+  "prompts": {}
+ },
+ "summary": {
+  "cases": 32,
+  "runs": 32,
+  "errors": 0,
+  "passRate": 0.906,
+  "passCI": [
+   0.758,
+   0.968
+  ],
+  "passAllRepeats": 0.906,
+  "meanScore": 0.948,
+  "headline": {
+   "model answered": 1,
+   "acceptable profile": 0.938,
+   "preferred profile": 0.609,
+   "forbidden profile": 0.034,
+   "recipe in bounds": 0.778,
+   "judge: faithful": null
+  },
+  "checks": {
+   "modelAnswered": {
+    "pass": 32,
+    "n": 32
+   },
+   "acceptable": {
+    "pass": 30,
+    "n": 32
+   },
+   "preferred": {
+    "pass": 14,
+    "n": 23
+   },
+   "notForbidden": {
+    "pass": 28,
+    "n": 29
+   },
+   "recipeSane": {
+    "pass": 32,
+    "n": 32
+   },
+   "nearSuggested": {
+    "pass": 23,
+    "n": 23
+   },
+   "alternatives": {
+    "pass": 32,
+    "n": 32
+   },
+   "rationaleShape": {
+    "pass": 32,
+    "n": 32
+   },
+   "noEmoji": {
+    "pass": 32,
+    "n": 32
+   },
+   "recipeBounds": {
+    "pass": 7,
+    "n": 9
+   },
+   "restAdvice": {
+    "pass": 2,
+    "n": 2
+   }
+  },
+  "tags": {
+   "synthetic": {
+    "pass": 21,
+    "n": 24
+   },
+   "anaerobic": {
+    "pass": 1,
+    "n": 1
+   },
+   "light": {
+    "pass": 12,
+    "n": 12
+   },
+   "setup": {
+    "pass": 1,
+    "n": 1
+   },
+   "milk": {
+    "pass": 10,
+    "n": 13
+   },
+   "natural": {
+    "pass": 2,
+    "n": 2
+   },
+   "medium-dark": {
+    "pass": 2,
+    "n": 2
+   },
+   "dark": {
+    "pass": 3,
+    "n": 4
+   },
+   "no-scale": {
+    "pass": 4,
+    "n": 4
+   },
+   "new-user": {
+    "pass": 3,
+    "n": 3
+   },
+   "decaf": {
+    "pass": 1,
+    "n": 1
+   },
+   "filter-roast": {
+    "pass": 1,
+    "n": 1
+   },
+   "real": {
+    "pass": 8,
+    "n": 8
+   },
+   "blend": {
+    "pass": 3,
+    "n": 3
+   },
+   "straight": {
+    "pass": 2,
+    "n": 2
+   },
+   "history": {
+    "pass": 2,
+    "n": 5
+   },
+   "adversarial": {
+    "pass": 1,
+    "n": 1
+   },
+   "installed": {
+    "pass": 2,
+    "n": 2
+   },
+   "burrs": {
+    "pass": 1,
+    "n": 1
+   },
+   "advanced": {
+    "pass": 2,
+    "n": 2
+   },
+   "conflict": {
+    "pass": 2,
+    "n": 2
+   },
+   "medium": {
+    "pass": 1,
+    "n": 1
+   },
+   "rest": {
+    "pass": 2,
+    "n": 2
+   },
+   "high-altitude": {
+    "pass": 1,
+    "n": 1
+   },
+   "single-origin": {
+    "pass": 1,
+    "n": 1
+   },
+   "unknown-roast": {
+    "pass": 1,
+    "n": 1
+   },
+   "roaster-recipe": {
+    "pass": 2,
+    "n": 2
+   },
+   "wet-hulled": {
+    "pass": 1,
+    "n": 1
+   }
+  },
+  "splits": {
+   "dev": {
+    "pass": 21,
+    "n": 22
+   },
+   "holdout": {
+    "pass": 8,
+    "n": 10
+   }
+  },
+  "latencyMs": {
+   "p50": 2,
+   "p95": 4,
+   "max": 9
+  },
+  "cost": {
+   "usdTotal": null,
+   "usdPerRun": null,
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "calls": 0
+  },
+  "judgeCostUsd": null
+ },
+ "records": [
+  {
+   "caseId": "rec-anaerobic-light-straight",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "anaerobic",
+    "light"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Rao Allongé",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 90,
+    "tempC": 91.5,
+    "targetTimeS": [
+     35,
+     40
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "5:1 ratio, 35–40 s, coarse espresso grind. Make 0.5 g dose changes to reach an 8–9 bar peak; small grind changes swing pressure a lot.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out fruit, clarity the roaster describes",
+     "Suits anaerobic coffees",
+     "Recipe from Rao Allongé's own recipe, ratio 1:5.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Extractamundo Dos!",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "A-Flow / default-light",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 91.5
+     },
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 85
+     },
+     {
+      "title": "A-Flow / default-light",
+      "doseG": 18,
+      "yieldG": 48,
+      "tempC": 95.5
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 94.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94
+     },
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 91.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Rao Allongé; acceptable [\"Blooming Espresso\",\"Espresso Forge Light\",\"Extractamundo Dos!\",\"A-Flow / default-light\",\"Adaptive v2\",\"Adaptive v3\",\"Rao Allongé\",\"Blooming Allongé\",\"Easy blooming - active pressure decline\",\"Gagné/Adaptive Shot 92C v1.0\",\"Best practice (light roast)\",\"TurboBloom\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Rao Allongé; preferred [\"Blooming Espresso\",\"Espresso Forge Light\",\"Extractamundo Dos!\",\"A-Flow / default-light\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Rao Allongé",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 90 g, 91.5 °C, 35–40 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→90 g 91.5 °C vs suggested 18→90 g 91.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Extractamundo Dos!\",\"A-Flow / default-light\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Rao Allongé",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-basket-22g",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "setup",
+    "milk"
+   ],
+   "ms": 4,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 22,
+    "yieldG": 51,
+    "tempC": 90.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 22,
+      "yieldG": 51,
+      "tempC": 90.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 22,
+      "yieldG": 44,
+      "tempC": 91.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 22,
+      "yieldG": 49,
+      "tempC": 89
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 22,
+      "yieldG": 44,
+      "tempC": 89.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 22,
+      "yieldG": 44,
+      "tempC": 89.5
+     },
+     {
+      "title": "Cremina lever machine",
+      "doseG": 22,
+      "yieldG": 44,
+      "tempC": 93
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Default\",\"A-Flow / default-medium\",\"Classic Italian espresso\",\"Cremina lever machine\"]",
+      "critical": true
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "22 g → 51 g, 90.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-brazil-natural-milk",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "natural",
+    "medium-dark",
+    "milk"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 88.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "A bit coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium-dark roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium-dark roasts"
+     },
+     {
+      "profileTitle": "Gentle and sweet",
+      "why": "Written for medium-dark roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 88.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 87.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 87
+     },
+     {
+      "title": "A-Flow / default-dark",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 93.5
+     },
+     {
+      "title": "Classic Italian espresso",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 93.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Gentle and sweet\",\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"A-Flow / default-dark\",\"Flow profile for milky drinks\",\"Classic Italian espresso\",\"Cremina lever machine\",\"Default\",\"Espresso Forge Dark\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Londonium; preferred [\"Londonium\",\"Gentle and sweet\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 88.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 88.5 °C vs suggested 18→42 g 88.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"Gentle and sweet\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-dark-milk-new-noscale",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "dark",
+    "milk",
+    "no-scale",
+    "new-user"
+   ],
+   "ms": 3,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 87.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "Noticeably coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for dark roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for dark roasts"
+     },
+     {
+      "profileTitle": "Gentle and sweet",
+      "why": "Written for dark roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 87.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88.5
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 86.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 86.5
+     },
+     {
+      "title": "Classic Italian espresso",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92.5
+     },
+     {
+      "title": "Cremina lever machine",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 90
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\",\"Damian's LRv3\",\"Default\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Classic Italian espresso\",\"Cremina lever machine\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Londonium; preferred [\"Londonium\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Damian's LRv3\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 87.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 87.5 °C vs suggested 18→42 g 87.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"Gentle and sweet\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-dark-milk-scale",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "dark",
+    "milk"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 87.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "Noticeably coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for dark roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for dark roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for dark roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 87.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 86
+     },
+     {
+      "title": "A-Flow / default-dark",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92.5
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 86.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 86.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"A-Flow / default-dark\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Classic Italian espresso\",\"Cremina lever machine\",\"Default\",\"Espresso Forge Dark\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Londonium; preferred [\"Londonium\",\"D-Flow / default\",\"A-Flow / default-dark\",\"Damian's LRv3\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 87.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 87.5 °C vs suggested 18→42 g 87.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-decaf-milk",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "decaf",
+    "milk"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "D-Flow / default",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 87.5,
+    "targetTimeS": [
+     25,
+     40
+    ],
+    "grindHint": "A bit coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Use it with a scale. Max pressure is typically 8.5–9 bar and max flow 1.7–2.2 ml/s. For light roasts, lower infusion pressure toward 0 so it behaves more like Adaptive.",
+    "rationale": [
+     "Written for medium roasts",
+     "Holds up in milk",
+     "Brings out body, sweetness the roaster describes",
+     "Recipe from D-Flow / default's own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Londonium",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 87.5
+     },
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 89
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 90
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88
+     },
+     {
+      "title": "Classic Italian espresso",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 94
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose D-Flow / default; acceptable [\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"Gentle and sweet\",\"Default\",\"Flow profile for milky drinks\",\"A-Flow / default-medium\",\"Classic Italian espresso\",\"Cremina lever machine\",\"Adaptive v2\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose D-Flow / default; preferred [\"Londonium\",\"D-Flow / default\",\"Gentle and sweet\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden D-Flow / default",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 87.5 °C, 25–40 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Londonium\",\"Damian's LRv3\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "D-Flow / default",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-filter-roast-straight",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "filter-roast",
+    "light"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Rao Allongé",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 90,
+    "tempC": 92,
+    "targetTimeS": [
+     35,
+     40
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "5:1 ratio, 35–40 s, coarse espresso grind. Make 0.5 g dose changes to reach an 8–9 bar peak; small grind changes swing pressure a lot.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out fruit, florals, clarity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Rao Allongé's own recipe, ratio 1:5.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Blooming Espresso",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Blooming Allongé",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 92
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 95
+     },
+     {
+      "title": "Blooming Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 95
+     },
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 92
+     },
+     {
+      "title": "TurboBloom",
+      "doseG": 18,
+      "yieldG": 39,
+      "tempC": 87
+     },
+     {
+      "title": "Trendy 6 bar low pressure shot",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Rao Allongé; acceptable [\"Rao Allongé\",\"Blooming Allongé\",\"Blooming Espresso\",\"Best practice (light roast)\",\"A-Flow / default-light\",\"TurboBloom\",\"TurboTurbo\",\"Gagné/Adaptive Shot 92C v1.0\",\"Adaptive v2\",\"Extractamundo Dos!\",\"Trendy 6 bar low pressure shot\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Rao Allongé; preferred [\"Rao Allongé\",\"Blooming Espresso\",\"Best practice (light roast)\",\"A-Flow / default-light\",\"Blooming Allongé\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Rao Allongé",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 90 g, 92 °C, 35–40 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Blooming Espresso\",\"Blooming Allongé\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Rao Allongé",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-haven-compass-milk-noscale-new",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "real",
+    "blend",
+    "milk",
+    "no-scale",
+    "new-user"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 90.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "Gentle and sweet",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 90.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 91.5
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Classic Italian espresso",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 95.5
+     },
+     {
+      "title": "Default",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 90
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\",\"Damian's LRv3\",\"Default\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Classic Italian espresso\",\"I got your back\",\"Adaptive v2\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Londonium; preferred [\"Londonium\",\"Damian's LRv3\",\"Gentle and sweet\",\"Default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 90.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 90.5 °C vs suggested 18→42 g 90.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"Gentle and sweet\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-haven-rioki-straight-noscale",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "real",
+    "straight",
+    "no-scale"
+   ],
+   "ms": 0,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 83.5,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for medium-light roasts",
+     "Brings out clarity, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for medium-light roasts"
+     },
+     {
+      "profileTitle": "Adaptive v3",
+      "why": "Written for medium-light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 83.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 93
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 93
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 88
+     },
+     {
+      "title": "Damian's LM Leva",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 90.5
+     },
+     {
+      "title": "Trendy 6 bar low pressure shot",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 90.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"Extractamundo Dos!\",\"Easy blooming - active pressure decline\",\"Gagné/Adaptive Shot 92C v1.0\",\"Flow profile for straight espresso\",\"Damian's LM Leva\",\"Trendy 6 bar low pressure shot\",\"Espresso Forge Light\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; preferred [\"Adaptive v2\",\"Extractamundo Dos!\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Extractamundo Dos!",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 83.5 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→40 g 83.5 °C vs suggested 18→40 g 83.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"Adaptive v3\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-history-avoid-bad",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "history",
+    "light"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Rao Allongé",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 90,
+    "tempC": 92,
+    "targetTimeS": [
+     35,
+     40
+    ],
+    "grindHint": "Much finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "5:1 ratio, 35–40 s, coarse espresso grind. Make 0.5 g dose changes to reach an 8–9 bar peak; small grind changes swing pressure a lot.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out fruit, florals, clarity, acidity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Rao Allongé's own recipe, ratio 1:5.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Best practice (light roast)",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Blooming Espresso",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 92
+     },
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 92
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 95
+     },
+     {
+      "title": "Blooming Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 95
+     },
+     {
+      "title": "Trendy 6 bar low pressure shot",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Rao Allongé; acceptable [\"Blooming Espresso\",\"Best practice (light roast)\",\"A-Flow / default-light\",\"Rao Allongé\",\"Extractamundo Dos!\",\"Easy blooming - active pressure decline\",\"Gagné/Adaptive Shot 92C v1.0\",\"Trendy 6 bar low pressure shot\",\"Blooming Allongé\",\"TurboBloom\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Rao Allongé; preferred [\"Blooming Espresso\",\"Best practice (light roast)\",\"Extractamundo Dos!\",\"A-Flow / default-light\",\"Trendy 6 bar low pressure shot\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Rao Allongé",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 90 g, 92 °C, 35–40 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→90 g 92 °C vs suggested 18→90 g 92 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Best practice (light roast)\",\"Blooming Espresso\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Rao Allongé",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-history-dose-yield",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "history",
+    "milk"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 89,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "A bit coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium-dark roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium-dark roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium-dark roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 89
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 90
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 87.5
+     },
+     {
+      "title": "A-Flow / default-dark",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 94
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\"]",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 89 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": false,
+      "detail": "yieldG 42.0 not in 34–38",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.857,
+    "pass": false,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-history-prefers-lower-ranked",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "history",
+    "milk"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 90.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 90.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 91.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Cremina lever machine",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 93
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": false,
+      "detail": "chose Londonium; acceptable [\"Gentle and sweet\"]",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 90.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": false,
+      "detail": "yieldG 42.0 not in 34–38",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.714,
+    "pass": false,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-history-repeat-good",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "history"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 83.5,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for medium-light roasts",
+     "Brings out clarity, sweetness, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for medium-light roasts"
+     },
+     {
+      "profileTitle": "A-Flow / default-light",
+      "why": "Written for medium-light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 83.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 93
+     },
+     {
+      "title": "A-Flow / default-light",
+      "doseG": 18,
+      "yieldG": 48,
+      "tempC": 94.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 90.5
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 93
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 88
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Extractamundo Dos!\"]",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 83.5 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"A-Flow / default-light\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-history-top-pick-failed",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "history",
+    "dark",
+    "milk"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 87.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "Noticeably coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for dark roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for dark roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for dark roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 87.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 86
+     },
+     {
+      "title": "A-Flow / default-dark",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92.5
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 86.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 86.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": false,
+      "detail": "chose Londonium; acceptable [\"Gentle and sweet\",\"Flow profile for milky drinks\",\"D-Flow / default\",\"A-Flow / default-dark\",\"Classic Italian espresso\",\"Cremina lever machine\",\"Default\",\"Espresso Forge Dark\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Londonium; preferred [\"Gentle and sweet\",\"Flow profile for milky drinks\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": false,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 87.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 87.5 °C vs suggested 18→42 g 87.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.667,
+    "pass": false,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-injection-in-description",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "adversarial",
+    "light"
+   ],
+   "ms": 4,
+   "output": {
+    "profileTitle": "Best practice (light roast)",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 50,
+    "tempC": 92,
+    "targetTimeS": [
+     50,
+     65
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Grind coarser than for medium roasts and aim for about 2.5 ml/s at peak pressure, with about 8 g dripping in preinfusion. 18 g in, 50 g out in 60 s is typical.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out clarity, fruit, acidity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Best practice (light roast)'s own recipe, ratio 1:2.8"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Rao Allongé",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Extractamundo Dos!",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 92
+     },
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 92
+     },
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 85
+     },
+     {
+      "title": "A-Flow / default-light",
+      "doseG": 18,
+      "yieldG": 48,
+      "tempC": 96
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 95
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Best practice (light roast); acceptable [\"Adaptive v2\",\"Adaptive v3\",\"Blooming Espresso\",\"Best practice (light roast)\",\"A-Flow / default-light\",\"Extractamundo Dos!\",\"Easy blooming - active pressure decline\",\"Rao Allongé\",\"Gagné/Adaptive Shot 92C v1.0\",\"Trendy 6 bar low pressure shot\",\"TurboBloom\",\"Blooming Allongé\",\"Espresso Forge Light\"]",
+      "critical": true
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Best practice (light roast)",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 50 g, 92 °C, 50–65 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Rao Allongé\",\"Extractamundo Dos!\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Best practice (light roast)",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-installed-limited-dark",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "installed",
+    "dark"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Default",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 36,
+    "tempC": 87,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "Noticeably coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "A safe starting point while you learn the machine.",
+    "rationale": [
+     "Holds up in milk",
+     "Brings out body the roaster describes",
+     "Recipe from Default's own recipe, ratio 1:2.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Brings out sweetness the roaster describes"
+     },
+     {
+      "profileTitle": "Best practice (light roast)",
+      "why": "Brings out acidity the roaster describes"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Default",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 87
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 88
+     },
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 88
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 91
+     },
+     {
+      "title": "TurboBloom",
+      "doseG": 18,
+      "yieldG": 39,
+      "tempC": 82
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Default; acceptable [\"Default\",\"Adaptive v2\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Default; preferred [\"Default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Default",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 36 g, 87 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→36 g 87 °C vs suggested 18→36 g 87 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"Best practice (light roast)\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Default",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-installed-limited-light",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "installed",
+    "light"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Blooming Espresso",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 50,
+    "tempC": 95,
+    "targetTimeS": [
+     45,
+     60
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Track the dripping before the ramp: about 8 g (±2 g) tastes best. Adjust grind and dose to hit it.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out clarity, fruit, acidity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Blooming Espresso's own recipe, ratio 1:2.8"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Default",
+      "why": "Gentle on the puck and easy on the barista. Good across a wide range of coffees."
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 95
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "Default",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 93
+     },
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 93
+     },
+     {
+      "title": "Classic Italian espresso",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 98
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Blooming Espresso; acceptable [\"Adaptive v2\",\"Blooming Espresso\"]",
+      "critical": true
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Blooming Espresso",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 50 g, 95 °C, 45–60 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→50 g 95 °C vs suggested 18→50 g 95 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"Default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Blooming Espresso",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-light-conical-advanced",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "light",
+    "burrs",
+    "advanced"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Rao Allongé",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 90,
+    "tempC": 92,
+    "targetTimeS": [
+     35,
+     40
+    ],
+    "grindHint": "Much finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "5:1 ratio, 35–40 s, coarse espresso grind. Make 0.5 g dose changes to reach an 8–9 bar peak; small grind changes swing pressure a lot.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out fruit, florals, clarity, acidity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Rao Allongé's own recipe, ratio 1:5.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Blooming Espresso",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Blooming Allongé",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 92
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 95
+     },
+     {
+      "title": "Blooming Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 95
+     },
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 92
+     },
+     {
+      "title": "Trendy 6 bar low pressure shot",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Rao Allongé; acceptable [\"Blooming Espresso\",\"Rao Allongé\",\"Blooming Allongé\",\"Best practice (light roast)\",\"A-Flow / default-light\",\"Adaptive v2\",\"Adaptive v3\",\"Extractamundo Dos!\",\"Trendy 6 bar low pressure shot\",\"Easy blooming - active pressure decline\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Rao Allongé; preferred [\"Blooming Espresso\",\"Rao Allongé\",\"Best practice (light roast)\",\"A-Flow / default-light\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Rao Allongé",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 90 g, 92 °C, 35–40 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→90 g 92 °C vs suggested 18→90 g 92 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Blooming Espresso\",\"Blooming Allongé\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Rao Allongé",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-light-milk-scale",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "light",
+    "milk",
+    "conflict"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 85,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out clarity, sweetness, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Holds up in milk"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 85
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 92
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 89.5
+     },
+     {
+      "title": "Baseline • Medium Contact • 6 Bar",
+      "doseG": 18,
+      "yieldG": 38,
+      "tempC": 86.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"D-Flow / default\",\"Easy blooming - active pressure decline\",\"Extractamundo Dos!\",\"Espresso Forge Light\",\"A-Flow / default-medium\",\"Baseline • Medium Contact • 6 Bar\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Extractamundo Dos!; preferred [\"D-Flow / default\",\"Adaptive v2\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Extractamundo Dos!",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 85 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→40 g 85 °C vs suggested 18→40 g 85 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-light-new-user",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "light",
+    "new-user"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Best practice (light roast)",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 50,
+    "tempC": 92,
+    "targetTimeS": [
+     50,
+     65
+    ],
+    "grindHint": "Much finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Grind coarser than for medium roasts and aim for about 2.5 ml/s at peak pressure, with about 8 g dripping in preinfusion. 18 g in, 50 g out in 60 s is typical.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out clarity, fruit, acidity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Best practice (light roast)'s own recipe, ratio 1:2.8"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Trendy 6 bar low pressure shot",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 92
+     },
+     {
+      "title": "Trendy 6 bar low pressure shot",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 92
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 89.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Best practice (light roast); acceptable [\"Adaptive v2\",\"Adaptive v3\",\"Easy blooming - active pressure decline\",\"Trendy 6 bar low pressure shot\",\"I got your back\",\"Extractamundo Dos!\",\"A-Flow / default-light\",\"Best practice (light roast)\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Best practice (light roast); preferred [\"Adaptive v2\",\"Adaptive v3\",\"Easy blooming - active pressure decline\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Best practice (light roast)",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 50 g, 92 °C, 50–65 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→50 g 92 °C vs suggested 18→50 g 92 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Trendy 6 bar low pressure shot\",\"Adaptive v2\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Best practice (light roast)",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-light-noscale",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "light",
+    "no-scale"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Trendy 6 bar low pressure shot",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 36,
+    "tempC": 92,
+    "targetTimeS": [
+     28,
+     38
+    ],
+    "grindHint": "Much finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Try it when a light roast tastes thin or sour at 9 bar.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out clarity, florals the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Trendy 6 bar low pressure shot's own recipe, ratio 1:2.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Extractamundo Dos!",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Trendy 6 bar low pressure shot",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 92
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 85
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94.5
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 89.5
+     },
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 92
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Trendy 6 bar low pressure shot; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"Extractamundo Dos!\",\"Easy blooming - active pressure decline\",\"Trendy 6 bar low pressure shot\",\"Gagné/Adaptive Shot 92C v1.0\",\"Espresso Forge Light\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Trendy 6 bar low pressure shot; preferred [\"Adaptive v2\",\"Extractamundo Dos!\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Trendy 6 bar low pressure shot",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 36 g, 92 °C, 28–38 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→36 g 92 °C vs suggested 18→36 g 92 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"Extractamundo Dos!\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Trendy 6 bar low pressure shot",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-medium-both-wide",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "medium"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 82,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for medium roasts",
+     "Brings out clarity, sweetness, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 82
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 91.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 90.5
+     },
+     {
+      "title": "A-Flow / default-medium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 92.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 91.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"D-Flow / default\",\"A-Flow / default-medium\",\"Extractamundo Dos!\",\"Londonium\",\"Damian's LRv3\",\"Damian's Q\",\"Damian's LM Leva\",\"Default\",\"Flow profile for straight espresso\",\"Gentle and sweet\",\"Easy blooming - active pressure decline\",\"Baseline • Medium Contact • 6 Bar\",\"I got your back\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Extractamundo Dos!; preferred [\"Adaptive v2\",\"D-Flow / default\",\"Londonium\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Extractamundo Dos!",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 82 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→40 g 82 °C vs suggested 18→40 g 82 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-old-blend-milk",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "synthetic",
+    "rest",
+    "milk"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 90.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "Day 60: past its best window. Grind finer to keep it lively, or freeze the rest.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 90.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 91.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Cremina lever machine",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 93
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Default\",\"A-Flow / default-medium\",\"Classic Italian espresso\",\"Cremina lever machine\"]",
+      "critical": true
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 90.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 90.5 °C vs suggested 18→42 g 90.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "restAdvice",
+      "pass": true,
+      "detail": "\"Day 60: past its best window. Grind finer to keep it lively, or freeze the rest.\"",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-ona-guji-milk",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "real",
+    "light",
+    "milk",
+    "conflict"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Adaptive v2",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 94,
+    "targetTimeS": [
+     28,
+     36
+    ],
+    "grindHint": "Much finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Aim for about 1.5 ml/s at the Pressurize step and roughly 4 g dripping during preinfusion. 15 g in, 33 g out in 32 s is typical for a medium roast.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out sweetness, clarity the roaster describes",
+     "Dense, high-grown beans (2350 masl) reward its long contact",
+     "Recipe from Adaptive v2's own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Extractamundo Dos!",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Holds up in milk"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94
+     },
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 85
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 91.5
+     },
+     {
+      "title": "Espresso Forge Light",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 96.5
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 89
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Adaptive v2; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"D-Flow / default\",\"Easy blooming - active pressure decline\",\"Extractamundo Dos!\",\"Espresso Forge Light\",\"A-Flow / default-medium\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Adaptive v2; preferred [\"Adaptive v2\",\"D-Flow / default\",\"Espresso Forge Light\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Adaptive v2",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 94 °C, 28–36 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→40 g 94 °C vs suggested 18→40 g 94 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Extractamundo Dos!\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Adaptive v2",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-ona-guji-straight-advanced",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "real",
+    "light",
+    "natural",
+    "high-altitude",
+    "advanced"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Rao Allongé",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 90,
+    "tempC": 91.5,
+    "targetTimeS": [
+     35,
+     40
+    ],
+    "grindHint": "Much finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "5:1 ratio, 35–40 s, coarse espresso grind. Make 0.5 g dose changes to reach an 8–9 bar peak; small grind changes swing pressure a lot.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out fruit, clarity, acidity the roaster describes",
+     "Suits natural coffees",
+     "Recipe from Rao Allongé's own recipe, ratio 1:5.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Blooming Espresso",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "TurboBloom",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 91.5
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 94.5
+     },
+     {
+      "title": "TurboBloom",
+      "doseG": 18,
+      "yieldG": 39,
+      "tempC": 86.5
+     },
+     {
+      "title": "Blooming Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 94.5
+     },
+     {
+      "title": "Gagné/Adaptive Shot 92C v1.0",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 92.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Rao Allongé; acceptable [\"Blooming Espresso\",\"Rao Allongé\",\"Blooming Allongé\",\"A-Flow / default-light\",\"Gagné/Adaptive Shot 92C v1.0\",\"TurboBloom\",\"Best practice (light roast)\",\"Adaptive v2\",\"Adaptive v3\",\"Extractamundo Dos!\",\"Espresso Forge Light\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Rao Allongé; preferred [\"Blooming Espresso\",\"A-Flow / default-light\",\"Rao Allongé\",\"Espresso Forge Light\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Rao Allongé",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 90 g, 91.5 °C, 35–40 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→90 g 91.5 °C vs suggested 18→90 g 91.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Blooming Espresso\",\"TurboBloom\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Rao Allongé",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-ona-kaliluni-straight",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "real",
+    "single-origin",
+    "straight"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 82,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for medium roasts",
+     "Brings out clarity, sweetness, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 82
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 91.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 91.5
+     },
+     {
+      "title": "Easy blooming - active pressure decline",
+      "doseG": 18,
+      "yieldG": 45,
+      "tempC": 86.5
+     },
+     {
+      "title": "Damian's Q",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 83.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"Extractamundo Dos!\",\"A-Flow / default-medium\",\"Damian's Q\",\"Damian's LM Leva\",\"Flow profile for straight espresso\",\"D-Flow / default\",\"Easy blooming - active pressure decline\",\"Baseline • Medium Contact • 6 Bar\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; preferred [\"Adaptive v2\",\"Extractamundo Dos!\",\"A-Flow / default-medium\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Extractamundo Dos!",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 82 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→40 g 82 °C vs suggested 18→40 g 82 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-ona-lafincona-unknown-roast",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "real",
+    "unknown-roast"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 83.5,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for medium-light roasts",
+     "Brings out clarity, sweetness, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for medium-light roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium-light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 83.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 93
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 90.5
+     },
+     {
+      "title": "A-Flow / default-light",
+      "doseG": 18,
+      "yieldG": 48,
+      "tempC": 94.5
+     },
+     {
+      "title": "A-Flow / default-medium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 94
+     },
+     {
+      "title": "Adaptive v3",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 93
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"D-Flow / default\",\"Extractamundo Dos!\",\"A-Flow / default-medium\",\"Damian's Q\",\"Easy blooming - active pressure decline\",\"Flow profile for straight espresso\",\"Damian's LM Leva\",\"Default\",\"I got your back\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Extractamundo Dos!; preferred [\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Extractamundo Dos!",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 83.5 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→40 g 83.5 °C vs suggested 18→40 g 83.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-ona-maple-milk",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "real",
+    "blend",
+    "milk"
+   ],
+   "ms": 9,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 42,
+    "tempC": 90.5,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium roasts",
+     "Holds up in milk",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from Londonium's own recipe, ratio 1:2.3"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 90.5
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 91.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Flow profile for milky drinks",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 89.5
+     },
+     {
+      "title": "Cremina lever machine",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 93
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"Gentle and sweet\",\"Flow profile for milky drinks\",\"Default\",\"A-Flow / default-medium\",\"Classic Italian espresso\",\"Cremina lever machine\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Londonium; preferred [\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 42 g, 90.5 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→42 g 90.5 °C vs suggested 18→42 g 90.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Damian's LRv3\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-ona-raspberry-both",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "real",
+    "blend",
+    "roaster-recipe"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Extractamundo Dos!",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 40,
+    "tempC": 83.5,
+    "targetTimeS": [
+     25,
+     35
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Decent ranks it second for light roasts. Keep its low, declining temperature, and nudge only the starting temperature by roast.",
+    "rationale": [
+     "Written for medium-light roasts",
+     "Brings out clarity, sweetness, fruit the roaster describes",
+     "Recipe from Extractamundo Dos!'s own recipe, ratio 1:2.2"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Adaptive v2",
+      "why": "Written for medium-light roasts"
+     },
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium-light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 83.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 20.5,
+      "yieldG": 38,
+      "tempC": 93.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 20.5,
+      "yieldG": 38,
+      "tempC": 90.5
+     },
+     {
+      "title": "A-Flow / default-light",
+      "doseG": 20.5,
+      "yieldG": 38,
+      "tempC": 94.5
+     },
+     {
+      "title": "A-Flow / default-medium",
+      "doseG": 20.5,
+      "yieldG": 38,
+      "tempC": 94
+     },
+     {
+      "title": "Espresso Forge Light",
+      "doseG": 20.5,
+      "yieldG": 38,
+      "tempC": 95.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Extractamundo Dos!; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"D-Flow / default\",\"Extractamundo Dos!\",\"A-Flow / default-medium\",\"Damian's Q\",\"Easy blooming - active pressure decline\",\"Flow profile for straight espresso\",\"Espresso Forge Light\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": false,
+      "detail": "chose Extractamundo Dos!; preferred [\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Extractamundo Dos!",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 40 g, 83.5 °C, 25–35 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Adaptive v2\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 0.889,
+    "pass": true,
+    "labels": {
+     "profile": "Extractamundo Dos!",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-roaster-recipe-medium",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "roaster-recipe"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Londonium",
+    "profileId": null,
+    "doseG": 20,
+    "yieldG": 40,
+    "tempC": 90,
+    "targetTimeS": [
+     30,
+     45
+    ],
+    "grindHint": "About where you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "Extra steps cope with imperfect puck prep. Identical to Damian's LRv2 under an easier name.",
+    "rationale": [
+     "Written for medium roasts",
+     "Brings out body, chocolate the roaster describes",
+     "Recipe from the roaster's recipe (20 g → 40 g) on Londonium"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Extractamundo Dos!",
+      "why": "Written for medium roasts"
+     },
+     {
+      "profileTitle": "Damian's LRv3",
+      "why": "Written for medium roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Londonium",
+      "doseG": 20,
+      "yieldG": 40,
+      "tempC": 90
+     },
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 82
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 20,
+      "yieldG": 40,
+      "tempC": 91
+     },
+     {
+      "title": "Gentle and sweet",
+      "doseG": 20,
+      "yieldG": 40,
+      "tempC": 89
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 20,
+      "yieldG": 40,
+      "tempC": 92.5
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 20,
+      "yieldG": 40,
+      "tempC": 88.5
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Londonium; acceptable [\"Adaptive v2\",\"Adaptive v3\",\"D-Flow / default\",\"A-Flow / default-medium\",\"Londonium\",\"Damian's LRv3\",\"Default\",\"Flow profile for straight espresso\",\"Flow profile for milky drinks\",\"Gentle and sweet\",\"Damian's Q\",\"Damian's LM Leva\",\"Classic Italian espresso\",\"Extractamundo Dos!\"]",
+      "critical": true
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Londonium",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "20 g → 40 g, 90 °C, 30–45 s",
+      "critical": true
+     },
+     {
+      "name": "recipeBounds",
+      "pass": true,
+      "detail": "",
+      "critical": true
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Extractamundo Dos!\",\"Damian's LRv3\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "3 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Londonium",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-sumatra-wet-hulled",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "wet-hulled",
+    "medium-dark"
+   ],
+   "ms": 1,
+   "output": {
+    "profileTitle": "Gentle and sweet",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 36,
+    "tempC": 88,
+    "targetTimeS": [
+     28,
+     38
+    ],
+    "grindHint": "A bit coarser than you'd grind a medium roast",
+    "restAdvice": "No roast date. Add one from the bag for rest tracking.",
+    "dialIn": "The author suggests it when you're having trouble making good drinks.",
+    "rationale": [
+     "Written for medium-dark roasts",
+     "Brings out sweetness, body the roaster describes",
+     "Suits wet-hulled coffees",
+     "Recipe from Gentle and sweet's own recipe, ratio 1:2.0"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "D-Flow / default",
+      "why": "Written for medium-dark roasts"
+     },
+     {
+      "profileTitle": "Londonium",
+      "why": "Written for medium-dark roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Gentle and sweet",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 88
+     },
+     {
+      "title": "D-Flow / default",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 87.5
+     },
+     {
+      "title": "Londonium",
+      "doseG": 18,
+      "yieldG": 42,
+      "tempC": 89
+     },
+     {
+      "title": "A-Flow / default-dark",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 94
+     },
+     {
+      "title": "Damian's LRv3",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 90
+     },
+     {
+      "title": "Classic Italian espresso",
+      "doseG": 18,
+      "yieldG": 36,
+      "tempC": 94
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Gentle and sweet; acceptable [\"Gentle and sweet\",\"Londonium\",\"Damian's LRv3\",\"D-Flow / default\",\"A-Flow / default-dark\",\"Flow profile for milky drinks\",\"Cremina lever machine\",\"Classic Italian espresso\",\"Default\",\"80's Espresso\",\"Espresso Forge Dark\"]",
+      "critical": true
+     },
+     {
+      "name": "preferred",
+      "pass": true,
+      "detail": "chose Gentle and sweet; preferred [\"Gentle and sweet\",\"Londonium\",\"D-Flow / default\"]",
+      "critical": false
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Gentle and sweet",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 36 g, 88 °C, 28–38 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→36 g 88 °C vs suggested 18→36 g 88 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"D-Flow / default\",\"Londonium\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Gentle and sweet",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  },
+  {
+   "caseId": "rec-very-fresh-light",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "synthetic",
+    "rest",
+    "light"
+   ],
+   "ms": 2,
+   "output": {
+    "profileTitle": "Best practice (light roast)",
+    "profileId": null,
+    "doseG": 18,
+    "yieldG": 50,
+    "tempC": 91.5,
+    "targetTimeS": [
+     50,
+     65
+    ],
+    "grindHint": "A bit finer than you'd grind a medium roast",
+    "restAdvice": "Day 3 off roast. light roasts usually open up from day 14.",
+    "dialIn": "Grind coarser than for medium roasts and aim for about 2.5 ml/s at peak pressure, with about 8 g dripping in preinfusion. 18 g in, 50 g out in 60 s is typical.",
+    "rationale": [
+     "Written for light roasts",
+     "Brings out clarity, fruit, acidity the roaster describes",
+     "Suits washed coffees",
+     "Recipe from Best practice (light roast)'s own recipe, ratio 1:2.8"
+    ],
+    "alternatives": [
+     {
+      "profileTitle": "Rao Allongé",
+      "why": "Written for light roasts"
+     },
+     {
+      "profileTitle": "Extractamundo Dos!",
+      "why": "Written for light roasts"
+     }
+    ]
+   },
+   "context": {
+    "candidates": [
+     {
+      "title": "Best practice (light roast)",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 91.5
+     },
+     {
+      "title": "Rao Allongé",
+      "doseG": 18,
+      "yieldG": 90,
+      "tempC": 91.5
+     },
+     {
+      "title": "Extractamundo Dos!",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 84.5
+     },
+     {
+      "title": "A-Flow / default-light",
+      "doseG": 18,
+      "yieldG": 48,
+      "tempC": 95.5
+     },
+     {
+      "title": "Blooming Espresso",
+      "doseG": 18,
+      "yieldG": 50,
+      "tempC": 94.5
+     },
+     {
+      "title": "Adaptive v2",
+      "doseG": 18,
+      "yieldG": 40,
+      "tempC": 94
+     }
+    ],
+    "source": "rules"
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "detail": "fell back: rules",
+      "critical": true
+     },
+     {
+      "name": "acceptable",
+      "pass": true,
+      "detail": "chose Best practice (light roast); acceptable [\"Adaptive v2\",\"Adaptive v3\",\"Blooming Espresso\",\"Best practice (light roast)\",\"A-Flow / default-light\",\"Extractamundo Dos!\",\"Easy blooming - active pressure decline\",\"Rao Allongé\",\"Gagné/Adaptive Shot 92C v1.0\",\"Trendy 6 bar low pressure shot\",\"TurboBloom\",\"Blooming Allongé\",\"Espresso Forge Light\"]",
+      "critical": true
+     },
+     {
+      "name": "notForbidden",
+      "pass": true,
+      "detail": "chose forbidden Best practice (light roast)",
+      "critical": true
+     },
+     {
+      "name": "recipeSane",
+      "pass": true,
+      "detail": "18 g → 50 g, 91.5 °C, 50–65 s",
+      "critical": true
+     },
+     {
+      "name": "nearSuggested",
+      "pass": true,
+      "detail": "18→50 g 91.5 °C vs suggested 18→50 g 91.5 °C",
+      "critical": false
+     },
+     {
+      "name": "alternatives",
+      "pass": true,
+      "detail": "[\"Rao Allongé\",\"Extractamundo Dos!\"]",
+      "critical": false
+     },
+     {
+      "name": "rationaleShape",
+      "pass": true,
+      "detail": "4 bullets",
+      "critical": false
+     },
+     {
+      "name": "restAdvice",
+      "pass": true,
+      "detail": "\"Day 3 off roast. light roasts usually open up from day 14.\"",
+      "critical": false
+     },
+     {
+      "name": "noEmoji",
+      "pass": true,
+      "critical": false
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "profile": "Best practice (light roast)",
+     "fellBack": false,
+     "inCandidates": true
+    }
+   }
+  }
+ ]
+}

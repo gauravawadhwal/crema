@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { BeanInfo } from "../schema.js";
-import type { LlmProvider, StructuredRequest } from "./types.js";
+import type { LlmProvider, StructuredRequest, TranscribeRequest } from "./types.js";
 
 /**
  * Offline provider for development, tests and the demo skin. It returns
@@ -16,7 +16,14 @@ export class MockProvider implements LlmProvider {
     if (!make) throw new Error(`mock has no answer for ${req.schemaName}`);
     return req.schema.parse(make(req.prompt));
   }
+
+  /** A canned transcript. A recording under ~1 KB counts as silence. */
+  async transcribe(req: TranscribeRequest): Promise<string> {
+    return req.audio.data.length < 1024 ? "" : MOCK_TRANSCRIPT;
+  }
 }
+
+export const MOCK_TRANSCRIPT = "Example Roasters Kii AA, roasted last Tuesday, 250 grams";
 
 const s = <T>(value: T, source: "bag" | "web" | "inferred" = "web") => ({ value, source });
 

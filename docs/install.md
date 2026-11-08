@@ -8,7 +8,7 @@ Crema has three parts. Only the first two are needed.
 | **The Crema skin** (`skin/`) | Inside Decaid on the tablet, and in a phone's browser | Yes |
 | **The Crema server** (`server/`) | Any always-on computer on your network: a NAS, a home server, a Raspberry Pi | No. Only for the AI features |
 
-Without the server, everything works except identifying coffees from photos, searches and links. You add coffees by typing the details from the bag, and Crema's rules pick the profile, recipe and dial-in changes. With the server connected, the AI does those, and if it stops answering, the rules take over again until it's back.
+Without the server, everything works except identifying coffees from photos, descriptions and links. You add coffees by typing the details from the bag, and Crema's rules pick the profile, recipe and dial-in changes. With the server connected, the AI does those, and if it stops answering, the rules take over again until it's back.
 
 > Crema is built against Decaid's documented API and tested with the simulator in this repo. It hasn't been tested on a real DE1 yet.
 
@@ -66,7 +66,36 @@ docker build -t crema .
 docker run -d --name crema --restart unless-stopped -p 8787:8787 --env-file .env -v crema-images:/data crema
 ```
 
-To use a Claude or ChatGPT subscription, the image needs their CLIs. Set `AI_CLIS` in `.env` (Compose passes it to the build), or build with `--build-arg AI_CLIS="@anthropic-ai/claude-code"`. For `codex-cli`, also mount the host's `~/.codex` login at `/home/node/.codex`.
+To use a Claude or ChatGPT subscription, the image needs their CLIs. Set `AI_CLIS` in `.env` (Compose passes it to the build), or build with `--build-arg AI_CLIS="@anthropic-ai/claude-code @openai/codex"`. Claude needs only `CLAUDE_CODE_OAUTH_TOKEN` in `.env`. Codex needs a login saved in the container, as below.
+
+#### Logging Codex in
+
+Codex saves its login in `/home/node/.codex`, which Compose keeps on the `codex-home` volume, so it survives rebuilds. The server usually has no browser, so use Codex's device code sign-in:
+
+1. In ChatGPT, turn on device code sign-in for Codex. It's in your account's security settings; a workspace admin turns it on for a workspace account.
+2. Log in from the server, once:
+
+   ```bash
+   docker compose run --rm crema codex login --device-auth
+   ```
+
+   It prints a web address and a code. Open the address on your phone or laptop, sign in to ChatGPT and enter the code.
+3. Check it worked:
+
+   ```bash
+   docker compose run --rm crema codex login status
+   ```
+
+Then start or restart the server (`docker compose up -d`). Codex refreshes the login by itself, so it lasts until you sign out or revoke it.
+
+Without Compose, add `-v crema-codex:/home/node/.codex` to `docker run`, and log in with `docker run --rm -it -v crema-codex:/home/node/.codex crema codex login --device-auth`.
+
+Notes:
+- **Log the server in on its own** rather than copying `~/.codex/auth.json` from another computer. A copy shares one login between two machines that each refresh it; a separate login can be revoked by itself. If device code sign-in isn't available, copying works. While the container runs, `docker compose exec -T crema sh -c 'umask 077 && cat > /home/node/.codex/auth.json' < ~/.codex/auth.json` writes it as the container's user.
+- **Mounting a host folder instead of a volume**: the container runs as the `node` user (uid 1000), so the folder must be writable by that uid, or Codex can't save refreshed tokens.
+- **The volume holds tokens for your ChatGPT account.** Treat it like a password: keep it out of shared backups.
+- An OpenAI API key works too (`codex login --with-api-key`), billed per token instead of to your plan.
+- **"error sending request for url (https://auth.openai.com/…)"** after about 5 seconds usually means the Docker host's DNS doesn't answer IPv6 (AAAA) lookups. Node only asks for IPv4, so the rest of Crema works, but Codex waits for both and gives up. Check with `docker compose run --rm crema node -e 'require("dns").promises.resolve6("auth.openai.com").then(console.log,console.error)'`. If that fails, give the container working DNS servers (`dns:` in `docker-compose.yml`, or the Docker daemon's `dns` setting). Colima on a Mac has this problem; `colima start --dns 1.1.1.1` fixes it.
 
 ### Without Docker
 
@@ -97,9 +126,10 @@ Everything is set with environment variables on the server.
 | `LLM_PROVIDERS` | `claude-cli,codex-cli` | AI providers, tried in order: `claude-cli`, `codex-cli`, `anthropic-api`, `gemini-api`, `mock` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | none | For `claude-cli`: run `claude setup-token` on any computer to get one. Billed to your Claude plan |
 | `CLAUDE_BIN`, `CLAUDE_CLI_MODEL` | `claude`, `opus` | Claude Code CLI binary and model |
-| `CODEX_BIN`, `CODEX_MODEL` | `codex`, the CLI's default | For `codex-cli`, after `codex login`. Billed to your ChatGPT plan |
+| `CODEX_BIN`, `CODEX_MODEL`, `CODEX_REASONING_EFFORT` | `codex`, the CLI's defaults | For `codex-cli`, after `codex login`. Billed to your ChatGPT plan. Effort is `low`, `medium` or `high`; coffee identification needs little, so `low` keeps it fast and cheap |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | none, `claude-opus-5-5` | For `anthropic-api`, billed per token |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token. A key also switches on speaking into "Describe it" (Gemini writes down your voice note), even when `LLM_PROVIDERS` doesn't list `gemini-api` |
+| `GEMINI_VOICE_MODEL` | `GEMINI_MODEL` | The Gemini model that transcribes voice notes. Each tablet or phone can switch to its own speech recognition instead, in Settings → AI features |
 | `DECAID_URL` | none | Decaid on the tablet, such as `http://<tablet-ip>:8080`. Only needed to open the app from the server. Use an address phones can reach: they connect to its live streams directly |
 | `PORT`, `HOST` | `8787`, `0.0.0.0` | Where the server listens |
 | `CREMA_IMAGES` | `data/images` | Cached roaster product photos |

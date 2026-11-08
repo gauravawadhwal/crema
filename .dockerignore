@@ -9,3 +9,7 @@ test
 .git
 .github
 .claude
+.env
+.env.*
+!.env.example
+evals/results

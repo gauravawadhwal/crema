@@ -43,7 +43,17 @@ So the model gets the photos plus web search, and every field records where it c
 
 **Product photos** come from the product page's metadata (Open Graph `og:image`, JSON-LD `Product.image` or the Twitter card), which nearly every roaster shop publishes, rather than from a URL the model guesses. The image is downloaded once and cached, so the shelf works offline. The user picks between the roaster's photo and their own. Lookups only go to public addresses, never the local network.
 
-Search and paste-a-link use the same pipeline. They help when browsing before buying, re-adding a past coffee, or when the bag isn't to hand.
+Describe-it and paste-a-link use the same pipeline. They help when browsing before buying, re-adding a past coffee, or when the bag isn't to hand.
+
+**Describing the bag** is often quicker than a photo: "ONA La Fincona, roasted on the 2nd, 250 grams" covers what matters, and the roast date comes from the user, read off the bag, so it counts as a `bag` fact. The model is told the text may be dictated, so it matches misheard names to real roasters by sound, resolves relative dates ("last Tuesday") against the tablet's date, and ignores false starts. A plain name works the same way, so this mode replaces the old search box.
+
+**Speaking** goes to Gemini when the Crema server has a `GEMINI_API_KEY`. The app records a voice note, stops after a 1.6 s pause (or at 30 s), and sends it as 16 kHz mono WAV, which every Gemini model accepts and which avoids the browsers' differing compressed formats. Gemini hears the audio itself and is told it's about a coffee bag, so it spells roaster names, origins and varieties properly where general dictation writes them by sound. Its reply has a fixed JSON shape, so silence comes back empty rather than as a made-up sentence. The text then goes through the description pipeline above, with whichever provider is configured, so a Claude or ChatGPT setup can add voice with only a Gemini key. Gemini's text models were chosen over a separate speech service (Whisper and the like) because one key does it, the free tier covers home use, and the domain hint in the prompt matters more than raw accuracy for names like "Gesha" and "Kirinyaga".
+
+Gemini only writes the voice note down. Identifying the coffee always takes the main path (`LLM_PROVIDERS`), so a spoken description and a typed one reach the same model and behave the same way.
+
+Each device chooses how it hears you, in Settings → AI features → "Speaking a description": **Gemini** (the default) or **This device**, which keeps audio off the Crema server. The choice is stored per device, like the theme, because a tablet and a phone differ in what they can do.
+
+Without a Gemini key, or with "This device" chosen, the Speak button uses the browser's own speech recognition (Chrome sends audio to Google, Safari to Apple) where it exists. Recording and browser recognition both need the microphone, which browsers allow only on https or localhost pages. A phone on the tablet's plain-http address gets neither, so the button stays hidden there and the keyboard's own microphone fills the same box. On the tablet the page is on localhost, but whether Decaid's WebView grants the microphone is untested.
 
 Ideas not yet built:
 - **Order emails**: roasters' order confirmations name the exact product, so a coffee could be added before the bag arrives, leaving only the roast-date sticker to photograph.

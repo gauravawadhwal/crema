@@ -199,24 +199,30 @@ function makeDemoApi() {
   return {
     demo: true,
     info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null, serverError: null },
-    ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true },
+    // No Crema server here, so no Gemini voice notes; "Describe it" uses the browser's speech recognition.
+    ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true, voice: false },
     settings: {
       get: async () => ({ aiEnabled }),
       set: async (p) => { if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled; return { aiEnabled }; },
     },
     async shelf() { return shelf().map(shelfItem); },
-    async identify({ files, query, url }, onStep) {
+    async identify({ files, query, description, url }, onStep) {
       if (!aiEnabled) throw new Error("AI features are off. Enter the details by hand, or switch AI on in Settings.");
       const steps = files?.length ? ["Reading the bag", "Finding the roaster's page", "Matching community profiles"] : ["Searching for the coffee", "Reading the roaster's page", "Matching community profiles"];
       for (let i = 0; i < steps.length; i++) { onStep(i, steps); await wait(850); }
       const pool = all.filter((b) => !b.shelf || b.finished);
-      const q = (query || url || "").toLowerCase();
-      const hit = pool.find((b) => q && q.split(/[\s/,-]+/).filter((w) => w.length > 3).some((w) => (b.info.name.value + " " + b.info.roaster.value).toLowerCase().includes(w))) || pool[Math.floor(Math.random() * pool.length)] || all[0];
+      const q = (query || description || url || "").toLowerCase();
+      // A description carries extra words ("roasted last week"), so take the coffee that matches the most of them.
+      const words = q.split(/[\s/,.-]+/).filter((w) => w.length > 2);
+      const score = (b) => words.filter((w) => (b.info.name.value + " " + b.info.roaster.value).toLowerCase().includes(w)).length;
+      const best = pool.reduce((top, b) => (score(b) > (top ? score(top) : 0) ? b : top), null);
+      const hit = best || pool[Math.floor(Math.random() * pool.length)] || all[0];
       const info = clone(hit.info);
       if (!files?.length) { info.roastDate = { value: null, source: null }; info.needsConfirmation = [...new Set([...(info.needsConfirmation || []), "roastDate"])]; }
       info.__demoId = hit.id;
       return info;
     },
+    async transcribe() { throw new Error("Speaking to Gemini needs a Crema server. This demo uses the browser's speech recognition."); },
     async saveBean(info, photo, art) {
       if (!info.__demoId) {
         // Typed in by hand: a new coffee, matched by the rules.
