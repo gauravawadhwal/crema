@@ -17,7 +17,7 @@ export class ClaudeCliProvider implements LlmProvider {
 
   constructor(
     private readonly bin = process.env.CLAUDE_BIN ?? "claude",
-    private readonly model = process.env.CLAUDE_CLI_MODEL ?? "opus",
+    readonly model = process.env.CLAUDE_CLI_MODEL ?? "opus",
   ) {}
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
@@ -60,7 +60,25 @@ export class ClaudeCliProvider implements LlmProvider {
         is_error?: boolean;
         result?: string;
         structured_output?: unknown;
+        total_cost_usd?: number;
+        usage?: {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_read_input_tokens?: number;
+          cache_creation_input_tokens?: number;
+          server_tool_use?: { web_search_requests?: number };
+        };
+        modelUsage?: Record<string, unknown>;
       };
+      const u = envelope.usage;
+      req.onUsage?.({
+        inputTokens: u?.input_tokens,
+        outputTokens: u?.output_tokens,
+        cacheTokens: (u?.cache_read_input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0),
+        costUsd: envelope.total_cost_usd,
+        model: Object.keys(envelope.modelUsage ?? {}).join(",") || undefined,
+        webSearches: u?.server_tool_use?.web_search_requests,
+      });
       if (envelope.is_error) throw new ProviderError(this.id, envelope.result ?? "unknown error");
       const raw = envelope.structured_output ?? extractJson(envelope.result ?? "");
       return req.schema.parse(raw);

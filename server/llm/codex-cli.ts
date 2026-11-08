@@ -14,7 +14,7 @@ export class CodexCliProvider implements LlmProvider {
 
   constructor(
     private readonly bin = process.env.CODEX_BIN ?? "codex",
-    private readonly model = process.env.CODEX_MODEL, // undefined = Codex default
+    readonly model = process.env.CODEX_MODEL, // undefined = Codex default
   ) {}
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {

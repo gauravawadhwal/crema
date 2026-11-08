@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { extractJson, jsonSchemaFor, ProviderError, type LlmProvider, type StructuredRequest, type TranscribeRequest } from "./types.js";
+import { extractJson, jsonSchemaFor, ProviderError, type LlmProvider, type StructuredRequest, type TranscribeRequest, type Usage } from "./types.js";
 
 /**
  * Google Gemini over its REST API (GEMINI_API_KEY). Grounding with Google
@@ -13,7 +13,7 @@ export class GeminiApiProvider implements LlmProvider {
 
   constructor(
     private readonly apiKey = process.env.GEMINI_API_KEY,
-    private readonly model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+    readonly model = process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
     private readonly voiceModel = process.env.GEMINI_VOICE_MODEL ?? model,
   ) {}
 
@@ -21,7 +21,7 @@ export class GeminiApiProvider implements LlmProvider {
     return !!this.apiKey;
   }
 
-  private async generate(model: string, body: unknown): Promise<string> {
+  private async generate(model: string, body: unknown, onUsage?: (usage: Usage) => void): Promise<string> {
     if (!this.apiKey) throw new ProviderError(this.id, "GEMINI_API_KEY is not set");
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const res = await fetch(url, {
@@ -33,7 +33,17 @@ export class GeminiApiProvider implements LlmProvider {
     if (!res.ok) throw new ProviderError(this.id, `HTTP ${res.status}: ${(await res.text()).slice(0, 1000)}`);
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; cachedContentTokenCount?: number };
+      modelVersion?: string;
     };
+    const um = json.usageMetadata;
+    onUsage?.({
+      // promptTokenCount includes cached tokens; report them separately.
+      inputTokens: um?.promptTokenCount != null ? um.promptTokenCount - (um.cachedContentTokenCount ?? 0) : undefined,
+      outputTokens: (um?.candidatesTokenCount ?? 0) + (um?.thoughtsTokenCount ?? 0) || undefined,
+      cacheTokens: um?.cachedContentTokenCount,
+      model: json.modelVersion ?? model,
+    });
     return json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   }
 
@@ -93,7 +103,7 @@ If there is no speech, or only noise, return an empty string. Never invent words
       ],
       tools: req.web ? [{ google_search: {} }] : undefined,
     };
-    const text = await this.generate(this.model, body);
+    const text = await this.generate(this.model, body, req.onUsage);
     try {
       const raw = extractJson(text);
       const first = req.schema.safeParse(raw);
