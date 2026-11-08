@@ -39,7 +39,7 @@ Read next, as needed:
 | `evals/` | AI eval suite: labelled cases for identify, recommend and dial-in, fixtures, graders, runner, committed baselines (see `evals/README.md`) |
 | `demo/` | `crema-demo.html` (built single-file demo, embeddable as one HTML file), `walkthrough.html` (story reel) |
 | `docs/` | Docs, `screenshots/`, `media/` (README animation) |
-| `.github/workflows/` | `pages.yml` deploys `_site/` to GitHub Pages on push to `main`; `release.yml` attaches the skin ZIP to `v*` releases |
+| `.github/workflows/` | `ci.yml` checks pull requests and `main`; `pages.yml` deploys `_site/` to GitHub Pages on push to `main`; `release.yml` attaches the skin ZIP to `v*` releases. Both run `ci.yml` first |
 | `Dockerfile`, `docker-compose.yml`, `.env.example` | Running the optional server |
 
 ## Commands
@@ -49,6 +49,7 @@ npm install
 npm test                    # vitest: unit, server flow, and engine.js freshness
 npm run typecheck
 npm run build:engine        # skin/engine.js from server/ (after changing ranking, rules or defaults)
+npm run package:skin && node scripts/check-skin-zip.mjs   # dist/crema-skin.zip, checked as Decaid will see it
 npm run mock:decaid         # simulated machine on :8080
 DECAID_URL=http://localhost:8080 LLM_PROVIDERS=mock npm start   # server on :8787, serves skin/
 ```
@@ -102,6 +103,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 - **Media queries see the iframe or viewport, not a scaled container.** That's why the device frame uses an iframe, and why the tablet layout is tested at real viewport sizes.
 - **Tablet layout**: the home screen must fit one screen at 1340×800 and the scaled sizes down to 1005×552, before and after a shot. Run `check-tablet-fit.cjs` after any layout or spacing change.
 - **Themes**: theme tokens use `html:root[data-skin=…]` so they outrank the light/dark blocks. Charts read CSS variables at draw time, so call `route(false)` to redraw after a change. Verde is the default (`DEFAULT_SKIN` in app.js, and `data-skin="verde"` on `<html>` in index.html); keep the two in step. See `docs/design.md`.
+- **Ratings are Decaid's 0–10, untouched.** The UI shows them as half stars (one point each); don't convert to or from 1–5 anywhere, including AI prompts and eval data. Decaid rejects values outside 0–10, and `null`.
 - **Temperature**: DE1 profiles set a temperature per step. Apply a recipe temperature by shifting every step (`withTemperature` in `server/app.ts`); never set only the first step.
 - **Recommendations must name a profile the machine has.** The AI chooses only among installed candidates, and the code enforces it.
 - **The engine bundle is committed.** `skin/engine.js` is generated, but the skin has no build step, so it's checked in. `npm test` fails when it's stale.

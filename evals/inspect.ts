@@ -31,7 +31,7 @@ if (task === "recommend") {
     const recipe = dialInRecipe(c, bean);
     const move = primaryMove(rulesDialIn(c.input.feedback, dialInShot(c, recipe), recipe));
     console.log(`\n${c.id} [${c.split}]  ${recipe.profileTitle}: ${recipe.doseG}→${recipe.yieldG} g ${recipe.tempC} °C, ${recipe.targetTimeS.join("–")} s`);
-    console.log(`  shot ${c.input.shot.timeS ?? "?"} s, sour/bitter ${c.input.feedback.sourBitter}, body ${c.input.feedback.body}, ${c.input.feedback.enjoyment}/5 ${c.input.feedback.notes ? `"${c.input.feedback.notes}"` : ""}`);
+    console.log(`  shot ${c.input.shot.timeS ?? "?"} s, sour/bitter ${c.input.feedback.sourBitter}, body ${c.input.feedback.body}, ${c.input.feedback.enjoyment ?? "unrated"}/10 ${c.input.feedback.notes ? `"${c.input.feedback.notes}"` : ""}`);
     console.log(`  accept ${c.expect.accept.join(", ")}${c.expect.preferred ? ` (prefer ${c.expect.preferred})` : ""} · rules say ${move} ${c.expect.accept.includes(move) ? "✓" : "✗"}`);
   }
 } else {

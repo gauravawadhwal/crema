@@ -314,7 +314,7 @@ function makeLiveApi(conn) {
     annotate: (id, a) => put(D(`/shots/${encodeURIComponent(id)}`), { annotations: a }),
     async feedback(shotId, beanId, fb) {
       const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
-      await put(D(`/shots/${encodeURIComponent(shotId)}`), { annotations: { ...(full.annotations ?? {}), enjoyment: fb.enjoyment, espressoNotes: fb.notes ?? full.annotations?.espressoNotes, extras: { crema: { sourBitter: fb.sourBitter, body: fb.body } } } });
+      await put(D(`/shots/${encodeURIComponent(shotId)}`), { annotations: { ...(full.annotations ?? {}), ...(fb.enjoyment != null ? { enjoyment: fb.enjoyment } : {}), espressoNotes: fb.notes ?? full.annotations?.espressoNotes, extras: { crema: { sourBitter: fb.sourBitter, body: fb.body } } } });
       const [{ info, batch }, rec] = await Promise.all([coffee(beanId), recordOf(beanId)]);
       const shot = E.toPastShot(full);
       const recipe = rec?.recipe ?? E.rulesRecipe({ bean: info });
@@ -798,13 +798,44 @@ function shotMetrics(points, s) {
   const doseG = s?.doseG ?? S.next?.doseG;
   return [["Time", points.at(-1) ? `${points.at(-1).t.toFixed(1)}` : s?.timeS, "s"], ["First drops", first ? first.t.toFixed(1) : "–", "s"], ["Yield", fmt1(yieldG), "g"], ["Ratio", doseG && yieldG ? `1:${(yieldG / doseG).toFixed(2)}` : "–", ""], ["Peak", fmt1(peak), "bar"], ["Avg flow", fmt1(avgFlow), "ml/s"]];
 }
+/* Ratings. Decaid stores enjoyment as 0–10, and Crema shows that as five stars in half
+   steps, so one point is half a star and nothing is converted. 0 or missing is "not rated".
+   Imported de1app ratings can be fractional; they show to the nearest half star. */
+const STAR_ROW = "<i data-n=\"1\">★</i><i data-n=\"2\">★</i><i data-n=\"3\">★</i><i data-n=\"4\">★</i><i data-n=\"5\">★</i>";
+const ratingPoints = (v) => Math.max(0, Math.min(10, Math.round(+v || 0)));
+const ratingText = (v) => (ratingPoints(v) ? `${ratingPoints(v) / 2} of 5 stars` : "Not rated");
+function starsHtml(v, id) {
+  const fill = `<span class="stars-fill" style="width:${ratingPoints(v) * 10}%" aria-hidden="true">${STAR_ROW}</span>`;
+  if (!id) return `<span class="stars static" role="img" aria-label="${ratingText(v)}">${STAR_ROW}${fill}</span>`;
+  return `<div class="stars" id="${id}" role="slider" tabindex="0" aria-label="Rating" aria-valuemin="0" aria-valuemax="10" aria-valuenow="${ratingPoints(v)}" aria-valuetext="${ratingText(v)}"><span aria-hidden="true">${STAR_ROW}</span>${fill}</div>`;
+}
+// Tap or drag across the stars; the left half of a star is a half star. Arrow keys step by half.
+function bindStars(el, v, onChange) {
+  let cur = ratingPoints(v), committed = cur;
+  const show = (n) => {
+    cur = n;
+    el.querySelector(".stars-fill").style.width = `${n * 10}%`;
+    el.setAttribute("aria-valuenow", String(n)); el.setAttribute("aria-valuetext", ratingText(n));
+  };
+  const commit = () => { if (cur !== committed) { committed = cur; onChange(cur); } };
+  const at = (x) => { const r = el.getBoundingClientRect(), f = ((x - r.left) / r.width) * 10; return f < 0.3 ? 0 : Math.max(1, Math.min(10, Math.ceil(f))); };
+  el.onpointerdown = (e) => { el.setPointerCapture?.(e.pointerId); el.dataset.drag = "1"; show(at(e.clientX)); };
+  el.onpointermove = (e) => { if (el.dataset.drag) show(at(e.clientX)); };
+  el.onpointerup = () => { delete el.dataset.drag; commit(); };
+  el.onpointercancel = () => { delete el.dataset.drag; show(committed); };
+  el.onkeydown = (e) => {
+    const n = { ArrowRight: cur + 1, ArrowUp: cur + 1, ArrowLeft: cur - 1, ArrowDown: cur - 1, Home: 0, End: 10 }[e.key];
+    if (n == null) return;
+    e.preventDefault(); show(Math.max(0, Math.min(10, n))); commit();
+  };
+}
 function metricsHtml(m) {
   return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
 }
 function showAfterShot(shot, pts) {
   const p = $("#afterShot");
   p.hidden = false;
-  let stars = 0;
+  let rating = shot?.enjoyment ?? null;
   const r = S.current?.recipe;
   const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
   const [lo, hi] = r?.targetTimeS || [25, 35];
@@ -815,7 +846,7 @@ function showAfterShot(shot, pts) {
     ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
     ${scale("sb", "Taste", [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]])}
     ${scale("bd", "Body", [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]])}
-    <div class="row between"><div class="row"><span class="label">Enjoyment</span><div class="stars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="false" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
+    <div class="row between"><div class="row"><span class="label">Enjoyment</span>${starsHtml(rating, "afterStars")}</div>
       <div class="row"><button class="btn primary" id="sendTaste">Next adjustment</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
     <div id="adviceBox"></div>`;
   const val = (id) => Number($(`#${id} [aria-pressed="true"]`)?.dataset.v ?? 0);
@@ -823,12 +854,16 @@ function showAfterShot(shot, pts) {
   $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); renderLive(); };
   $(".live-col").classList.add("has-after");
   requestAnimationFrame(renderLive);
-  $$(".star", p).forEach((b) => (b.onclick = () => { stars = +b.dataset.n; $$(".star", p).forEach((x) => x.setAttribute("aria-pressed", String(+x.dataset.n <= stars))); }));
+  // The rating saves as soon as it's set; asking for the next adjustment is separate.
+  bindStars($("#afterStars"), rating, (n) => {
+    rating = n;
+    if (shot) { shot.enjoyment = n; S.api.annotate(shot.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating")); }
+  });
   $("#sendTaste").onclick = async (e) => {
     if (!shot || !S.current) return;
     e.target.disabled = true;
     try {
-      const { advice, source } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: stars || 3, notes: null });
+      const { advice, source } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: rating || null, notes: null });
       $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div><div class="muted small">${source === "ai" ? "Advice from the AI" : "From Crema's dial-in rules"}</div></div>`;
     } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
     e.target.disabled = false;
@@ -1347,7 +1382,7 @@ async function renderShots() {
       <input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}>
       <canvas data-spark="${i}" aria-hidden="true"></canvas>
       <button class="open" data-open="${esc(s.id)}"><strong>${esc(s.coffee || "Unknown coffee")}</strong>
-        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span>${s.enjoyment ? "★".repeat(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("");
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("");
   requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
   $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShots(); }));
   $$("[data-cmp]").forEach((b) => (b.onchange = () => { S.cmpShot = b.checked ? b.dataset.cmp : null; renderShots(); }));
@@ -1361,11 +1396,16 @@ function renderShotDetail() {
     ${metricsHtml(shotMetrics(s.points, s))}
     <div class="chart-box"><canvas id="detailChart"></canvas></div>
     <div class="legend">${legendHtml(false)}${c ? `<span><span class="swatch" style="background:var(--muted)"></span>Faint: ${esc(c.coffee || "")} ${new Date(c.timestamp).toLocaleDateString()}</span>` : ""}</div>
-    <div class="row"><span class="label">Rating</span><div class="stars" id="detailStars">${[1, 2, 3, 4, 5].map((n) => `<button class="star" type="button" aria-pressed="${(s.enjoyment || 0) >= n}" data-n="${n}" aria-label="${n} of 5">★</button>`).join("")}</div></div>
+    <div class="row"><span class="label">Rating</span>${starsHtml(s.enjoyment, "detailStars")}</div>
     <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Reference shot ✓" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>`;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
-  $$("#detailStars .star").forEach((b) => (b.onclick = async () => { s.enjoyment = +b.dataset.n; await S.api.annotate(s.id, { enjoyment: s.enjoyment }).catch(() => {}); renderShotDetail(); }));
+  bindStars($("#detailStars"), s.enjoyment, async (n) => {
+    s.enjoyment = n;
+    const row = $$("[data-rating]").find((x) => x.dataset.rating === s.id);
+    if (row) row.innerHTML = n ? starsHtml(n) : "Not rated";
+    await S.api.annotate(s.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating"));
+  });
   $("#shotNotes").onchange = async (e) => { s.notes = e.target.value; await S.api.annotate(s.id, { espressoNotes: s.notes }).catch(() => {}); toast("Notes saved"); };
   const pin = $("#pinDetail");
   if (pin) pin.onclick = async () => { await S.api.pinBest(bean.id, s.id); bean.bestShotId = s.id; if (S.current?.id === bean.id) await loadGhost(); renderShots(); toast("Reference shot set"); };

@@ -16,7 +16,7 @@ Without the server, everything works except identifying coffees from photos, des
 
 1. Install and set up [Decaid](https://github.com/decentespresso/decaid) on the DE1's tablet, and connect it to the machine and scale. (Decaid was previously called REA, ReaPrime and Streamline Bridge.)
 2. Get the skin, either way:
-   - **From a GitHub release.** Pushing a version tag runs `.github/workflows/release.yml`, which builds `crema-skin.zip` and attaches it to a release. If the repo has no release yet, publish one from `main`:
+   - **From a GitHub release.** Pushing a version tag runs `.github/workflows/release.yml`, which runs the CI checks, builds `crema-skin.zip`, checks it, and attaches it to a release. If a check fails, nothing is published. If the repo has no release yet, publish one from `main`:
 
      ```bash
      git tag v0.1.0 && git push origin v0.1.0

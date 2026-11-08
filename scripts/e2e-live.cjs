@@ -99,7 +99,7 @@ const check = (ok, label) => { console.log(`${ok ? "ok  " : "FAIL"} ${label}`); 
     check(await S(() => S.current.recipeSource === "rules"), "rules chose the recipe");
     const kv = await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema`)).json();
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
-    const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 3, notes: null }) : { source: "no shot" }; });
+    const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });
     check(fb.source === "rules" || fb.source === "no shot", `dial-in advice from the rules (${fb.source})`);
     // Steam and hot water write their preset first. Decaid has no GET for shot
     // settings and rejects a partial write, so this only works if the app reads

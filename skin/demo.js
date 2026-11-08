@@ -104,13 +104,13 @@ function makeDemoApi() {
     return pts;
   }
   const onShelf = all.filter((b) => b.shelf);
-  const history = [[0, 2, 31, 4], [0, 26, 27, 3], [1, 5, 30, 4], [1, 29, 34, 5], [4, 50, 29, 4], [4, 52, 32, 3], [2, 74, 28, 3], [5, 98, 30, 4], [3, 120, 33, 4], [5, 140, 36, 2]];
-  history.forEach(([bi, hoursAgo, secs, stars], i) => {
+  const history = [[0, 2, 31, 8], [0, 26, 27, 7], [1, 5, 30, 9], [1, 29, 34, 10], [4, 50, 29, 8], [4, 52, 32, 6], [2, 74, 28, 7], [5, 98, 30, 8], [3, 120, 33, 9], [5, 140, 36, 4]];
+  history.forEach(([bi, hoursAgo, secs, rating], i) => {
     const b = onShelf[bi % onShelf.length], r = b.recipe;
     shots.push({
       id: `s${i}`, timestamp: new Date(Date.now() - hoursAgo * 36e5).toISOString(), beanId: b.id, batch: b.batch,
       coffee: b.info.name.value, roaster: b.info.roaster.value, profileTitle: r.profileTitle, doseG: r.doseG,
-      yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, timeS: secs, enjoyment: stars, notes: "", points: curve(r.yieldG, secs, isLever(r.profileTitle), i + 1),
+      yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, timeS: secs, enjoyment: rating, notes: "", points: curve(r.yieldG, secs, isLever(r.profileTitle), i + 1),
     });
   });
   onShelf[0].bestShotId = "s1";
@@ -258,7 +258,7 @@ function makeDemoApi() {
     async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; } },
     async feedback(shotId, beanId, fb) {
       const s = shots.find((x) => x.id === shotId); const b = byId(beanId);
-      if (s) s.enjoyment = fb.enjoyment;
+      if (s && fb.enjoyment != null) s.enjoyment = fb.enjoyment;
       await wait(500);
       const recipe = b.recipe || recipeFor(b).recipe;
       return { advice: CE.rulesDialIn(fb, { timestamp: s?.timestamp ?? new Date().toISOString(), timeS: s?.timeS ?? 30 }, recipe), source: "rules" };

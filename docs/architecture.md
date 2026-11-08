@@ -58,7 +58,7 @@ Both must provide:
 | `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |
 | `rank(beanId)`, `catalog()` | Candidate ranking, profile catalog |
 | `apply(beanId, recipe, grinderSetting)` | Load the recipe onto the machine |
-| `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes |
+| `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `shotSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat` |
