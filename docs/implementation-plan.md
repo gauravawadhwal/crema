@@ -373,8 +373,21 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   backoff with jitter, and cleanup so reconnects don't accumulate handlers. Reopening
   on link-up isn't needed on Decaid 0.9.1, which re-attached the sockets after a
   `MockDe1` reconnect; confirm after a real DE1 power cycle.
-- [ ] **Bound API waits** and keep optional AI/recipe discovery from delaying machine
+- [x] **Bound API waits** and keep optional AI/recipe discovery from delaying machine
   telemetry and Stop availability. Reproduce before choosing the smallest change.
+  *Reproduced: boot loaded settings, the shelf and a recipe (possibly an AI call)
+  before subscribing to the machine streams, so with Decaid's bean list held for
+  15 s the first reading and a usable Stop came at 15.7 s; a request that never
+  answered had no limit at all. Done: boot subscribes first and shows the Brew
+  screen at once (0.9 s in the same test); the controls column shows Stop even
+  before presets load; every request has a limit (15 s for Decaid; identify 330 s,
+  recommend and dial-in 120 s, transcribe 60 s, matching the server's own model
+  limits); a shelf load that fails says "Couldn't load your coffees" with Try again
+  instead of "No coffee yet", and "Loading your coffees…" shows meanwhile.
+  `e2e-live.cjs` covers a slow bean list (readings and Stop in under 4 s) and one
+  that never answers (gives up at 15 s, says so, Stop works, Try again recovers).
+  The Shelf view itself still shows an empty list on a failed load (phase 2,
+  "surface fetch failures").*
 - [ ] Handle missing/error/busy states using documented capabilities. Preserve
   group-head-controller use and stop-at-weight responsibility in Decaid.
 

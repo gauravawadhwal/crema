@@ -133,6 +133,39 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     // Leaving for Decaid's dashboard: only inside Decaid's WebView, and not mid-operation.
     await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#sGhc", { timeout: 10000 });
     check(await page.locator("#exitDash").count() === 0, "no Decaid exit in an ordinary browser");
+
+    // Slow or stuck requests mustn't hold up the machine. Boot subscribes to the
+    // machine streams before it loads the shelf (which can mean an AI recipe), and every
+    // request has a time limit.
+    {
+      const slow = await browser.newPage({ viewport: { width: 1340, height: 800 } });
+      slow.on("pageerror", (e) => errs.push(`slow: ${e.message}`));
+      let held = true;
+      await slow.route(/\/api\/v1\/beans/, async (route) => { const t = Date.now(); while (held && Date.now() - t < 6000) await new Promise((r) => setTimeout(r, 100)); route.continue().catch(() => {}); });
+      const t0 = Date.now();
+      await slow.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#brew`);
+      await slow.waitForFunction(() => S.snap && !document.querySelector("#stopBtn").disabled, null, { timeout: 5000 }).catch(() => {});
+      const ready = (Date.now() - t0) / 1000;
+      const loading = await slow.textContent("#nextShot");
+      check(ready < 4 && /Loading your coffees/.test(loading), `readings and Stop arrive while the shelf is still loading (${ready.toFixed(1)} s; "${loading.trim()}")`);
+      await slow.waitForFunction(() => S.shelfLoaded && S.current, null, { timeout: 15000 }).catch(() => {});
+      check(await slow.evaluate(() => !!S.current && !S.shelfError), "the shelf fills in once Decaid answers");
+      await slow.close();
+
+      const stuck = await browser.newPage({ viewport: { width: 1340, height: 800 } });
+      stuck.on("pageerror", (e) => errs.push(`stuck: ${e.message}`));
+      let release = null;
+      await stuck.route(/\/api\/v1\/beans/, (route) => { if (release === null) return; route.continue().catch(() => {}); }); // never answers
+      await stuck.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#brew`);
+      await stuck.waitForFunction(() => /Couldn't load your coffees/.test(document.querySelector("#nextShot").textContent), null, { timeout: 25000 }).catch(() => {});
+      const failed = await stuck.evaluate(() => ({ err: S.shelfError, text: document.querySelector("#nextShot").textContent, stop: !document.querySelector("#stopBtn").disabled }));
+      check(/no answer within 15 s/.test(failed.err || "") && /Couldn't load your coffees/.test(failed.text) && failed.stop, "a request that never answers gives up after 15 s and says so; Stop still works", JSON.stringify(failed));
+      release = true; // Decaid answers again
+      await stuck.click("#retryShelf");
+      await stuck.waitForFunction(() => S.current && !S.shelfError, null, { timeout: 15000 }).catch(() => {});
+      check(await stuck.evaluate(() => !!S.current), "Try again loads the shelf");
+      await stuck.close();
+    }
     const tablet = await browser.newPage({ viewport: { width: 1340, height: 800 } });
     tablet.on("pageerror", (e) => errs.push(`tablet: ${e.message}`));
     await tablet.addInitScript(() => { window.__exits = 0; window.decentApp = { exitToDashboard() { window.__exits++; } }; });
