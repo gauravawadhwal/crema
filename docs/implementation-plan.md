@@ -99,6 +99,11 @@ phase 1, so real-hardware findings can reshape phases 1–3.
 9. ~~**Comparison bugs 1–3**~~ (see "Findings from the skin comparison"). *Fixed for
    v0.1.1.*
 
+10. **Voice input inside Decaid** (see "Findings: voice input inside Decaid"). Hide Speak
+   from the start in Decaid's WebView and point to the keyboard's microphone. Small; for
+   0.3.0. Optionally, HTTPS for the Crema server so a phone gets Speak, and a feature
+   request to Decaid for an opt-in microphone (the user posts it).
+
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 
 Small follow-up: the README screenshots and walkthrough still show the old boxed
@@ -173,6 +178,42 @@ building on them.
 7. **Playwright is installed globally, not declared (phase 0, R11).** The UI scripts
    only work where `playwright` is installed globally. A fresh checkout can't run them.
    *Fixed: Playwright is a dev dependency and CI's `ui` job runs the UI checks.*
+
+## Findings: voice input inside Decaid (9 November 2026)
+
+Seen by the user on the Android tablet: tapping Speak in "Describe it" fails, because
+the microphone is refused. It isn't a bug or a setting:
+
+- Decaid's `doc/Skins.md` ("Live Camera Access on Android, iOS and macOS") says skins in
+  its embedded WebView may use the camera only (`getUserMedia({video: true, audio:
+  false})`, with per-skin Ask/Allow/Deny consent); "microphone and combined
+  camera/microphone requests are denied", on Android, iOS and macOS alike.
+- Decaid's Android manifest (`android/app/src/main/AndroidManifest.xml` on `main`, read
+  9 November 2026) doesn't declare `RECORD_AUDIO`, so Android doesn't even offer a
+  Microphone permission for the app. Nothing in Android or Decaid settings can turn it on.
+- The file-input route (`<input type="file" capture>` opening a recorder) is limited to
+  images on Android ("image/non-image mixtures are denied for capture").
+- Forking Decaid to change this is out of scope (see "Outcome and boundaries").
+
+What works, and what to do:
+
+- [ ] **Hide Speak inside Decaid from the start.** Today Crema shows Speak, the first
+  tap fails, then `noMicrophone()` hides it and suggests the keyboard. `window.decentApp`
+  exists only in Decaid's WebView, where the microphone is always denied, so Crema can
+  skip straight to the hint: "Tap the box, then the microphone on your keyboard." The
+  keyboard (Gboard and similar) is a separate app with its own microphone permission, so
+  its dictation works in the "Describe it" box and the text goes through the same
+  identification as typing. Gemini's coffee-aware transcription is lost there, but the
+  identify step already corrects misheard names. Settings' "Speaking a description" row
+  should say the same inside Decaid. Test in `e2e-live.cjs` with a stand-in
+  `decentApp`, as the dashboard-exit check does.
+- [ ] **Optional: HTTPS for the Crema server** (homelab reverse proxy), so the phone app
+  is a secure page and gets Speak with Gemini. Browsers allow the microphone only on
+  https or localhost; the phone app is served over plain http on the LAN. Document it in
+  `docs/install.md` when it's set up; no code change needed.
+- [ ] **Optional: ask Decaid for an opt-in microphone for skins**, like the camera's
+  per-skin Ask/Allow/Deny. It's a deliberate privacy choice, so a feature request, not a
+  bug. The user would post it; Claude can draft it.
 
 ## Findings from the skin comparison (8–9 November 2026)
 
