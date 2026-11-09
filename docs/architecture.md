@@ -61,7 +61,7 @@ Both must provide:
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
-| `machine.*` | `setState`, `tare`, `workflowSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat`. `workflowSettings` reads and writes only the workflow's `steamSettings`, `hotWaterData` and `rinseData` (never the profile); `settings` is left with fan and USB |
+| `machine.*` | `setState`, `tare`, `recipe`, `workflowSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat`. `recipe()` is what the machine holds now, as `{profileTitle, doseG, yieldG, tempC, grind, batchId}` (the demo returns null until something is loaded); `workflowSettings` reads and writes only the workflow's `steamSettings`, `hotWaterData` and `rinseData` (never the profile); `settings` is left with fan and USB |
 | `subscribe({snapshot, scale, water, ready, devices})` | Live streams. `devices` is Decaid's device list (`ws/v1/devices`, first answered by `GET /api/v1/devices`): the machine's link state and connection errors. The demo sends one "connected" frame |
 | `host.{canExit, exitToDashboard()}` | Leave the skin for Decaid's dashboard. Live: `canExit` is true only when Decaid's WebView provides `window.decentApp.exitToDashboard`. Demo: always shown, and only explains itself |
 
