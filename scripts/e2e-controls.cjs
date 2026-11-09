@@ -78,6 +78,12 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
   const hold = (name) => p.evaluate((n) => { window.__release = window.__hold(n); }, name);
   const release = () => p.evaluate(() => window.__release());
   const tap = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel); // a tap, even on a disabled-looking button
+  // A real tap: press, hold about as long as a finger does, release.
+  const press = async (sel, ms = 150) => {
+    const box = await (await p.$(sel)).boundingBox();
+    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await p.mouse.down(); await p.waitForTimeout(ms); await p.mouse.up();
+  };
 
   try {
     // 1. Stop while steam's settings write is still pending.
@@ -201,7 +207,29 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await tap('[data-run="flush"]');
     await p.waitForFunction(() => S.snap?.state?.state === "flush", null, { timeout: 5000 }).catch(() => {});
     check((await state()) === "flush", "a plain start still runs", `machine ${await state()}`);
-    await tap("#opStop");
+
+    // 10. A finger-length tap on the running overlay's Stop lands. Its card is redrawn
+    // on every machine update; if the button were replaced between press and release,
+    // the tap would be lost (an instant click() never shows this).
+    await p.waitForTimeout(400);
+    await press("#opStop");
+    await p.waitForFunction(() => S.snap?.state?.state !== "flush", null, { timeout: 3000 }).catch(() => {});
+    check((await state()) !== "flush", "a held tap on the running overlay's Stop stops the machine", `machine ${await state()}`);
+
+    // 11. The same for the tare buttons, redrawn on every scale and machine update.
+    // At idle those come rarely, so redraw as often as a shot does (every 50 ms).
+    await reset();
+    await p.evaluate(() => {
+      window.__tares = 0; const t = S.api.machine.tare; S.api.machine.tare = (...a) => { window.__tares++; return t(...a); };
+      window.__redraw = setInterval(() => { S.scale = { ...S.scale, connected: true, weight: (S.scale.weight || 0) + 0.1 }; renderStatus(); renderReadouts(); }, 50);
+    });
+    for (const sel of ["#scaleChip", "#weightReadout"]) {
+      await p.evaluate(() => (window.__tares = 0));
+      for (let i = 0; i < 3; i++) { await press(sel); await p.waitForTimeout(150); }
+      const n = await p.evaluate(() => window.__tares);
+      check(n === 3, `held taps on ${sel} each tare the scale`, `${n} of 3`);
+    }
+    await p.evaluate(() => clearInterval(window.__redraw));
   } catch (e) {
     check(false, e.message.split("\n")[0]);
   }
