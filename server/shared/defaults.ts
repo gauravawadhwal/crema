@@ -37,9 +37,15 @@ export interface Presets {
 export interface AppSettings {
   /** Master switch for AI features (identification, AI profile choice, AI dial-in). */
   aiEnabled: boolean;
+  /** Grinder setting a coffee starts at before one is saved for it. */
+  grindStart: number;
+  /** How far one tap of the grind stepper moves the setting. */
+  grindStep: number;
 }
 
-export const DEFAULT_SETTINGS: AppSettings = { aiEnabled: true };
+export const DEFAULT_SETTINGS: AppSettings = { aiEnabled: true, grindStart: 10, grindStep: 0.25 };
+/** Steps offered in Settings; the stepper accepts any positive step. */
+export const GRIND_STEPS = [0.1, 0.25, 0.5, 1];
 
 export const DEFAULT_PRESETS: Presets = {
   steam: [

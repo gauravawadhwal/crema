@@ -45,6 +45,7 @@ function makeDemoApi() {
     return { ...b, info, productImage: art, art: "product", frozen: false, finished: false, bestShotId: null, recipe: null, recipeSource: null };
   });
   let aiEnabled = true;
+  const demoGrind = { grindStart: CE.DEFAULT_SETTINGS.grindStart, grindStep: CE.DEFAULT_SETTINGS.grindStep };
   // The AI recipes in demo-data.js are from real runs. With AI off, or for a coffee typed in by hand, the browser rules decide, as they do live.
   const rulesFor = (b) => {
     const ranked = CE.rankProfiles(b.info, prefs, titles);
@@ -213,8 +214,13 @@ function makeDemoApi() {
     // Shown in the demo so the control can be seen; on the tablet it closes the skin.
     host: { canExit: true, exitToDashboard() { toast("On the tablet, this closes Crema and shows Decaid's dashboard"); } },
     settings: {
-      get: async () => ({ aiEnabled }),
-      set: async (p) => { if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled; return { aiEnabled }; },
+      get: async () => ({ ...demoGrind, aiEnabled }),
+      set: async (p) => {
+        if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled;
+        if (Number.isFinite(p.grindStart)) demoGrind.grindStart = p.grindStart;
+        if (p.grindStep > 0) demoGrind.grindStep = p.grindStep;
+        return { ...demoGrind, aiEnabled };
+      },
     },
     async shelf() { return shelf().map(shelfItem); },
     async identify({ files, query, description, url }, onStep) {

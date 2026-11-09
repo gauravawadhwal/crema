@@ -590,6 +590,7 @@ const S = {
   noBag: local.get("current", null) === NO_BAG, machineInfo: null, loadedRecipe: null,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
+  appSettings: null, // S.api.settings, once read
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
   shots: [], selShot: null, cmpShot: null,
@@ -785,9 +786,18 @@ async function tare() {
 function saveBrewChoice() {
   if (S.noBag) local.set("baglessRecipe", S.next);
 }
+// Grind start and step are shared settings, so every device steps the same grinder alike.
+// A coffee with no grind saved yet starts at the start value, so the stepper always has
+// a number to move and nobody needs the keyboard.
+function grindSettings() {
+  const st = { ...E.DEFAULT_SETTINGS, ...S.appSettings };
+  const start = Number(st.grindStart), stepBy = Number(st.grindStep);
+  return { start: Number.isFinite(start) ? start : E.DEFAULT_SETTINGS.grindStart, step: Number.isFinite(stepBy) && stepBy > 0 ? stepBy : E.DEFAULT_SETTINGS.grindStep };
+}
+const savedGrind = (beanId) => local.get(`grind:${beanId ?? "bagless"}`, "") || String(grindSettings().start);
 function setNextFromRecipe(bean, recipe) {
   const r = recipe || bean?.recipe;
-  S.next = r ? { beanId: bean?.id ?? null, profileTitle: r.profileTitle, profileId: r.profileId ?? null, profileShape: r.profileShape ?? null, direct: r.direct ?? false, manual: r.manual ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.manual ? null : r.targetTimeS, grind: local.get(`grind:${bean?.id ?? "bagless"}`, "") } : null;
+  S.next = r ? { beanId: bean?.id ?? null, profileTitle: r.profileTitle, profileId: r.profileId ?? null, profileShape: r.profileShape ?? null, direct: r.direct ?? false, manual: r.manual ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.manual ? null : r.targetTimeS, grind: savedGrind(bean?.id) } : null;
   S.loaded = false;
   saveBrewChoice();
 }
@@ -854,8 +864,9 @@ function step(spec) {
   if (key === "yield") n.yieldG = clamp(round(n.yieldG + d, 0.5), n.direct || n.manual ? 0 : 10, 1000);
   if (key === "temp") n.tempC = clamp(round(n.tempC + d * 0.5, 0.5), 60, 100);
   if (key === "grind") {
-    const v = parseFloat(n.grind);
-    n.grind = Number.isFinite(v) ? String(round(v + d * 0.5, 0.5)) : n.grind;
+    // Empty or not a number (a note like "2.3 turns"): start from the start value.
+    const g = grindSettings(), v = parseFloat(n.grind);
+    n.grind = String(Number.isFinite(v) ? +(v + d * g.step).toFixed(3) : g.start);
     local.set(`grind:${n.beanId ?? "bagless"}`, n.grind);
   }
   S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls();
@@ -981,6 +992,7 @@ async function selectBean(key, opts = {}) {
   if (key === NO_BAG) {
     S.noBag = true; S.current = null; local.set("current", NO_BAG);
     S.next = local.get("baglessRecipe", null); S.loaded = false; S.ghost = null;
+    if (S.next && !S.next.grind) S.next.grind = savedGrind(null);
     renderNextShot(); renderLive(); renderControls(); return;
   }
   S.noBag = false;
@@ -1084,7 +1096,7 @@ async function useFav(i) {
   if (f.noBag === true) await selectBean(NO_BAG, { quiet: true });
   if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
   if (f.beanId && !S.shelf.some((b) => b.id === f.beanId)) return toast("That favourite's coffee is no longer on the shelf");
-  S.next = { ...S.next, beanId: S.current?.id ?? null, profileTitle: f.profileTitle, profileId: f.profileId ?? null, profileShape: f.profileShape ?? null, manual: f.manual ?? null, direct: f.direct ?? false, targetTimeS: f.targetTimeS ?? null, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting ?? "" };
+  S.next = { ...S.next, beanId: S.current?.id ?? null, profileTitle: f.profileTitle, profileId: f.profileId ?? null, profileShape: f.profileShape ?? null, manual: f.manual ?? null, direct: f.direct ?? false, targetTimeS: f.targetTimeS ?? null, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting || savedGrind(S.current?.id) };
   S.loaded = false; saveBrewChoice();
   renderNextShot();
   const loaded = await loadOntoMachine(true);
@@ -2162,7 +2174,7 @@ function sw(id, checked) { return `<label class="switch"><input type="checkbox" 
 // Decaid 0.9.1 REST: sleep 0..240 (0 disables idle sleep). DE1 fan MMR:
 // 0..50, also enforced by installed Streamline 0.2.23. Decaid's water-level
 // form uses 0..30 mm. These are edit limits, never replacement machine defaults.
-const SETTING_LIMITS = { sFan: [0, 50, 1], sSleepMin: [0, 240, 1], sWaterWarn: [0, 30, 1] };
+const SETTING_LIMITS = { sFan: [0, 50, 1], sSleepMin: [0, 240, 1], sWaterWarn: [0, 30, 1], gStart: [-100, 1000, 0.01] };
 function settingNumber(value, limits) {
   if (value == null || String(value).trim() === "" || !Number.isFinite(Number(value))) throw new Error("Enter a number");
   const n = Number(value);
@@ -2181,7 +2193,8 @@ async function renderSettings() {
   const [wf, ms, pres, scheds, disp, plugins, maint] = await Promise.all([m.workflowSettings.get().catch(() => null), m.settings.get().catch(() => null), m.presence.get().catch(() => null), m.schedules.list().catch(() => []), m.display.get().catch(() => null), m.plugins().catch(() => []), S.api.maintenance.get().catch(() => null)]);
   S.maint = maint;
   const p = S.prefs, theme = local.get("theme", "auto");
-  const ai = { enabled: (await S.api.settings.get().catch(() => ({ aiEnabled: true }))).aiEnabled !== false };
+  S.appSettings = await S.api.settings.get().catch(() => S.appSettings);
+  const ai = { enabled: S.appSettings?.aiEnabled !== false }, grind = grindSettings();
   const viz = plugins.find((x) => /visualizer/i.test(x.id));
   const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
   el.innerHTML = `
@@ -2189,6 +2202,8 @@ async function renderSettings() {
     <div class="set-row first"><span>How you drink it</span>${seg("pDrink", [["straight", "Straight"], ["milk", "Milk"], ["both", "Both"]], p.drink ?? "both")}</div>
     <div class="set-row"><span>Bluetooth scale<span class="hint">Needed for D-Flow, A-Flow, blooming and allongé profiles</span></span>${sw("pScale", p.hasScale !== false)}</div>
     <div class="set-row"><span>Grinder burrs</span>${seg("pBurrs", [["flat", "Flat"], ["conical", "Conical"], ["unknown", "Not sure"]], p.burrs ?? "unknown")}</div>
+    <div class="set-row"><span>Grind to start from<span class="hint">For a coffee with no grind saved yet</span></span>${mini("gStart", grind.start, grind.step, "grind setting")}</div>
+    <div class="set-row"><span>Grind step<span class="hint">How far one tap of − or + moves the grind</span></span>${seg("gStep", E.GRIND_STEPS.map((v) => [v, String(v)]), grind.step)}</div>
     <div class="set-row"><span>Experience</span>${seg("pExp", [["new", "New"], ["comfortable", "Comfortable"], ["advanced", "Advanced"]], p.experience ?? "comfortable")}</div>
     <div class="set-row"><span>Basket dose<span class="hint">Grams your basket holds</span></span>${mini("pDose", p.basketDoseG ?? 18, 0.5, "grams")}</div>
   </div>
@@ -2258,6 +2273,7 @@ async function renderSettings() {
   const num = (id) => settingNumber($(`#${id}`)?.value, SETTING_LIMITS[id]);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
+    gStart: async () => { S.appSettings = await S.api.settings.set({ grindStart: num("gStart") }); },
     sSteamT: () => setWorkflowSetting("steamSettings", "targetTemperature", num("sSteamT")),
     sSteamF: () => setWorkflowSetting("steamSettings", "flow", num("sSteamF")),
     sWaterT: () => setWorkflowSetting("hotWaterData", "targetTemperature", num("sWaterT")),
@@ -2290,8 +2306,18 @@ async function renderSettings() {
       finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
     };
     input.onchange = run;
-    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { if (saving || input.disabled) return; const d = Number(b.dataset.mini.split(":")[1]); input.value = String(round(Number(input.value) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
+    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { if (saving || input.disabled) return; const d = Number(b.dataset.mini.split(":")[1]); const dp = (x) => (String(Math.abs(x)).split(".")[1] ?? "").length, places = Math.min(3, Math.max(dp(d), dp(Number(input.value)))); input.value = String(+(Number(input.value) + d).toFixed(places)); run(); }));
   }
+  $$("#gStep button").forEach((b) => (b.onclick = async () => {
+    const v = Number(b.dataset.v);
+    $$("#gStep button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    try {
+      S.appSettings = await S.api.settings.set({ grindStep: v });
+      $$('[data-mini^="gStart:"]').forEach((x) => (x.dataset.mini = `gStart:${x.dataset.mini.includes("-") ? -v : v}`));
+      $("#gStart").step = String(v);
+      toast("Saved");
+    } catch (e) { toast(`Couldn't save: ${e.message}`); renderSettings(); }
+  }));
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
   const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
   const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
@@ -2327,7 +2353,7 @@ async function renderSettings() {
   $("#changeServer").onclick = () => connectSheet();
   const ex = $("#exitDash"); if (ex) ex.onclick = exitToDashboard;
   $("#sAi").onchange = async (e) => {
-    try { await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { toast(`Couldn't save: ${err.message}`); }
+    try { S.appSettings = await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { toast(`Couldn't save: ${err.message}`); }
     renderStatus(); renderSettings();
     toast(e.target.checked ? "AI features on" : "AI features off. Crema uses its rules");
   };
@@ -2525,7 +2551,7 @@ async function boot() {
   document.addEventListener("visibilitychange", checkStaleReadings);
   // Show the Brew screen (readings, Stop) now; the rest of it fills in as data arrives.
   if (!location.hash || location.hash === "#brew") route(false);
-  await S.api.settings.get().catch(() => {});
+  S.appSettings = await S.api.settings.get().catch(() => null);
   S.machineInfo = await S.api.machine.info().catch(() => null);
   $("#demoBanner").hidden = !S.api.demo;
   // Offer to connect when this page could reach a machine (not the hosted demos).
