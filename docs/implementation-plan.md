@@ -6,7 +6,8 @@ progress table and the ticked items below say what is done; everything else is s
 **Where things stand (10 November 2026).** Phases 1, 2 and 5 are done in software, and
 phase 6 mostly. v0.2.0 is released and is the first install on the user's DE1 tablet;
 v0.3.0 (No bag and manual brewing, profile graphs, removable reference) followed the
-same day, and installing it on the tablet is the first in-place upgrade.
+same day, and v0.4.0 (10 November 2026: AI shot review, grind stepper, stable buttons)
+after it; installing either on the tablet is the first in-place upgrade.
 One real brew has since been reported successful and its saved workflow/measurements
 inspected read-only (see the live-verification note below). Broader tablet acceptance
 is pending. Software checks use `dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
@@ -47,7 +48,7 @@ merged (PR #30) and released in v0.3.0; tablet acceptance is pending.
 AI shot review, requested 9 November 2026: see [AI shot review](shot-review-plan.md)
 for how other DE1 projects do it, the design (shot checks with no AI, then a
 button-triggered AI review that sees the curves), implementation order and
-acceptance checks. First version implemented in the shot-review change; real-shot calibration remains pending. It builds on the profile graph (PR #31).
+acceptance checks. First version merged (PR #35) and released in v0.4.0; real-shot calibration and tablet acceptance remain pending. It builds on the profile graph (PR #31).
 
 ## Current UI delivery — 9 November 2026
 
@@ -215,8 +216,9 @@ phase 1, so real-hardware findings can reshape phases 1–3.
 3. ~~**Tag `v0.1.0` as a normal GitHub release**~~ *Done 9 November 2026 (release
    workflow passed, `crema-skin.zip` checked); v0.1.1 fixed comparison bugs 1–3, and
    v0.2.0 (9 November 2026: phase 2 done in software, Docker in CI) is the first
-   install, so the tablet session covers phases 1 and 2. v0.3.0 (9 November 2026) is the
-   next release; upgrading the tablet to it tests phase 7's "upgrade without losing records".* From `main`. The release workflow runs CI
+   install, so the tablet session covers phases 1 and 2. v0.3.0 (9 November 2026) and
+   v0.4.0 (10 November 2026) followed; upgrading the tablet to the latest tests phase 7's
+   "upgrade without losing records".* From `main`. The release workflow runs CI
    and checks the ZIP first. Not a pre-release: Decaid's GitHub Release install asks for
    `releases/latest` unless `includePrerelease` is set (`lib/src/util/github_archive.dart`
    on Decaid's `main`, read 8 November 2026), and GitHub's latest skips pre-releases, so
@@ -247,7 +249,7 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    user on 9 November 2026. One "Review shot" button replaces "Next adjustment": shot
    checks in `server/profiles/analysis.ts` (no AI, the fallback), then `/api/review`
    with the curves, findings and taste. Saved on the shot in Decaid. No score and no
-   follow-up chat yet. Implemented and tested in software; thresholds still need
+   follow-up chat yet. Released in v0.4.0 (PR #35); thresholds still need
    calibration on real shots.
 
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
@@ -1040,7 +1042,7 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
   `verify` (typecheck, `npm test` including engine freshness, skin syntax, built demo
   matches source, skin ZIP check), `ui` (the Playwright checks, screenshots kept on
   failure) and `docker` (image smoke test). `release.yml` and `pages.yml` call it
-  first. The release path has run for v0.1.0, v0.1.1, v0.2.0 and v0.3.0.*
+  first. The release path has run for v0.1.0, v0.1.1, v0.2.0, v0.3.0 and v0.4.0.*
 - [ ] Preserve root `index.html`, skin metadata, relative asset paths and semantic
   version tags. Include the actual project repository in release metadata where
   appropriate. Do not ship test tooling or credentials inside the skin.

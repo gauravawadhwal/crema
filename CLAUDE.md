@@ -127,7 +127,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 
 ## Status and next steps
 
-Released: v0.3.0 (9 November 2026): bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier the same day, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; updating that tablet to v0.3.0 is the first in-place upgrade.
+Released: v0.4.0 (10 November 2026): AI shot review (shot checks with no AI, an optional AI review, saved on the shot in Decaid), a shared grind start value and stepper, and buttons that stay put when panels redraw. v0.3.0 (9 November 2026) added bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier on 9 November, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; updating that tablet to v0.3.0 or v0.4.0 is the first in-place upgrade.
 
 Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
 - the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site
