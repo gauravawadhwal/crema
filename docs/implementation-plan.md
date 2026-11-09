@@ -57,7 +57,7 @@ separate supervised step; implement and test locally first.
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
-| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Started: CI gates releases and Pages, with a `ui` job for the Playwright checks; tablet fit fails on overflow; skin ZIP checked before publishing |
+| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. Left: a live test that pulls a shot end to end with the recorded workflow; backup/restore docs; repository in the manifest |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
 
 ### Suggested next sessions
@@ -734,6 +734,10 @@ mark the whole matrix complete based on one working link.
   schemas and UI views. Avoid changing unrelated visuals during extraction.
 - [ ] Enforce the live/demo contract using shared types (TypeScript or checked
   JavaScript/JSDoc are both acceptable). Include relevant frontend code in checks.
+  *Partly done: `e2e-live.cjs` compares the live and demo API objects' members, two
+  levels deep, and fails on any one-sided member (one documented exception: the
+  demo's `machine.refill()`). It catches a member added to one backend only; it
+  doesn't check argument shapes or return types, which shared types would.*
 - [ ] Validate external/persisted values at adapter boundaries and define migration
   versions. Keep pure recommendation logic in the shared engine, not copied into UI.
 - [ ] Define subscription cleanup and ownership so reconnects/navigation do not
@@ -809,9 +813,15 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
   a missing or absolute asset path, a script that doesn't parse, or development files.
   The release workflow rejects tags that aren't semantic versions. Repository in the
   manifest: not done.*
-- [ ] Build/smoke-test the optional Docker server using mock AI; assert basic config,
+- [x] Build/smoke-test the optional Docker server using mock AI; assert basic config,
   static skin delivery and permitted local proxy behaviour. Account-dependent AI
   provider smoke tests remain separate from ordinary CI and require no CI secrets.
+  *Done: `scripts/docker-smoke.mjs` builds the image and runs it with the mock AI
+  against the simulator: config, the web app and its scripts at `/`, the `/decaid/*`
+  proxy, identification, a private photo URL refused, and a non-root user with a
+  writable `/data`. CI's new `docker` job runs it and also builds the image with
+  `AI_CLIS` (Claude Code and Codex) and checks both CLIs start; no secrets. Release
+  and Pages run it too, through `ci.yml`.*
 - [ ] Document GitHub Release installation and Decaid-managed updates as the normal
   path, with ZIP installation for offline/manual use. Do not add a custom updater.
 - [ ] Document and test what Decaid backup/export includes, especially Crema's KV
