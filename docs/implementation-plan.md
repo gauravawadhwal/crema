@@ -534,14 +534,35 @@ and abandoned commands must never run after recovery.
 
 ### Profiles
 
-- [ ] Populate the library from installed Decaid profiles, including custom ones.
+- [x] Populate the library from installed Decaid profiles, including custom ones.
   Treat the curated catalogue as optional recommendation metadata.
-- [ ] Use stable upstream IDs where available; handle duplicate titles and edited
+  *Done: `api.library()` (both backends) lists Decaid's installed espresso profiles,
+  each with Crema's guide entry when the catalogue knows it. Profiles shows "N of M
+  on this machine"; guide filters apply to known profiles; ones the guide doesn't
+  know show Decaid's author, notes and step count and can be used, starting from the
+  usual dose, the profile's target weight and first-step temperature. Guide entries
+  that aren't installed are listed separately as not usable. Falls back to the guide
+  if Decaid's profiles can't be read. The user has no custom profiles, so only the
+  read path is covered; ranking still uses the guide.*
+- [x] Use stable upstream IDs where available; handle duplicate titles and edited
   profiles. Preserve unsupported/unknown profile fields and full step semantics.
-- [ ] When no supported recommendation is available, say so and allow manual
+  *Done: recipes carry `profileId` from the library; `apply` loads by id when there
+  is one, else by title; duplicates are shown with their author or id. Only
+  temperatures and `target_weight` are changed on load.*
+- [x] When no supported recommendation is available, say so and allow manual
   selection. Never present an uninstalled profile as an actionable recommendation.
-- [ ] Keep applying temperature offsets across all steps. Test round trips of
+  *Done: the rules fallback could recommend an uninstalled profile. The app now turns
+  a recipe for an uninstalled profile into "no recommendation" (Brew says so with
+  "Choose a profile"); candidate cards offer Use only for installed profiles ("Not on
+  this machine" otherwise); and the server skips the model when no candidate is
+  installed. No prompt change; the rules recommend eval matches its baseline (100%
+  agreement on the profile).*
+- [x] Keep applying temperature offsets across all steps. Test round trips of
   custom profiles with limits, exits and temperature curves, not only mock steps.
+  *Done: unit tests on a hand-written profile in Decaid's shape (limits, exits,
+  sensors, pumps, unknown fields): every step moves by the same amount and nothing
+  else changes. `e2e-live.cjs` covers the library, using a profile outside the guide,
+  the id picking between two same-title profiles, and the no-match path.*
 
 Acceptance: an installed custom profile can be selected and used without catalogue
 membership; empty/nonmatching libraries do not produce a fake usable recipe;

@@ -331,6 +331,41 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       check(/hasn't saved this shot yet/.test(await page.textContent("#afterShot")), "if Decaid hasn't saved the shot, the panel says the rating can't be attached yet");
       await page.unroute(/\/api\/v1\/shots\/latest/);
     }
+
+    // Profiles: the library is what's installed in Decaid; Crema's guide only adds notes.
+    {
+      const profilesUrl = /\/api\/v1\/profiles\?visibility=visible/;
+      const installed = await (await fetch(`http://localhost:${MOCK}/api/v1/profiles?visibility=visible`)).json();
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#profiles`);
+      await page.waitForFunction(() => /on this machine/.test(document.querySelector("#catCount")?.textContent || ""), null, { timeout: 15000 }).catch(() => {});
+      const lib = await S(() => ({ count: document.querySelector("#catCount").textContent, unknown: [...document.querySelectorAll(".cat-card")].filter((c) => /Not in Crema's guide/.test(c.textContent)).length, size: S.library?.length }));
+      check(lib.size === installed.length && new RegExp(`of ${installed.length} on this machine`).test(lib.count) && lib.unknown > 0, `the library lists every installed profile, including ones Crema's guide doesn't know (${JSON.stringify(lib)})`);
+      // One the guide doesn't know can be chosen and loaded.
+      const pick = await S(() => S.library.find((p) => !p.guide));
+      await page.click(`.cat-card[data-p="${pick.id}"]`); await page.click("#useProfile");
+      await page.waitForFunction((t) => S.next?.profileTitle === t, pick.title, { timeout: 5000 }).catch(() => {});
+      await S(() => loadOntoMachine(true));
+      const loaded = await wfGet();
+      check(await page.evaluate((id) => S.next.profileId === id, pick.id) && loaded.profile.title === pick.title, `an installed profile outside the guide can be chosen and loaded (${pick.title})`);
+      // Two installed profiles with one title: the id decides which is loaded.
+      const twin = installed.find((x) => x.profile.title === pick.title);
+      await page.route(profilesUrl, (r) => r.fulfill({ json: [{ id: "profile:twin", profile: { ...twin.profile, notes: "the other one" } }, ...installed] }));
+      await page.evaluate((id) => { S.next.profileId = id; S.loaded = false; }, twin.id);
+      await S(() => loadOntoMachine(true));
+      check((await wfGet()).profile.notes !== "the other one", "with two installed profiles of one title, the recipe's profile id picks the right one");
+      await page.unroute(profilesUrl);
+      // Nothing installed is in the guide: no recommendation, and nothing uninstalled offers Use.
+      const outside = installed.filter((x) => !/^(Adaptive|Blooming|A-Flow|D-Flow|Gagn|Extractamundo|Turbo|Rao|Londonium|Damian|80's|Default|Gentle|Flow profile|Best practice|Easy blooming|Espresso Forge|Classic Italian|Trendy|I got your back|Cremina|Traditional lever|Baseline)/.test(x.profile.title));
+      await page.route(profilesUrl, (r) => r.fulfill({ json: outside.length ? outside : [{ id: "profile:solo", profile: { title: "Nobody's Profile", author: "Test", beverage_type: "espresso", steps: [{ temperature: 90 }], target_weight: 38 } }] }));
+      const none = await S(async () => { S.library = null; S.current.recipe = null; const out = await S.api.recommend(S.current.id, { rulesOnly: true }); S.current.recipe = out.recipe; S.current.recipeSource = out.source; setNextFromRecipe(S.current); renderNextShot(); return { recipe: out.recipe, source: out.source, brew: document.querySelector("#nextShot").textContent }; });
+      check(none.recipe === null && none.source === "none" && /no recommendation/.test(none.brew), `with no installed match there's no recommendation, and Brew says so (${none.source})`);
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#profiles`);
+      await page.waitForFunction(() => /no recommendation/.test(document.querySelector("#recommended")?.textContent || ""), null, { timeout: 15000 }).catch(() => {});
+      const rec = await S(() => ({ text: document.querySelector("#recommended").textContent, use: document.querySelectorAll("#recommended [data-use]").length }));
+      check(/no recommendation/.test(rec.text) && rec.use === 0 && /Not on this machine/.test(rec.text), "Profiles says there's no recommendation, and uninstalled candidates can't be used");
+      await page.unroute(profilesUrl);
+      await S(async () => { S.library = null; S.current.recipe = null; await selectBean(S.current.id, { quiet: true }); });
+    }
     const kv = await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema`)).json();
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });

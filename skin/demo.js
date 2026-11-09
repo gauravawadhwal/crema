@@ -256,6 +256,9 @@ function makeDemoApi() {
     },
     async rank(id) { return recipeFor(byId(id)).candidates; },
     async catalog() { return D.catalog.map((p) => ({ ...p, installed: true })); },
+    async library() {
+      return D.catalog.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.character, steps: 0, targetWeight: p.recipe.yieldG, tempC: p.recipe.tempC, guide: p }));
+    },
     async apply(id, recipe, grinderSetting) {
       const b = byId(id);
       workflow = { profile: { title: recipe.profileTitle }, context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: b.batch, grinderSetting: grinderSetting ?? "" }, tempC: recipe.tempC, applied: true };

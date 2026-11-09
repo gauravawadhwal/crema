@@ -58,3 +58,33 @@ describe("isPlaceholderImage", () => {
     "not a url",
   ])("keeps %s", (u) => expect(isPlaceholderImage(u)).toBe(false));
 });
+
+describe("withTemperature on a full profile", () => {
+  // Hand-written in Decaid's profile shape: limits, exits, sensors, pumps and fields
+  // Crema doesn't know must all come back as they went in; only temperatures move.
+  const profile = {
+    version: "2", title: "Test Lever", author: "Crema tests", notes: "keep me", beverage_type: "espresso",
+    target_weight: 36, target_volume: 0, tank_temperature: 0, lang: "en", legacy_profile_type: "settings_2c",
+    unknown_future_field: { nested: [1, 2, 3] },
+    steps: [
+      { name: "fill", temperature: "88.0", sensor: "coffee", pump: "flow", transition: "fast", pressure: "0", flow: "8", seconds: "25", volume: "100",
+        exit: { type: "pressure", condition: "over", value: "4" }, limiter: { value: "1", range: "0.6" } },
+      { name: "hold", temperature: 90.5, sensor: "water", pump: "pressure", transition: "smooth", pressure: 8.6, seconds: 10, weight: 0 },
+      { name: "decline", temperature: 86, sensor: "coffee", pump: "pressure", transition: "smooth", pressure: 6, seconds: 30,
+        exit: { type: "flow", condition: "under", value: 1.5 }, limiter: { value: 2.5, range: 0.6 } },
+    ],
+  };
+  it("shifts every step's temperature by the same amount", () => {
+    const out = withTemperature(profile, 92) as typeof profile;
+    expect(out.steps.map((st) => Number(st.temperature))).toEqual([92, 94.5, 90]);
+  });
+  it("leaves every other field, nested or unknown, exactly as it was", () => {
+    const out = withTemperature(profile, 92) as typeof profile;
+    const strip = (p: typeof profile) => ({ ...p, steps: p.steps.map(({ temperature, ...rest }) => rest) });
+    expect(strip(out)).toEqual(strip(profile));
+    expect(profile.steps[0].temperature).toBe("88.0"); // the input isn't changed
+  });
+  it("is a no-op at the same temperature", () => {
+    expect((withTemperature(profile, 88) as typeof profile).steps.map((st) => Number(st.temperature))).toEqual([88, 90.5, 86]);
+  });
+});
