@@ -12,8 +12,9 @@ simulated machine. Next:
 the tablet session (phase 7, next-session item 3), then phase 3 (Streamline Settings and
 the profile-editing hand-off), which needs the tablet first. Without the tablet, the
 open software work is phase 4 (splitting `skin/app.js`), the end-to-end shot test
-(phase 6), "why the shot stopped" and the other Streamline improvements, and the voice
-fix (next-session item 10). The user merges nothing by hand: agents open a PR per piece
+(phase 6), "why the shot stopped" and the other Streamline improvements, the voice
+fix (next-session item 10) and AI shot review (next-session item 11, planned in
+[shot-review-plan.md](shot-review-plan.md)). The user merges nothing by hand: agents open a PR per piece
 of work and merge it once CI's `verify` job passes; tagging a release is the user's call.
 
 This is the execution plan requested by the user after the project review. It covers
@@ -26,7 +27,12 @@ and untested assumptions. Read it before changing behaviour.
 Additional brewing work requested on 9 November 2026: see
 [Bagless and manual brewing](bagless-manual-plan.md) for the installed-Decaid
 review, product behavior, implementation order and acceptance checks. This is
-implemented on `codex/brewing-modes`; it has not yet reached a NAS/tablet release.
+merged (PR #30); it has not yet reached a NAS/tablet release.
+
+AI shot review, requested 9 November 2026: see [AI shot review](shot-review-plan.md)
+for how other DE1 projects do it, the design (shot checks with no AI, then a
+button-triggered AI review that sees the curves), implementation order and
+acceptance checks. Not started. It builds on the profile graph (PR #31).
 
 ## Current UI delivery — 9 November 2026
 
@@ -222,6 +228,11 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    from the start in Decaid's WebView and point to the keyboard's microphone. Small; for
    0.3.0. Optionally, HTTPS for the Crema server so a phone gets Speak, and a feature
    request to Decaid for an opt-in microphone (the user posts it).
+11. **AI shot review** ([shot-review-plan.md](shot-review-plan.md)). Requested by the
+   user on 9 November 2026. One "Review shot" button replaces "Next adjustment": shot
+   checks in `server/profiles/analysis.ts` (no AI, the fallback), then `/api/review`
+   with the curves, findings and taste. Saved on the shot in Decaid. No score and no
+   follow-up chat yet. Needs no tablet to build; thresholds get tuned on real shots.
 
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 
@@ -1088,6 +1099,7 @@ new shortcuts/help, extra steam workflows and translations remain feature decisi
 after the ownership audit. Prefer existing tools for specialist functions. Bengle-only
 features, Home Assistant integration, order-email ingestion, new themes and additional
 AI features are not required to close this review. Do not build them by inference.
+The exception is AI shot review, which the user asked for (next-session item 11).
 
 ## Upstream references
 

@@ -1,6 +1,6 @@
 # Bagless and manual brewing: review and implementation plan
 
-Reviewed 9 November 2026. **Implemented in software on `codex/brewing-modes`;
+Reviewed 9 November 2026. **Implemented in software and merged (PR #30);
 not released to the NAS/tablet.** Requested outcome: brew
 directly from installed profiles without registering a bag, and offer manual
 flow/pressure brewing using the capabilities Decaid and Streamline already have.
