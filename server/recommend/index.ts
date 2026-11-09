@@ -35,6 +35,9 @@ export async function recommend(llm: ProviderChain, input: RecommendInput): Prom
   const out = (recipe: Recipe, source: string): RecommendOutput => ({ recipe, baseline: b, candidates: ranked.slice(0, 8).map(strip), source });
 
   if (input.rulesOnly) return out(rulesRecipe(input, ranked), "rules");
+  // Nothing installed matches the catalogue: there is nothing for a model to choose
+  // from. The app shows "no recommendation" for a recipe whose profile isn't installed.
+  if (!candidates.length) return out(rulesRecipe(input, ranked), "rules (no installed profile matches)");
 
   const cards = candidates.map((c, i) => ({
     rank: i + 1,

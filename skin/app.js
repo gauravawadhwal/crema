@@ -202,7 +202,8 @@ function makeLiveApi(conn) {
     const batch = batches.find((x) => x.id === rec?.batchId) ?? batches[0] ?? null;
     return { bean, rec, batch, info: rec?.info ?? infoFromDecaidBean(bean, batch) };
   }
-  const installedTitles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso").map((p) => p.profile.title);
+  const installedProfiles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso");
+  const installedTitles = async () => (await installedProfiles()).map((p) => p.profile.title);
 
   // Steam, hot water and flush live in Decaid's workflow (steamSettings, hotWaterData,
   // rinseData), its recommended route: it sends them to the machine itself, and a
@@ -318,6 +319,10 @@ function makeLiveApi(conn) {
         const ranked = E.rankProfiles(info, prefs, titles);
         out = { recipe: E.rulesRecipe({ bean: info, preferences: prefs, profileTitles: titles }, ranked), candidates: ranked.slice(0, 8).map(E.strip), source: aiFailed ? "rules (AI unavailable)" : "rules" };
       }
+      // Never recommend a profile the machine doesn't have: with no installed match there
+      // is no recipe, and the app asks you to pick one of the installed profiles.
+      const installed = new Set(titles.map((t) => t.toLowerCase()));
+      if (out.recipe && !installed.has(out.recipe.profileTitle.toLowerCase())) out = { ...out, recipe: null, source: "none" };
       await patchRecord(beanId, { info, recipe: out.recipe, recipeSource: out.source, batchId: batch?.id ?? null });
       return out;
     },
@@ -329,9 +334,20 @@ function makeLiveApi(conn) {
       const installed = await installedTitles().then((t) => new Set(t.map((x) => x.toLowerCase()))).catch(() => null);
       return E.CATALOG.map((p) => ({ ...p, installed: installed ? installed.has(p.title.toLowerCase()) : null }));
     },
+    // The profiles installed in Decaid (espresso ones), with Crema's guide entry where
+    // the catalogue knows the profile. This is the library; the catalogue only adds notes.
+    async library() {
+      const guide = new Map(E.CATALOG.map((p) => [p.title.toLowerCase(), p]));
+      return (await installedProfiles()).map((p) => ({
+        id: p.id, title: p.profile.title, author: p.profile.author || "", notes: p.profile.notes || "",
+        steps: p.profile.steps?.length ?? 0, targetWeight: Number(p.profile.target_weight) || null,
+        tempC: Number(p.profile.steps?.[0]?.temperature) || null, guide: guide.get(p.profile.title.toLowerCase()) ?? null,
+      }));
+    },
     async apply(beanId, recipe, grinderSetting) {
       const [{ info, batch }, profiles] = await Promise.all([coffee(beanId), j(D("/profiles?visibility=visible"))]);
-      const profile = profiles.find((p) => p.profile.title === recipe.profileTitle);
+      // By id when the recipe has one (two installed profiles can share a title), else by title.
+      const profile = (recipe.profileId && profiles.find((p) => p.id === recipe.profileId)) || profiles.find((p) => p.profile.title === recipe.profileTitle);
       if (!profile) throw new Error(`The profile "${recipe.profileTitle}" isn't on the machine`);
       return put(D("/workflow"), {
         profile: E.withTemperature({ ...profile.profile, target_weight: recipe.yieldG }, recipe.tempC),
@@ -660,7 +676,7 @@ async function tare() {
 /* ================= next shot (brew home, left) ================= */
 function setNextFromRecipe(bean, recipe) {
   const r = recipe || bean?.recipe;
-  S.next = bean && r ? { beanId: bean.id, profileTitle: r.profileTitle, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.targetTimeS, grind: local.get(`grind:${bean.id}`, "") } : null;
+  S.next = bean && r ? { beanId: bean.id, profileTitle: r.profileTitle, profileId: r.profileId ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.targetTimeS, grind: local.get(`grind:${bean.id}`, "") } : null;
   S.loaded = false;
 }
 function renderNextShot() {
@@ -700,7 +716,7 @@ function renderNextShot() {
       ${r.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(r.dialIn)}</div>` : ""}
       <div class="muted small">Target ${r.targetTimeS?.[0] ?? "–"}–${r.targetTimeS?.[1] ?? "–"} s · ${esc(r.grindHint || "")}</div>
       ${r.alternatives?.length ? `<div class="muted small">Also try: ${r.alternatives.map((a) => esc(a.profileTitle)).join(", ")}</div>` : ""}</div></details>` : ""}
-    ` : `<p class="muted">Working out a recipe…</p>`}`;
+    ` : b.recipeSource === "none" ? `<p class="muted">None of the profiles on this machine is in Crema's guide, so there's no recommendation for this coffee. Choose one of the installed profiles.</p><div><a class="btn primary" href="#profiles">Choose a profile</a></div>` : `<p class="muted">Working out a recipe…</p>`}`;
   const go = (d) => selectBean(S.shelf[(idx + d + S.shelf.length) % S.shelf.length].id);
   if ($("#prevBean")) { $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1); }
   if (!n) return;
@@ -756,7 +772,7 @@ async function loadNow(silent, queued) {
   if (queued && S.loaded) return true;
   S.heldLoad = false;
   wfWrites++;
-  const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
+  const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: n.profileId ?? null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
   try {
     await S.api.apply(b.id, recipe, n.grind || undefined);
     wfWrites++;
@@ -1644,7 +1660,8 @@ async function renderProfiles() {
           <div class="row between"><h3>${esc(c.title)}</h3>${c.title === chosen ? '<span class="pill accent">AI pick</span>' : `<span class="muted small num">#${i + 1}</span>`}</div>
           <div class="scorebar" aria-label="Match score ${c.score}"><div style="width:${clamp((c.score / top) * 100, 5, 100)}%"></div></div>
           <ul>${c.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}${c.cautions.map((r) => `<li class="caution">${esc(r)}</li>`).join("")}</ul>
-          <div class="row between"><span class="num small">${fmt1(c.recipe.doseG)}→${fmt1(c.recipe.yieldG)} g · ${fmt1(c.recipe.tempC)} °C</span><button class="btn small" data-use="${esc(c.title)}">Use</button></div></div>`).join("")}</div>`;
+          <div class="row between"><span class="num small">${fmt1(c.recipe.doseG)}→${fmt1(c.recipe.yieldG)} g · ${fmt1(c.recipe.tempC)} °C</span>${c.installed === false ? '<span class="pill plain">Not on this machine</span>' : `<button class="btn small" data-use="${esc(c.title)}">Use</button>`}</div></div>`).join("")}</div>`;
+      if (!cands.some((c) => c.installed !== false)) rec.insertAdjacentHTML("afterbegin", `<div class="panel stack"><span class="label">Recommended</span><p class="muted">None of the profiles on this machine is in Crema's guide, so there's no recommendation. Choose one of the installed profiles below.</p></div>`);
       $$("[data-use]", rec).forEach((btn) => (btn.onclick = () => {
         const c = cands.find((x) => x.title === btn.dataset.use);
         const r = btn.dataset.rec ? b.recipe : { ...b.recipe, profileTitle: c.title, doseG: c.recipe.doseG, yieldG: c.recipe.yieldG, tempC: c.recipe.tempC, targetTimeS: c.recipe.timeS };
@@ -1660,6 +1677,7 @@ async function renderProfiles() {
     } catch (e) { rec.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
   } else rec.innerHTML = "";
   if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
+  if (!S.library) S.library = await S.api.library().catch(() => null);
   renderCatalog();
 }
 function renderCatalog() {
@@ -1675,31 +1693,75 @@ function renderCatalog() {
     if (k === "roast") f.roast = f.roast === v ? null : v; else if (k === "scale") f.scale = f.scale === false ? null : false; else f[k] = !f[k];
     renderCatalog();
   }));
-  const list = (S.catalog || []).filter((p) => (!f.roast || p.roasts.includes(f.roast)) && (!f.milk || p.milk === "great") && (!f.easy || p.difficulty === "easy") && (f.scale !== false || !p.needsScale))
-    .sort((a, b) => b.popularity - a.popularity);
-  $("#catCount").textContent = `${list.length} of ${(S.catalog || []).length}`;
-  $("#catalog").innerHTML = list.map((p) => `<button class="cat-card" data-p="${esc(p.title)}">
-      <div class="row between"><h3>${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>
-      <div class="roastbar" aria-label="Roasts: ${p.roasts.join(", ")}">${ROASTS.map((r) => `<span class="${p.roasts.includes(r) ? "on" : ""}"></span>`).join("")}</div>
-      <div class="muted small">${esc(p.author)} · ${esc(p.style)} · ${p.difficulty}${p.milk === "great" ? " · milk" : ""}</div>
-      <div class="small">${esc(p.character)}</div></button>`).join("");
+  // The library is what's installed in Decaid. Crema's guide adds notes and the filters
+  // to the profiles it knows; with a filter on, profiles it doesn't know are left out.
+  const matches = (p) => (!f.roast || p.roasts.includes(f.roast)) && (!f.milk || p.milk === "great") && (!f.easy || p.difficulty === "easy") && (f.scale !== false || !p.needsScale);
+  const filtering = !!(f.roast || f.milk || f.easy || f.scale === false);
+  const lib = S.library;
+  if (!lib) {
+    // Couldn't read Decaid's profiles: fall back to Crema's guide, as before.
+    const list = (S.catalog || []).filter(matches).sort((a, b) => b.popularity - a.popularity);
+    $("#catCount").textContent = `${list.length} of ${(S.catalog || []).length}`;
+    $("#catalog").innerHTML = list.map((p) => guideCard(p, p.title)).join("");
+  } else {
+    const shown = lib.filter((p) => (p.guide ? matches(p.guide) : !filtering)).sort((a, b) => (b.guide?.popularity ?? -1) - (a.guide?.popularity ?? -1) || a.title.localeCompare(b.title));
+    const dup = (t) => lib.filter((x) => x.title === t).length > 1;
+    const missing = (S.catalog || []).filter((p) => p.installed === false && matches(p));
+    $("#catCount").textContent = `${shown.length} of ${lib.length} on this machine`;
+    $("#catalog").innerHTML = shown.map((p) => p.guide ? guideCard(p.guide, p.id, dup(p.title) ? p.author : "") : `<button class="cat-card" data-p="${esc(p.id)}">
+        <div class="row between"><h3>${esc(p.title)}</h3><span class="pill plain">Not in Crema's guide</span></div>
+        <div class="muted small">${esc(p.author || "Unknown author")}${p.steps ? ` · ${p.steps} steps` : ""}${dup(p.title) ? ` · ${esc(p.id.slice(-6))}` : ""}</div>
+        <div class="small">${esc((p.notes || "").slice(0, 140))}</div></button>`).join("")
+      + (missing.length ? `<details class="cat-missing"><summary class="muted small">${missing.length} more in Crema's guide that aren't on this machine</summary><div class="small muted">Install them in Decaid to use them: ${missing.map((p) => esc(p.title)).join(", ")}.</div></details>` : "");
+  }
   $$("[data-p]").forEach((b) => (b.onclick = () => showProfile(b.dataset.p)));
 }
-function showProfile(title) {
-  const p = S.catalog.find((x) => x.title === title);
+function guideCard(p, key, note = "") {
+  return `<button class="cat-card" data-p="${esc(key)}">
+      <div class="row between"><h3>${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>
+      <div class="roastbar" aria-label="Roasts: ${p.roasts.join(", ")}">${ROASTS.map((r) => `<span class="${p.roasts.includes(r) ? "on" : ""}"></span>`).join("")}</div>
+      <div class="muted small">${esc(p.author)} · ${esc(p.style)} · ${p.difficulty}${p.milk === "great" ? " · milk" : ""}${note ? ` · ${esc(note)}` : ""}</div>
+      <div class="small">${esc(p.character)}</div></button>`;
+}
+// `key` is a library id (a profile installed in Decaid) or, when Decaid's profiles
+// couldn't be read, a catalogue title.
+function showProfile(key) {
+  const lp = S.library?.find((x) => x.id === key) ?? null;
+  const p = lp ? lp.guide : S.catalog.find((x) => x.title === key);
+  if (!p) return lp && showInstalledProfile(lp);
+  const usable = lp || p.installed !== false;
   openSheet(`<div class="stack" style="gap:4px"><span class="label">${esc(p.author)} · ${esc(p.style)}</span><h2>${esc(p.title)}</h2></div>
     <p>${esc(p.character)}</p>
     <div class="metrics">${[["Dose", fmt1(p.recipe.doseG), "g"], ["Yield", fmt1(p.recipe.yieldG), "g"], ["Temp", fmt1(p.recipe.tempC), "°C"], ["Time", p.recipe.timeS.join("–"), "s"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
     <div class="small"><b>Written for:</b> ${p.roasts.join(", ")} roasts · <b>Milk:</b> ${p.milk} · <b>Difficulty:</b> ${p.difficulty}${p.needsScale ? " · works best with a scale" : ""}${p.wantsFlatBurrs ? " · high-extraction flat burrs" : ""}</div>
     <div class="advice small"><div class="label">Author's dial-in guidance</div>${esc(p.dialIn)}</div>
     <div class="muted small">Source: ${esc(p.source)}</div>
-    ${S.current ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(S.current.info.name.value)}</button></div>` : ""}`);
+    ${S.current && usable ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(S.current.info.name.value)}</button></div>` : !usable ? `<p class="muted small">Not installed in Decaid. Install it there to use it.</p>` : ""}`);
   const u = $("#useProfile");
   if (u) u.onclick = async () => {
     const cands = await S.api.rank(S.current.id).catch(() => []);
     const c = cands.find((x) => x.title === p.title);
-    const r = { ...S.current.recipe, profileTitle: p.title, doseG: c?.recipe.doseG ?? p.recipe.doseG, yieldG: c?.recipe.yieldG ?? p.recipe.yieldG, tempC: c?.recipe.tempC ?? p.recipe.tempC, targetTimeS: p.recipe.timeS, dialIn: p.dialIn };
+    const r = { ...S.current.recipe, profileTitle: p.title, profileId: lp?.id ?? null, doseG: c?.recipe.doseG ?? p.recipe.doseG, yieldG: c?.recipe.yieldG ?? p.recipe.yieldG, tempC: c?.recipe.tempC ?? p.recipe.tempC, targetTimeS: p.recipe.timeS, dialIn: p.dialIn };
     setNextFromRecipe(S.current, r); closeSheet(); location.hash = "#brew"; toast(`${p.title} set for the next shot`);
+  };
+}
+// An installed profile Crema's guide doesn't know: show what Decaid knows about it.
+// Using it starts from your usual dose and the profile's own target weight and first-step
+// temperature; there's no time window to judge the shot against.
+function showInstalledProfile(lp) {
+  const b = S.current;
+  const dose = b?.recipe?.doseG ?? S.prefs?.basketDoseG ?? 18;
+  const yieldG = lp.targetWeight || Math.round(dose * 2 * 2) / 2;
+  const tempC = lp.tempC || b?.recipe?.tempC || 93;
+  openSheet(`<div class="stack" style="gap:4px"><span class="label">${esc(lp.author || "Unknown author")} · installed in Decaid</span><h2>${esc(lp.title)}</h2></div>
+    ${lp.notes ? `<p>${esc(lp.notes)}</p>` : ""}
+    <div class="metrics" style="grid-template-columns:repeat(3,1fr)">${[["Steps", lp.steps || "–", ""], ["Target", lp.targetWeight ? fmt1(lp.targetWeight) : "–", "g"], ["First step", lp.tempC ? fmt1(lp.tempC) : "–", "°C"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
+    <p class="muted small">Not in Crema's guide, so there's no dial-in advice or roast fit for it.</p>
+    ${b ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(b.info.name.value)}</button></div>` : ""}`);
+  const u = $("#useProfile");
+  if (u) u.onclick = () => {
+    const r = { ...(b.recipe || {}), profileTitle: lp.title, profileId: lp.id, doseG: dose, yieldG, tempC, targetTimeS: null, dialIn: "", rationale: [], alternatives: [] };
+    setNextFromRecipe(b, r); closeSheet(); location.hash = "#brew"; toast(`${lp.title} set for the next shot`);
   };
 }
 
