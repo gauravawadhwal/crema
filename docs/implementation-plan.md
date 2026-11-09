@@ -52,6 +52,30 @@ its original workflow was restored. Its mock reports no GHC, so manual UI gating
 was checked there; real manual interaction remains pending. Details and the
 installed-snapshot versus live-edit distinction are in the bagless/manual record.
 
+## Profile graph and removable reference — 9 November 2026
+
+User report: a reference shot, once set, could not be removed, and nothing showed
+what a profile is meant to do. Streamline (checked in `decentespresso/streamline-js`)
+keeps no pinned reference: between shots it shows the last shot, and its profile
+picker draws each profile's graph from its steps. Implemented:
+
+- `server/profiles/curve.ts`: a profile's steps as a plan (pressure or flow target,
+  fast or smooth, time limit, exit and limiter in words) and real step timings from
+  a saved shot's `profileFrame`. Steps often end early, so a plan drawn from limits
+  is labelled as such.
+- Profiles sheet: graph and step list for every installed profile, timed from the
+  newest shot with it when there is one (`api.lastShotWith`).
+- Brew chart: before a shot, the loaded profile's plan, dashed. Closing the shot
+  review returns the chart to it.
+- Reference shot: optional; removable from the chart legend, the shot review and
+  Shots. The demo no longer starts with one.
+- Simulator and demo: profiles from Crema's own step outlines per style, and shots
+  run through a shared puck model that follows the steps and records them.
+
+Unverified on the tablet: real profiles' `profileFrame` numbering is assumed to match
+step indexes (shots with other numbers, such as firmware extension frames, fall back
+to time limits).
+
 Deliver a dependable custom daily interface for the user's Decent DE1, with clear
 access to existing specialist functionality and a small ongoing maintenance burden.
 

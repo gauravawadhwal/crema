@@ -44,10 +44,12 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     await page.click('a[href="#profiles"].primary');
     await page.waitForFunction(() => S.library?.length);
     await evaluate(() => showProfile(S.library.find(p => !p.manual).id)); await page.click('#baglessProfile');
-    check(await evaluate(() => S.noBag && !S.current && S.next.direct && S.next.tempC === 92 && S.next.yieldG === 36), 'empty shelf brews from the installed profile settings');
+    check(await evaluate(() => { const lp = S.library.find(p => !p.manual); return S.noBag && !S.current && S.next.direct && S.next.tempC === lp.tempC && S.next.yieldG === lp.targetWeight; }), 'empty shelf brews from the installed profile settings');
     await loaded();
     let current = await wf();
     check(current.context.beanBatchId === null && current.context.targetWaterVolume === null, 'bagless load clears coffee association and inherited volume override');
+    await page.waitForFunction(() => S.plan?.steps.length > 1);
+    check(await evaluate(() => S.plan.timed === 'limits' && document.querySelector('#chartEmpty').textContent.includes('time limit')), 'before any shot, the Brew chart shows the installed profile at its step time limits');
     await page.reload(); await page.waitForFunction(() => S.shelfLoaded && S.next && S.loaded);
     check(await evaluate(() => S.noBag && !S.current), 'No bag and its recipe survive a reload');
     // Add a coffee while intentionally bagless; a background refresh must keep the choice.
@@ -154,6 +156,22 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     const demoShot = await evaluate(() => S.api.latestShot());
     check(!demoShot.beanId && !demoShot.batch && demoShot.manual === 'flow', 'built demo records bagless manual shots without attaching its first coffee');
     await page.screenshot({ path: `${artifacts}/built-manual-after.png`, fullPage: true });
+    // The profile's graph, and a reference shot that can be removed (the demo has coffees and history).
+    await page.goto(origin + '/built?full&demo#brew'); await page.waitForFunction(() => S.api?.demo && S.shelfLoaded);
+    // Until its review is closed, the chart keeps the shot just pulled; closing it brings back the plan.
+    check(await evaluate(() => S.live.length > 0), 'built demo: the finished shot stays on the chart while its review is open');
+    await page.click('#closeAfter');
+    await evaluate(() => selectBean(S.shelf[0].key, { quiet: true }));
+    await page.waitForFunction(() => S.plan?.timed === 'shot' && /Dashed: what .* timed from your last shot/.test(document.querySelector('#chartEmpty').textContent), null, { timeout: 8000 });
+    check(await evaluate(() => !S.ghost && document.querySelector('#chartEmpty').textContent.includes('timed from your last shot')), 'built demo: the Brew chart shows the profile, timed from the last shot with it, and no reference by default');
+    await evaluate(() => showProfile(nextProfile().id));
+    await page.waitForFunction(() => document.querySelectorAll('#planSteps li').length > 1 && /Step times from your shot/.test(document.querySelector('#planNote').textContent));
+    check(true, 'built demo: the profile sheet lists the steps, timed from a shot');
+    await evaluate(() => closeSheet());
+    await evaluate(async () => { const s = (await S.api.shotPage(0, 40)).items.find(x => x.batch === S.current.batch); await setReference(S.current, s.id); });
+    check(await evaluate(() => !!S.ghost && !!document.querySelector('#clearRef')), 'built demo: a reference shot shows faintly with Remove in the legend');
+    await page.click('#clearRef'); await page.waitForFunction(() => !S.ghost);
+    check(await evaluate(async () => (await S.api.shelf()).find(b => b.id === S.current.id).bestShotId === null), 'built demo: removing the reference shot is saved');
   } catch (e) { console.error(e); if (page) await page.screenshot({ path: '/tmp/crema-brewing/failure.png', fullPage: true }).catch(() => {}); process.exitCode = 1; }
   finally { await browser?.close(); server.close(); try { process.kill(-mock.pid, 'SIGTERM'); } catch {} }
 })().catch(e => { console.error(e); process.exitCode = 1; try { process.kill(-mock.pid, 'SIGTERM'); } catch {} });
