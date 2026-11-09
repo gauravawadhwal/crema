@@ -104,13 +104,14 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     const wfGet = async () => (await fetch(`http://localhost:${MOCK}/api/v1/workflow`)).json();
     const recheck = async () => { await S(() => window.dispatchEvent(new Event("focus"))); await page.waitForTimeout(600); };
     await S(() => loadOntoMachine(true));
-    await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForFunction(() => S.next && S.link.connected, null, { timeout: 15000 }); await page.waitForTimeout(800);
+    // A real reload: goto to the same URL with another #hash wouldn't reload the page.
+    await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.reload(); await page.waitForFunction(() => S.next && S.link.connected && S.shelfLoaded, null, { timeout: 15000 }); await page.waitForTimeout(800);
     check(await S(() => S.loaded) && /Loaded/.test(await page.textContent("#loadBtn")), "after a reload, a recipe already on the machine shows as loaded");
     const dose0 = await S(() => S.next.doseG);
     await wfPut({ context: { targetDoseWeight: dose0 + 1.5 } }); // another client changes the dose
     await recheck();
-    const adopted = await S(() => ({ dose: S.next.doseG, loaded: S.loaded, toast: document.querySelector("#toast").textContent }));
-    check(adopted.dose === dose0 + 1.5 && adopted.loaded && /changed elsewhere/.test(adopted.toast), "a change made elsewhere for this coffee is taken and announced", JSON.stringify(adopted));
+    const adopted = await S(() => ({ dose: S.next.doseG, loaded: S.loaded, toast: document.querySelector("#toast").textContent, label: document.querySelector(".pick-src")?.textContent }));
+    check(adopted.dose === dose0 + 1.5 && adopted.loaded && /changed elsewhere/.test(adopted.toast) && /set on the machine/.test(adopted.label), "a change made elsewhere for this coffee's bag is taken, labelled and announced", JSON.stringify(adopted));
     await S(() => step("dose:1")); // an unsaved edit here...
     const mine = await S(() => S.next.doseG);
     await wfPut({ context: { targetDoseWeight: 15 } }); // ...and another change elsewhere
@@ -125,6 +126,16 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     check(started.machine === started.screen, "starting espresso loads the screen's recipe if the machine has changed", JSON.stringify(started));
     await S(() => stopMachine()); await page.waitForFunction(() => S.snap?.state?.state !== "espresso", null, { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(600);
+    // A recipe with no bag recorded (what Streamline and Decaid's defaults leave) isn't
+    // this coffee's: a reload keeps the coffee's own recipe instead of taking it.
+    const own = await S(() => ({ title: S.current.recipe.profileTitle, dose: S.current.recipe.doseG }));
+    const untagged = await S(async () => (await fetch(`${S.api.info.decaidUrl}/api/v1/profiles?visibility=visible`).then((r) => r.json())).map((x) => x.profile).find((x) => x.title !== S.current.recipe.profileTitle));
+    await wfPut({ profile: untagged, context: { beanBatchId: null, targetDoseWeight: 15.5 } });
+    const afterPut = await wfGet();
+    await page.reload(); await page.waitForFunction(() => S.next && S.link.connected && S.shelfLoaded, null, { timeout: 15000 }); await page.waitForTimeout(800);
+    const kept = { ...(await S(() => ({ title: S.next.profileTitle, dose: S.next.doseG, loaded: S.loaded, label: document.querySelector(".pick-src")?.textContent }))), own, putMachine: { t: afterPut.profile.title, d: afterPut.context.targetDoseWeight, b: afterPut.context.beanBatchId }, nowMachine: await wfGet().then((w) => ({ t: w.profile.title, d: w.context.targetDoseWeight, b: w.context.beanBatchId })) };
+    check(kept.title === own.title && kept.dose !== 15.5 && !kept.loaded && !/set on the machine/.test(kept.label), "after a reload, a recipe left by another skin doesn't replace the coffee's own", JSON.stringify(kept));
+    await S(() => loadOntoMachine(true));
     await wfPut({ context: { beanBatchId: "someone-elses-batch" } });
     await recheck();
     const other = await S(() => ({ loaded: S.loaded, toast: document.querySelector("#toast").textContent }));
@@ -302,11 +313,33 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await page.fill("#describeInput", "Example Roasters Kii AA");
     await page.click("#identifyBtn");
     await page.waitForSelector("#saveBean", { timeout: 15000 }).catch(async () => { throw new Error(`identify: ${await page.textContent("#reviewPanel")}`); });
+    // A slow AI: Add sends you to Profiles before the recommendation arrives.
+    await page.route(/\/api\/recommend/, async (route) => { await new Promise((r) => setTimeout(r, 2500)); route.continue().catch(() => {}); });
     await page.click("#saveBean");
+    await page.waitForFunction(() => location.hash === "#profiles" && /Asking the AI/.test(document.querySelector("#recommended").textContent), null, { timeout: 8000 }).catch(() => {});
+    check(/Asking the AI/.test(await page.textContent("#recommended")), "Profiles says it's asking the AI while the recommendation is on its way");
+    await page.waitForFunction(() => /AI pick/.test(document.querySelector("#recommended").textContent), null, { timeout: 15000 }).catch(() => {});
+    check(/AI pick/.test(await page.textContent("#recommended")) && await page.evaluate(() => location.hash) === "#profiles", "and shows the AI's pick when it arrives, without leaving the page");
+    await page.unroute(/\/api\/recommend/);
     await page.waitForFunction(() => S.current?.info.name.value === "Kii AA" && S.current.recipe, null, { timeout: 15000 });
     const got = await S(() => ({ name: S.current.info.name.value, source: S.current.recipeSource }));
     check(got.name === "Kii AA" && got.source === "mock", `identified by the server and recipe chosen by the AI (${got.name}, ${got.source})`);
     check(await S(() => S.shelf.length >= 2), "both coffees on the shelf");
+    // A product photo the server can't fetch (a dead link, a shop placeholder) isn't kept.
+    const noPhoto = await S(async () => {
+      const info = JSON.parse(JSON.stringify(S.current.info));
+      info.name = { value: "Broken Photo", source: "bag" }; info.imageUrl = "https://127.0.0.1/placeholder.jpg";
+      const { id } = await S.api.saveBean(info, null, "product");
+      const b = (await S.api.shelf()).find((x) => x.id === id);
+      const html = bagArt({ info: { name: { value: "Zed" } }, productImage: "http://localhost:9/nothing.png", art: "product" });
+      const box = document.createElement("div"); box.innerHTML = html; document.body.appendChild(box);
+      await new Promise((r) => setTimeout(r, 800));
+      const tile = box.querySelector(".initial")?.textContent; box.remove();
+      await S.api.setBeanState(id, { finished: true });
+      return { productImage: b?.productImage ?? null, imageUrl: b?.info.imageUrl ?? null, tile };
+    });
+    check(!noPhoto.productImage && !noPhoto.imageUrl, `a photo the server couldn't fetch isn't saved with the coffee (${JSON.stringify(noPhoto)})`);
+    check(noPhoto.tile === "Z", "a picture that fails to load falls back to the initial tile");
     // Boot starts on the coffee the machine holds, not the one last viewed here.
     const onMachine = await S(() => S.current.id);
     await S(() => loadOntoMachine(true));

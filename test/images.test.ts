@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSafeUrl, productImageFromHtml } from "../server/images.js";
+import { isPlaceholderImage, isSafeUrl, productImageFromHtml } from "../server/images.js";
 
 const page = "https://roaster.coffee/products/kii-aa";
 
@@ -41,4 +41,20 @@ describe("withTemperature", () => {
   it("leaves profiles without steps alone", () => {
     expect(withTemperature({ title: "x" }, 90)).toEqual({ title: "x" });
   });
+});
+
+describe("isPlaceholderImage", () => {
+  it.each([
+    "https://roaster.coffee/cdn/shop/t/4/assets/placeholder.jpg",
+    "https://shop.coffee/wp-content/uploads/woocommerce-placeholder-600x600.png",
+    "https://shop.coffee/img/no-image.png",
+    "https://shop.coffee/img/NoImage.jpg",
+    "https://shop.coffee/images/image-coming-soon.jpg",
+    "https://shop.coffee/default-product.png",
+  ])("flags %s", (u) => expect(isPlaceholderImage(u)).toBe(true));
+  it.each([
+    "https://cdn.shopify.com/s/files/1/0/files/gogogu-250g.jpg?v=1",
+    "https://roaster.coffee/products/kii-aa.png",
+    "not a url",
+  ])("keeps %s", (u) => expect(isPlaceholderImage(u)).toBe(false));
 });

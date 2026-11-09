@@ -19,6 +19,19 @@ export const imageDir = () => path.resolve(process.env.CREMA_IMAGES ?? "data/ima
 // Kept here for the importers that already get it from this module.
 export { isSafeUrl };
 
+/**
+ * Shops fill missing product photos with a stock placeholder (Shopify's
+ * `placeholder.jpg`, WooCommerce's `woocommerce-placeholder.png`, "no image"
+ * files). Models and page metadata sometimes hand those back as the coffee's
+ * picture; they aren't one.
+ */
+export function isPlaceholderImage(raw: string): boolean {
+  let path: string;
+  try { path = decodeURIComponent(new URL(raw).pathname).toLowerCase(); } catch { return false; }
+  const file = path.split("/").pop() ?? "";
+  return /placeholder|no[-_ ]?image|image[-_ ]?(coming|not[-_ ]?available|unavailable)|default[-_ ]?(product|image)|^missing\./.test(file);
+}
+
 const decode = (s: string) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
 /** Find the main product image URL in a product page's HTML. */

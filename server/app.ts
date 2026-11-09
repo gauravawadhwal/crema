@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { z, ZodError } from "zod";
 import { identify } from "./identify.js";
-import { cacheImage, findProductImage, isSafeUrl, readCachedImage } from "./images.js";
+import { cacheImage, findProductImage, isPlaceholderImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
 import type { AudioInput, ImageInput } from "./llm/types.js";
 import { dialIn, recommend } from "./recommend/index.js";
@@ -126,9 +126,10 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
     const text = IdentifyText.parse({ query: str("query"), description: str("description"), url: str("url"), today: str("today") });
     const info = await identify(llm, { images, ...text, offline: str("offline") === "true" });
     // The roaster's own packshot: prefer what the page's metadata says over a URL the model may have guessed.
-    if (info.imageUrl && !isSafeUrl(info.imageUrl)) info.imageUrl = null;
+    if (info.imageUrl && (!isSafeUrl(info.imageUrl) || isPlaceholderImage(info.imageUrl))) info.imageUrl = null;
     if (info.productUrl && str("offline") !== "true") {
-      info.imageUrl = (await findProductImage(info.productUrl)) ?? info.imageUrl;
+      const found = await findProductImage(info.productUrl);
+      info.imageUrl = (found && !isPlaceholderImage(found) ? found : null) ?? info.imageUrl;
     }
     return c.json({ info, provider: llm.lastUsed });
   });

@@ -2193,7 +2193,10 @@ function makeLiveApi(conn) {
       // Keep a copy of the roaster's photo on the Crema server when there is one, so it shows offline.
       let productImage = info.imageUrl || null;
       if (productImage && conn.crema != null && /^https?:/.test(productImage)) {
-        try { productImage = conn.crema + (await post(C("/api/images/cache"), { url: productImage })).path; } catch {}
+        // The server couldn't fetch it (a dead link, a shop placeholder): don't keep a
+        // picture that will show as broken; the bag photo or the initial tile stands in.
+        try { productImage = conn.crema + (await post(C("/api/images/cache"), { url: productImage })).path; }
+        catch { productImage = null; info = { ...info, imageUrl: null }; if (art === "product") art = photo ? "photo" : null; }
       }
       await kvSet(`bean:${bean.id}`, { info, recipe: null, recipeSource: null, photo: photo || null, productImage, art: art || (productImage ? "product" : "photo"), bestShotId: null, finished: false, batchId: batch.id, addedAt: new Date().toISOString() });
       return { id: bean.id };
@@ -2377,6 +2380,7 @@ const S = {
   api: null,
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
   streams: null, // subscribe()'s handle: { close, reopenMachine }
+  recommending: null, // id of the coffee whose recipe is being worked out
   shelf: [], shelfLoaded: false, shelfError: null, current: null, next: null, loaded: false, heldLoad: false,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
@@ -2459,9 +2463,15 @@ function artSrc(b) {
   return b.art === "photo" ? b.photo || product : product || b.photo;
 }
 function bagArt(b, size = "") {
-  const src = artSrc(b);
-  if (src) return `<div class="bag ${size}"><img src="${esc(src)}" alt="" loading="lazy"></div>`;
-  return `<div class="bag ${size}" style="background:#c99a6b"><span class="initial">${esc((b.info?.name?.value || "?").trim()[0])}</span></div>`;
+  const src = artSrc(b), initial = esc((b.info?.name?.value || "?").trim()[0]);
+  // A picture that fails to load (a link that has since died) falls back to the initial tile.
+  if (src) return `<div class="bag ${size}"><img src="${esc(src)}" alt="" loading="lazy" data-initial="${initial}" onerror="artFailed(this)"></div>`;
+  return `<div class="bag ${size}" style="background:#c99a6b"><span class="initial">${initial}</span></div>`;
+}
+function artFailed(img) {
+  const bag = img.parentNode; if (!bag) return;
+  bag.style.background = "#c99a6b";
+  bag.innerHTML = `<span class="initial">${esc(img.dataset.initial || "?")}</span>`;
 }
 function restBar(rest) {
   if (rest.days == null) return `<div class="row between"><span class="label">Rest</span><span class="pill unknown">No roast date</span></div>`;
@@ -2572,7 +2582,7 @@ function renderNextShot() {
     </div>
     ${n ? `
     <div class="field-row first"><span class="label">Profile</span>
-      <button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "Tap for recommendations")}</span></span><span class="muted">›</span></button></div>
+      <button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.fromMachine ? "As set on the machine" : b.recipeSource ? `Chosen by ${b.recipeSource}` : "Tap for recommendations")}</span></span><span class="muted">›</span></button></div>
     <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
     <div class="field-row"><span class="label">Yield</span>${stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
     <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
@@ -2660,9 +2670,11 @@ async function loadNow(silent, queued) {
 // before an espresso start, and compares only what the next-shot panel shows.
 //   - It matches: the recipe is on the machine (S.loaded).
 //   - It differs and the panel had unsaved edits: keep them; a start loads them.
-//   - It differs and the panel matched the machine (an outside change): for the same
-//     coffee, or one with no coffee recorded, take the machine's values and say so;
-//     for another coffee, mark the recipe as not loaded. Nothing is written back.
+//   - It differs and the panel matched the machine (an outside change): if the
+//     machine's recipe is recorded for this bag, take its values, label them as set on
+//     the machine, and say so. Otherwise (another coffee's bag, or no bag recorded,
+//     which is what Streamline and Decaid's defaults leave) keep this coffee's recipe
+//     and mark it not loaded, so a start loads it. Nothing is written back.
 //   - Before a start (adopt: false): never take the machine's values; a difference
 //     only clears S.loaded, so the start loads what the screen shows.
 // A read that began before one of our own writes finished is dropped, so it can't
@@ -2693,8 +2705,12 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
     const unsaved = !S.loaded && !boot;
     S.loaded = false;
     if (!adopt || unsaved) { renderNextShot(); return "differs"; }
-    if (otherCoffee || !m.profileTitle) { if (!boot) toast("The machine has another recipe, set elsewhere. Starting here loads this one"); renderNextShot(); return "other"; }
+    const forThisBag = !!m.batchId && m.batchId === S.current.batch;
+    if (!forThisBag || !m.profileTitle) { toast("The machine has another recipe, set elsewhere. Starting here loads this one"); renderNextShot(); return "other"; }
+    // A different profile than the recommendation's: its time window no longer applies.
+    if (m.profileTitle !== S.current.recipe?.profileTitle) S.next.targetTimeS = null;
     Object.assign(S.next, {
+      fromMachine: true,
       profileTitle: m.profileTitle,
       doseG: m.doseG ?? S.next.doseG, yieldG: m.yieldG ?? S.next.yieldG, tempC: m.tempC ?? S.next.tempC,
       grind: m.grind || S.next.grind,
@@ -2712,8 +2728,14 @@ async function selectBean(id, opts = {}) {
   S.current = S.shelf.find((b) => b.id === id) || S.shelf[0] || null;
   local.set("current", S.current?.id);
   if (S.current && !S.current.recipe) {
+    const b = S.current;
+    S.recommending = b.id;
     renderNextShot();
-    try { const out = await S.api.recommend(S.current.id); S.current.recipe = out.recipe; S.current.recipeSource = out.source; } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    if (!$("#view-profiles").hidden) renderProfiles();
+    try { const out = await S.api.recommend(b.id); b.recipe = out.recipe; b.recipeSource = out.source; } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    finally { if (S.recommending === b.id) S.recommending = null; }
+    // Profiles may have been drawn while waiting (Add sends you there first).
+    if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
   }
   setNextFromRecipe(S.current);
   S.ghost = null;
@@ -3017,8 +3039,11 @@ function showAfterShot(shot, pts) {
   let rating = shot?.enjoyment ?? null;
   const r = S.current?.recipe;
   const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
-  const [lo, hi] = r?.targetTimeS || [25, 35];
-  const timing = timeS == null ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
+  // The recommendation's time window belongs to its profile; a different profile
+  // pulled (picked here or set on the machine) isn't judged against it.
+  const window = S.next && S.next.profileTitle === r?.profileTitle ? S.next.targetTimeS || r?.targetTimeS || [25, 35] : null;
+  const [lo, hi] = window || [0, 0];
+  const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
   const scale = (id, label, opts) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === 0}" aria-pressed="${v === 0}">${t}</button>`).join("")}</div></div>`;
   p.innerHTML = `
     <div class="row between"><h2>How was it?</h2>${timing}</div>
@@ -3484,11 +3509,13 @@ async function renderProfiles() {
   const rec = $("#recommended");
   if (b) {
     rec.innerHTML = `<p class="muted">Ranking profiles…</p>`;
+    const waiting = !b.recipe && S.recommending === b.id
+      ? `<div class="panel stack"><span class="label">Recommended</span><p class="muted">${S.api.ai.on ? "Asking the AI to choose among these…" : "Working out a recipe…"}</p></div>` : "";
     try {
       const cands = await S.api.rank(b.id);
       const top = cands[0]?.score || 1;
       const chosen = b.recipe?.profileTitle;
-      rec.innerHTML = `${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "")}</span></div>
+      rec.innerHTML = `${waiting}${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "")}</span></div>
           <div class="row between"><h2>${esc(chosen)}</h2><span class="num">${fmt1(b.recipe.doseG)} g → ${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C · ${b.recipe.targetTimeS?.join("–")} s</span></div>
           <ul class="why">${(b.recipe.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
           ${b.recipe.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(b.recipe.dialIn)}</div>` : ""}

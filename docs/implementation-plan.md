@@ -72,7 +72,9 @@ phase 1, so real-hardware findings can reshape phases 1–3.
 2. ~~**Dashboard exit**~~ (finding 1, phase 3). *Done in Settings; still to confirm
    on the tablet (item 3). PR #9 was merged into #8's branch after #8 had landed, so it
    reached `main` in a follow-up PR.*
-3. **Tag `v0.1.0` as a normal GitHub release** from `main`. The release workflow runs CI
+3. ~~**Tag `v0.1.0` as a normal GitHub release**~~ *Done 9 November 2026 (release
+   workflow passed, `crema-skin.zip` checked); v0.1.1 follows with comparison bugs
+   1–3 fixed, before the first install.* From `main`. The release workflow runs CI
    and checks the ZIP first. Not a pre-release: Decaid's GitHub Release install asks for
    `releases/latest` unless `includePrerelease` is set (`lib/src/util/github_archive.dart`
    on Decaid's `main`, read 8 November 2026), and GitHub's latest skips pre-releases, so
@@ -92,9 +94,8 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    pinned references by ID, then per-batch bag state with a migration.
 7. **Streamline Settings entry and the parity audit** (phase 3), after items 2 and 4.
 8. **Supervised tablet session** (phase 7), once 2–4 are in.
-9. **Comparison bugs 1–3** (see "Findings from the skin comparison"). Fix bug 1 before
-   the tablet session: on a machine that another skin has used, it loads the wrong
-   recipe. Bugs 2 and 3 are small and can go in the same PR.
+9. ~~**Comparison bugs 1–3**~~ (see "Findings from the skin comparison"). *Fixed for
+   v0.1.1.*
 
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 
@@ -223,6 +224,24 @@ were still present at `c59a538`.
    Bluetooth notice after the shot, and Streamline showed the same notice. Decaid on the
    Mac reports it because the Mac's Bluetooth is off, even with simulated devices. Both
    skins pass along what Decaid says, which is correct.
+
+*Fixed 9 November 2026 (v0.1.1):*
+- *Bug 1: a machine recipe is adopted only when it's recorded for the current bag;
+  one with no bag (Streamline, Decaid's defaults) or another coffee's keeps the
+  coffee's own recipe, marks it not loaded and says the machine has another one. An
+  adopted recipe is labelled "As set on the machine", not with the AI's name, and the
+  after-shot fast/slow flag only judges a shot against the time window of the profile
+  it belongs to. `e2e-live.cjs`: an untagged recipe and a real reload keep the
+  coffee's recipe (fails with the old rule). The earlier "after a reload" check from
+  #16 didn't actually reload (a same-URL `goto` with another `#hash` keeps the page);
+  both now call `page.reload()`.*
+- *Bug 2: Profiles shows "Asking the AI to choose among these…" while the
+  recommendation is pending and redraws when it arrives (`e2e-live.cjs`, with the
+  recommend call delayed 2.5 s).*
+- *Bug 3: the server drops placeholder-looking image URLs (`isPlaceholderImage`, from
+  the model or the page metadata); saving a coffee whose photo the server can't fetch
+  keeps no image link; and a picture that fails to load in the browser falls back to
+  the initial tile (`artFailed`). Unit and `e2e-live.cjs` checks.*
 
 ### Improvements seen in Streamline
 
