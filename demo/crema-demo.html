@@ -1917,6 +1917,7 @@ function makeDemoApi() {
     subscribe(handlers) {
       listeners.push(handlers); snapshot();
       handlers.devices?.({ devices: [{ name: "DE1", id: "demo", state: "connected", type: "machine" }], scanning: false, connectionStatus: { phase: "ready", error: null } });
+      return { close() { const i = listeners.indexOf(handlers); if (i >= 0) listeners.splice(i, 1); }, reopenMachine() {} };
     },
   };
 }
@@ -2313,14 +2314,38 @@ function makeLiveApi(conn) {
       plugins: () => j(D("/plugins")),
       heartbeat() { if (Date.now() - heartbeatAt > 30000) { heartbeatAt = Date.now(); post(D("/machine/heartbeat")).catch(() => {}); } },
     },
+    // One slot per stream, each holding at most one socket. A replacement opens only
+    // after the old socket is closed and its handlers detached, so a discarded socket
+    // can't deliver frames twice or report a disconnect that isn't real. A closed
+    // socket reconnects with backoff and jitter (1 s growing to 15 s), reset once a
+    // connection has stayed up 5 s. Returns { close, reopenMachine }. Approach from
+    // Streamline's socket-slot.js, reimplemented here.
     subscribe(h) {
-      const open = (path, fn) => {
-        const connect = () => {
-          let ws;
-          try { ws = new WebSocket(wsBase + path); } catch { return; }
-          ws.onmessage = (e) => { try { fn(JSON.parse(e.data)); } catch {} };
-          ws.onclose = () => setTimeout(connect, 2000);
+      let closed = false;
+      const slots = [];
+      const detach = (ws) => { if (!ws) return; ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null; try { ws.close(); } catch {} };
+      const open = (path, fn, onLost) => {
+        const slot = { path, ws: null, tries: 0, timer: null };
+        const retry = () => {
+          if (closed) return;
+          clearTimeout(slot.timer);
+          const wait = Math.min(15000, 1000 * 1.6 ** slot.tries++) * (0.7 + Math.random() * 0.3);
+          slot.timer = setTimeout(connect, wait);
         };
+        const connect = () => {
+          if (closed) return;
+          detach(slot.ws); slot.ws = null;
+          let ws;
+          try { ws = new WebSocket(wsBase + path); } catch { return retry(); }
+          slot.ws = ws;
+          let stable = null;
+          ws.onopen = () => { stable = setTimeout(() => (slot.tries = 0), 5000); };
+          ws.onmessage = (e) => { try { fn(JSON.parse(e.data)); } catch {} };
+          ws.onclose = () => { clearTimeout(stable); if (slot.ws !== ws) return; slot.ws = null; onLost?.(); retry(); };
+        };
+        slot.reopen = () => { clearTimeout(slot.timer); slot.tries = 0; connect(); };
+        slot.close = () => { clearTimeout(slot.timer); detach(slot.ws); slot.ws = null; };
+        slots.push(slot);
         connect();
       };
       let prev = null;
@@ -2328,15 +2353,20 @@ function makeLiveApi(conn) {
         const st = s.state?.state;
         if (prev === "espresso" && st !== "espresso") s.finished = "latest";
         prev = st; h.snapshot?.(s);
-      });
+      }, () => { prev = null; h.lost?.("machine"); });
       open("/ws/v1/scale/snapshot", (s) => h.scale?.(s.status ? { connected: s.status === "connected" } : { connected: true, weight: s.weight, batteryLevel: s.batteryLevel }));
       open("/ws/v1/machine/waterLevels", (s) => h.water?.(s));
       open("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", (s) => h.ready?.(s));
       // Machine link state. A Decaid without this stream leaves it unknown, and
       // the app behaves as it did before.
       let devicesSeen = false;
-      open("/ws/v1/devices", (d) => { devicesSeen = true; h.devices?.(d); });
+      open("/ws/v1/devices", (d) => { devicesSeen = true; h.devices?.(d); }, () => h.lost?.("devices"));
       j(D("/devices")).then((d) => !devicesSeen && h.devices?.(d)).catch(() => {});
+      return {
+        close() { closed = true; slots.forEach((s) => s.close()); },
+        // Reopen the machine-bound sockets, for a Decaid that doesn't re-attach them.
+        reopenMachine() { slots.filter((s) => s.path.startsWith("/ws/v1/machine/")).forEach((s) => s.reopen()); },
+      };
     },
   };
   return api;
@@ -2346,6 +2376,7 @@ function makeLiveApi(conn) {
 const S = {
   api: null,
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
+  streams: null, // subscribe()'s handle: { close, reopenMachine }
   shelf: [], shelfLoaded: false, shelfError: null, current: null, next: null, loaded: false, heldLoad: false,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
@@ -2857,8 +2888,30 @@ function renderLive() {
   $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
   $("#phaseSub").textContent = st === "espresso" && S.next ? `${S.next.profileTitle} · target ${fmt1(target)} g` : "";
 }
+// A stream that closes means Decaid can't be reached: drop what it last said rather
+// than show it as live. The socket reconnects on its own.
+function onStreamLost(which) {
+  if (which === "machine") {
+    S.snap = null;
+    renderStatus(); renderAlerts(); renderControls();
+    if (!$("#view-brew").hidden) { renderReadouts(); renderLive(); }
+  }
+  if (which === "devices") { S.link = { connected: null, error: null }; renderAlerts(); }
+}
+// The machine socket can stay open but go quiet (Streamline saw older Decaid keep
+// it bound to a machine that had been replaced). Decaid 0.9.1 re-attaches it, and a
+// machine that's unlinked is quiet anyway, so this is only a fallback: no reading for
+// 15 s while the machine counts as linked reopens the machine sockets, at most every 30 s.
+let lastSnapAt = 0, lastReopenAt = 0;
+function checkStaleReadings() {
+  if (!S.streams || unlinked() || document.visibilityState !== "visible" || !lastSnapAt) return;
+  const now = Date.now();
+  if (now - lastSnapAt > 15000 && now - lastReopenAt > 30000) { lastReopenAt = now; S.streams.reopenMachine(); }
+}
+
 function onSnapshot(s) {
   const prevState = S.snap?.state?.state;
+  lastSnapAt = Date.now();
   S.snap = s;
   const st = s.state?.state;
   if (st !== prevState && S.starting?.kind === st) S.starting = null; // the machine has picked up the start
@@ -3851,13 +3904,16 @@ async function boot() {
   else S.api = makeDemoApi();
   // Machine streams first: readings and Stop mustn't wait for settings, the shelf or
   // a recipe (which can mean an AI call).
-  S.api.subscribe({
+  S.streams = S.api.subscribe({
+    lost: onStreamLost,
     snapshot: onSnapshot,
     scale: (s) => { S.scale = { ...S.scale, ...s }; renderStatus(); if (!$("#view-brew").hidden) renderReadouts(); },
     water: (w) => { S.water = w; renderStatus(); },
     ready: (r) => { S.ready = r; },
     devices: onDevices,
   });
+  setInterval(checkStaleReadings, 5000);
+  document.addEventListener("visibilitychange", checkStaleReadings);
   // Show the Brew screen (readings, Stop) now; the rest of it fills in as data arrives.
   if (!location.hash || location.hash === "#brew") route(false);
   await S.api.settings.get().catch(() => {});

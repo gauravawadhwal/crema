@@ -319,6 +319,7 @@ function makeDemoApi() {
     subscribe(handlers) {
       listeners.push(handlers); snapshot();
       handlers.devices?.({ devices: [{ name: "DE1", id: "demo", state: "connected", type: "machine" }], scanning: false, connectionStatus: { phase: "ready", error: null } });
+      return { close() { const i = listeners.indexOf(handlers); if (i >= 0) listeners.splice(i, 1); }, reopenMachine() {} };
     },
   };
 }
