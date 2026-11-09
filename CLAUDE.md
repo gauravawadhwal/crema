@@ -20,6 +20,7 @@ Read next, as needed:
 - `docs/design.md`: the design system, layouts, themes, copy style.
 - `docs/investigation.md`: research and product decisions (photos vs search, AI providers, how recipes are chosen, why a skin rather than a fork of Streamline).
 - `docs/parity.md`: feature checklist against the stock Decent app and community skins.
+- `docs/shot-review-plan.md`: AI shot review (planned): how other DE1 projects do it, the design and the order of work.
 
 ## Repo layout
 
@@ -138,4 +139,5 @@ Not done (details in `docs/implementation-plan.md`):
 - Streamline Settings from Crema, the profile-editing hand-off and an evidence-based `docs/parity.md` (plan phase 3; needs the tablet)
 - splitting `skin/app.js` (plan phase 4)
 - voice input inside Decaid: Decaid never gives skins the microphone; hide Speak there and point to the keyboard's microphone (next-session item 10)
+- AI shot review: a "Review shot" button that reads the curves, with rule-based shot checks as the fallback (next-session item 11, `docs/shot-review-plan.md`)
 - grinder entities and a numeric grind advisor; Home Assistant sensors; order-email ingestion

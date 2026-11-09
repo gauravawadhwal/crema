@@ -98,6 +98,7 @@ confirming against a real machine.
 | Compare two shots | Community favourite | ✅ tick a second shot to overlay it |
 | Rating and notes | DYE | ✅ saved as Decaid annotations |
 | Taste feedback → next adjustment | — | ✅ |
+| AI shot review from the curves | Decenza, community tools | ⬜ planned ([shot-review-plan.md](shot-review-plan.md)) |
 | Upload to Visualizer | Plugin | 🟡 via Decaid's Visualizer plugin (status shown in Settings) |
 | Delete shot | Decaid | ⬜ |
 
