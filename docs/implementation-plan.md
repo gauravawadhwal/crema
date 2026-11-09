@@ -73,8 +73,10 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    on the tablet (item 3). PR #9 was merged into #8's branch after #8 had landed, so it
    reached `main` in a follow-up PR.*
 3. ~~**Tag `v0.1.0` as a normal GitHub release**~~ *Done 9 November 2026 (release
-   workflow passed, `crema-skin.zip` checked); v0.1.1 follows with comparison bugs
-   1–3 fixed, before the first install.* From `main`. The release workflow runs CI
+   workflow passed, `crema-skin.zip` checked); v0.1.1 fixed comparison bugs 1–3, and
+   v0.2.0 (9 November 2026: phase 2 done in software, Docker in CI) is the first
+   install, so the tablet session covers phases 1 and 2. Upgrading it to the next
+   release later tests phase 7's "upgrade without losing records".* From `main`. The release workflow runs CI
    and checks the ZIP first. Not a pre-release: Decaid's GitHub Release install asks for
    `releases/latest` unless `includePrerelease` is set (`lib/src/util/github_archive.dart`
    on Decaid's `main`, read 8 November 2026), and GitHub's latest skips pre-releases, so
