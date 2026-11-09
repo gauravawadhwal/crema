@@ -3339,7 +3339,31 @@ async function renderShelf() {
     };
   }));
 }
-async function refreshShelf() { S.shelf = await S.api.shelf(); }
+let shelfRequest = 0, shelfSync = null;
+async function refreshShelf() {
+  const request = ++shelfRequest;
+  const rows = await S.api.shelf();
+  if (request !== shelfRequest) return;
+  S.shelf = rows;
+  // Keep the selected object current without resetting edits to the next shot.
+  const selected = rows.find((b) => b.key === S.current?.key);
+  if (selected) { Object.assign(S.current, selected); rows[rows.indexOf(selected)] = S.current; }
+}
+// Decaid has no inventory stream. Refresh visible clients without overlapping reads,
+// resetting the recipe being edited, or turning a failed read into an empty shelf.
+function syncShelf() {
+  if (S.api.demo || !S.shelfLoaded || shotRunning() || S.recommending || loadsPending) return Promise.resolve();
+  if (shelfSync) return shelfSync;
+  const before = JSON.stringify(S.shelf), selected = JSON.stringify(S.current);
+  shelfSync = refreshShelf().then(async () => {
+    S.shelfError = null;
+    if ((S.current && !S.shelf.some((b) => b.key === S.current.key)) || (!S.current && S.shelf.length)) {
+      await selectBean(S.shelf[0]?.key, { quiet: true });
+    } else if (selected !== JSON.stringify(S.current)) renderNextShot();
+    if (before !== JSON.stringify(S.shelf) && !$("#view-shelf").hidden) renderShelf();
+  }).catch(() => {}).finally(() => { shelfSync = null; });
+  return shelfSync;
+}
 // A coffee's recipe and reference shot are shared by all its bags on the shelf.
 const sameCoffee = (id, fn) => S.shelf.filter((x) => x.id === id).forEach(fn);
 async function retryShelf() {
@@ -4247,10 +4271,15 @@ async function boot() {
   const machineBean = onMachine?.batchId && S.shelf.find((b) => b.batch === onMachine.batchId);
   await selectBean(machineBean?.key || local.get("current", null) || S.shelf[0]?.key, { quiet: true });
   await reconcileWorkflow({ boot: true });
-  const recheck = () => document.visibilityState === "visible" && reconcileWorkflow();
+  const recheck = () => {
+    if (document.visibilityState !== "visible") return;
+    void syncShelf();
+    void reconcileWorkflow();
+  };
   document.addEventListener("visibilitychange", recheck);
   window.addEventListener("focus", recheck);
   setInterval(recheck, 60000);
+  setInterval(() => { if (document.visibilityState === "visible") void syncShelf(); }, 5000);
 
   window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());
