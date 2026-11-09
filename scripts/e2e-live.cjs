@@ -262,6 +262,75 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await gone.close();
       stop(mock2);
     }
+
+    // Shot history. Decaid gives at most 100 shots a page (and echoes the limit asked
+    // for), so counts and the reference shot must page and fetch by id.
+    {
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.reload();
+      await page.waitForFunction(() => S.current && S.shelfLoaded && S.link.connected, null, { timeout: 15000 });
+      const batchId = await S(() => S.current.batch);
+      const before = await S(async () => (await S.api.shelf()).find((b) => b.id === S.current.id).shots);
+      await dev("shots/seed", { count: 130, batchId, dose: 18 });
+      const after = await S(async () => (await S.api.shelf()).find((b) => b.id === S.current.id));
+      check(after.shots === before + 130, `all of a bag's shots are counted past 100 (${before} + 130 → ${after.shots})`);
+      const total = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots?limit=1`)).json()).total;
+      const since = await S(async () => (await S.api.maintenance.get()).shotsSinceBackflush);
+      check(since === total && total > 100, `shots since the last backflush are counted past 100 (${since} of ${total})`);
+
+      // A reference shot older than any page that's loaded.
+      const oldest = await S(async () => { const p = await S.api.shotPage(0, 1); const last = await S.api.shotPage(p.total - 1, 1); return last.items[0].id; });
+      await page.evaluate((id) => S.api.pinBest(S.current.id, id), oldest);
+      await page.reload(); await page.waitForFunction(() => S.current && S.shelfLoaded, null, { timeout: 15000 }); await page.waitForTimeout(800);
+      const ref = await page.evaluate(async (id) => ({ best: S.current.bestShotId, want: id, ghost: S.ghost?.length ?? null, fetched: (await S.api.shot(id).catch((e) => ({ err: e.message })))?.points?.length }), oldest);
+      check(ref.best === oldest && ref.ghost > 0, "a reference shot older than the loaded history still shows on the chart", JSON.stringify(ref));
+
+      // The history page loads 20 at a time.
+      await page.goto(`http://localhost:${SKIN}/?full#shots`); await page.waitForSelector("#moreShots", { timeout: 15000 }).catch(() => {});
+      const first = await S(() => ({ n: S.shots.length, more: document.querySelector("#moreShots")?.textContent }));
+      await page.click("#moreShots").catch(() => {}); await page.waitForFunction(() => S.shots.length > 20, null, { timeout: 15000 }).catch(() => {});
+      check(first.n === 20 && /Show more/.test(first.more || "") && await S(() => S.shots.length) === 40, `history loads 20 at a time with Show more (${first.n}, "${first.more}")`);
+
+      // Failures aren't zero: history and a bag's count say so instead.
+      await page.route(/\/api\/v1\/shots\?/, (r) => r.abort());
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#shots`);
+      await page.waitForSelector("#retryShots", { timeout: 15000 }).catch(() => {});
+      check(/Couldn't load your shots/.test(await page.textContent("#shotList")), "a failed history load says so, not \"No shots yet\"");
+      const unknown = await S(async () => { const b = (await S.api.shelf()).find((x) => x.id === S.current.id); return { remaining: b.remaining, shots: b.shots }; });
+      check(unknown.remaining === null && unknown.shots === null, `if a bag's shots can't be read, how much is left is unknown, not full (${JSON.stringify(unknown)})`);
+      await page.unroute(/\/api\/v1\/shots\?/);
+      await page.click("#retryShots").catch(() => {});
+      await page.waitForFunction(() => !document.querySelector("#retryShots") && document.querySelectorAll(".shot-row").length > 0, null, { timeout: 15000 }).catch(() => {});
+      check(await S(() => document.querySelectorAll(".shot-row").length) === 20, "Try again loads the history");
+
+      // After a shot, the rating goes to that shot, even if Decaid is slow to save it.
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForTimeout(800);
+      const prevLatest = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots/latest`)).json()).id;
+      let stale = 0;
+      await page.route(/\/api\/v1\/shots\/latest/, async (r) => {
+        // Hold back the new shot for the first two reads after the shot ends.
+        const real = await (await fetch(`http://localhost:${MOCK}/api/v1/shots/latest`)).json();
+        if (real.id !== prevLatest && stale < 2) { stale++; return r.fulfill({ json: { id: prevLatest, timestamp: new Date(0).toISOString() } }); }
+        return r.continue();
+      });
+      await S(() => startOp("espresso"));
+      await page.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      await S(() => stopMachine());
+      await page.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 }).catch(() => {});
+      await page.waitForFunction((p) => S.lastShotId && S.lastShotId !== p, prevLatest, { timeout: 10000 }).catch(() => {});
+      const newest = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots/latest`)).json()).id;
+      check(stale === 2 && await S(() => S.lastShotId) === newest && newest !== prevLatest, `the after-shot panel waits for Decaid to save the shot and rates that one (${stale} stale reads)`);
+      await page.unroute(/\/api\/v1\/shots\/latest/);
+      // Never saved: the panel says the rating can't be attached yet.
+      await page.route(/\/api\/v1\/shots\/latest/, (r) => r.fulfill({ json: { id: "never-the-new-one", timestamp: new Date(0).toISOString() } }));
+      await S(() => startOp("espresso"));
+      await page.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      await S(() => stopMachine());
+      await page.waitForFunction(() => /hasn't saved this shot yet/.test(document.querySelector("#afterShot").textContent), null, { timeout: 20000 }).catch(() => {});
+      check(/hasn't saved this shot yet/.test(await page.textContent("#afterShot")), "if Decaid hasn't saved the shot, the panel says the rating can't be attached yet");
+      await page.unroute(/\/api\/v1\/shots\/latest/);
+    }
     const kv = await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema`)).json();
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });

@@ -1860,7 +1860,13 @@ function makeDemoApi() {
       sim.group = recipe.tempC;
       await wait(250);
     },
-    async shots(limit = 40) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, limit); },
+    async shotPage(offset = 0, limit = 20) {
+      const all = shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return { items: all.slice(offset, offset + limit), total: all.length };
+    },
+    async shots(limit = 40) { return (await this.shotPage(0, limit)).items; },
+    async shot(id) { return shots.find((s) => s.id === id) || null; },
+    async latestShot() { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null; },
     async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; } },
     async feedback(shotId, beanId, fb) {
       const s = shots.find((x) => x.id === shotId); const b = byId(beanId);
@@ -2097,7 +2103,28 @@ function makeLiveApi(conn) {
       doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? ctx.targetYield, timeS: points.length ? Math.round(points.at(-1).t) : null,
       enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points };
   };
-  const batchShots = async (batchId, limit = 500) => (batchId ? (await j(D(`/shots?beanBatchId=${encodeURIComponent(batchId)}&limit=${limit}`)).catch(() => ({ items: [] }))).items : []);
+  // Decaid's shot list gives at most 100 per page and echoes whatever limit was asked
+  // for, so a bigger request silently comes back short. Pages are asked for 100 at a
+  // time and `total` says when to stop. List items are summaries (no measurements),
+  // which is all counting needs. Decaid lists newest first, so `since` can stop early.
+  const SHOT_PAGE = 100;
+  const shotSummaries = async ({ batchId = null, since = 0 } = {}) => {
+    const out = [];
+    for (let offset = 0, pages = 0; pages < 100; offset += SHOT_PAGE, pages++) {
+      const q = new URLSearchParams({ limit: String(SHOT_PAGE), offset: String(offset) });
+      if (batchId) q.set("beanBatchId", batchId);
+      const page = await j(D(`/shots?${q}`));
+      const items = page?.items ?? [];
+      for (const s of items) { if (since && Date.parse(s.timestamp) <= since) return out; out.push(s); }
+      if (!items.length || offset + items.length >= (page.total ?? 0)) return out;
+    }
+    return out;
+  };
+  // A few recent shots of one bag, for the AI's context. Failures mean no context.
+  const batchShots = async (batchId, limit) => (batchId ? (await j(D(`/shots?beanBatchId=${encodeURIComponent(batchId)}&limit=${Math.min(limit, SHOT_PAGE)}`)).catch(() => ({ items: [] }))).items : []);
+  const fullShot = async (id) => {
+    try { return await j(D(`/shots/${encodeURIComponent(id)}`)); } catch (e) { if (e.status === 404) return null; throw e; }
+  };
 
   // ---- one coffee, assembled from Decaid + Crema's record ----
   async function coffee(beanId) {
@@ -2147,14 +2174,15 @@ function makeLiveApi(conn) {
         if (rec?.finished) return null;
         const batch = batches.find((x) => x.id === rec?.batchId) ?? batches[0] ?? null;
         const info = rec?.info ?? infoFromDecaidBean(b, batch);
-        const shots = (await batchShots(batch?.id)).filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name));
-        const grams = shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0);
+        // If the shots can't be read, how much is left is unknown, not "all of it".
+        const shots = batch?.id ? await shotSummaries({ batchId: batch.id }).then((all) => all.filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)), () => null) : [];
+        const grams = shots ? shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0) : null;
         const weight = batch?.weight ?? info.weightGrams ?? null;
         return {
           id: b.id, batch: batch?.id ?? null, info, recipe: rec?.recipe ?? null, recipeSource: rec?.recipeSource ?? (rec?.recipe ? "saved" : null),
           photo: rec?.photo ?? null, productImage: rec?.productImage ?? info.imageUrl ?? null, art: rec?.art,
-          weight, remaining: weight != null ? Math.max(0, Math.round(weight - grams)) : batch?.weightRemaining ?? null,
-          frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: shots.length,
+          weight, remaining: weight != null && grams != null ? Math.max(0, Math.round(weight - grams)) : grams == null ? null : batch?.weightRemaining ?? null,
+          frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: shots ? shots.length : null,
         };
       }));
       return rows.filter(Boolean);
@@ -2241,10 +2269,16 @@ function makeLiveApi(conn) {
       });
     },
 
-    async shots(limit = 15) {
-      const { items } = await j(D(`/shots?limit=${limit}`));
-      return Promise.all(items.map(async (s) => toShot(s, await j(D(`/shots/${encodeURIComponent(s.id)}`)).catch(() => null))));
+    // One page of history, with each shot's measurements for its chart.
+    async shotPage(offset = 0, limit = 20) {
+      const page = await j(D(`/shots?limit=${Math.min(limit, SHOT_PAGE)}&offset=${offset}`));
+      const items = await Promise.all((page?.items ?? []).map(async (s) => toShot(s, await fullShot(s.id).catch(() => null))));
+      return { items, total: page?.total ?? items.length };
     },
+    async shots(limit = 15) { return (await api.shotPage(0, limit)).items; },
+    // One shot by id (a reference shot can be older than any page loaded), or null.
+    async shot(id) { const full = await fullShot(id); return full ? toShot(full, full) : null; },
+    async latestShot() { const s = await j(D("/shots/latest")).catch((e) => { if (e.status === 404) return null; throw e; }); return s?.id ? api.shot(s.id) : null; },
     annotate: (id, a) => put(D(`/shots/${encodeURIComponent(id)}`), { annotations: a }),
     async feedback(shotId, beanId, fb) {
       const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
@@ -2271,11 +2305,10 @@ function makeLiveApi(conn) {
     maintenance: {
       async get() {
         const m = { ...E.DEFAULT_MAINTENANCE, ...(await kvGet("maintenance", {})) };
-        let shotsSinceBackflush = null;
+        let shotsSinceBackflush = null; // unknown if the shots can't be read
         try {
-          const { items } = await j(D("/shots?limit=500"));
           const since = m.lastBackflush ? Date.parse(m.lastBackflush) : 0;
-          shotsSinceBackflush = items.filter((s) => Date.parse(s.timestamp) > since && isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)).length;
+          shotsSinceBackflush = (await shotSummaries({ since })).filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)).length;
         } catch {}
         const daysSinceDescale = m.lastDescale ? Math.floor((Date.now() - Date.parse(m.lastDescale)) / DAY) : null;
         return { ...m, shotsSinceBackflush, daysSinceDescale, backflushDue: shotsSinceBackflush != null && shotsSinceBackflush >= m.backflushEveryShots, descaleDue: daysSinceDescale != null && daysSinceDescale >= m.descaleEveryDays };
@@ -2746,8 +2779,8 @@ async function selectBean(id, opts = {}) {
 async function loadGhost() {
   const b = S.current;
   if (!b?.bestShotId) { S.ghost = null; return; }
-  if (!S.shots.length) S.shots = await S.api.shots(40).catch(() => []);
-  S.ghost = S.shots.find((s) => s.id === b.bestShotId)?.points || null;
+  // Fetched by id: the reference can be older than any page of history loaded.
+  S.ghost = (S.shots.find((s) => s.id === b.bestShotId) || (await S.api.shot(b.bestShotId).catch(() => null)))?.points || null;
 }
 
 /* ================= favourites ================= */
@@ -2978,17 +3011,32 @@ function onSnapshot(s) {
 }
 function onShotStart() {
   S.live = []; S.opStart = Date.now();
+  // Which shot was newest before this one, so the end can tell when Decaid has saved it.
+  S.shotBefore = undefined;
+  S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});
   $("#afterShot").hidden = true;
   $(".live-col").classList.remove("has-after");
   if (location.hash !== "#brew") location.hash = "#brew";
 }
 async function onShotEnd(finishedId) {
   const pts = S.live.slice();
-  S.shots = await S.api.shots(40).catch(() => S.shots);
-  const shot = finishedId === "latest" ? S.shots[0] : S.shots.find((x) => x.id === finishedId) || S.shots[0];
+  const shot = finishedId === "latest" ? await justFinishedShot() : await S.api.shot(finishedId).catch(() => null);
+  if (shot && !S.shots.some((s) => s.id === shot.id)) S.shots = [shot, ...S.shots];
   S.lastShotId = shot?.id;
   showAfterShot(shot, pts);
   if (S.current) S.current.remaining = S.current.remaining != null ? Math.max(0, S.current.remaining - (S.next?.doseG ?? 18)) : null;
+}
+// Decaid saves the shot a moment after the machine stops. Ratings and the reference
+// must go to this shot, not the one before it, so wait (up to ~6 s) for a newest shot
+// that isn't the one that was newest when this shot started.
+async function justFinishedShot() {
+  for (let i = 0; i < 8; i++) {
+    const s = await S.api.latestShot().catch(() => null);
+    if (s && S.shotBefore !== undefined && s.id !== S.shotBefore) return s;
+    if (s && S.shotBefore === undefined && Date.parse(s.timestamp) >= S.opStart - 60000) return s; // start-time read failed; fall back to the clock
+    await new Promise((r) => setTimeout(r, 750));
+  }
+  return null;
 }
 function shotMetrics(points, s) {
   const first = points.find((p) => p.w > 0.5);
@@ -3037,6 +3085,7 @@ function showAfterShot(shot, pts) {
   const p = $("#afterShot");
   p.hidden = false;
   let rating = shot?.enjoyment ?? null;
+  const unsaved = shot ? "" : `<p class="muted small">Decaid hasn't saved this shot yet, so the rating and advice can't be attached. Rate it from Shots in a moment.</p>`;
   const r = S.current?.recipe;
   const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
   // The recommendation's time window belongs to its profile; a different profile
@@ -3046,7 +3095,7 @@ function showAfterShot(shot, pts) {
   const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
   const scale = (id, label, opts) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === 0}" aria-pressed="${v === 0}">${t}</button>`).join("")}</div></div>`;
   p.innerHTML = `
-    <div class="row between"><h2>How was it?</h2>${timing}</div>
+    <div class="row between"><h2>How was it?</h2>${timing}</div>${unsaved}
     ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
     ${scale("sb", "Taste", [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]])}
     ${scale("bd", "Body", [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]])}
@@ -3585,17 +3634,30 @@ function showProfile(title) {
 }
 
 /* ================= shots ================= */
-async function renderShots() {
+const SHOTS_PER_PAGE = 20;
+// A shot pulled from another skin may record a bag but no coffee name: name it from the shelf.
+const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch === s.batch)?.info.name.value || "No coffee recorded";
+async function renderShots(more = false) {
   const list = $("#shotList");
-  list.innerHTML = `<p class="muted">Loading…</p>`;
-  S.shots = await S.api.shots(40).catch(() => []);
+  if (!more) list.innerHTML = `<p class="muted">Loading…</p>`;
+  try {
+    const page = await S.api.shotPage(more ? S.shots.length : 0, SHOTS_PER_PAGE);
+    S.shots = more ? [...S.shots, ...page.items.filter((x) => !S.shots.some((s) => s.id === x.id))] : page.items;
+    S.shotsTotal = page.total;
+  } catch (e) {
+    // A failed load isn't an empty history.
+    list.innerHTML = `<p class="muted">Couldn't load your shots (${esc(e.message)}).</p><button class="btn" id="retryShots">Try again</button>`;
+    $("#retryShots").onclick = () => renderShots(); $("#shotDetail").innerHTML = ""; return;
+  }
   if (!S.shots.length) { list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
   if (!S.shots.some((s) => s.id === S.selShot)) S.selShot = S.shots[0].id;
   list.innerHTML = S.shots.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
       <input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}>
       <canvas data-spark="${i}" aria-hidden="true"></canvas>
-      <button class="open" data-open="${esc(s.id)}"><strong>${esc(s.coffee || "Unknown coffee")}</strong>
-        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("");
+      <button class="open" data-open="${esc(s.id)}"><strong>${esc(shotCoffee(s))}</strong>
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("")
+    + (S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "");
+  const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
   requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
   $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShots(); }));
   $$("[data-cmp]").forEach((b) => (b.onchange = () => { S.cmpShot = b.checked ? b.dataset.cmp : null; renderShots(); }));

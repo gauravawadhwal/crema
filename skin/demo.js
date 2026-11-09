@@ -262,7 +262,13 @@ function makeDemoApi() {
       sim.group = recipe.tempC;
       await wait(250);
     },
-    async shots(limit = 40) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, limit); },
+    async shotPage(offset = 0, limit = 20) {
+      const all = shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      return { items: all.slice(offset, offset + limit), total: all.length };
+    },
+    async shots(limit = 40) { return (await this.shotPage(0, limit)).items; },
+    async shot(id) { return shots.find((s) => s.id === id) || null; },
+    async latestShot() { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null; },
     async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; } },
     async feedback(shotId, beanId, fb) {
       const s = shots.find((x) => x.id === shotId); const b = byId(beanId);
