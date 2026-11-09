@@ -92,6 +92,9 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    pinned references by ID, then per-batch bag state with a migration.
 7. **Streamline Settings entry and the parity audit** (phase 3), after items 2 and 4.
 8. **Supervised tablet session** (phase 7), once 2–4 are in.
+9. **Comparison bugs 1–3** (see "Findings from the skin comparison"). Fix bug 1 before
+   the tablet session: on a machine that another skin has used, it loads the wrong
+   recipe. Bugs 2 and 3 are small and can go in the same PR.
 
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 
@@ -167,6 +170,88 @@ building on them.
 7. **Playwright is installed globally, not declared (phase 0, R11).** The UI scripts
    only work where `playwright` is installed globally. A fresh checkout can't run them.
    *Fixed: Playwright is a dev dependency and CI's `ui` job runs the UI checks.*
+
+## Findings from the skin comparison (8–9 November 2026)
+
+Crema, Streamline.js 0.2.23 and Insight 0.2.7 were compared screen by screen in desktop
+Decaid 0.9.1 (macOS, `MockDe1` and `MockScale`). Crema was packaged from `e49b2a9` and
+installed through `POST /api/v1/webui/skins/install/url`, and the served `app.js`
+matched the commit byte for byte. Skins were switched with `PUT
+/api/v1/webui/skins/default` and a restart of the skin server, then screenshotted
+headless at 1340×800 and 390×844. One coffee (Haven Ethiopia Guji Gogogu, from "Describe
+it") was identified and matched by the real AI server (codex-cli first), loaded, and
+pulled from Crema's own buttons. Streamline's shot was started from its Coffee button.
+
+The user has a private web page with the screenshots (Crema vs Streamline). It isn't in
+this repo, and its screenshots were saved to a temporary folder, not to the repo. When
+these items change, tell the user which parts of that page are out of date.
+
+None of the bugs below reproduce in the demo or `dev/mock-decaid.ts`. They need a
+machine recipe set by another skin, a real model's answer, or a slow AI reply. Bugs 1–3
+were still present at `c59a538`.
+
+### Bugs
+
+1. **A page load adopts another skin's recipe over the coffee's own (phase 1,
+   reconciliation; high).** Codex chose Adaptive v2, 18 → 40 g at 92 °C, and Crema
+   stored it in the bean record (the shelf card showed it). Brew then showed the
+   machine's leftover recipe from Streamline, Gentle and sweet at 18 → 36 g and 88 °C,
+   still labelled "Chosen by codex-cli". Load wrote Gentle and sweet to the workflow,
+   tagged with the Haven batch, and the shot ran on it. The after-shot "fast for this
+   profile (28–36 s)" flag then used Adaptive v2's time window. Cause, from reading
+   `reconcileWorkflow`: with `boot: true`, a machine recipe that has no `batchId` (set by
+   Streamline or Decaid, which don't tag one) isn't treated as another coffee's, so it is
+   adopted into `S.next`. `recipeSource` is left alone, so the label still names the AI.
+   Fix: adopt only a recipe tagged with the current batch. Treat an untagged recipe like
+   `otherCoffee` (keep Crema's recipe, toast that the machine has another one), and label
+   an adopted recipe as set on the machine, not with the AI's name. Add an `e2e-live`
+   case: the simulator holds an untagged recipe, the page reloads, and Brew must keep
+   the bean's recipe.
+2. **Profiles doesn't redraw when the AI's pick arrives (phase 2; medium).** "Save to
+   shelf and match a profile" sets `#profiles` before `selectBean` has the
+   recommendation, so `renderProfiles` draws the rules ranking only and never redraws.
+   For five minutes it showed no AI pick, until the next visit. Fix: re-render Profiles
+   (if it's the current view) when `selectBean`'s recommend call returns, and show
+   "Asking the AI…" in the Recommended slot while it waits.
+3. **A placeholder product photo is kept as the coffee's picture (phase 5; medium).** The
+   model returned the roaster's Shopify `placeholder.jpg` as `imageUrl`. The server's
+   download got a 404 (logged), but the URL stayed on the record, so the add review, the
+   shelf card and the Brew card show a broken image. Fix: when the download fails, drop
+   `imageUrl` and fall back to the bag photo or the initial tile. Also consider
+   rejecting URLs whose path names a placeholder.
+4. **Not a bug: "Bluetooth is turned off".** Crema's link-state banner reported Decaid's
+   Bluetooth notice after the shot, and Streamline showed the same notice. Decaid on the
+   Mac reports it because the Mac's Bluetooth is off, even with simulated devices. Both
+   skins pass along what Decaid says, which is correct.
+
+### Improvements seen in Streamline
+
+Not started. Each names the phase it fits. None blocks the tablet session.
+
+1. **Name the running step, and offer skip-step (phase 2, profiles).** During a shot,
+   Streamline shows the profile step ("rise and hold"), its countdown, a skip-step button,
+   and step boundaries on the chart. Crema shows none of these. Check which snapshot
+   field carries the step (`profileFrame`) and whether Decaid has a skip-step command
+   before designing it.
+2. **Say why the shot stopped (phase 2).** Streamline shows "Stopped by weight". Crema's
+   after-shot panel could name weight, volume, time or the user.
+3. **Show the profile's steps before choosing it (phase 2, profiles).** Streamline's
+   selector previews each profile's step chart and notes. Crema's candidate cards could
+   show a small step chart once installed Decaid profiles are the library (next session
+   6).
+4. **Hand off profile editing (phase 3, ownership).** Streamline's editor (step cards,
+   script view, save as new) is its clearest lead over Crema. Prefer a tested hand-off
+   to it over building an editor, alongside the Streamline Settings entry.
+5. **One-tap preset strips for dose, yield and temperature (deferred product work).**
+   Streamline puts a preset strip under each stepper. Crema has strips for steam, water
+   and flush only. Check the tablet fit after any change.
+6. **Shots from other skins show as "Unknown coffee" (phase 2, history).** The Streamline
+   shot's workflow carried no bean. If Decaid records a `coffeeName` or batch in the
+   shot's context, use it before falling back to "Unknown coffee".
+7. **Capture Decaid's own screens next time (phase 7).** Its dashboard (devices, skins,
+   plugins) wasn't captured: the window was on another macOS Space behind a full-screen
+   app, so background clicks couldn't reach it. Doing this needs a short spell of
+   full-screen control, or the tablet.
 
 ## Phase 0 — compatibility baseline and test setup
 
