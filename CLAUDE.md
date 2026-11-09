@@ -18,7 +18,7 @@ Read next, as needed:
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
 - `docs/design.md`: the design system, layouts, themes, copy style.
-- `docs/investigation.md`: research and product decisions (photos vs search, AI providers, how recipes are chosen).
+- `docs/investigation.md`: research and product decisions (photos vs search, AI providers, how recipes are chosen, why a skin rather than a fork of Streamline).
 - `docs/parity.md`: feature checklist against the stock Decent app and community skins.
 
 ## Repo layout
@@ -109,6 +109,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 - **Steam, hot water and flush are workflow fields.** Write them with `machine.workflowSettings` (`steamSettings`, `hotWaterData`, `rinseData`), not `POST /machine/shotSettings`, which Decaid doesn't copy back into the workflow. Decaid stores any number, so keep values inside `WF_LIMITS` (integers for temperatures, durations, volumes).
 - **Never write the workflow's profile during a shot.** Decaid sends it to the DE1 at once, even mid-shot, replacing the steps being poured. `loadOntoMachine` holds the load until the shot ends (`S.heldLoad`); any new path that writes `profile` to `/workflow` must go through it.
 - **Before building machine plumbing, check Decaid and Streamline.** Decaid has `/ws/v1/devices` for link state and workflow fields for steam, hot water and flush; Streamline has solved reconnects and outside workflow changes. Streamline is GPL-3.0, so learn from it but don't copy its code into this MIT repo (implementation plan, phase 1).
+- **Crema is a skin that owns the brewing loop, not a Streamline replacement.** Hand machine settings, profile editing and maintenance to Streamline, its settings plugin or Decaid rather than rebuilding them to close a parity gap. Why, and the Decaid-plugin alternative: `docs/investigation.md` section 7.
 - **Recommendations must name a profile the machine has.** The AI chooses only among installed candidates, and the code enforces it.
 - **The engine bundle is committed.** `skin/engine.js` is generated, but the skin has no build step, so it's checked in. `npm test` fails when it's stale.
 - **https pages can't call Decaid** (plain http). `discoverConnections` doesn't probe Decaid from an https page unless an address was saved.

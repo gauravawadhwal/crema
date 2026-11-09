@@ -22,6 +22,10 @@ Reuse maintained upstream interfaces where practical. Do not fork Streamline or
 Decaid, replace the frontend framework, or build a second profile editor merely to
 complete this plan. Extract small modules when they make the fixes testable. Any
 larger redesign needs a demonstrated incompatibility and a separate decision.
+Why a skin and not a fork, and the Decaid-plugin alternative, are recorded in
+[investigation.md, section 7](investigation.md#7-a-skin-not-a-fork-of-streamline-reviewed-8-november-2026)
+(8 November 2026): Crema owns the daily brewing loop and hands the rest to Streamline,
+its settings plugin or Decaid, rather than closing every parity gap.
 
 The older `de1app` is a different application. Its plugins are not assumed to work
 in Decaid. Streamline's UI is not automatically inherited by installing Crema.

@@ -130,9 +130,51 @@ The first version kept Crema's records on the server and sent everything through
 
 Running the server as an Android app on the tablet was considered and rejected: the subscription CLIs need a Node and shell environment, and an always-on home computer (a NAS, a Pi) is the more common place for one.
 
-## 7. Sources
+## 7. A skin, not a fork of Streamline (reviewed 8 November 2026)
 
-- Decaid repo and skin/API docs: https://github.com/decentespresso/decaid (`doc/Skins.md`, `doc/Api.md`)
+Crema is its own Decaid skin. Once phase 1 of the [implementation plan](implementation-plan.md) turned out to need lessons from Streamline (Decent's own skin for Decaid), we asked whether forking Streamline would have been the better start. It would not, but the review changed what Crema tries to be.
+
+### The options
+
+| Option | What it means | Verdict |
+|---|---|---|
+| **Crema as a Decaid skin** (current) | Crema's own home screen, talking to Decaid's REST and WebSocket APIs, as Streamline does | **Keep.** It's the extension point Decaid documents, and the part Crema changes is the UI |
+| **Fork Streamline** | Start from Streamline's code and replace its screens | **Rejected.** See below |
+| **Crema's AI as a Decaid plugin inside Streamline** | A `.reaplugin` with its own page, shown through Streamline's plugin surfaces | **A hedge, not a replacement.** See below |
+
+### Why not a fork
+
+- **License.** Streamline's `LICENSE.txt` is GPL-3.0-or-later; its `package.json` says ISC. Until its maintainers say which applies, assume GPL. A fork would make Crema GPL and end the MIT repo.
+- **Upstream moves fast.** About 1,100 commits, with a release every few days to two weeks (v0.2.20 to v0.2.23 between 29 October and 5 November 2026). A fork that rewrites the UI would conflict with upstream in exactly the files it changes.
+- **A fork keeps the wrong half.** What makes Crema different is the home screen (the shelf, and the coffee → recipe → shot → feedback loop), the themes, the AI server, the shared rules engine and the evals. A fork keeps Streamline's machine plumbing and throws away its UI.
+- **It's the same layer.** Streamline is itself a skin on Decaid; neither sits below the other.
+
+### What the skin costs
+
+About 40% of `skin/app.js` is plumbing any skin needs: the Decaid adapter (`makeLiveApi`), the controls and live state, and connection discovery. The rest of phase 1 reimplements lessons from five Streamline modules (`machine-link`, `profile-send-gate`, `workflow-watch`, `resync-policy`, `socket-slot`), each written around a Decaid gap such as the missing workflow stream for skins, or the DE1 echoing an old value after a write (Decaid gh-678). Every gap Streamline finds later, Crema has to find again.
+
+That cost is accepted for machine reliability: a skin that pours shots must handle disconnects, outside workflow changes and writes during a shot. It isn't accepted for feature parity. Treating every Streamline feature in `docs/parity.md` as a gap to close is how a skin turns into a fork in all but name.
+
+### The plugin route
+
+A Decaid plugin runs on the tablet in a sandbox (no DOM; fetches only to public hosts and Decaid's own API), stores its own data, receives `shotStored` and `workflowUpdated` events, and serves its own page on Decaid's port (Decaid `doc/Plugins.md`). Streamline shows plugins through a fixed set of surfaces: menu items, header and screensaver buttons, tile hints and lines, and an overlay or full page for the plugin's own UI. Surface actions can set dose, yield, grind and temperature, but not the profile (Streamline `docs/plugin-surfaces.md`). A third-party plugin, `pagratios/bean-journal`, already tracks coffees and dial-in this way.
+
+So Crema's identification, recommendation and dial-in could also ship as a plugin, with Streamline owning the machine. The costs: Streamline's design rather than Crema's, a workflow write for the profile choice, and camera access from a plugin page that isn't documented. It isn't planned; it's worth revisiting if the skin's plumbing proves expensive on the tablet. The rules engine already runs anywhere as `skin/engine.js`, which keeps the option cheap.
+
+### What follows
+
+1. **Crema owns the daily brewing loop and hands off the rest.** Machine settings go to the Streamline Settings plugin; profile editing and Visualizer import to the Streamline skin (switch skins, then switch back); firmware, calibration and cleaning to Decaid. `docs/parity.md` becomes a matrix of who owns each feature (phase 3), not a list of gaps to close.
+2. **Finish phase 1, asking upstream first.** Plugins get `workflowUpdated`; skins get no workflow stream, which is why Streamline has `workflow-watch` and `resync-policy` and Crema needs the same. Before building a workaround, check whether Decaid would take the fix: an upstream fix serves every skin.
+3. **Ask Streamline's maintainers which license applies.** If it's ISC, its reliability modules could be reused with credit instead of rewritten.
+4. **Let the first tablet session set the size of phase 1.** If Decaid on the tablet re-attaches sockets after a power cycle and behaves like the desktop build, phase 1 shrinks. If not, look at the plugin route again.
+
+Read from the public `main` branches of Streamline (`README.md`, `LICENSE.txt`, `package.json`, `docs/plugin-surfaces.md`, commit history) and Decaid (`doc/Skins.md`, `doc/Plugins.md`) on 8 November 2026, not from the versions installed on a tablet. Parts of `Plugins.md` and `plugin-surfaces.md` were read as summaries rather than word for word; confirm details before building on them.
+
+## 8. Sources
+
+- Decaid repo and skin/API docs: https://github.com/decentespresso/decaid (`doc/Skins.md`, `doc/Api.md`, `doc/Plugins.md`)
+- Streamline skin, its manual and plugin surfaces: https://github.com/decentespresso/streamline-js (`README.md`, `docs/plugin-surfaces.md`)
+- Streamline Settings plugin: https://github.com/decentespresso/streamline-setting
 - Decent's 2025 software update: https://decentespresso.com/blog/decent_software_2025_and_beyond_skins_calibration_dflowmore
 - Visualizer's AI bag import and Bean Base: https://visualizer.coffee/updates/ai-comes-to-visualizer, https://visualizer.coffee/updates/loffee-labs-meets-coffee-management
 - Bean AI (iOS label scanner): https://mwm.ai/apps/bean-ai/6760227144
