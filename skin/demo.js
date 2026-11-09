@@ -69,6 +69,10 @@ function makeDemoApi() {
   };
   // Steam, hot water and flush, shaped like Decaid's workflow fields. Kept apart from
   // `workflow` below because loading a recipe replaces that.
+  const demoProfiles = [
+    ...D.catalog.map((p) => ({ title: p.title, author: p.author, notes: p.character, beverage_type: "espresso", steps: [{ name: "Extraction", temperature: p.recipe.tempC }], target_weight: p.recipe.yieldG, target_volume: 0 })),
+    ...D.manualProfiles,
+  ];
   const wf = {
     steamSettings: { targetTemperature: 150, duration: 25, flow: 1.5, stopAtTemperature: 0 },
     hotWaterData: { targetTemperature: 85, duration: 60, volume: 120, flow: 6 },
@@ -78,7 +82,6 @@ function makeDemoApi() {
   let presence = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
   const schedules = [{ id: "w1", time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }, { id: "w2", time: "08:30", daysOfWeek: [6, 7], enabled: true }];
   let display = { brightness: 80, platformSupported: { brightness: true } };
-  let waterWarning = 20;
   let workflow = { profile: { title: all[0].recipe.profileTitle }, context: { targetDoseWeight: 18, targetYield: 36, beanBatchId: all[0].batch } };
   let presets = {
     steam: [{ label: "Cortado", seconds: 15 }, { label: "Flat white", seconds: 25 }, { label: "Latte", seconds: 35 }, { label: "Manual", seconds: 0 }],
@@ -125,10 +128,10 @@ function makeDemoApi() {
     clearInterval(sim.timer); sim.timer = null;
     const was = sim.state;
     if (was === "espresso" && sim.samples.length > 20) {
-      const b = all.find((x) => x.batch === workflow.context.beanBatchId) || all[0];
+      const b = all.find((x) => x.batch === workflow.context.beanBatchId);
       const last = sim.samples.at(-1);
-      shots.push({ id: `s${shots.length}`, timestamp: new Date().toISOString(), beanId: b.id, batch: b.batch, coffee: b.info.name.value, roaster: b.info.roaster.value, profileTitle: workflow.profile.title, doseG: workflow.context.targetDoseWeight, yieldG: Math.round(last.w * 10) / 10, timeS: Math.round(last.t), enjoyment: null, notes: "", points: sim.samples.slice() });
-      b.used += workflow.context.targetDoseWeight;
+      shots.push({ id: `s${shots.length}`, timestamp: new Date().toISOString(), beanId: b?.id ?? null, batch: b?.batch ?? null, coffee: b?.info.name.value ?? null, roaster: b?.info.roaster.value ?? null, manual: manualKind(workflow.profile), profileTitle: workflow.profile.title, doseG: workflow.context.targetDoseWeight, yieldG: Math.round(last.w * 10) / 10, timeS: Math.round(last.t), enjoyment: null, notes: "", points: sim.samples.slice() });
+      if (b) b.used += workflow.context.targetDoseWeight;
     }
     sim.state = next; sim.substate = "idle";
     sim.live = { p: 0, f: 0, tp: 0, tf: 0, t: 0 };
@@ -140,7 +143,7 @@ function makeDemoApi() {
     if (sim.water <= sim.refill) { sim.state = "needsWater"; snapshot(); return; }
     if (sim.timer) stop();
     sim.state = state; sim.samples = [];
-    const target = Number(workflow.context.targetYield || 36);
+    const target = Number(workflow.context.targetYield ?? 0);
     const lever = isLever(workflow.profile.title);
     const pi = lever ? 9 : 7;
     const limit = state === "steam" ? (wf.steamSettings.duration || 600) : state === "hotWater" ? wf.hotWaterData.volume / wf.hotWaterData.flow : state === "flush" ? wf.rinseData.duration : 120;
@@ -159,7 +162,7 @@ function makeDemoApi() {
         sim.live = { p, f, tp: t < pi ? 3 : 9, tf: t < pi ? 4 : 2, t };
         const w = sim.scale - sim.scaleOffset;
         sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf });
-        if (w >= target - 1.2 || t > 60) { sim.substate = "pouringDone"; return stop(); }
+        if ((target > 0 && w >= target - 1.2) || t > (manualKind(workflow.profile) ? 120 : 60)) { sim.substate = "pouringDone"; return stop(); }
       } else if (state === "steam") {
         p = 1.9 + Math.random() * 0.2; f = settings.steamFlow; sim.steamTemp = Math.max(135, sim.steamTemp - 0.08); sim.substate = "pouring";
         sim.live = { p, f, tp: 0, tf: 0, t };
@@ -190,7 +193,7 @@ function makeDemoApi() {
     } else if (sim.state === "sleeping") { sim.group = Math.max(30, sim.group - 1.5); emit("ready", { status: "not_heating" }); }
     else if (sim.state === "idle") { sim.group = 92.5 + Math.random() * 0.3; sim.steamTemp = Math.min(150, sim.steamTemp + 0.6); }
     if (!sim.timer) snapshot();
-    emit("water", { currentLevel: Math.round(sim.water), refillLevel: sim.refill, warningThresholdPercentage: waterWarning });
+    emit("water", { currentLevel: Math.round(sim.water), refillLevel: sim.refill });
     emit("scale", { connected: true, weight: Math.round((sim.scale - sim.scaleOffset) * 10) / 10, batteryLevel: sim.battery });
   }, 1000);
   setInterval(() => { if (sim.timer) emit("scale", { connected: true, weight: Math.round((sim.scale - sim.scaleOffset) * 10) / 10, batteryLevel: sim.battery }); }, 200);
@@ -272,13 +275,16 @@ function makeDemoApi() {
     async rank(id) { return recipeFor(byId(id)).candidates; },
     async catalog() { return D.catalog.map((p) => ({ ...p, installed: true })); },
     async library() {
-      return D.catalog.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.character, steps: 0, targetWeight: p.recipe.yieldG, tempC: p.recipe.tempC, guide: p }));
+      return demoProfiles.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.notes, steps: p.steps.length, targetWeight: Number(p.target_weight), tempC: Number(p.steps[0].temperature), manual: manualKind(p), profileShape: brewProfileShape(p), guide: D.catalog.find((g) => g.title === p.title) ?? null }));
     },
     async apply(id, recipe, grinderSetting, batch = null) {
-      const b = byBag(id, batch);
-      workflow = { profile: { title: recipe.profileTitle }, context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: b.batch, grinderSetting: grinderSetting ?? "" }, tempC: recipe.tempC, applied: true };
+      const b = id ? byBag(id, batch) : null;
+      const profile = demoProfiles.find((p) => recipe.profileId ? `demo:${p.title}` === recipe.profileId : p.title === recipe.profileTitle);
+      if (!profile) throw new Error("The profile is not installed");
+      workflow = { profile: CE.withTemperature({ ...clone(profile), target_weight: recipe.yieldG }, recipe.tempC), context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, targetWaterVolume: manualKind(profile) ? 0 : null, beanBatchId: b?.batch ?? null, coffeeName: b?.info.name.value ?? null, coffeeRoaster: b?.info.roaster.value ?? null, grinderSetting: grinderSetting ?? null }, tempC: recipe.tempC, applied: true };
       sim.group = recipe.tempC;
       await wait(250);
+      return clone(workflow);
     },
     async shotPage(offset = 0, limit = 20) {
       const all = shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp));
@@ -310,7 +316,7 @@ function makeDemoApi() {
     },
     machine: {
       canStart: true,
-      async info() { return { model: "DE1 (simulated)", GHC: false }; },
+      async info() { return { model: "DE1 (simulated)", GHC: true }; },
       async setState(s) {
         if (s === "idle") { if (sim.state === "sleeping") { sim.state = "heating"; snapshot(); } else stop("idle"); }
         else if (s === "sleeping") stop("sleeping");
@@ -320,14 +326,14 @@ function makeDemoApi() {
       async recipe() {
         if (!workflow.applied) return null; // the demo's starting workflow is a placeholder, not a load
         const c = workflow.context;
-        return { profileTitle: workflow.profile.title, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null };
+        return { profileTitle: workflow.profile.title, profileShape: brewProfileShape(workflow.profile), manual: manualKind(workflow.profile), coffeeName: c.coffeeName ?? null, coffeeRoaster: c.coffeeRoaster ?? null, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null };
       },
       workflowSettings: {
         get: async () => clone(wf),
         set: async (p) => { for (const k of Object.keys(wf)) if (p[k]) Object.assign(wf[k], p[k]); },
       },
       settings: { get: async () => ({ ...settings }), set: async (p) => { settings = { ...settings, ...p }; } },
-      async waterThreshold(pct) { waterWarning = pct; },
+      async waterThreshold(mm) { sim.refill = settingNumber(mm, SETTING_LIMITS.sWaterWarn); snapshot(); },
       async refill() { sim.water = 58; if (sim.state === "needsWater") sim.state = "idle"; snapshot(); },
       presence: { get: async () => ({ ...presence }), set: async (p) => { presence = { ...presence, ...p }; } },
       schedules: {

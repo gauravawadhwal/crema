@@ -73,6 +73,8 @@ jobs:
         run: node scripts/check-tablet-fit.cjs ui-shots/fit
       - name: Live mode against the simulator
         run: node scripts/e2e-live.cjs
+      - name: Bagless and manual brewing
+        run: node scripts/e2e-brewing.cjs
       - name: Keep screenshots when a check fails
         if: failure()
         uses: actions/upload-artifact@v4

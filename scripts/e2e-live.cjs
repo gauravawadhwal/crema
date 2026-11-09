@@ -164,6 +164,49 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#sGhc", { timeout: 10000 });
     check(await page.locator("#exitDash").count() === 0, "no Decaid exit in an ordinary browser");
 
+    // Settings show Decaid's values without writing defaults on entry. Numeric
+    // edits must use the actual API units and never leave impossible values shown.
+    {
+      const writes = [];
+      const capture = (r) => { if (r.method() === "POST" && /\/api\/v1\/(machine\/settings|machine\/waterLevels|presence\/settings)$/.test(r.url())) writes.push({ url: r.url(), body: r.postDataJSON() }); };
+      page.on("request", capture);
+      await S(() => renderSettings());
+      check(writes.length === 0, "opening Settings never applies machine defaults");
+      check(await page.inputValue("#sFan") === "50" && await page.inputValue("#sSleepMin") === "30" && await page.inputValue("#sWaterWarn") === "7", "Settings reads fan, sleep and refill values from Decaid");
+      await page.fill("#sSleepMin", "-5"); await page.locator("#sSleepMin").press("Tab");
+      await page.waitForFunction(() => !document.querySelector("#sSleepMin").disabled);
+      check(await page.inputValue("#sSleepMin") === "0" && writes.at(-1).body.sleepTimeoutMinutes === 0, "negative sleep minutes become Decaid's timer-off value, never a negative write");
+      await page.fill("#sSleepMin", "999"); await page.locator("#sSleepMin").press("Tab");
+      await page.waitForFunction(() => !document.querySelector("#sSleepMin").disabled);
+      check(await page.inputValue("#sSleepMin") === "240", "sleep minutes respect Decaid's 240-minute maximum");
+      await page.fill("#sSleepMin", "30"); await page.locator("#sSleepMin").press("Tab");
+      await page.waitForFunction(() => !document.querySelector("#sSleepMin").disabled);
+      await page.fill("#sFan", "99"); await page.locator("#sFan").press("Tab");
+      await page.waitForFunction(() => !document.querySelector("#sFan").disabled);
+      check(await page.inputValue("#sFan") === "50" && writes.at(-1).body.fan === 50, "fan threshold is limited to DE1's 50 °C maximum and read back");
+      const beforeEmpty = writes.length;
+      await page.fill("#sFan", ""); await page.locator("#sFan").press("Tab");
+      await page.waitForFunction(() => !document.querySelector("#sFan").disabled);
+      check(writes.length === beforeEmpty && await page.inputValue("#sFan") === "50", "blank fan value is rejected without changing the machine");
+      await page.fill("#sWaterWarn", "10"); await page.locator("#sWaterWarn").press("Tab");
+      await page.waitForFunction(() => S.water?.refillLevel === 10);
+      check(writes.at(-1).body.refillLevel === 10 && !("warningThresholdPercentage" in writes.at(-1).body), "refill warning writes millimetres and updates the live stream");
+      await page.fill("#sWaterWarn", "7"); await page.locator("#sWaterWarn").press("Tab");
+      await page.waitForFunction(() => S.water?.refillLevel === 7);
+      await page.waitForFunction(() => !document.querySelector("#sWaterWarn").disabled);
+      const beforeToggle = writes.length;
+      await page.check("#sGhc");
+      await page.waitForFunction(() => S.ghc === true);
+      check(writes.length === beforeToggle, "machine-buttons-only preference changes this device's UI, never the machine", JSON.stringify({ beforeToggle, writes }));
+      await page.uncheck("#sGhc");
+      await page.route(/\/api\/v1\/machine\/settings$/, (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{}' }));
+      await S(() => renderSettings());
+      check(await page.isDisabled("#sFan") && await page.inputValue("#sFan") === "", "missing machine values stay unavailable instead of becoming invented defaults");
+      await page.unroute(/\/api\/v1\/machine\/settings$/);
+      await S(() => renderSettings());
+      page.off("request", capture);
+    }
+
     // Slow or stuck requests mustn't hold up the machine. Boot subscribes to the
     // machine streams before it loads the shelf (which can mean an AI recipe), and every
     // request has a time limit.

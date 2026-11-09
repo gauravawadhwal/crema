@@ -9,6 +9,13 @@ export interface Favourite {
   tempC: number;
   beanId: string | null;
   grinderSetting: string | null;
+  /** Explicitly bagless; absent on older favourites, which retain their behavior. */
+  noBag?: boolean;
+  profileId?: string | null;
+  profileShape?: string | null;
+  manual?: "flow" | "pressure" | null;
+  direct?: boolean;
+  targetTimeS?: number[] | null;
 }
 
 export interface Maintenance {

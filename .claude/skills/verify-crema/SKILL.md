@@ -45,6 +45,12 @@ Run what applies, in this order. Each command exits non-zero on failure.
    ```bash
    node scripts/e2e-live.cjs
    ```
+   For brewing modes, profiles, favourites or shot attribution, also run:
+   ```bash
+   node scripts/e2e-brewing.cjs
+   ```
+   It runs a local simulator only and checks the built demo too. It must never
+   be repointed at a physical machine.
    To poke at it by hand, run `npm run mock:decaid` and `DECAID_URL=http://localhost:8080 LLM_PROVIDERS=mock npm start`, open `http://localhost:8787`, and check `curl localhost:8080/api/v1/workflow` and `curl localhost:8080/api/v1/store/crema`.
 
 7. **Docker image**: needed for changes to `Dockerfile`, `.dockerignore`, `package.json` dependencies or how `server/main.ts` starts. Needs Docker; CI's `docker` job runs it too.

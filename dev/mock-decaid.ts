@@ -11,6 +11,7 @@
  *   curl -X PUT localhost:8080/api/v1/machine/state/espresso
  */
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 
@@ -37,6 +38,9 @@ const profiles = PROFILE_TITLES.map((title, i) => ({
   isDefault: true,
 }));
 
+// Decaid 0.9.1 bundled profile data; used only by the simulators/demo.
+profiles.push(...JSON.parse(readFileSync(new URL("../samples/manual-profiles.json", import.meta.url), "utf8")).map((profile: Json, i: number) => ({ id: `manual-${i}`, profile, visibility: "visible", isDefault: true })));
+
 const beans: Json[] = [];
 const kv: Record<string, Record<string, unknown>> = {};
 const batches: Json[] = [];
@@ -61,7 +65,6 @@ function applyWorkflowSettings() {
 let presence: Json = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
 const schedules: Json[] = [{ id: randomUUID(), time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }];
 let display: Json = { wakeLockEnabled: true, wakeLockOverride: false, brightness: 80, requestedBrightness: 80, lowBatteryBrightnessActive: false, platformSupported: { brightness: true, wakeLock: true } };
-let waterWarning = 20;
 
 // ---------------- the simulated machine ----------------
 const sim = {
@@ -129,7 +132,7 @@ function run(state: string) {
       sim.live = { pressure: p, flow: f, targetPressure: t < pi ? 3 : 9, targetFlow: t < pi ? 4 : 2, elapsed: t, profileFrame: t < pi ? 0 : 1 };
       sim.samples.push({ t, p, f, w: sim.scaleWeight - sim.scaleOffset, temp: sim.group });
       // stop at weight, with the usual lag
-      if (sim.scaleWeight - sim.scaleOffset >= target - 1.2 || t >= shotSeconds + 15) {
+      if ((target > 0 && sim.scaleWeight - sim.scaleOffset >= target - 1.2) || t >= (workflow.profile?.beverage_type === "manual" ? 120 : shotSeconds + 15)) {
         sim.substate = "pouringDone";
         return stop();
       }
@@ -159,7 +162,7 @@ function recordShot() {
       machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" }, flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), mixTemperature: +s.temp.toFixed(1) },
       scale: { timestamp: new Date(start + s.t * 1000).toISOString(), weight: +s.w.toFixed(1) },
     })),
-    workflow: { name: workflow.name, profile: { title: workflow.profile?.title }, context: { ...ctx } },
+    workflow: { name: workflow.name, profile: structuredClone(workflow.profile), context: { ...ctx } },
     annotations: { actualDoseWeight: ctx.targetDoseWeight ?? 18, actualYield: +(sim.scaleWeight - sim.scaleOffset).toFixed(1) },
   };
   shots.unshift(shot);
@@ -176,7 +179,7 @@ setInterval(() => {
     sim.group = Math.min(92.8, sim.group + 0.6);
     if (sim.group >= 92.8) sim.state = "idle";
   } else if (sim.state === "idle") sim.group = 92.6 + Math.random() * 0.3;
-  if (presence.userPresenceEnabled && sim.state === "idle" && Date.now() - sim.lastActive > presence.sleepTimeoutMinutes * 60_000) sim.state = "sleeping";
+  if (presence.userPresenceEnabled && presence.sleepTimeoutMinutes > 0 && sim.state === "idle" && Date.now() - sim.lastActive > presence.sleepTimeoutMinutes * 60_000) sim.state = "sleeping";
   if (sim.state !== "steam") sim.steamTemp = Math.min(150, sim.steamTemp + 0.2);
 }, 1000);
 
@@ -269,7 +272,7 @@ const server = createServer(async (req, res) => {
     // machine
     if (p.startsWith("/api/v1/machine/") && !sim.machineConnected && m !== "GET") return send(res, 503, { error: "No machine connected" });
     if (m === "GET" && p === "/api/v1/machine/state") return send(res, 200, snapshot());
-    if (m === "GET" && p === "/api/v1/machine/info") return send(res, 200, { model: "DE1+ (simulated)", serialNumber: "SIM-0001", GHC: false, firmwareVersion: "1352" });
+    if (m === "GET" && p === "/api/v1/machine/info") return send(res, 200, { model: "DE1+ (simulated)", serialNumber: "SIM-0001", GHC: true, firmwareVersion: "1352" });
     if ((match = p.match(/^\/api\/v1\/machine\/state\/(\w+)$/)) && m === "PUT") {
       const next = match[1];
       sim.lastActive = Date.now();
@@ -302,8 +305,12 @@ const server = createServer(async (req, res) => {
       return send(res, 200, settings);
     }
     if (p === "/api/v1/machine/waterLevels") {
-      if (m === "POST") waterWarning = (await body(req)).warningThresholdPercentage ?? waterWarning;
-      return send(res, 200, { currentLevel: Math.round(sim.water), refillLevel: sim.refill, warningThresholdPercentage: waterWarning });
+      if (m === "POST") {
+        const b = await body(req);
+        if (typeof b.refillLevel !== "number" || !Number.isFinite(b.refillLevel)) return send(res, 400, { error: "refillLevel must be a number in mm" });
+        sim.refill = Math.trunc(b.refillLevel);
+      }
+      return send(res, 200, { currentLevel: Math.round(sim.water), refillLevel: sim.refill });
     }
     if (p === "/api/v1/machine/heartbeat" && m === "POST") {
       sim.lastActive = Date.now();
@@ -322,7 +329,12 @@ const server = createServer(async (req, res) => {
     }
     // presence & display
     if (p === "/api/v1/presence/settings") {
-      if (m === "POST") presence = { ...presence, ...(await body(req)) };
+      if (m === "POST") {
+        const b = await body(req);
+        if (("sleepTimeoutMinutes" in b && !Number.isInteger(b.sleepTimeoutMinutes)) || ("userPresenceEnabled" in b && typeof b.userPresenceEnabled !== "boolean")) return send(res, 400, { error: "Invalid presence setting" });
+        if ("sleepTimeoutMinutes" in b) b.sleepTimeoutMinutes = Math.max(0, Math.min(240, b.sleepTimeoutMinutes));
+        presence = { ...presence, ...b };
+      }
       return send(res, 200, { ...presence, schedules });
     }
     if (p === "/api/v1/presence/schedules") {
@@ -412,6 +424,7 @@ const server = createServer(async (req, res) => {
         const groups = ["steamSettings", "hotWaterData", "rinseData"] as const;
         // Decaid rejects a wrong type with a 400 but accepts any number.
         for (const g of groups) for (const v of Object.values(patch[g] ?? {})) if (typeof v !== "number") return send(res, 400, { error: `${g} values must be numbers` });
+        if (patch.context === null || (patch.context && "targetYield" in patch.context && (typeof patch.context.targetYield !== "number" || !Number.isFinite(patch.context.targetYield)))) return send(res, 400, { error: "targetYield must be a number; use 0 to disable" });
         const before = workflow;
         workflow = { ...workflow, ...patch, context: { ...workflow.context, ...(patch.context ?? {}) } };
         for (const g of groups) if (patch[g]) workflow[g] = { ...before[g], ...patch[g] }; // fields merge, like Decaid

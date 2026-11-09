@@ -95,6 +95,17 @@ function restOf(info) {
 const E = window.CremaEngine;
 const KV_NS = "crema";
 const isEspresso = (title) => !/clean|flush|descal|rinse|steam/i.test(title || "");
+const NO_BAG = "__no_bag__";
+const manualKind = (p) => p?.beverage_type === "manual" ? ({ "ghc/manual flow control": "flow", "ghc/manual pressure control": "pressure" }[p.title?.toLowerCase()] ?? null) : null;
+// Ignore only temperature/yield edits; retain step structure, limits and notes so
+// two installed profiles with the same title cannot be mistaken for one another.
+function brewProfileShape(profile) {
+  if (!profile) return null;
+  const first = Number(profile.steps?.[0]?.temperature);
+  const relative = { ...profile, steps: profile.steps?.map((s) => ({ ...s, temperature: s.temperature == null ? null : Math.round((Number(s.temperature) - first) * 1e6) / 1e6 })) };
+  const ordered = (v) => Array.isArray(v) ? v.map(ordered) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().filter((k) => k !== "target_weight").map((k) => [k, ordered(v[k])])) : v;
+  return JSON.stringify(ordered(relative));
+}
 const PROCESS_KINDS = ["washed", "natural", "honey", "anaerobic", "wet-hulled", "decaf", "experimental"];
 function processKindOf(text) {
   const t = String(text || "").toLowerCase();
@@ -170,7 +181,7 @@ function makeLiveApi(conn) {
     const ctx = s.workflow?.context || {};
     const points = full ? shotPoints(full) : [];
     return { id: s.id, timestamp: s.timestamp, beanId: null, batch: ctx.beanBatchId, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
-      doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? ctx.targetYield, timeS: points.length ? Math.round(points.at(-1).t) : null,
+      manual: manualKind(s.workflow?.profile), doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? (points.length ? points.at(-1).w : ctx.targetYield), timeS: points.length ? Math.round(points.at(-1).t) : null,
       enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points };
   };
   // Decaid's shot list gives at most 100 per page and echoes whatever limit was asked
@@ -400,20 +411,25 @@ function makeLiveApi(conn) {
     // the catalogue knows the profile. This is the library; the catalogue only adds notes.
     async library() {
       const guide = new Map(E.CATALOG.map((p) => [p.title.toLowerCase(), p]));
-      return (await installedProfiles()).map((p) => ({
+      return (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso" || manualKind(p.profile)).map((p) => ({
         id: p.id, title: p.profile.title, author: p.profile.author || "", notes: p.profile.notes || "",
-        steps: p.profile.steps?.length ?? 0, targetWeight: Number(p.profile.target_weight) || null,
-        tempC: Number(p.profile.steps?.[0]?.temperature) || null, guide: guide.get(p.profile.title.toLowerCase()) ?? null,
+        steps: p.profile.steps?.length ?? 0, targetWeight: p.profile.target_weight == null ? null : Number(p.profile.target_weight),
+        tempC: p.profile.steps?.[0]?.temperature == null ? null : Number(p.profile.steps[0].temperature),
+        manual: manualKind(p.profile), profileShape: brewProfileShape(p.profile),
+        guide: guide.get(p.profile.title.toLowerCase()) ?? null,
       }));
     },
     async apply(beanId, recipe, grinderSetting, batchId = null) {
-      const [{ info, batch }, profiles] = await Promise.all([coffee(beanId, batchId), j(D("/profiles?visibility=visible"))]);
+      const [bean, profiles] = await Promise.all([beanId ? coffee(beanId, batchId) : null, j(D("/profiles?visibility=visible"))]);
       // By id when the recipe has one (two installed profiles can share a title), else by title.
-      const profile = (recipe.profileId && profiles.find((p) => p.id === recipe.profileId)) || profiles.find((p) => p.profile.title === recipe.profileTitle);
+      const profile = recipe.profileId ? profiles.find((p) => p.id === recipe.profileId) : profiles.find((p) => p.profile.title === recipe.profileTitle);
       if (!profile) throw new Error(`The profile "${recipe.profileTitle}" isn't on the machine`);
+      if ((profile.profile.beverage_type ?? "espresso") !== "espresso" && !manualKind(profile.profile)) throw new Error("Choose an espresso or supported manual profile");
+      if (manualKind(profile.profile) && (await api.machine.info()).GHC !== true) throw new Error("Manual brewing needs a connected group-head controller");
+      if (![recipe.doseG, recipe.yieldG, recipe.tempC].every((v) => typeof v === "number" && Number.isFinite(v)) || recipe.doseG <= 0 || recipe.yieldG < 0) throw new Error("Check the dose, yield and temperature");
       return put(D("/workflow"), {
         profile: E.withTemperature({ ...profile.profile, target_weight: recipe.yieldG }, recipe.tempC),
-        context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: batch?.id ?? undefined, coffeeName: info.name.value ?? undefined, coffeeRoaster: info.roaster.value ?? undefined, grinderSetting: grinderSetting || undefined },
+        context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, targetWaterVolume: manualKind(profile.profile) ? 0 : null, beanBatchId: bean?.batch?.id ?? null, coffeeName: bean?.info.name.value ?? null, coffeeRoaster: bean?.info.roaster.value ?? null, grinderSetting: grinderSetting || null },
       });
     },
 
@@ -478,6 +494,8 @@ function makeLiveApi(conn) {
         const n = (v) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
         return {
           profileTitle: w.profile?.title ?? null,
+          profileShape: brewProfileShape(w.profile), manual: manualKind(w.profile),
+          coffeeName: c.coffeeName ?? null, coffeeRoaster: c.coffeeRoaster ?? null,
           doseG: n(c.targetDoseWeight ?? w.doseData?.doseIn),
           yieldG: n(c.targetYield ?? w.doseData?.doseOut ?? w.profile?.target_weight),
           tempC: n(w.profile?.steps?.[0]?.temperature),
@@ -486,7 +504,7 @@ function makeLiveApi(conn) {
         };
       },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
-      waterThreshold: (pct) => post(D("/machine/waterLevels"), { warningThresholdPercentage: pct }),
+      waterThreshold: (mm) => post(D("/machine/waterLevels"), { refillLevel: settingNumber(mm, SETTING_LIMITS.sWaterWarn) }),
       presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
       schedules: {
         list: () => j(D("/presence/schedules")),
@@ -563,6 +581,7 @@ const S = {
   streams: null, // subscribe()'s handle: { close, reopenMachine }
   recommending: null, // id of the coffee whose recipe is being worked out
   shelf: [], shelfLoaded: false, shelfError: null, current: null, next: null, loaded: false, heldLoad: false,
+  noBag: local.get("current", null) === NO_BAG, machineInfo: null, loadedRecipe: null,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
   prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
@@ -699,7 +718,7 @@ function renderStatus() {
   const s = unlinked() ? null : S.snap, st = s?.state?.state || "unknown";
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
   const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
-  const low = S.water && tank < (S.water.warningThresholdPercentage ?? 20);
+  const low = S.water && S.water.currentLevel <= S.water.refillLevel;
   const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
   $("#status").innerHTML = `
     <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
@@ -736,57 +755,67 @@ async function tare() {
 }
 
 /* ================= next shot (brew home, left) ================= */
+function saveBrewChoice() {
+  if (S.noBag) local.set("baglessRecipe", S.next);
+}
 function setNextFromRecipe(bean, recipe) {
   const r = recipe || bean?.recipe;
-  S.next = bean && r ? { beanId: bean.id, profileTitle: r.profileTitle, profileId: r.profileId ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.targetTimeS, grind: local.get(`grind:${bean.id}`, "") } : null;
+  S.next = r ? { beanId: bean?.id ?? null, profileTitle: r.profileTitle, profileId: r.profileId ?? null, profileShape: r.profileShape ?? null, direct: r.direct ?? false, manual: r.manual ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.manual ? null : r.targetTimeS, grind: local.get(`grind:${bean?.id ?? "bagless"}`, "") } : null;
   S.loaded = false;
+  saveBrewChoice();
+}
+function coffeePicker() {
+  openSheet(`<h2>Coffee</h2><div class="stack"><button class="btn" id="chooseNoBag">No bag</button>${S.shelf.map((b) => `<button class="btn" data-choose-bag="${esc(b.key)}">${esc(b.info.name.value)}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</button>`).join("")}<a class="btn ghost" href="#add" onclick="closeSheet()">Add coffee</a></div>`);
+  $("#chooseNoBag").onclick = () => { closeSheet(); selectBean(NO_BAG); };
+  $$("[data-choose-bag]").forEach((el) => el.onclick = () => { closeSheet(); selectBean(el.dataset.chooseBag); });
 }
 function renderNextShot() {
-  const el = $("#nextShot");
-  const b = S.current;
-  if (!b && !S.shelfLoaded) { el.innerHTML = `<p class="muted">Loading your coffees…</p>`; return; }
-  if (!b && S.shelfError) {
-    // A failed load isn't an empty shelf: don't offer to add a coffee that may be there.
-    el.innerHTML = `<h2>Couldn't load your coffees</h2><p class="muted">Decaid didn't answer (${esc(S.shelfError)}).</p><div><button class="btn primary" id="retryShelf">Try again</button></div>`;
-    $("#retryShelf").onclick = retryShelf;
+  const el = $("#nextShot"), b = S.current, n = S.next;
+  if (!b && !S.noBag && !S.shelfLoaded) { el.innerHTML = `<p class="muted">Loading your coffees…</p>`; return; }
+  if (!b && !S.noBag) {
+    el.innerHTML = S.shelfError
+      ? `<h2>Couldn't load your coffees</h2><p class="muted">Decaid didn't answer (${esc(S.shelfError)}).</p><button class="btn" id="retryShelf">Try again</button>`
+      : `<h2>No coffee yet</h2><p class="muted">Add a bag for recommendations, or brew straight from a profile.</p><a class="btn primary" href="#add">Add coffee</a>`;
+    el.insertAdjacentHTML("beforeend", `<button class="btn" id="noBagBrew">Brew without a bag</button>`);
+    if ($("#retryShelf")) $("#retryShelf").onclick = retryShelf;
+    $("#noBagBrew").onclick = () => selectBean(NO_BAG);
     return;
   }
-  if (!b) { el.innerHTML = `<h2>No coffee yet</h2><p class="muted">Add a bag to get a profile and recipe matched to it.</p><div><a class="btn primary" href="#add">Add coffee</a></div>`; return; }
-  const i = b.info, n = S.next, r = b.recipe, rest = restOf(i);
-  const idx = S.shelf.findIndex((x) => x.key === b.key);
-  const ratio = n ? (n.yieldG / n.doseG).toFixed(1) : "–";
+  const r = b?.recipe, i = b?.info, rest = b ? restOf(i) : null;
+  const ratio = n?.yieldG > 0 && n?.doseG > 0 ? (n.yieldG / n.doseG).toFixed(1) : null;
   el.innerHTML = `
-    <div class="coffee-line">${bagArt(b)}
-      <div style="min-width:0"><div class="label">${esc(i.roaster.value)}${b.bags > 1 ? ` · Bag ${b.bagNo} of ${b.bags}` : ""}</div><div class="coffee-name">${esc(i.name.value)}</div>
-        <div class="row" style="gap:6px;margin-top:3px"><span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}</span>${b.frozen ? '<span class="pill plain">Frozen</span>' : ""}</div></div>
-      <div class="cycler">${S.shelf.length > 1 ? `<button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button>` : ""}</div>
+    <div class="coffee-line ${b ? "" : "bagless"}">${b ? bagArt(b) : ""}<button class="coffee-choice" id="coffeeChoice"><span class="label">${b ? esc(i.roaster.value) : "Coffee"}</span><span class="coffee-name">${b ? esc(i.name.value) : "No bag"} ›</span>
+      ${b ? `<span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</span>` : `<span class="muted small">${S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag"}</span>`}</button>
+      ${b && S.shelf.length > 1 ? `<div class="cycler"><button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button></div>` : ""}
     </div>
     ${n ? `
-    <div class="field-row first"><span class="label">Profile</span>
-      <button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.fromMachine ? "As set on the machine" : b.recipeSource ? `Chosen by ${b.recipeSource}` : "Tap for recommendations")}</span></span><span class="muted">›</span></button></div>
+    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? `Chosen by ${b.recipeSource}` : "Selected from installed profiles")}</span></span><span>›</span></button></div>
     <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
-    <div class="field-row"><span class="label">Yield</span>${stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
+    <div class="field-row"><span class="label">Yield</span>${n.manual || S.noBag ? `<div class="stepper"><button type="button" data-step="yield:-1" aria-label="Less">−</button><button type="button" class="val stop-choice" id="stopMode">${n.yieldG > 0 ? fmt1(n.yieldG) : "Off"}<small>${n.yieldG > 0 ? "Tap for manual stop" : "Tap to set weight"}</small></button><button type="button" data-step="yield:1" aria-label="More">+</button></div>` : stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
     <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
-    <div class="field-row"><span class="label">Grind</span>
-      <div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
-    <div class="row">
-      <button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine"}</button>
-      <button class="btn ghost" id="resetRecipe" title="Back to the recommended recipe">Reset</button>
-    </div>
-    ${r ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px">
-      <ul class="why">${(r.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
-      ${r.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(r.dialIn)}</div>` : ""}
-      <div class="muted small">Target ${r.targetTimeS?.[0] ?? "–"}–${r.targetTimeS?.[1] ?? "–"} s · ${esc(r.grindHint || "")}</div>
-      ${r.alternatives?.length ? `<div class="muted small">Also try: ${r.alternatives.map((a) => esc(a.profileTitle)).join(", ")}</div>` : ""}</div></details>` : ""}
-    ` : b.recipeSource === "none" ? `<p class="muted">None of the profiles on this machine is in Crema's guide, so there's no recommendation for this coffee. Choose one of the installed profiles.</p><div><a class="btn primary" href="#profiles">Choose a profile</a></div>` : `<p class="muted">Working out a recipe…</p>`}`;
-  const go = (d) => selectBean(S.shelf[(idx + d + S.shelf.length) % S.shelf.length].key);
-  if ($("#prevBean")) { $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1); }
+    <div class="field-row"><span class="label">Grind</span><div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
+    <div class="row"><button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine"}</button><button class="btn ghost" id="resetRecipe">Reset</button></div>
+    ${r && !n.direct && !n.manual ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px"><ul class="why">${(r.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${r.dialIn ? `<div class="advice small">${esc(r.dialIn)}</div>` : ""}<div class="muted small">Target ${r.targetTimeS?.join("–") ?? "–"} s · ${esc(r.grindHint || "")}</div></div></details>` : ""}
+    ` : `<p class="muted">${S.noBag ? "Choose an installed profile. No bag or recommendation needed." : b.recipeSource === "none" ? "There is no recommendation for this coffee. Choose an installed profile." : "Working out a recipe…"}</p><a class="btn primary" href="#profiles">Choose a profile</a>`}`;
+  $("#coffeeChoice").onclick = coffeePicker;
+  if ($("#prevBean")) {
+    const idx = S.shelf.findIndex((x) => x.key === b.key), go = (d) => selectBean(S.shelf[(idx + d + S.shelf.length) % S.shelf.length].key);
+    $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1);
+  }
   if (!n) return;
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
   $$("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
-  $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b.id}`, n.grind); S.loaded = false; renderNextShot(); };
+  $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
-  $("#resetRecipe").onclick = () => { setNextFromRecipe(b); renderNextShot(); };
+  $("#resetRecipe").onclick = () => n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot());
+  const stopMode = $("#stopMode");
+  if (stopMode) stopMode.onclick = () => {
+    if (n.yieldG > 0) { n.lastYieldG = n.yieldG; n.yieldG = 0; S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls(); }
+    else {
+      openSheet(`<h2>Stop at weight</h2><p class="muted">Requires a connected scale. Profile time limits still apply. Manual-profile scale stopping still needs a supervised check on your machine.</p><div class="field"><label for="weightTarget">Grams out</label><input type="number" min="1" id="weightTarget" value="${n.lastYieldG ?? ""}"></div><button class="btn primary" id="saveWeight">Set target</button>`);
+      $("#saveWeight").onclick = () => { const v = Number($("#weightTarget").value); if (!Number.isFinite(v) || v <= 0 || v > 1000) return toast("Enter a weight between 1 and 1000 g"); n.yieldG = v; S.loaded = false; saveBrewChoice(); closeSheet(); renderNextShot(); renderControls(); };
+    }
+  };
 }
 function stepper(key, valHtml) {
   return `<div class="stepper"><button type="button" data-step="${key}:-1" aria-label="Less">−</button><div class="val">${valHtml}</div><button type="button" data-step="${key}:1" aria-label="More">+</button></div>`;
@@ -794,14 +823,14 @@ function stepper(key, valHtml) {
 function step(spec) {
   const [key, dir] = spec.split(":"); const d = Number(dir), n = S.next;
   if (key === "dose") n.doseG = clamp(round(n.doseG + d * 0.5, 0.5), 5, 30);
-  if (key === "yield") n.yieldG = clamp(round(n.yieldG + d * 1, 0.5), 10, 150);
+  if (key === "yield") n.yieldG = clamp(round(n.yieldG + d, 0.5), n.direct || n.manual ? 0 : 10, 1000);
   if (key === "temp") n.tempC = clamp(round(n.tempC + d * 0.5, 0.5), 60, 100);
   if (key === "grind") {
     const v = parseFloat(n.grind);
     n.grind = Number.isFinite(v) ? String(round(v + d * 0.5, 0.5)) : n.grind;
-    local.set(`grind:${n.beanId}`, n.grind);
+    local.set(`grind:${n.beanId ?? "bagless"}`, n.grind);
   }
-  S.loaded = false; renderNextShot();
+  S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls();
 }
 // Writing the workflow sends its profile to the machine at once, and Decaid doesn't
 // wait for a shot to finish: the DE1 runs its steps by index from that table, so a
@@ -816,7 +845,7 @@ const shotRunning = () => S.snap?.state?.state === "espresso";
 // instead of writing twice).
 let loadChain = Promise.resolve(), loadsPending = 0;
 function loadOntoMachine(silent = false) {
-  if (!S.next || !S.current) return Promise.resolve(false);
+  if (!S.next) return Promise.resolve(false);
   const queued = loadsPending > 0;
   loadsPending++;
   const run = loadChain.then(() => loadNow(silent, queued)).finally(() => { loadsPending--; });
@@ -825,7 +854,7 @@ function loadOntoMachine(silent = false) {
 }
 async function loadNow(silent, queued) {
   const n = S.next, b = S.current;
-  if (!n || !b) return false;
+  if (!n) return false;
   if (shotRunning()) {
     S.heldLoad = true; renderNextShot();
     if (!silent) toast("Loads when this shot ends");
@@ -834,13 +863,17 @@ async function loadNow(silent, queued) {
   if (queued && S.loaded) return true;
   S.heldLoad = false;
   wfWrites++;
-  const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: n.profileId ?? null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
+  const draft = JSON.stringify(n);
+  const recipe = { ...(b?.recipe || {}), ...n, targetTimeS: n.manual ? null : n.targetTimeS ?? null };
   try {
-    await S.api.apply(b.id, recipe, n.grind || undefined, b.batch);
+    const workflow = await S.api.apply(b?.id ?? null, recipe, n.grind || undefined, b?.batch ?? null);
+    S.loadedRecipe = { ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null };
     wfWrites++;
-    S.loaded = true; renderNextShot();
+    S.loaded = S.next === n && S.current === b && JSON.stringify(n) === draft;
+    if (S.loaded) { n.profileShape = S.loadedRecipe.profileShape; saveBrewChoice(); }
+    renderNextShot();
     if (!silent) toast(`Loaded ${n.profileTitle}: ${n.doseG} g → ${n.yieldG} g at ${n.tempC} °C`);
-    return true;
+    return S.loaded;
   } catch (e) { toast(`Couldn't load the recipe: ${e.message}`); return false; }
 }
 /* ================= the machine's recipe vs the screen ================= */
@@ -869,16 +902,16 @@ const sameGrind = (a, b) => {
   const x = String(a ?? "").trim(), y = String(b ?? "").trim();
   return x === "" || y === "" || x === y || (Number.isFinite(Number(x)) && Number(x) === Number(y));
 };
-const recipeMatches = (m, n) => !!(m && n) && m.profileTitle === n.profileTitle && near(m.doseG, n.doseG) && near(m.yieldG, n.yieldG) && near(m.tempC, n.tempC) && sameGrind(m.grind, n.grind);
+const recipeMatches = (m, n) => !!(m && n) && m.profileTitle === n.profileTitle && (!n.profileShape || m.profileShape === n.profileShape) && near(m.doseG, n.doseG) && near(m.yieldG, n.yieldG) && near(m.tempC, n.tempC) && sameGrind(m.grind, n.grind);
 function reconcileWorkflow({ adopt = true, boot = false } = {}) {
   if (!S.api?.machine.recipe || shotRunning() || unlinked()) return Promise.resolve(null);
   if (wfReading) return wfReading;
   const writesBefore = wfWrites;
   const timeout = new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 4000));
-  wfReading = Promise.race([S.api.machine.recipe(), timeout]).then((m) => {
-    if (writesBefore !== wfWrites || !m || !S.next || !S.current) return null;
+  wfReading = Promise.race([S.api.machine.recipe(), timeout]).then(async (m) => {
+    if (writesBefore !== wfWrites || !m || !S.next) return null;
     // A recipe recorded against another bag is another coffee's, whatever its numbers.
-    const otherCoffee = !!m.batchId && m.batchId !== S.current.batch;
+    const otherCoffee = S.noBag ? !!(m.batchId || m.coffeeName || m.coffeeRoaster) : !!m.batchId && m.batchId !== S.current?.batch;
     if (!otherCoffee && recipeMatches(m, S.next)) {
       if (!S.loaded) { S.loaded = true; renderNextShot(); }
       return "same";
@@ -886,17 +919,26 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
     const unsaved = !S.loaded && !boot;
     S.loaded = false;
     if (!adopt || unsaved) { renderNextShot(); return "differs"; }
-    const forThisBag = !!m.batchId && m.batchId === S.current.batch;
+    const forThisBag = S.noBag ? !otherCoffee && m.profileShape === S.next.profileShape : !!m.batchId && m.batchId === S.current?.batch;
     if (!forThisBag || !m.profileTitle) { toast("The machine has another recipe, set elsewhere. Starting here loads this one"); renderNextShot(); return "other"; }
+    let profileId = S.next.profileId;
+    if (m.profileShape !== S.next.profileShape) {
+      const nextBefore = S.next, choice = JSON.stringify(S.next), beanBefore = S.current;
+      const library = await S.api.library().catch(() => []);
+      if (writesBefore !== wfWrites || shotRunning() || S.next !== nextBefore || S.current !== beanBefore || JSON.stringify(S.next) !== choice) return null;
+      profileId = library.find((p) => p.profileShape === m.profileShape)?.id ?? "unlisted-workflow-profile";
+    }
     // A different profile than the recommendation's: its time window no longer applies.
-    if (m.profileTitle !== S.current.recipe?.profileTitle) S.next.targetTimeS = null;
+    if (m.profileTitle !== S.current?.recipe?.profileTitle) S.next.targetTimeS = null;
     Object.assign(S.next, {
       fromMachine: true,
       profileTitle: m.profileTitle,
+      profileId, profileShape: m.profileShape, manual: m.manual,
       doseG: m.doseG ?? S.next.doseG, yieldG: m.yieldG ?? S.next.yieldG, tempC: m.tempC ?? S.next.tempC,
       grind: m.grind || S.next.grind,
     });
-    if (m.grind) local.set(`grind:${S.current.id}`, m.grind);
+    if (m.grind) local.set(`grind:${S.current?.id ?? "bagless"}`, m.grind);
+    saveBrewChoice();
     S.loaded = recipeMatches(m, S.next);
     renderNextShot();
     if (!boot) toast(`Recipe changed elsewhere: ${m.profileTitle}, ${fmtC(S.next.doseG)} → ${fmtC(S.next.yieldG)} g`);
@@ -908,6 +950,12 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
 // Shelf rows are bags: `key` picks one; a coffee id (from a favourite, or saved before
 // bags) picks that coffee's first bag.
 async function selectBean(key, opts = {}) {
+  if (key === NO_BAG) {
+    S.noBag = true; S.current = null; local.set("current", NO_BAG);
+    S.next = local.get("baglessRecipe", null); S.loaded = false; S.ghost = null;
+    renderNextShot(); renderLive(); renderControls(); return;
+  }
+  S.noBag = false;
   S.current = S.shelf.find((b) => b.key === key) || S.shelf.find((b) => b.id === key) || S.shelf[0] || null;
   local.set("current", S.current?.key);
   if (S.current && !S.current.recipe) {
@@ -920,10 +968,11 @@ async function selectBean(key, opts = {}) {
     // Profiles may have been drawn while waiting (Add sends you there first).
     if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
   }
+  if (S.noBag) return;
   setNextFromRecipe(S.current);
   S.ghost = null;
   await loadGhost();
-  renderNextShot(); renderLive();
+  renderNextShot(); renderLive(); renderControls();
   if (!opts.quiet && S.current) toast(`Now brewing ${S.current.info.name.value}`);
 }
 async function loadGhost() {
@@ -934,10 +983,18 @@ async function loadGhost() {
 }
 
 /* ================= favourites ================= */
+function favouriteRecipe() {
+  const n = S.next;
+  return { noBag: S.noBag, profileId: n.profileId ?? null, profileShape: n.profileShape ?? null, manual: n.manual ?? null, direct: !!n.direct, targetTimeS: n.targetTimeS ?? null };
+}
 function renderFavs() {
   $("#favs").innerHTML = S.favourites.map((f, i) => f
-    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmtC(f.doseG)}→${fmtC(f.yieldG)}</span></button><button class="fav-edit" data-favedit="${i}" aria-label="Edit favourite">⋯</button></div>`
-    : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("");
+    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmtC(f.doseG)}→${fmtC(f.yieldG)}</span></button></div>`
+    : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("") + `<button class="fav-edit" id="editFavs" aria-label="Edit favourites">⋯</button>`;
+  $("#editFavs").onclick = () => {
+    openSheet(`<h2>Edit favourites</h2><div class="stack">${S.favourites.map((f, i) => `<button class="btn" data-favedit="${i}" ${f ? "" : "disabled"}>${i + 1} · ${esc(f?.name || "Empty slot")}</button>`).join("")}</div>`);
+    $$("[data-favedit]").forEach((b) => b.onclick = () => editFav(Number(b.dataset.favedit)));
+  };
   $$("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
   $$("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
 }
@@ -946,13 +1003,16 @@ async function useFav(i) {
   if (!f) {
     if (!S.next) return toast("Pick a coffee first");
     const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 18);
-    const fav = { name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
+    const fav = { ...favouriteRecipe(), name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
     S.favourites = await S.api.favourites.set(i, fav);
     renderFavs(); toast(`Saved "${name}" to slot ${i + 1}`);
     return;
   }
+  if (f.noBag === true) await selectBean(NO_BAG, { quiet: true });
   if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
-  S.next = { ...S.next, beanId: S.current?.id, profileTitle: f.profileTitle, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting ?? S.next?.grind ?? "" };
+  if (f.beanId && !S.shelf.some((b) => b.id === f.beanId)) return toast("That favourite's coffee is no longer on the shelf");
+  S.next = { ...S.next, beanId: S.current?.id ?? null, profileTitle: f.profileTitle, profileId: f.profileId ?? null, profileShape: f.profileShape ?? null, manual: f.manual ?? null, direct: f.direct ?? false, targetTimeS: f.targetTimeS ?? null, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting ?? "" };
+  S.loaded = false; saveBrewChoice();
   renderNextShot();
   const loaded = await loadOntoMachine(true);
   if (loaded === "held") toast(`"${f.name}" loads when this shot ends`);
@@ -989,7 +1049,7 @@ function renderControls() {
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
   const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
   $("#controls").innerHTML = `
-    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${fmtC(S.next.yieldG)} g` : ""}</span></button>
+    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}` : "Choose a profile"}</span></button>
       ${S.loaded || !S.next ? "" : '<span class="ghc-note">Starting loads the recipe first</span>'}</div>
     <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
     <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
@@ -1044,6 +1104,7 @@ async function startOp(kind) {
   if (isStarting()) return;
   if (unlinked()) return toast("The machine isn't connected");
   const st = S.snap?.state?.state;
+  if (["espresso", "steam", "hotWater", "flush"].includes(st)) return toast("Stop the current operation before starting another");
   if (NOT_READY.includes(st)) return toast(`Not now: the machine says "${STATE_LABEL[st] || st}"`);
   const gen = ++opGen, current = () => gen === opGen;
   S.starting = { kind, until: Infinity };
@@ -1161,6 +1222,9 @@ function onSnapshot(s) {
 }
 function onShotStart() {
   S.live = []; S.opStart = Date.now();
+  const context = { ...S.loadedRecipe };
+  S.shotContext = context;
+  S.api.machine.recipe().then((r) => { if (r) Object.assign(context, r); }, () => {});
   // Which shot was newest before this one, so the end can tell when Decaid has saved it.
   S.shotBefore = undefined;
   S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});
@@ -1170,14 +1234,16 @@ function onShotStart() {
 }
 async function onShotEnd(finishedId) {
   const pts = S.live.slice();
+  const context = { ...S.shotContext };
   const shot = finishedId === "latest" ? await justFinishedShot() : await S.api.shot(finishedId).catch(() => null);
   if (shot && !S.shots.some((s) => s.id === shot.id)) S.shots = [shot, ...S.shots];
   S.lastShotId = shot?.id;
-  showAfterShot(shot, pts);
-  if (S.current?.batch && shot) {
-    const b = S.current;
+  showAfterShot(shot, pts, context);
+  const batch = shot ? shot.batch : context.batchId;
+  const b = batch ? S.shelf.find((b) => b.batch === batch) : null;
+  if (b && shot) {
     S.api.syncRemaining(b.id, b.batch).then((r) => { if (r != null) b.remaining = r; }).catch(() => {});
-  } else if (S.current) S.current.remaining = S.current.remaining != null ? Math.max(0, S.current.remaining - (S.next?.doseG ?? 18)) : null;
+  }
 }
 // Decaid saves the shot a moment after the machine stops. Ratings and the reference
 // must go to this shot, not the one before it, so wait (up to ~6 s) for a newest shot
@@ -1234,16 +1300,19 @@ function bindStars(el, v, onChange) {
 function metricsHtml(m) {
   return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
 }
-function showAfterShot(shot, pts) {
+function showAfterShot(shot, pts, context = {}) {
   const p = $("#afterShot");
   p.hidden = false;
   let rating = shot?.enjoyment ?? null;
   const unsaved = shot ? "" : `<p class="muted small">Decaid hasn't saved this shot yet, so the rating and advice can't be attached. Rate it from Shots in a moment.</p>`;
-  const r = S.current?.recipe;
+  const batch = shot ? shot.batch : context.batchId;
+  const bean = batch ? S.shelf.find((b) => b.batch === batch) : null;
+  const r = bean?.recipe;
+  const manual = shot?.manual || context.manual;
   const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
   // The recommendation's time window belongs to its profile; a different profile
   // pulled (picked here or set on the machine) isn't judged against it.
-  const window = S.next && S.next.profileTitle === r?.profileTitle ? S.next.targetTimeS || r?.targetTimeS || [25, 35] : null;
+  const window = !manual && (shot?.profileTitle ?? context.profileTitle) === r?.profileTitle ? r?.targetTimeS ?? null : null;
   const [lo, hi] = window || [0, 0];
   const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
   const scale = (id, label, opts) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === 0}" aria-pressed="${v === 0}">${t}</button>`).join("")}</div></div>`;
@@ -1256,6 +1325,15 @@ function showAfterShot(shot, pts) {
       <div class="row"><button class="btn primary" id="sendTaste">Next adjustment</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
     <div id="adviceBox"></div>`;
   const val = (id) => Number($(`#${id} [aria-pressed="true"]`)?.dataset.v ?? 0);
+  if (!bean || manual) {
+    [$("#sb"), $("#bd")].forEach((el) => (el.parentElement.hidden = true));
+    $("#sendTaste").hidden = true;
+    $("#pinShot").hidden = !bean;
+    if (!bean && shot) {
+      $("#adviceBox").innerHTML = `<div class="field"><label class="label" for="afterNotes">Shot notes</label><textarea id="afterNotes" rows="2">${esc(shot.notes || "")}</textarea></div>`;
+      $("#afterNotes").onchange = (e) => S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes"));
+    }
+  }
   $$(".seg.tap", p).forEach((g) => $$("button", g).forEach((b) => (b.onclick = () => $$("button", g).forEach((x) => { x.setAttribute("aria-pressed", String(x === b)); x.setAttribute("aria-checked", String(x === b)); }))));
   $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); renderLive(); };
   $(".live-col").classList.add("has-after");
@@ -1266,18 +1344,19 @@ function showAfterShot(shot, pts) {
     if (shot) { shot.enjoyment = n; S.api.annotate(shot.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating")); }
   });
   $("#sendTaste").onclick = async (e) => {
-    if (!shot || !S.current) return;
+    if (!shot || !bean) return;
     e.target.disabled = true;
     try {
-      const { advice, source } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: rating || null, notes: null }, S.current.batch);
+      const { advice, source } = await S.api.feedback(shot.id, bean.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: rating || null, notes: null }, bean.batch);
       $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div><div class="muted small">${source === "ai" ? "Advice from the AI" : "From Crema's dial-in rules"}</div></div>`;
     } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
     e.target.disabled = false;
   };
   $("#pinShot").onclick = async () => {
-    if (!shot || !S.current) return;
-    await S.api.pinBest(S.current.id, shot.id);
-    sameCoffee(S.current.id, (x) => (x.bestShotId = shot.id)); S.ghost = pts.length ? pts : shot.points;
+    if (!shot || !bean) return;
+    await S.api.pinBest(bean.id, shot.id);
+    sameCoffee(bean.id, (x) => (x.bestShotId = shot.id));
+    if (S.current?.id === bean.id) S.ghost = pts.length ? pts : shot.points;
     toast("Pinned as the reference shot for this coffee"); renderLive();
   };
 }
@@ -1409,7 +1488,7 @@ function syncShelf() {
   const before = JSON.stringify(S.shelf), selected = JSON.stringify(S.current);
   shelfSync = refreshShelf().then(async () => {
     S.shelfError = null;
-    if ((S.current && !S.shelf.some((b) => b.key === S.current.key)) || (!S.current && S.shelf.length)) {
+    if ((S.current && !S.shelf.some((b) => b.key === S.current.key)) || (!S.current && !S.noBag && S.shelf.length)) {
       await selectBean(S.shelf[0]?.key, { quiet: true });
     } else if (selected !== JSON.stringify(S.current)) renderNextShot();
     if (before !== JSON.stringify(S.shelf) && !$("#view-shelf").hidden) renderShelf();
@@ -1772,7 +1851,7 @@ let catFilter = { roast: null, milk: false, easy: false, scale: null };
 async function renderProfiles() {
   const b = S.current;
   $("#profilesTitle").textContent = b ? `Profiles for ${b.info.name.value}` : "Profiles";
-  $("#profilesSub").textContent = b ? `Matched against what ${b.info.roaster.value} says about it: ${[b.info.roastLevel?.value, b.info.processKind, (b.info.tastingNotes?.value || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ")}` : "Add a coffee to see recommendations.";
+  $("#profilesSub").textContent = b ? `Matched against what ${b.info.roaster.value} says about it: ${[b.info.roastLevel?.value, b.info.processKind, (b.info.tastingNotes?.value || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ")}` : "Choose an installed profile, with or without a bag.";
   const rec = $("#recommended");
   if (b) {
     rec.innerHTML = `<p class="muted">Ranking profiles…</p>`;
@@ -1780,6 +1859,7 @@ async function renderProfiles() {
       ? `<div class="panel stack"><span class="label">Recommended</span><p class="muted">${S.api.ai.on ? "Asking the AI to choose among these…" : "Working out a recipe…"}</p></div>` : "";
     try {
       const cands = await S.api.rank(b.id);
+      if (S.current !== b) return;
       const top = cands[0]?.score || 1;
       const chosen = b.recipe?.profileTitle;
       rec.innerHTML = `${waiting}${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "")}</span></div>
@@ -1809,17 +1889,23 @@ async function renderProfiles() {
     } catch (e) { rec.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
   } else rec.innerHTML = "";
   if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
-  if (!S.library) S.library = await S.api.library().catch(() => null);
+  [S.library, S.machineInfo] = await Promise.all([S.api.library().catch(() => null), S.api.machine.info().catch(() => null)]);
   renderCatalog();
 }
 function renderCatalog() {
   const f = catFilter;
   $("#catFilters").innerHTML = [
+    ...["flow", "pressure"].map((kind) => `<button class="fchip" data-manual="${kind}">Manual ${kind}</button>`),
     ...ROASTS.map((r) => `<button class="fchip" data-f="roast:${r}" aria-pressed="${f.roast === r}">${r}</button>`),
     `<button class="fchip" data-f="milk" aria-pressed="${f.milk}">Good with milk</button>`,
     `<button class="fchip" data-f="easy" aria-pressed="${f.easy}">Easy to dial</button>`,
     `<button class="fchip" data-f="scale" aria-pressed="${f.scale === false}">No scale needed</button>`,
   ].join("");
+  $$("[data-manual]").forEach((btn) => btn.onclick = () => {
+    const p = S.library?.find((p) => p.manual === btn.dataset.manual);
+    if (p) showInstalledProfile(p);
+    else openSheet(`<h2>Manual ${esc(btn.dataset.manual)}</h2><p>The matching manual profile isn't visible in Decaid. Show or restore it in Decaid or Streamline, then reopen Profiles.</p>`);
+  });
   $$("[data-f]").forEach((b) => (b.onclick = () => {
     const [k, v] = b.dataset.f.split(":");
     if (k === "roast") f.roast = f.roast === v ? null : v; else if (k === "scale") f.scale = f.scale === false ? null : false; else f[k] = !f[k];
@@ -1868,7 +1954,9 @@ function showProfile(key) {
     <div class="small"><b>Written for:</b> ${p.roasts.join(", ")} roasts · <b>Milk:</b> ${p.milk} · <b>Difficulty:</b> ${p.difficulty}${p.needsScale ? " · works best with a scale" : ""}${p.wantsFlatBurrs ? " · high-extraction flat burrs" : ""}</div>
     <div class="advice small"><div class="label">Author's dial-in guidance</div>${esc(p.dialIn)}</div>
     <div class="muted small">Source: ${esc(p.source)}</div>
-    ${S.current && usable ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(S.current.info.name.value)}</button></div>` : !usable ? `<p class="muted small">Not installed in Decaid. Install it there to use it.</p>` : ""}`);
+    ${lp ? `<div class="row"><button class="btn" id="baglessProfile">Brew without a bag</button></div>` : ""}${S.current && usable ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(S.current.info.name.value)}</button></div>` : !usable ? `<p class="muted small">Not installed in Decaid. Install it there to use it.</p>` : ""}`);
+  const bagless = $("#baglessProfile");
+  if (bagless) bagless.onclick = () => chooseInstalledProfile(lp, true);
   const u = $("#useProfile");
   if (u) u.onclick = async () => {
     const cands = await S.api.rank(S.current.id).catch(() => []);
@@ -1880,21 +1968,29 @@ function showProfile(key) {
 // An installed profile Crema's guide doesn't know: show what Decaid knows about it.
 // Using it starts from your usual dose and the profile's own target weight and first-step
 // temperature; there's no time window to judge the shot against.
-function showInstalledProfile(lp) {
+async function chooseInstalledProfile(lp, withoutBag = false) {
+  if (!lp) return toast("Reopen Profiles to choose an installed profile");
+  if (lp.manual) {
+    S.machineInfo = await S.api.machine.info().catch(() => null);
+    if (S.machineInfo?.GHC !== true) return toast("Manual brewing needs a connected group-head controller");
+  }
+  if (lp.tempC == null || !Number.isFinite(lp.tempC)) return toast("This profile has no usable first-step temperature. Check it in Decaid");
+  if (withoutBag) { S.noBag = true; S.current = null; S.ghost = null; local.set("current", NO_BAG); }
   const b = S.current;
-  const dose = b?.recipe?.doseG ?? S.prefs?.basketDoseG ?? 18;
-  const yieldG = lp.targetWeight || Math.round(dose * 2 * 2) / 2;
-  const tempC = lp.tempC || b?.recipe?.tempC || 93;
+  const recipe = { profileTitle: lp.title, profileId: lp.id, profileShape: lp.profileShape, manual: lp.manual, direct: true, doseG: b?.recipe?.doseG ?? S.prefs?.basketDoseG ?? 18, yieldG: lp.targetWeight ?? 0, tempC: lp.tempC, targetTimeS: null };
+  setNextFromRecipe(b, recipe); closeSheet(); location.hash = "#brew"; renderNextShot(); renderControls();
+  toast(`${lp.title} set for the next shot`);
+}
+function showInstalledProfile(lp) {
+  const capable = !lp.manual || S.machineInfo?.GHC === true;
   openSheet(`<div class="stack" style="gap:4px"><span class="label">${esc(lp.author || "Unknown author")} · installed in Decaid</span><h2>${esc(lp.title)}</h2></div>
     ${lp.notes ? `<p>${esc(lp.notes)}</p>` : ""}
-    <div class="metrics" style="grid-template-columns:repeat(3,1fr)">${[["Steps", lp.steps || "–", ""], ["Target", lp.targetWeight ? fmt1(lp.targetWeight) : "–", "g"], ["First step", lp.tempC ? fmt1(lp.tempC) : "–", "°C"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
-    <p class="muted small">Not in Crema's guide, so there's no dial-in advice or roast fit for it.</p>
-    ${b ? `<div class="row"><button class="btn primary" id="useProfile">Use for ${esc(b.info.name.value)}</button></div>` : ""}`);
+    <div class="metrics" style="grid-template-columns:repeat(3,1fr)">${[["Steps", lp.steps || "–", ""], ["Target", lp.targetWeight > 0 ? fmt1(lp.targetWeight) : "Off", "g"], ["First step", lp.tempC == null ? "–" : fmt1(lp.tempC), "°C"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
+    <p class="muted small">${lp.manual ? `Adjust ${lp.manual} on the physical group-head controller. Profile time limits still apply.${capable ? "" : " A connected machine with a group-head controller is required."}` : "Uses this installed profile's own settings. No recommended time window."}</p>
+    <div class="row">${S.current ? `<button class="btn primary" id="useProfile" ${capable ? "" : "disabled"}>Use for ${esc(S.current.info.name.value)}</button>` : ""}<button class="btn" id="baglessProfile" ${capable ? "" : "disabled"}>Brew without a bag</button></div>`);
   const u = $("#useProfile");
-  if (u) u.onclick = () => {
-    const r = { ...(b.recipe || {}), profileTitle: lp.title, profileId: lp.id, doseG: dose, yieldG, tempC, targetTimeS: null, dialIn: "", rationale: [], alternatives: [] };
-    setNextFromRecipe(b, r); closeSheet(); location.hash = "#brew"; toast(`${lp.title} set for the next shot`);
-  };
+  if (u) u.onclick = () => chooseInstalledProfile(lp);
+  $("#baglessProfile").onclick = () => chooseInstalledProfile(lp, true);
 }
 
 /* ================= shots ================= */
@@ -1952,7 +2048,20 @@ function renderShotDetail() {
 
 /* ================= settings ================= */
 function sw(id, checked) { return `<label class="switch"><input type="checkbox" id="${id}" ${checked ? "checked" : ""}><span></span></label>`; }
-function mini(id, value, stepV, unit) { return `<div class="mini"><button type="button" data-mini="${id}:-${stepV}" aria-label="Less">−</button><input id="${id}" inputmode="decimal" value="${value ?? ""}" aria-label="${unit}"><button type="button" data-mini="${id}:${stepV}" aria-label="More">+</button></div>`; }
+// Decaid 0.9.1 REST: sleep 0..240 (0 disables idle sleep). DE1 fan MMR:
+// 0..50, also enforced by installed Streamline 0.2.23. Decaid's water-level
+// form uses 0..30 mm. These are edit limits, never replacement machine defaults.
+const SETTING_LIMITS = { sFan: [0, 50, 1], sSleepMin: [0, 240, 1], sWaterWarn: [0, 30, 1] };
+function settingNumber(value, limits) {
+  if (value == null || String(value).trim() === "" || !Number.isFinite(Number(value))) throw new Error("Enter a number");
+  const n = Number(value);
+  return limits ? clamp(round(n, limits[2]), limits[0], limits[1]) : n;
+}
+function mini(id, value, stepV, unit) {
+  const available = value != null && Number.isFinite(Number(value)), limits = SETTING_LIMITS[id];
+  const disabled = available ? "" : "disabled";
+  return `<div class="mini"><button type="button" data-mini="${id}:-${stepV}" aria-label="Less" ${disabled}>−</button><input id="${id}" type="number" step="${stepV}" ${limits ? `min="${limits[0]}" max="${limits[1]}"` : ""} inputmode="decimal" value="${available ? value : ""}" placeholder="Unavailable" aria-label="${unit}" ${disabled}><button type="button" data-mini="${id}:${stepV}" aria-label="More" ${disabled}>+</button></div>`;
+}
 function seg(id, options, value) { return `<div class="seg" id="${id}">${options.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(value)}">${l}</button>`).join("")}</div>`; }
 async function renderSettings() {
   const el = $("#settings");
@@ -1985,21 +2094,21 @@ async function renderSettings() {
   </div>
 
   <div class="panel stack"><h2>Machine</h2>
-    <div class="set-row first"><span>Start from the group head<span class="hint">For machines with a group head controller: Crema sets recipes and presets, and you start shots on the machine</span></span>${sw("sGhc", S.ghc)}</div>
-    <div class="set-row"><span>Low water warning<span class="hint">Percent of the tank</span></span>${mini("sWaterWarn", 20, 5, "%")}</div>
+    <div class="set-row first"><span>Use only the machine's start buttons<span class="hint">Disables Crema's Espresso, Steam, Hot water and Flush buttons on this device. The group-head controls always work; Stop stays available</span></span>${sw("sGhc", S.ghc)}</div>
+    <div class="set-row"><span>Refill warning level<span class="hint">Water height in mm, as reported by Decaid</span></span>${mini("sWaterWarn", S.water?.refillLevel, 5, "mm")}</div>
     ${ms ? `<div class="set-row"><span>Tablet USB charging</span>${sw("sUsb", ms.usb === true || ms.usb === "enable")}</div>
-    <div class="set-row"><span>Fan threshold</span>${mini("sFan", ms.fan, 5, "°C")}</div>` : ""}
+    <div class="set-row"><span>Fan threshold<span class="hint">Current Decaid value. DE1 accepts 0–50 °C; Crema does not set a default</span></span>${mini("sFan", ms.fan, 5, "°C")}</div>` : ""}
   </div>
 
   <div class="panel stack"><h2>Sleep and wake</h2>
     ${pres ? `<div class="set-row first"><span>Sleep when idle</span>${sw("sPresence", pres.userPresenceEnabled)}</div>
-    <div class="set-row"><span>After<span class="hint">Minutes without use</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
+    <div class="set-row"><span>After<span class="hint">0–240 minutes without use. 0 turns off the idle sleep timer</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
     <span class="label">Wake schedules</span>
     <div class="stack" style="gap:6px" id="scheds">${scheds.map((s) => `<div class="sched"><span class="num">${esc(s.time)}</span><div class="days">${DAYS.map((d, i) => `<button type="button" data-day="${esc(s.id)}:${i + 1}" aria-pressed="${!s.daysOfWeek.length || s.daysOfWeek.includes(i + 1)}">${d}</button>`).join("")}</div>${sw(`en-${s.id}`, s.enabled)}<button class="btn small ghost" data-del="${esc(s.id)}">Remove</button></div>`).join("") || '<p class="muted small">None yet.</p>'}</div>
     <div class="row"><div class="field" style="flex:1"><label class="label" for="newWake">Add a wake time</label><input type="time" id="newWake" value="06:45"></div><button class="btn" id="addWake" style="align-self:end">Add</button></div>
   </div>
 
-  <div class="panel stack"><h2>Display</h2>
+  <div class="panel stack"><h2>Display</h2><p class="muted small">Theme and clock choices are saved on this device. Machine settings are shared through Decaid.</p>
     <div class="stack" style="gap:8px"><span class="label">Theme</span>
       <div class="skins">${SKINS.map((k) => `<button type="button" class="skin" data-skin="${k.id}" aria-pressed="${currentSkin() === k.id}">
         <span class="pv" style="background:${k.bg}">${k.pv.map((c) => `<i style="background:${c}"></i>`).join("")}</span><b>${k.name}</b><span>${k.note}</span></button>`).join("")}</div></div>
@@ -2035,7 +2144,7 @@ async function renderSettings() {
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
-  const num = (id) => parseFloat($(`#${id}`)?.value);
+  const num = (id) => settingNumber($(`#${id}`)?.value, SETTING_LIMITS[id]);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
     sSteamT: () => setWorkflowSetting("steamSettings", "targetTemperature", num("sSteamT")),
@@ -2045,16 +2154,32 @@ async function renderSettings() {
     sFlushF: () => setWorkflowSetting("rinseData", "flow", num("sFlushF")),
     sFlushT: () => setWorkflowSetting("rinseData", "targetTemperature", num("sFlushT")),
     sWaterWarn: () => m.waterThreshold(num("sWaterWarn")),
-    sFan: () => m.settings.set({ fan: num("sFan") }),
-    sSleepMin: () => m.presence.set({ sleepTimeoutMinutes: num("sSleepMin") }),
+    sFan: async () => { await m.settings.set({ fan: num("sFan") }); return (await m.settings.get()).fan; },
+    sSleepMin: async () => { await m.presence.set({ sleepTimeoutMinutes: num("sSleepMin") }); return (await m.presence.get()).sleepTimeoutMinutes; },
     mBack: () => S.api.maintenance.set({ backflushEveryShots: num("mBack") }),
     mDesc: () => S.api.maintenance.set({ descaleEveryDays: num("mDesc") }),
   };
   for (const [id, fn] of Object.entries(handlers)) {
     const input = $(`#${id}`); if (!input) continue;
-    const run = async () => { try { await fn(); if (!id.startsWith("p")) toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); } };
+    let saved = input.value, saving = false;
+    const run = async () => {
+      if (saving) return;
+      const buttons = $$(`[data-mini^="${id}:"]`);
+      saving = true; input.disabled = true; buttons.forEach((b) => (b.disabled = true));
+      try {
+        input.value = String(num(id));
+        const actual = await fn();
+        if (id === "sFan" || id === "sSleepMin") {
+          if (actual == null || !Number.isFinite(Number(actual))) throw new Error("Decaid didn't return the saved value");
+          input.value = String(actual);
+        }
+        saved = input.value;
+        if (!id.startsWith("p")) toast("Saved");
+      } catch (e) { input.value = saved; toast(`Couldn't save: ${e.message}`); }
+      finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
+    };
     input.onchange = run;
-    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { const d = parseFloat(b.dataset.mini.split(":")[1]); input.value = String(round((parseFloat(input.value) || 0) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
+    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { if (saving || input.disabled) return; const d = Number(b.dataset.mini.split(":")[1]); input.value = String(round(Number(input.value) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
   }
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
   const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
@@ -2290,6 +2415,7 @@ async function boot() {
   // Show the Brew screen (readings, Stop) now; the rest of it fills in as data arrives.
   if (!location.hash || location.hash === "#brew") route(false);
   await S.api.settings.get().catch(() => {});
+  S.machineInfo = await S.api.machine.info().catch(() => null);
   $("#demoBanner").hidden = !S.api.demo;
   // Offer to connect when this page could reach a machine (not the hosted demos).
   if (S.api.demo && !forceDemo && location.protocol === "http:") {
@@ -2321,7 +2447,7 @@ async function boot() {
   // Start on the coffee the machine holds, if it's on the shelf, then take its recipe.
   const onMachine = await S.api.machine.recipe?.().catch(() => null);
   const machineBean = onMachine?.batchId && S.shelf.find((b) => b.batch === onMachine.batchId);
-  await selectBean(machineBean?.key || local.get("current", null) || S.shelf[0]?.key, { quiet: true });
+  await selectBean(local.get("current", null) === NO_BAG ? NO_BAG : machineBean?.key || local.get("current", null) || S.shelf[0]?.key, { quiet: true });
   await reconcileWorkflow({ boot: true });
   const recheck = () => {
     if (document.visibilityState !== "visible") return;
