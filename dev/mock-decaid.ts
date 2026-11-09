@@ -14,6 +14,8 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
+import { findProfile } from "../server/profiles/catalog.js";
+import { outlineProfile, shotSim } from "../server/profiles/curve.js";
 
 type Json = Record<string, any>;
 
@@ -29,11 +31,8 @@ const PROFILE_TITLES = [
 ];
 const profiles = PROFILE_TITLES.map((title, i) => ({
   id: `profile:${(i + 1).toString(16).padStart(16, "0")}`,
-  profile: {
-    version: "2", title, author: "Decent", notes: "", beverage_type: "espresso",
-    steps: [{ name: "preinfusion", temperature: 92 }, { name: "extraction", temperature: 92 }],
-    target_weight: 36, target_volume: 0, tank_temperature: 0,
-  },
+  // Crema's simplified step outline for the profile's style, not Decaid's file.
+  profile: { ...outlineProfile(title, findProfile(title)?.style ?? "flat-pressure", findProfile(title)?.recipe.tempC ?? 92, findProfile(title)?.recipe.yieldG ?? 36), tank_temperature: 0 },
   visibility: "visible",
   isDefault: true,
 }));
@@ -88,7 +87,6 @@ const sim = {
   lastActive: Date.now(),
 };
 
-const isLever = (title: string) => /londinium|lrv|lever|leva|cremina|80's|forge|gentle/i.test(title);
 
 function stop(next = "idle") {
   if (sim.timer) clearInterval(sim.timer);
@@ -111,8 +109,8 @@ function run(state: string) {
   sim.samples = [];
   const ctx = workflow.context ?? {};
   const target = Number(ctx.targetYield ?? 36);
-  const lever = isLever(workflow.profile?.title ?? "");
-  const shotSeconds = 26 + Math.random() * 10;
+  // The puck follows the loaded profile's steps; resistance varies like grind does.
+  const puck = state === "espresso" ? shotSim(workflow.profile ?? {}, { resistance: 0.9 + Math.random() * 0.2 }) : null;
   const limit =
     state === "steam" ? Number(shotSettings.targetSteamDuration || 600) :
     state === "hotWater" ? Number(shotSettings.targetHotWaterVolume) / Number(settings.hotWaterFlow || 6) :
@@ -123,16 +121,15 @@ function run(state: string) {
     t += 0.1;
     let p = 0, f = 0;
     if (state === "espresso") {
-      const pi = lever ? 9 : 7;
-      if (t < pi) { p = Math.min(lever ? 4 : 3, t * 0.7); f = Math.max(1, 4 - t * 0.45); sim.substate = "preinfusion"; }
-      else if (t < pi + 2) { p = 3 + (t - pi) * 3; f = 1.5; sim.substate = "pouring"; }
-      else { p = lever ? Math.max(4, 9 - (t - pi - 2) * 0.28) : Math.max(5.5, 9 - (t - pi - 2) * 0.13); f = 1.7 + Math.sin(t / 4) * 0.12 + (t - pi) * 0.025; }
-      p += (Math.random() - 0.5) * 0.08; f += (Math.random() - 0.5) * 0.04;
-      if (t > pi - 1) sim.scaleWeight += Math.max(0, f) * 0.1 * 0.93;
-      sim.live = { pressure: p, flow: f, targetPressure: t < pi ? 3 : 9, targetFlow: t < pi ? 4 : 2, elapsed: t, profileFrame: t < pi ? 0 : 1 };
-      sim.samples.push({ t, p, f, w: sim.scaleWeight - sim.scaleOffset, temp: sim.group });
+      const before = sim.samples.at(-1)?.cup ?? 0;
+      const s = puck!.tick(0.1);
+      p = s.p; f = s.f;
+      sim.scaleWeight += s.w - before;
+      sim.substate = s.w < 0.5 ? "preinfusion" : "pouring";
+      sim.live = { pressure: p, flow: f, targetPressure: s.tp ?? 0, targetFlow: s.tf ?? 0, elapsed: t, profileFrame: s.frame };
+      sim.samples.push({ t, p, f, w: sim.scaleWeight - sim.scaleOffset, cup: s.w, temp: sim.group, tp: s.tp ?? 0, tf: s.tf ?? 0, frame: s.frame });
       // stop at weight, with the usual lag
-      if ((target > 0 && sim.scaleWeight - sim.scaleOffset >= target - 1.2) || t >= (workflow.profile?.beverage_type === "manual" ? 120 : shotSeconds + 15)) {
+      if ((target > 0 && sim.scaleWeight - sim.scaleOffset >= target - 1.2) || (puck!.done && workflow.profile?.beverage_type !== "manual") || t >= 120) {
         sim.substate = "pouringDone";
         return stop();
       }
@@ -159,7 +156,7 @@ function recordShot() {
     id: `shot-${new Date().toISOString().replace(/[:.]/g, "-")}`,
     timestamp: new Date().toISOString(),
     measurements: sim.samples.filter((_, i) => i % 2 === 0).map((s) => ({
-      machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" }, flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), mixTemperature: +s.temp.toFixed(1) },
+      machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" }, flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), targetFlow: s.tf, targetPressure: s.tp, profileFrame: s.frame, mixTemperature: +s.temp.toFixed(1) },
       scale: { timestamp: new Date(start + s.t * 1000).toISOString(), weight: +s.w.toFixed(1) },
     })),
     workflow: { name: workflow.name, profile: structuredClone(workflow.profile), context: { ...ctx } },

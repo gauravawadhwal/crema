@@ -175,7 +175,7 @@ function makeLiveApi(conn) {
   const shotPoints = (full) => {
     const m = full.measurements || [];
     const t0 = m.length ? Date.parse(m[0].machine.timestamp) : 0;
-    return m.map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? 0, f: x.machine.flow ?? 0, w: x.scale?.weight ?? 0, temp: x.machine.mixTemperature, tp: x.machine.targetPressure, tf: x.machine.targetFlow }));
+    return m.map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? 0, f: x.machine.flow ?? 0, w: x.scale?.weight ?? 0, temp: x.machine.mixTemperature, tp: x.machine.targetPressure, tf: x.machine.targetFlow, frame: x.machine.profileFrame ?? null }));
   };
   const toShot = (s, full) => {
     const ctx = s.workflow?.context || {};
@@ -415,7 +415,7 @@ function makeLiveApi(conn) {
         id: p.id, title: p.profile.title, author: p.profile.author || "", notes: p.profile.notes || "",
         steps: p.profile.steps?.length ?? 0, targetWeight: p.profile.target_weight == null ? null : Number(p.profile.target_weight),
         tempC: p.profile.steps?.[0]?.temperature == null ? null : Number(p.profile.steps[0].temperature),
-        manual: manualKind(p.profile), profileShape: brewProfileShape(p.profile),
+        manual: manualKind(p.profile), profileShape: brewProfileShape(p.profile), profile: p.profile,
         guide: guide.get(p.profile.title.toLowerCase()) ?? null,
       }));
     },
@@ -440,6 +440,12 @@ function makeLiveApi(conn) {
       return { items, total: page?.total ?? items.length };
     },
     async shots(limit = 15) { return (await api.shotPage(0, limit)).items; },
+    // The newest shot (of the last page of summaries) pulled with a profile, in full: its
+    // recorded steps time the profile's graph. Summaries carry the profile, not samples.
+    async lastShotWith(title) {
+      const hit = (await j(D(`/shots?limit=${SHOT_PAGE}&offset=0`)))?.items?.find((s) => (s.workflow?.profile?.title ?? s.workflow?.name) === title);
+      return hit ? api.shot(hit.id) : null;
+    },
     // One shot by id (a reference shot can be older than any page loaded), or null.
     async shot(id) { const full = await fullShot(id); return full ? toShot(full, full) : null; },
     async latestShot() { const s = await j(D("/shots/latest")).catch((e) => { if (e.status === 404) return null; throw e; }); return s?.id ? api.shot(s.id) : null; },
@@ -591,7 +597,7 @@ const S = {
 
 /* ================= chart ================= */
 function drawChart(canvas, pts, o = {}) {
-  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true } = o;
+  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true } = o;
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   if (!rect.width) return;
@@ -612,7 +618,7 @@ function drawChart(canvas, pts, o = {}) {
     for (let v = 0; v <= 12; v += 3) {
       ctx.globalAlpha = .6; ctx.beginPath(); ctx.moveTo(pad.l, yB(v)); ctx.lineTo(W - pad.r, yB(v)); ctx.stroke(); ctx.globalAlpha = 1;
       ctx.textAlign = "right"; ctx.fillText(String(v), pad.l - 6, yB(v) + 4);
-      ctx.textAlign = "left"; ctx.fillText(String(Math.round((v / 12) * maxW)), W - pad.r + 6, yB(v) + 4);
+      if (weightAxis) { ctx.textAlign = "left"; ctx.fillText(String(Math.round((v / 12) * maxW)), W - pad.r + 6, yB(v) + 4); }
     }
     ctx.textAlign = "center";
     const step = maxT > 60 ? 20 : 10;
@@ -626,6 +632,26 @@ function drawChart(canvas, pts, o = {}) {
     data.forEach((d, i) => (i ? ctx.lineTo(x(d.t), y(d[key])) : ctx.moveTo(x(d.t), y(d[key]))));
     ctx.stroke(); ctx.restore();
   };
+  // The profile's plan (E.profileCurve), dashed: pressure and flow targets, each only
+  // for the steps that drive it, the temperature, and faint lines where steps change.
+  if (plan && !compact) {
+    ctx.save(); ctx.beginPath(); ctx.rect(pad.l, 0, iw, H); ctx.clip();
+    ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+    for (const st of plan.steps.slice(1)) if (st.end > st.start && st.start > 0) { ctx.beginPath(); ctx.moveTo(x(st.start), pad.t); ctx.lineTo(x(st.start), pad.t + ih); ctx.stroke(); }
+    const planLine = (key, color, y, width, alpha) => {
+      ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash([5, 4]); ctx.lineJoin = "round"; ctx.beginPath();
+      let down = false;
+      for (const d of plan.points) {
+        if (d[key] == null) { down = false; continue; }
+        if (down) ctx.lineTo(x(d.t), y(d[key])); else { ctx.moveTo(x(d.t), y(d[key])); down = true; }
+      }
+      ctx.stroke(); ctx.restore();
+    };
+    planLine("temp", css("--temp"), yT, 1.2, .55);
+    planLine("tp", css("--pressure"), yB, 1.8, .85);
+    planLine("tf", css("--flow"), yB, 1.8, .85);
+    ctx.restore();
+  }
   if (ghost?.length) {
     line(ghost, "p", css("--pressure"), yB, 1.5, { alpha: .25 });
     line(ghost, "f", css("--flow"), yB, 1.5, { alpha: .25 });
@@ -651,10 +677,11 @@ function drawChart(canvas, pts, o = {}) {
     }
   }
 }
-function legendHtml(withGhost) {
+function legendHtml(withGhost, withPlan = false, removable = false) {
   const item = (c, t, dash) => `<span><span class="swatch" style="background:var(${c})${dash ? ";opacity:.6" : ""}"></span>${t}</span>`;
   return [item("--pressure", "Pressure (bar)"), item("--flow", "Flow (ml/s)"), item("--weight", "Weight (g, right)"), item("--temp", "Temp (70–100 °C)"),
-    `<span class="muted">Dashed: targets</span>`, withGhost ? `<span class="muted">Faint: reference shot</span>` : ""].join("");
+    `<span class="muted">${withPlan ? "Dashed: the profile" : "Dashed: targets"}</span>`,
+    withGhost ? `<span class="muted">Faint: reference shot${removable ? ' <button type="button" class="linkish" id="clearRef">Remove</button>' : ""}</span>` : ""].join("");
 }
 
 /* ================= bag art + rest ================= */
@@ -770,6 +797,7 @@ function coffeePicker() {
   $$("[data-choose-bag]").forEach((el) => el.onclick = () => { closeSheet(); selectBean(el.dataset.chooseBag); });
 }
 function renderNextShot() {
+  void refreshPlan();
   const el = $("#nextShot"), b = S.current, n = S.next;
   if (!b && !S.noBag && !S.shelfLoaded) { el.innerHTML = `<p class="muted">Loading your coffees…</p>`; return; }
   if (!b && !S.noBag) {
@@ -981,6 +1009,51 @@ async function loadGhost() {
   // Fetched by id: the reference can be older than any page of history loaded.
   S.ghost = (S.shots.find((s) => s.id === b.bestShotId) || (await S.api.shot(b.bestShotId).catch(() => null)))?.points || null;
 }
+// A coffee's reference shot (shared by its bags) is optional: `shotId` null removes it.
+async function setReference(bean, shotId, points = null) {
+  if (!bean) return;
+  try { await S.api.pinBest(bean.id, shotId); } catch (e) { toast(`Couldn't save the reference: ${e.message}`); return false; }
+  sameCoffee(bean.id, (x) => (x.bestShotId = shotId));
+  if (S.current?.id === bean.id) { if (points && shotId) S.ghost = points; else await loadGhost(); }
+  renderLive();
+  toast(shotId ? "Set as the reference shot for this coffee" : "Reference shot removed");
+  return true;
+}
+
+/* ================= the profile's plan ================= */
+// What the next shot's profile asks for, drawn dashed before a shot. Its steps come
+// from the installed profile; their timing from the newest shot pulled with it (shots
+// record which step was running), else each step's time limit.
+function nextProfile() {
+  const n = S.next;
+  if (!n || !S.library) return null;
+  return (n.profileId && S.library.find((p) => p.id === n.profileId)) || S.library.find((p) => p.title === n.profileTitle) || null;
+}
+// How much of a plan to show: all of it when timed from a shot; limits can add up to
+// minutes, so cap those.
+const planWindow = (plan, cap = 60) => plan.timed === "shot" ? plan.total : Math.min(plan.total, cap);
+const planTimes = new Map();
+function planTiming(lp) {
+  if (!lp?.profile?.steps?.length || !S.api.lastShotWith) return Promise.resolve(null);
+  if (!planTimes.has(lp.title)) planTimes.set(lp.title, S.api.lastShotWith(lp.title).then((shot) => {
+    const durations = shot ? E.stepDurations(shot.points || [], lp.profile.steps.length) : null;
+    return durations ? { durations, shot } : null;
+  }, () => null));
+  return planTimes.get(lp.title);
+}
+function planBody(lp, tempC) {
+  return lp?.profile && tempC != null ? E.withTemperature(lp.profile, tempC) : lp?.profile;
+}
+let planFor = null;
+async function refreshPlan() {
+  if (!S.library && !S.libraryLoading) S.libraryLoading = S.api.library().then((l) => (S.library = l), () => null).finally(() => (S.libraryLoading = null));
+  if (!S.library) await S.libraryLoading;
+  const lp = nextProfile(), tempC = S.next?.tempC;
+  const key = lp ? `${lp.id}|${tempC}` : null;
+  if (key !== planFor) { planFor = key; S.plan = lp ? E.profileCurve(planBody(lp, tempC)) : null; if (!$("#view-brew").hidden) renderLive(); }
+  const timing = await planTiming(lp);
+  if (timing && planFor === key && S.plan?.timed !== "shot") { S.plan = E.profileCurve(planBody(lp, tempC), timing.durations); if (!$("#view-brew").hidden) renderLive(); }
+}
 
 /* ================= favourites ================= */
 function favouriteRecipe() {
@@ -1165,12 +1238,19 @@ function renderReadouts() {
 function renderLive() {
   const target = S.next?.yieldG ?? 36;
   const pts = S.live;
-  const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0);
-  drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost });
+  // Before a shot the chart shows what the loaded profile asks for (S.plan); once one
+  // starts, the machine's own targets take over.
+  const plan = pts.length ? null : S.plan;
+  const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
+  drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;
+  const about = [plan ? `Dashed: what ${S.next.profileTitle} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
   $("#chartEmpty").hidden = pts.length > 0;
-  $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : S.ghc ? "Press the espresso button on the group head." : S.ghost ? "Tap Espresso. The faint curves are your reference shot for this coffee." : "Tap Espresso to pull a shot.";
-  $("#legend").innerHTML = legendHtml(!!S.ghost);
+  $("#chartEmpty").classList.toggle("over-plan", !!plan);
+  $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
+  $("#legend").innerHTML = legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId);
+  const clear = $("#clearRef");
+  if (clear) clear.onclick = () => setReference(S.current, null);
   $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
   $("#phaseSub").textContent = st === "espresso" && S.next ? `${S.next.profileTitle} · target ${fmt1(target)} g` : "";
 }
@@ -1207,7 +1287,7 @@ function onSnapshot(s) {
     // value carried over from the previous operation on the first frame.
     const local = (Date.now() - S.opStart) / 1000;
     const t = s.elapsed != null && !(S.live.length === 0 && s.elapsed > 2) ? s.elapsed : local;
-    S.live.push({ t, p: s.pressure ?? 0, f: s.flow ?? 0, w: S.scale.weight ?? 0, temp: s.mixTemperature, tp: s.targetPressure, tf: s.targetFlow });
+    S.live.push({ t, p: s.pressure ?? 0, f: s.flow ?? 0, w: S.scale.weight ?? 0, temp: s.mixTemperature, tp: s.targetPressure, tf: s.targetFlow, frame: s.profileFrame ?? null });
     $("#shotClock").textContent = t.toFixed(1);
     if (!$("#view-brew").hidden) renderLive();
   } else if (["steam", "hotWater", "flush"].includes(st)) {
@@ -1238,6 +1318,7 @@ async function onShotEnd(finishedId) {
   const shot = finishedId === "latest" ? await justFinishedShot() : await S.api.shot(finishedId).catch(() => null);
   if (shot && !S.shots.some((s) => s.id === shot.id)) S.shots = [shot, ...S.shots];
   S.lastShotId = shot?.id;
+  planTimes.clear(); planFor = null; // the next plan can be timed from this shot
   showAfterShot(shot, pts, context);
   const batch = shot ? shot.batch : context.batchId;
   const b = batch ? S.shelf.find((b) => b.batch === batch) : null;
@@ -1335,7 +1416,8 @@ function showAfterShot(shot, pts, context = {}) {
     }
   }
   $$(".seg.tap", p).forEach((g) => $$("button", g).forEach((b) => (b.onclick = () => $$("button", g).forEach((x) => { x.setAttribute("aria-pressed", String(x === b)); x.setAttribute("aria-checked", String(x === b)); }))));
-  $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); renderLive(); };
+  // Closing the review readies the chart for the next shot: the profile again, not this one.
+  $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); if (S.snap?.state?.state !== "espresso") S.live = []; renderLive(); };
   $(".live-col").classList.add("has-after");
   requestAnimationFrame(renderLive);
   // The rating saves as soon as it's set; asking for the next adjustment is separate.
@@ -1352,12 +1434,13 @@ function showAfterShot(shot, pts, context = {}) {
     } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
     e.target.disabled = false;
   };
-  $("#pinShot").onclick = async () => {
+  const pinBtn = $("#pinShot");
+  const pinLabel = () => (pinBtn.textContent = bean?.bestShotId === shot?.id ? "Remove reference" : "Set as reference");
+  pinLabel();
+  pinBtn.onclick = async () => {
     if (!shot || !bean) return;
-    await S.api.pinBest(bean.id, shot.id);
-    sameCoffee(bean.id, (x) => (x.bestShotId = shot.id));
-    if (S.current?.id === bean.id) S.ghost = pts.length ? pts : shot.points;
-    toast("Pinned as the reference shot for this coffee"); renderLive();
+    const isRef = bean.bestShotId === shot.id;
+    if (await setReference(bean, isRef ? null : shot.id, pts.length ? pts : shot.points)) pinLabel();
   };
 }
 function opOverlay() {
@@ -1951,6 +2034,7 @@ function showProfile(key) {
   openSheet(`<div class="stack" style="gap:4px"><span class="label">${esc(p.author)} · ${esc(p.style)}</span><h2>${esc(p.title)}</h2></div>
     <p>${esc(p.character)}</p>
     <div class="metrics">${[["Dose", fmt1(p.recipe.doseG), "g"], ["Yield", fmt1(p.recipe.yieldG), "g"], ["Temp", fmt1(p.recipe.tempC), "°C"], ["Time", p.recipe.timeS.join("–"), "s"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
+    ${profilePlanHtml(lp)}
     <div class="small"><b>Written for:</b> ${p.roasts.join(", ")} roasts · <b>Milk:</b> ${p.milk} · <b>Difficulty:</b> ${p.difficulty}${p.needsScale ? " · works best with a scale" : ""}${p.wantsFlatBurrs ? " · high-extraction flat burrs" : ""}</div>
     <div class="advice small"><div class="label">Author's dial-in guidance</div>${esc(p.dialIn)}</div>
     <div class="muted small">Source: ${esc(p.source)}</div>
@@ -1963,7 +2047,7 @@ function showProfile(key) {
     const c = cands.find((x) => x.title === p.title);
     const r = { ...S.current.recipe, profileTitle: p.title, profileId: lp?.id ?? null, doseG: c?.recipe.doseG ?? p.recipe.doseG, yieldG: c?.recipe.yieldG ?? p.recipe.yieldG, tempC: c?.recipe.tempC ?? p.recipe.tempC, targetTimeS: p.recipe.timeS, dialIn: p.dialIn };
     setNextFromRecipe(S.current, r); closeSheet(); location.hash = "#brew"; toast(`${p.title} set for the next shot`);
-  };
+  };  drawProfilePlan(lp);
 }
 // An installed profile Crema's guide doesn't know: show what Decaid knows about it.
 // Using it starts from your usual dose and the profile's own target weight and first-step
@@ -1981,16 +2065,43 @@ async function chooseInstalledProfile(lp, withoutBag = false) {
   setNextFromRecipe(b, recipe); closeSheet(); location.hash = "#brew"; renderNextShot(); renderControls();
   toast(`${lp.title} set for the next shot`);
 }
+// An installed profile's graph and steps, for its sheet. Drawn first from each step's
+// time limit, then redrawn with real timings if a shot with it is found.
+function profilePlanHtml(lp) {
+  if (!lp?.profile?.steps?.length) return "";
+  return `<div class="plan-box"><div class="row between"><span class="label">What it asks the machine for</span><span class="muted small" id="planNote"></span></div>
+    <canvas class="plan-chart" id="planChart" role="img" aria-label="Pressure and flow targets of ${esc(lp.title)}, step by step"></canvas>
+    <div class="legend small"><span><span class="swatch" style="background:var(--pressure)"></span>Pressure (bar)</span><span><span class="swatch" style="background:var(--flow)"></span>Flow (ml/s)</span><span><span class="swatch" style="background:var(--temp)"></span>Temp (70–100 °C)</span></div>
+    <ol class="plan-steps small" id="planSteps"></ol></div>`;
+}
+function drawProfilePlan(lp) {
+  const canvas = $("#planChart");
+  if (!canvas) return;
+  const unit = (st) => (st.pump === "flow" ? "ml/s" : "bar");
+  const draw = (plan, timing) => {
+    if (!canvas.isConnected) return;
+    const shown = planWindow(plan, 90);
+    drawChart(canvas, [], { maxT: Math.max(20, Math.ceil(shown / 10) * 10), plan, weightAxis: false });
+    $("#planNote").textContent = plan.timed === "shot"
+      ? `Step times from your shot of ${new Date(timing.shot.timestamp).toLocaleDateString([], { day: "numeric", month: "short" })}`
+      : `Each step at its time limit${plan.total > shown ? `; first ${shown} s shown` : ""}. Most end sooner.`;
+    $("#planSteps").innerHTML = plan.steps.map((st) => `<li><b>${esc(st.name)}</b>: ${st.pump} ${st.smooth ? "ramps to" : "at"} ${fmt1(st.target)} ${unit(st)}${st.tempC != null ? `, ${fmt1(st.tempC)} °C` : ""}, up to ${fmt1(st.limitS)} s${plan.timed === "shot" ? ` (took ${fmt1(st.end - st.start)} s)` : ""}.${st.exit ? ` ${esc(st.exit)}.` : ""}${st.cap ? ` ${esc(st.cap)}.` : ""}</li>`).join("");
+  };
+  requestAnimationFrame(() => draw(E.profileCurve(lp.profile)));
+  planTiming(lp).then((timing) => { if (timing) requestAnimationFrame(() => draw(E.profileCurve(lp.profile, timing.durations), timing)); });
+}
 function showInstalledProfile(lp) {
   const capable = !lp.manual || S.machineInfo?.GHC === true;
   openSheet(`<div class="stack" style="gap:4px"><span class="label">${esc(lp.author || "Unknown author")} · installed in Decaid</span><h2>${esc(lp.title)}</h2></div>
     ${lp.notes ? `<p>${esc(lp.notes)}</p>` : ""}
     <div class="metrics" style="grid-template-columns:repeat(3,1fr)">${[["Steps", lp.steps || "–", ""], ["Target", lp.targetWeight > 0 ? fmt1(lp.targetWeight) : "Off", "g"], ["First step", lp.tempC == null ? "–" : fmt1(lp.tempC), "°C"]].map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${v}<small class="muted"> ${u}</small></span></div>`).join("")}</div>
+    ${profilePlanHtml(lp)}
     <p class="muted small">${lp.manual ? `Adjust ${lp.manual} on the physical group-head controller. Profile time limits still apply.${capable ? "" : " A connected machine with a group-head controller is required."}` : "Uses this installed profile's own settings. No recommended time window."}</p>
     <div class="row">${S.current ? `<button class="btn primary" id="useProfile" ${capable ? "" : "disabled"}>Use for ${esc(S.current.info.name.value)}</button>` : ""}<button class="btn" id="baglessProfile" ${capable ? "" : "disabled"}>Brew without a bag</button></div>`);
   const u = $("#useProfile");
   if (u) u.onclick = () => chooseInstalledProfile(lp);
   $("#baglessProfile").onclick = () => chooseInstalledProfile(lp, true);
+  drawProfilePlan(lp);
 }
 
 /* ================= shots ================= */
@@ -2033,7 +2144,7 @@ function renderShotDetail() {
     <div class="legend">${legendHtml(false)}${c ? `<span><span class="swatch" style="background:var(--muted)"></span>Faint: ${esc(c.coffee || "")} ${new Date(c.timestamp).toLocaleDateString()}</span>` : ""}</div>
     <div class="row"><span class="label">Rating</span>${starsHtml(s.enjoyment, "detailStars")}</div>
     <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
-    <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Reference shot ✓" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>`;
+    <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>`;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
   bindStars($("#detailStars"), s.enjoyment, async (n) => {
     s.enjoyment = n;
@@ -2043,7 +2154,7 @@ function renderShotDetail() {
   });
   $("#shotNotes").onchange = async (e) => { s.notes = e.target.value; await S.api.annotate(s.id, { espressoNotes: s.notes }).catch(() => {}); toast("Notes saved"); };
   const pin = $("#pinDetail");
-  if (pin) pin.onclick = async () => { await S.api.pinBest(bean.id, s.id); bean.bestShotId = s.id; if (S.current?.id === bean.id) await loadGhost(); renderShots(); toast("Reference shot set"); };
+  if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShots(); };
 }
 
 /* ================= settings ================= */

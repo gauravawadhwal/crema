@@ -29,7 +29,7 @@ Read next, as needed:
 | `server/engine.ts` | Entry for `skin/engine.js`: the catalog, ranking, recipes, dial-in rules and defaults, bundled for the browser |
 | `server/shared/defaults.ts` | Defaults for Crema's records in Decaid's key-value store |
 | `server/llm/` | AI provider chain: `claude-cli`, `codex-cli` (subscription CLIs), `anthropic-api`, `gemini-api`, `mock` |
-| `server/profiles/` | `catalog.ts` (31 community profiles) and `match.ts` (ranking against a coffee) |
+| `server/profiles/` | `catalog.ts` (31 community profiles), `match.ts` (ranking against a coffee) and `curve.ts` (a profile's steps as a drawable plan, step timings from a shot, and the puck model the simulators share) |
 | `server/recommend/` | `rules.ts` (roast/rest baseline), `local.ts` (rules recipe and dial-in, no AI), `index.ts` (AI choice among candidates, AI dial-in) |
 | `server/identify.ts`, `images.ts` | Coffee identification and roaster product photos |
 | `server/safe-fetch.ts` | Fetching URLs from models or users: public addresses only, checked after DNS and on every redirect, size and time limits. Use it for any new outbound fetch of such a URL |
@@ -115,6 +115,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 - **Recommendations must name a profile the machine has.** The AI chooses only among installed candidates, and the code enforces it.
 - **The engine bundle is committed.** `skin/engine.js` is generated, but the skin has no build step, so it's checked in. `npm test` fails when it's stale.
 - **https pages can't call Decaid** (plain http). `discoverConnections` doesn't probe Decaid from an https page unless an address was saved.
+- **Simulated profiles are Crema's own outlines.** `dev/mock-decaid.ts` and the demo build each catalogue profile from `outlineProfile` (a step shape per style), and their shots run through the shared puck model (`shotSim`). Decaid's bundled profile files are GPL-3.0, so don't copy them in; the live app reads the real ones from Decaid.
 - **The simulators send an `elapsed` field that real Decaid snapshots don't have.** The app falls back to its own clock; keep that fallback.
 - **Sandboxed network**: some sandboxed environments block arbitrary sites (roaster shops, decentespresso.com, github.io). The `claude-cli` provider's web search still works there, while page fetching may not. The `samples/` records were built that way, from search results, so they can be thinner than what a run with full web access produces.
 - **Background processes**: don't `pkill -f` a pattern that also matches your own shell command. Kill by PID.

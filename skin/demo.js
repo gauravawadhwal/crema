@@ -67,12 +67,15 @@ function makeDemoApi() {
     state: "idle", substate: "idle", group: 92.6, steamTemp: 150, water: 46, refill: 7,
     scale: 0, scaleOffset: 0, battery: 84, live: { p: 0, f: 0, tp: 0, tf: 0, t: 0 }, timer: null, samples: [], heatLeft: 0,
   };
-  // Steam, hot water and flush, shaped like Decaid's workflow fields. Kept apart from
-  // `workflow` below because loading a recipe replaces that.
+  // The installed profiles: Crema's simplified step outline for each guide entry's
+  // style (not the profile files Decaid bundles), plus Decaid's manual profiles.
   const demoProfiles = [
-    ...D.catalog.map((p) => ({ title: p.title, author: p.author, notes: p.character, beverage_type: "espresso", steps: [{ name: "Extraction", temperature: p.recipe.tempC }], target_weight: p.recipe.yieldG, target_volume: 0 })),
+    ...D.catalog.map((p) => ({ ...CE.outlineProfile(p.title, p.style, p.recipe.tempC, p.recipe.yieldG, p.author), notes: p.character })),
     ...D.manualProfiles,
   ];
+  const profileTitled = (title) => demoProfiles.find((p) => p.title === title) ?? demoProfiles[0];
+  // Steam, hot water and flush, shaped like Decaid's workflow fields. Kept apart from
+  // `workflow` below because loading a recipe replaces that.
   const wf = {
     steamSettings: { targetTemperature: 150, duration: 25, flow: 1.5, stopAtTemperature: 0 },
     hotWaterData: { targetTemperature: 85, duration: 60, volume: 120, flow: 6 },
@@ -82,7 +85,7 @@ function makeDemoApi() {
   let presence = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
   const schedules = [{ id: "w1", time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }, { id: "w2", time: "08:30", daysOfWeek: [6, 7], enabled: true }];
   let display = { brightness: 80, platformSupported: { brightness: true } };
-  let workflow = { profile: { title: all[0].recipe.profileTitle }, context: { targetDoseWeight: 18, targetYield: 36, beanBatchId: all[0].batch } };
+  let workflow = { profile: clone(profileTitled(all[0].recipe.profileTitle)), context: { targetDoseWeight: 18, targetYield: 36, beanBatchId: all[0].batch } };
   let presets = {
     steam: [{ label: "Cortado", seconds: 15 }, { label: "Flat white", seconds: 25 }, { label: "Latte", seconds: 35 }, { label: "Manual", seconds: 0 }],
     water: [{ label: "Rinse", ml: 60 }, { label: "Long black", ml: 120 }, { label: "Tea", ml: 250 }],
@@ -93,36 +96,22 @@ function makeDemoApi() {
   let maintenance = { backflushEveryShots: 100, descaleEveryDays: 90, lastBackflush: iso(9), lastDescale: iso(76) };
   const listeners = [];
   const emit = (kind, data) => listeners.forEach((l) => l[kind] && l[kind](data));
-  const isLever = (t) => /londinium|lrv|lever|leva|cremina|80's|forge|gentle/i.test(t || "");
 
   // ---------- shot history ----------
   const shots = [];
-  function curve(target, seconds, lever, seed) {
-    const pts = []; let w = 0;
-    const rnd = (i) => Math.sin(seed * 977 + i * 12.9898) * 0.5;
-    const pi = lever ? 9 : 7;
-    for (let t = 0; t <= seconds; t += 0.25) {
-      let p, f;
-      if (t < pi) { p = Math.min(lever ? 4 : 3, t * 0.7); f = Math.max(1, 4 - t * 0.45); }
-      else if (t < pi + 2) { p = 3 + (t - pi) * 3; f = 1.5; }
-      else { p = lever ? Math.max(4, 9 - (t - pi - 2) * 0.28) : Math.max(5.5, 8.9 - (t - pi - 2) * 0.13); f = 1.7 + Math.sin(t / 4) * 0.12 + (t - pi) * 0.025; }
-      p += rnd(t * 4) * 0.1; f += rnd(t * 7) * 0.05;
-      if (t > pi - 1) w = Math.min(target, w + Math.max(0, f) * 0.25 * 0.93);
-      pts.push({ t, p: Math.max(0, p), f: Math.max(0, f), w, temp: 92.4 + rnd(t) * 0.3, tp: t < pi ? 3 : 9, tf: t < pi ? 4 : 2 });
-    }
-    return pts;
-  }
   const onShelf = all.filter((b) => b.shelf);
-  const history = [[0, 2, 31, 8], [0, 26, 27, 7], [1, 5, 30, 9], [1, 29, 34, 10], [4, 50, 29, 8], [4, 52, 32, 6], [2, 74, 28, 7], [5, 98, 30, 8], [3, 120, 33, 9], [5, 140, 36, 4]];
-  history.forEach(([bi, hoursAgo, secs, rating], i) => {
+  // [bag, hours ago, grind (puck resistance), rating]: each simulated through its profile.
+  const history = [[0, 2, 1.0, 8], [0, 26, 0.9, 7], [1, 5, 1.0, 9], [1, 29, 1.08, 10], [4, 50, 0.97, 8], [4, 52, 1.04, 6], [2, 74, 0.94, 7], [5, 98, 1.0, 8], [3, 120, 1.06, 9], [5, 140, 1.15, 4]];
+  history.forEach(([bi, hoursAgo, resistance, rating], i) => {
     const b = onShelf[bi % onShelf.length], r = b.recipe;
+    const points = CE.simulateShot(CE.withTemperature(clone(profileTitled(r.profileTitle)), r.tempC), r.yieldG, { resistance }).map((x) => ({ ...x, temp: x.temp ?? r.tempC }));
+    const secs = Math.round(points.at(-1).t);
     shots.push({
       id: `s${i}`, timestamp: new Date(Date.now() - hoursAgo * 36e5).toISOString(), beanId: b.id, batch: b.batch,
       coffee: b.info.name.value, roaster: b.info.roaster.value, profileTitle: r.profileTitle, doseG: r.doseG,
-      yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, timeS: secs, enjoyment: rating, notes: "", points: curve(r.yieldG, secs, isLever(r.profileTitle), i + 1),
+      yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, timeS: secs, enjoyment: rating, notes: "", points,
     });
   });
-  onShelf[0].bestShotId = "s1";
 
   function stop(next = "idle") {
     clearInterval(sim.timer); sim.timer = null;
@@ -144,8 +133,8 @@ function makeDemoApi() {
     if (sim.timer) stop();
     sim.state = state; sim.samples = [];
     const target = Number(workflow.context.targetYield ?? 0);
-    const lever = isLever(workflow.profile.title);
-    const pi = lever ? 9 : 7;
+    // The puck follows the loaded profile's steps.
+    const puck = state === "espresso" ? CE.shotSim(workflow.profile, { resistance: 0.92 + Math.random() * 0.16 }) : null;
     const limit = state === "steam" ? (wf.steamSettings.duration || 600) : state === "hotWater" ? wf.hotWaterData.volume / wf.hotWaterData.flow : state === "flush" ? wf.rinseData.duration : 120;
     let t = 0;
     if (state === "espresso") sim.scaleOffset = sim.scale;
@@ -154,15 +143,15 @@ function makeDemoApi() {
       t += 0.1 * speed;
       let p = 0, f = 0;
       if (state === "espresso") {
-        if (t < pi) { p = Math.min(lever ? 4 : 3, t * 0.7); f = Math.max(1, 4 - t * 0.45); sim.substate = "preinfusion"; }
-        else if (t < pi + 2) { p = 3 + (t - pi) * 3; f = 1.5; sim.substate = "pouring"; }
-        else { p = lever ? Math.max(4, 9 - (t - pi - 2) * 0.28) : Math.max(5.5, 9 - (t - pi - 2) * 0.13); f = 1.7 + Math.sin(t / 4) * 0.12 + (t - pi) * 0.025; }
-        p += (Math.random() - 0.5) * 0.08; f += (Math.random() - 0.5) * 0.04;
-        if (t > pi - 1) sim.scale += Math.max(0, f) * 0.1 * speed * 0.93;
-        sim.live = { p, f, tp: t < pi ? 3 : 9, tf: t < pi ? 4 : 2, t };
+        let x;
+        for (let i = 0; i < speed; i++) x = puck.tick(0.1);
+        p = x.p; f = x.f;
+        sim.scale = sim.scaleOffset + x.w;
+        sim.substate = x.w < 0.5 ? "preinfusion" : "pouring";
+        sim.live = { p, f, tp: x.tp ?? 0, tf: x.tf ?? 0, t, frame: x.frame };
         const w = sim.scale - sim.scaleOffset;
-        sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf });
-        if ((target > 0 && w >= target - 1.2) || t > (manualKind(workflow.profile) ? 120 : 60)) { sim.substate = "pouringDone"; return stop(); }
+        sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf, frame: x.frame });
+        if ((target > 0 && w >= target - 1.2) || (puck.done && !manualKind(workflow.profile)) || t > 120) { sim.substate = "pouringDone"; return stop(); }
       } else if (state === "steam") {
         p = 1.9 + Math.random() * 0.2; f = settings.steamFlow; sim.steamTemp = Math.max(135, sim.steamTemp - 0.08); sim.substate = "pouring";
         sim.live = { p, f, tp: 0, tf: 0, t };
@@ -180,7 +169,7 @@ function makeDemoApi() {
   function snapshot(finished = null) {
     emit("snapshot", {
       state: { state: sim.state, substate: sim.substate },
-      pressure: sim.live.p, flow: sim.live.f, targetPressure: sim.live.tp, targetFlow: sim.live.tf,
+      pressure: sim.live.p, flow: sim.live.f, targetPressure: sim.live.tp, targetFlow: sim.live.tf, profileFrame: sim.live.frame ?? null,
       mixTemperature: sim.group - (sim.state === "espresso" ? 0.3 : 0), groupTemperature: sim.group, targetGroupTemperature: 92.8,
       steamTemperature: sim.steamTemp, elapsed: sim.live.t, finished,
     });
@@ -275,7 +264,7 @@ function makeDemoApi() {
     async rank(id) { return recipeFor(byId(id)).candidates; },
     async catalog() { return D.catalog.map((p) => ({ ...p, installed: true })); },
     async library() {
-      return demoProfiles.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.notes, steps: p.steps.length, targetWeight: Number(p.target_weight), tempC: Number(p.steps[0].temperature), manual: manualKind(p), profileShape: brewProfileShape(p), guide: D.catalog.find((g) => g.title === p.title) ?? null }));
+      return demoProfiles.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.notes, steps: p.steps.length, targetWeight: Number(p.target_weight), tempC: Number(p.steps[0].temperature), manual: manualKind(p), profileShape: brewProfileShape(p), profile: clone(p), guide: D.catalog.find((g) => g.title === p.title) ?? null }));
     },
     async apply(id, recipe, grinderSetting, batch = null) {
       const b = id ? byBag(id, batch) : null;
@@ -292,6 +281,7 @@ function makeDemoApi() {
     },
     async shots(limit = 40) { return (await this.shotPage(0, limit)).items; },
     async shot(id) { return shots.find((s) => s.id === id) || null; },
+    async lastShotWith(title) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).find((s) => s.profileTitle === title) || null; },
     async latestShot() { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null; },
     async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; } },
     async feedback(shotId, beanId, fb) {

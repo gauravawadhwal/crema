@@ -21,8 +21,8 @@ confirming against a real machine.
 | Sleep / wake button | Stock, Streamline, Lumen | ✅ rail (tablet), top bar (phone) |
 | Live pressure, flow, weight, temperature | Stock, all skins | ✅ readouts + chart, targets dashed |
 | Shot timer and phase (preinfusion / pouring) | Stock, Lumen | ✅ |
-| Live chart with profile targets | Streamline | ✅ dashed target pressure and flow |
-| Reference ("god") shot overlay | DSx, community favourite | ✅ pin per coffee; faint curves on the live chart |
+| Live chart with profile targets | Streamline | ✅ dashed target pressure and flow; before a shot, the loaded profile's steps, timed from your last shot with it |
+| Reference ("god") shot overlay | DSx, community favourite | ✅ optional, per coffee; faint curves on the live chart; Remove in the legend, the shot review or Shots |
 | Steam / water / flush running screen with big timer and stop | Lumen | ✅ overlay with progress and remaining time |
 | Water tank level and low-water warning | Stock, Lumen | ✅ top-bar gauge; red under the threshold; refill banner when empty |
 | "Ready in N min" while heating | Decaid Time To Ready plugin | ✅ shown in the status chip |
@@ -80,6 +80,7 @@ confirming against a real machine.
 | Feature | Where | Crema |
 |---|---|---|
 | Browse profiles with notes | Stock, Streamline | ✅ installed Decaid library; community guide adds notes and filters |
+| Profile graph preview | Streamline | ✅ pressure, flow and temperature by step, with each step described (limit, exit, cap); timed from your last shot with it when there is one |
 | Brew without registering/selecting a bag | Streamline | ✅ No bag, direct installed-profile selection, history and ratings; no bag inventory deduction |
 | Manual flow / pressure | Decaid GHC profiles | ✅ installed manual profiles, physical controller required; physical interaction and manual-profile scale stopping remain unverified |
 | Recommendations for the coffee | — | ✅ rules ranking + AI choice, with reasons |

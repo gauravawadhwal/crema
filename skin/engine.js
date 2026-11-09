@@ -30,9 +30,15 @@ var CremaEngine = (() => {
     beanTraits: () => beanTraits,
     findProfile: () => findProfile,
     inferRoast: () => inferRoast,
+    outlineProfile: () => outlineProfile,
+    planAt: () => planAt,
+    profileCurve: () => profileCurve,
     rankProfiles: () => rankProfiles,
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
+    shotSim: () => shotSim,
+    simulateShot: () => simulateShot,
+    stepDurations: () => stepDurations,
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
     toPastShot: () => toPastShot,
@@ -898,5 +904,217 @@ var CremaEngine = (() => {
     selected: { steam: 1, water: 1, flush: 1 }
   };
   var DEFAULT_MAINTENANCE = { backflushEveryShots: 100, descaleEveryDays: 90, lastBackflush: null, lastDescale: null };
+
+  // server/profiles/curve.ts
+  var num = (v) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  var fmt = (n) => (Math.round(n * 10) / 10).toString();
+  function exitText(s) {
+    const parts = [];
+    const e = s.exit;
+    const v = num(e?.value);
+    if (e && v != null && (e.type === "pressure" || e.type === "flow")) {
+      const unit = e.type === "pressure" ? "bar" : "ml/s";
+      parts.push(`${e.type} ${e.condition === "under" ? "drops below" : "rises above"} ${fmt(v)} ${unit}`);
+    }
+    const w = num(s.weight);
+    if (w != null && w > 0) parts.push(`${fmt(w)} g is in the cup`);
+    const vol = num(s.volume);
+    if (vol != null && vol > 0) parts.push(`${fmt(vol)} ml has gone through`);
+    return parts.length ? `Moves on when ${parts.join(", or ")}` : null;
+  }
+  function capText(s, pump) {
+    const v = num(s.limiter?.value);
+    if (v == null || v <= 0) return null;
+    return pump === "flow" ? `Pressure capped at ${fmt(v)} bar` : `Flow capped at ${fmt(v)} ml/s`;
+  }
+  function profileCurve(profile, durations) {
+    const raw = profile?.steps;
+    if (!raw?.length) return null;
+    const timed = durations && durations.length === raw.length ? "shot" : "limits";
+    const steps = [];
+    const points = [];
+    let t = 0;
+    let prevP = null, prevF = null;
+    raw.forEach((s, index) => {
+      const pump = s.pump === "flow" ? "flow" : "pressure";
+      const target = num(pump === "flow" ? s.flow : s.pressure) ?? 0;
+      const limitS = Math.max(0, num(s.seconds) ?? 0);
+      const dur = timed === "shot" ? Math.max(0, durations[index]) : limitS;
+      const smooth = s.transition === "smooth";
+      const tempC = num(s.temperature);
+      steps.push({ index, name: s.name || `Step ${index + 1}`, pump, target, smooth, tempC, limitS, start: t, end: t + dur, exit: exitText(s), cap: capText(s, pump) });
+      if (dur <= 0) return;
+      const prev = pump === "flow" ? prevF : prevP;
+      const from = smooth && prev != null ? prev : target;
+      const at = (v) => pump === "flow" ? { tp: null, tf: v } : { tp: v, tf: null };
+      points.push({ t, ...at(from), temp: tempC, frame: index });
+      points.push({ t: t + dur, ...at(target), temp: tempC, frame: index });
+      if (pump === "flow") {
+        prevF = target;
+        prevP = null;
+      } else {
+        prevP = target;
+        prevF = null;
+      }
+      t += dur;
+    });
+    return { steps, points, total: t, timed };
+  }
+  function stepDurations(points, stepCount) {
+    const seen = points.filter((p) => p.frame != null && Number.isInteger(p.frame));
+    if (seen.length < 2 || !stepCount) return null;
+    if (seen.some((p) => p.frame < 0 || p.frame >= stepCount)) return null;
+    const first = new Array(stepCount).fill(null);
+    for (const p of seen) if (first[p.frame] == null) first[p.frame] = p.t;
+    const out = new Array(stepCount).fill(0);
+    const end = seen.at(-1).t;
+    for (let i = 0; i < stepCount; i++) {
+      if (first[i] == null) continue;
+      const next = first.slice(i + 1).find((x) => x != null);
+      out[i] = Math.max(0, (next ?? end) - first[i]);
+    }
+    return out.some((d) => d > 0) ? out : null;
+  }
+  function planAt(curve, t) {
+    const pts = curve.points;
+    for (let i = 0; i + 1 < pts.length; i += 2) {
+      const a = pts[i], b = pts[i + 1];
+      if (t <= b.t || i + 2 >= pts.length) {
+        const k = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 1;
+        const lerp = (x, y) => x == null || y == null ? null : x + (y - x) * k;
+        return { tp: lerp(a.tp, b.tp), tf: lerp(a.tf, b.tf), frame: a.frame };
+      }
+    }
+    return { tp: null, tf: null, frame: 0 };
+  }
+  var over = (type, value) => ({ exit: { type, condition: "over", value: String(value) } });
+  var under = (type, value) => ({ exit: { type, condition: "under", value: String(value) } });
+  var cap = (value) => ({ limiter: { value: String(value), range: "0.6" } });
+  var OUTLINES = {
+    "flat-pressure": [["Preinfusion", "flow", 4, 12, over("pressure", 3)], ["Extraction", "pressure", 9, 40]],
+    lever: [["Fill", "flow", 6, 12, over("pressure", 2.5)], ["Soak", "pressure", 3, 8], ["Rise", "pressure", 9, 4], ["Decline", "pressure", 5, 30, { transition: "smooth", ...over("flow", 2.8) }], ["Flow limit", "flow", 2.5, 30]],
+    adaptive: [["Fill", "flow", 6, 12, over("pressure", 3)], ["Rise", "pressure", 9, 6, over("flow", 2.2)], ["Follow the puck", "flow", 2, 40, { transition: "smooth", ...cap(9.5) }]],
+    blooming: [["Fill", "flow", 6, 12, over("pressure", 3)], ["Bloom", "flow", 0, 15, { ...under("pressure", 0.8), dT: -1 }], ["Extraction", "flow", 2.2, 40, cap(9)]],
+    flow: [["Preinfusion", "flow", 4, 12, over("pressure", 4)], ["Extraction", "flow", 2.2, 40, cap(9)]],
+    allonge: [["Fill", "flow", 8, 8, over("pressure", 2)], ["Extraction", "flow", 4.5, 50, cap(7)]],
+    turbo: [["Fill", "flow", 8, 6, over("pressure", 3)], ["Extraction", "flow", 4.5, 30, cap(6)]],
+    "low-contact": [["Fill", "flow", 8, 12, { ...over("pressure", 4.5), dT: -6 }], ["Bloom", "flow", 0, 25, { ...under("pressure", 2.2), dT: -14 }], ["Extraction", "pressure", 6, 40, { ...cap(3), dT: -8 }]],
+    "scale-driven": [["Fill", "flow", 8, 12, { ...over("pressure", 3), weight: "2" }], ["Infuse", "pressure", 3, 20, { weight: "5" }], ["Extraction", "flow", 2, 40, { transition: "smooth", ...cap(9) }]]
+  };
+  function outlineProfile(title, style, tempC = 92, targetWeight = 36, author = "Decent") {
+    const o = OUTLINES[style] ?? OUTLINES["flat-pressure"];
+    return {
+      version: "2",
+      title,
+      author,
+      notes: "",
+      beverage_type: "espresso",
+      target_weight: targetWeight,
+      target_volume: 0,
+      steps: o.map(([name, pump, target, seconds, extra = {}]) => {
+        const { dT = 0, ...rest } = extra;
+        return {
+          name,
+          pump,
+          transition: "fast",
+          pressure: pump === "pressure" ? String(target) : "0",
+          flow: pump === "flow" ? String(target) : "0",
+          seconds: String(seconds),
+          temperature: String(tempC + dT),
+          sensor: "coffee",
+          volume: "0",
+          weight: "0",
+          exit: null,
+          limiter: null,
+          ...rest
+        };
+      })
+    };
+  }
+  function shotSim(profile, { resistance = 1 } = {}) {
+    const steps = profile.steps?.length ? profile.steps : outlineProfile("", "flat-pressure").steps;
+    const manual = profile.beverage_type === "manual";
+    let t = 0, frame = 0, frameStart = 0, p = 0, f = 0, w = 0, water = 0, from = { p: null, f: null };
+    let done = false, out = { tp: null, tf: null, frame: 0, temp: null };
+    const FILL = 18;
+    return {
+      get done() {
+        return done;
+      },
+      tick(dt = 0.1) {
+        if (!done) {
+          const s = steps[frame];
+          const pump = s.pump === "flow" ? "flow" : "pressure";
+          let target = num(pump === "flow" ? s.flow : s.pressure) ?? 0;
+          if (manual) target = t < 4 ? pump === "flow" ? 6 : 3 : pump === "flow" ? 2 : 8;
+          const limit = Math.max(0.1, num(s.seconds) ?? 0);
+          const into = t - frameStart;
+          const prev = pump === "flow" ? from.f : from.p;
+          const goal = s.transition === "smooth" && prev != null ? prev + (target - prev) * Math.min(1, into / limit) : target;
+          const R = 5.2 * resistance * (1 - 0.35 * Math.min(1, Math.max(0, water - FILL) / 45));
+          const capV = num(s.limiter?.value);
+          let wantP, wantF;
+          if (pump === "pressure") {
+            wantP = goal;
+            wantF = water < FILL ? 6 : goal / R;
+            if (capV && capV > 0 && wantF > capV) {
+              wantF = capV;
+              wantP = Math.min(goal, wantF * R);
+            }
+          } else {
+            wantF = goal;
+            wantP = water < FILL ? Math.min(1.2, goal * 0.3) : goal * R;
+            if (capV && capV > 0 && wantP > capV) {
+              wantP = capV;
+              wantF = water < FILL ? goal : wantP / R;
+            }
+          }
+          const k = Math.min(1, dt / 0.6);
+          p += Math.min(8 * dt, (wantP - p) * (wantP < p ? Math.min(1, dt / 4) : k)) + (Math.random() - 0.5) * 0.05;
+          f += (wantF - f) * k + (Math.random() - 0.5) * 0.03;
+          p = Math.max(0, p);
+          f = Math.max(0, f);
+          water += f * dt;
+          if (water > FILL + 4) w += f * dt * 0.92;
+          t += dt;
+          out = { tp: pump === "pressure" ? goal : null, tf: pump === "flow" ? goal : null, frame, temp: num(s.temperature) };
+          const e = s.exit, ev = num(e?.value), sw = num(s.weight);
+          const exitNow = into > 0.5 && (e && ev != null && (e.type === "pressure" && (e.condition === "under" ? p < ev : p > ev) || e.type === "flow" && (e.condition === "under" ? f < ev : f > ev)) || sw != null && sw > 0 && w >= sw);
+          if (!manual && (t - frameStart >= limit || exitNow)) {
+            from = pump === "flow" ? { p: null, f: goal } : { p: goal, f: null };
+            frame += 1;
+            frameStart = t;
+            if (frame >= steps.length) {
+              done = true;
+              frame = steps.length - 1;
+            }
+          }
+        }
+        return { t, p, f, w, ...out };
+      }
+    };
+  }
+  function simulateShot(profile, yieldG, opts = {}) {
+    const sim = shotSim(profile, opts);
+    const out = [];
+    const every = opts.every ?? 0.25;
+    let next = 0;
+    for (let i = 0; i < 900; i++) {
+      const s = sim.tick(0.1);
+      if (s.t >= next - 1e-9) {
+        out.push(s);
+        next += every;
+      }
+      if (sim.done || yieldG > 0 && s.w >= yieldG) {
+        out.push(s);
+        break;
+      }
+    }
+    return out;
+  }
   return __toCommonJS(engine_exports);
 })();

@@ -81,10 +81,11 @@ Both must provide:
 | `identify(input, onStep)` | Photos, a typed or spoken description, or a link → BeanInfo. Throws when AI is off |
 | `transcribe(wav)` | A voice note (16 kHz mono WAV) → text, through the server's Gemini. The demo throws: it uses the browser's speech recognition |
 | `saveBean(info, photo, art)` | Returns `{id}` |
-| `setBeanState(id, {frozen?, finished?})`, `pinBest(id, shotId)` | Bag state and reference shot |
+| `setBeanState(id, {frozen?, finished?})`, `pinBest(id, shotId)` | Bag state and reference shot (`shotId` null removes it) |
 | `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |
 | `rank(beanId)`, `catalog()` | Candidate ranking, profile catalog |
 | `apply(beanId, recipe, grinderSetting, batchId)` | Load the recipe onto the machine; null bean id means No bag |
+| `lastShotWith(title)` | The newest shot pulled with that profile, in full, or null. Its `points` carry the step number (`frame`, Decaid's `profileFrame`), which times the profile's graph |
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |

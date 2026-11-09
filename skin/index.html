@@ -265,6 +265,13 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .chart-box { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; }
 .chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .9rem; text-align: center; padding: 20px; pointer-events: none; }
+/* With the profile drawn, the hint sits above it, where pressure rarely reaches. */
+.chart-empty.over-plan { place-items: start center; padding: 14px 48px; font-size: .84rem; }
+.linkish { border: 0; background: none; padding: 0 2px; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; min-height: 24px; }
+.plan-box { display: grid; gap: 8px; }
+.plan-chart { width: 100%; height: 190px; display: block; }
+.plan-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--fg); }
+.plan-steps b { font-weight: 600; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .76rem; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .phase { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; }
