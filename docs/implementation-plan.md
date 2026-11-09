@@ -1,9 +1,9 @@
 # Crema implementation handoff
 
-Created: 6 November 2026. Status: **in progress** (last updated 9 November 2026). The
+Created: 6 November 2026. Status: **in progress** (last updated 10 November 2026). The
 progress table and the ticked items below say what is done; everything else is still planned.
 
-**Where things stand (9 November 2026).** Phases 1, 2 and 5 are done in software, and
+**Where things stand (10 November 2026).** Phases 1, 2 and 5 are done in software, and
 phase 6 mostly. v0.2.0 is released and is the first install on the user's DE1 tablet;
 v0.3.0 (No bag and manual brewing, profile graphs, removable reference) followed the
 same day, and installing it on the tablet is the first in-place upgrade.
@@ -13,16 +13,29 @@ is pending. Software checks use `dev/mock-decaid.ts` and desktop Decaid 0.9.1 wi
 simulated machine. Next:
 the tablet session (phase 7, next-session item 3), then phase 3 (Streamline Settings and
 the profile-editing hand-off), which needs the tablet first. Without the tablet, the
-open software work is phase 4 (splitting `skin/app.js`), the end-to-end shot test
-(phase 6), "why the shot stopped" and the other Streamline improvements, the voice
-fix (next-session item 10) and AI shot review (next-session item 11, planned in
+open software work is phase 4 (splitting `skin/app.js`), "why the shot stopped" and the other Streamline improvements, the voice
+fix (next-session item 10). AI shot review now has its first software implementation (next-session item 11, recorded in
 [shot-review-plan.md](shot-review-plan.md)). The user merges nothing by hand: agents open a PR per piece
-of work and merge it once CI's `verify` job passes; tagging a release is the user's call.
+of work and merge it once CI's `verify`, `ui` and `docker` jobs pass; tagging a release is the user's call.
 
 This is the execution plan requested by the user after the project review. It covers
 all review recommendations, including reuse of Streamline Settings. The supporting
 [review record](review-2026-11-06.md) distinguishes reproductions, source findings
 and untested assumptions. Read it before changing behaviour.
+
+## Shot review follow-through — 10 November 2026
+
+The first shot-review implementation follows the repository health review: recorded
+shot context, local conservative checks, optional AI, persisted reviews and explicit
+unknown taste. See [shot-review-plan.md](shot-review-plan.md) for implemented scope
+and verification. Review calculations and display never apply settings automatically.
+
+The same change corrects advice source labels, profile-timing identity, and narrow
+manual-control layout clipping; horizontal column checks now accompany vertical fit
+checks. No broad frontend rewrite, specialist-settings integration, release tag or
+NAS/tablet installation is part of this work. Remaining acceptance is the supervised
+upgrade/control session and real-shot calibration, not repeating the successful
+baseline brew.
 
 ## Outcome and boundaries
 
@@ -34,7 +47,7 @@ merged (PR #30) and released in v0.3.0; tablet acceptance is pending.
 AI shot review, requested 9 November 2026: see [AI shot review](shot-review-plan.md)
 for how other DE1 projects do it, the design (shot checks with no AI, then a
 button-triggered AI review that sees the curves), implementation order and
-acceptance checks. Not started. It builds on the profile graph (PR #31).
+acceptance checks. First version implemented in the shot-review change; real-shot calibration remains pending. It builds on the profile graph (PR #31).
 
 ## Current UI delivery — 9 November 2026
 
@@ -131,8 +144,8 @@ separate supervised step; implement and test locally first.
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
-| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. Left: a live test that pulls a shot end to end with the recorded workflow; backup/restore docs; repository in the manifest |
-| 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Not started |
+| 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. The complete saved-shot regression is covered by `e2e-brewing.cjs`. Left: backup/restore docs; repository in the manifest |
+| 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Started: one real brew and saved workflow/telemetry checked; broader acceptance pending |
 
 ### Suggested next sessions
 
@@ -234,7 +247,8 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    user on 9 November 2026. One "Review shot" button replaces "Next adjustment": shot
    checks in `server/profiles/analysis.ts` (no AI, the fallback), then `/api/review`
    with the curves, findings and taste. Saved on the shot in Decaid. No score and no
-   follow-up chat yet. Needs no tablet to build; thresholds get tuned on real shots.
+   follow-up chat yet. Implemented and tested in software; thresholds still need
+   calibration on real shots.
 
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 

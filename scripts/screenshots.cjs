@@ -25,7 +25,7 @@ async function mark(p, name, selector) {
   await tablet.click('[data-run="espresso"]'); await tablet.waitForTimeout(4200);
   await shot(tablet, "tablet-pulling"); await mark(tablet, "tablet-pulling", ".live-col > .panel");
   await tablet.waitForSelector("#afterShot:not([hidden])", { timeout: 30000 });
-  await tablet.click('#sb [data-v="-1"]'); await tablet.locator('#afterStars > span:not(.stars-fill) i[data-n="4"]').click({ position: { x: 24, y: 14 } }); await tablet.click("#sendTaste");
+  await tablet.click('#sb [data-v="-1"]'); await tablet.click('#bd [data-v="0"]'); await tablet.locator('#afterStars > span:not(.stars-fill) i[data-n="4"]').click({ position: { x: 24, y: 14 } }); await tablet.click("#reviewShot");
   await tablet.waitForTimeout(800);
   await shot(tablet, "tablet-after-shot"); await mark(tablet, "tablet-after-shot", "#afterShot");
   await tablet.click('[data-preset="steam:2"]'); await tablet.click('[data-run="steam"]'); await tablet.waitForTimeout(6200);

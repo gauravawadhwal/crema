@@ -55,8 +55,8 @@ function pageUrl() {
       await p.mouse.click(...(await starAt("#afterStars", 4, 0.85))); await expectRating("#afterStars", "8", "tap right of star 4");
     });
     await step("taste", async () => {
-      await p.click('#sb [data-v="-1"]'); await p.click("#sendTaste");
-      await p.waitForSelector("#adviceBox .advice", { timeout: 5000 }); await snap("3-after", true);
+      await p.click('#sb [data-v="-1"]'); await p.click('#bd [data-v="0"]'); await p.click("#reviewShot");
+      await p.waitForSelector("#reviewBox .advice", { timeout: 5000 }); await snap("3-after", true);
     });
     await step("steam", async () => {
       await p.click('[data-preset="steam:0"]'); await p.click('[data-run="steam"]');

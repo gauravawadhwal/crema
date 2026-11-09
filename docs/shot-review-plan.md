@@ -1,6 +1,6 @@
 # AI shot review: research and implementation plan
 
-Planned 9 November 2026. **Not started.** Requested outcome: a button that reviews
+Planned 9 November; implemented 10 November 2026. **First version implemented; verification recorded below.** Requested outcome: a button that reviews
 a finished shot from its curves (pressure, flow, weight, temperature against the
 profile's targets), together with taste when the user gives it, and says what
 went well, what didn't and the one change to make next. Only run when asked.
@@ -8,6 +8,45 @@ went well, what didn't and the one change to make next. Only run when asked.
 Builds on `server/profiles/curve.ts` (profile plan and real step timings from
 `profileFrame`), merged in PR #31. Tracked as next-session item 11 in the
 [implementation plan](implementation-plan.md).
+
+## First-version scope and implementation record
+
+The first version adds explicit Review shot / Review again actions after brewing
+and in shot history, including bagless shots. Reviews are stored per shot in
+Decaid, and AI is called only on request. Nothing is applied to the machine.
+
+The original design below is research, not a promise that every detector ships.
+This implementation deliberately narrows it:
+
+- The recorded workflow/profile and actual yield belong to the completed shot;
+  a bag's current recommendation is not substituted. Missing telemetry stays
+  unknown. Temperature is compared with its corresponding recorded target.
+- Taste starts unset. Both taste and body must be explicitly selected before
+  numerical taste feedback is supplied; a balanced selection is distinct from
+  no feedback. Notes and ratings retain their normal storage.
+- Local checks require sufficiently long, settled, comparable windows. They
+  report sustained flow/pressure differences and qualified flow-rise evidence,
+  with temperature offsets as observations. There is no automatic failed-puck
+  verdict, yield-only choke diagnosis, or general timing rule for manual shots.
+- A review may suggest no change or say the evidence is insufficient. Conflicting
+  taste and curve evidence must not force a grind direction. Manual/unknown
+  profiles receive conservative treatment.
+- AI sees bounded history and sampled curves, preserves measured finding evidence,
+  and may suggest at most one bounded change. Profile switches must name an
+  installed profile. Source labels distinguish AI from local fallback.
+- Existing shot annotations, including other plugins' extras, are preserved.
+  Stored results carry a version, source and creation time.
+- Chart shading, follow-up chat, scores, numeric grinder calibration and
+  automatic application remain deferred.
+
+Evaluation cases live in `evals/datasets/review.json`, with deterministic
+synthetic telemetry in `evals/lib/review-fixtures.ts`. These test false positives,
+missing data, manual/bloom/turbo behavior, early stops and taste conflicts. They
+are not evidence of physical diagnostic accuracy. Real-shot calibration and a
+supervised tablet acceptance session remain pending; no hardware brew is required
+for local implementation.
+
+Verification: pending final integrated checks for this change.
 
 ## Why this is new
 

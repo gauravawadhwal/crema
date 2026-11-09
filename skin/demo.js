@@ -100,6 +100,15 @@ function makeDemoApi() {
 
   // ---------- shot history ----------
   const shots = [];
+  let savedReviews = (() => { try { return JSON.parse(localStorage.getItem("crema:demo-reviews") || "{}"); } catch { return {}; } })();
+  const savedReviewOf = (id) => savedReviews[id]?.review ?? savedReviews[id] ?? null;
+  const saveDemoReview = (shot) => {
+    try {
+      const entries = { ...savedReviews, [shot.id]: { review: shot.review, shot: clone(shot) } };
+      savedReviews = Object.fromEntries(Object.entries(entries).slice(-20));
+      localStorage.setItem("crema:demo-reviews", JSON.stringify(savedReviews));
+    } catch {}
+  };
   const onShelf = all.filter((b) => b.shelf);
   // [bag, hours ago, grind (puck resistance), rating]: each simulated through its profile.
   const history = [[0, 2, 1.0, 8], [0, 26, 0.9, 7], [1, 5, 1.0, 9], [1, 29, 1.08, 10], [4, 50, 0.97, 8], [4, 52, 1.04, 6], [2, 74, 0.94, 7], [5, 98, 1.0, 8], [3, 120, 1.06, 9], [5, 140, 1.15, 4]];
@@ -107,20 +116,27 @@ function makeDemoApi() {
     const b = onShelf[bi % onShelf.length], r = b.recipe;
     const points = CE.simulateShot(CE.withTemperature(clone(profileTitled(r.profileTitle)), r.tempC), r.yieldG, { resistance }).map((x) => ({ ...x, temp: x.temp ?? r.tempC }));
     const secs = Math.round(points.at(-1).t);
-    shots.push({
+    const generated = {
       id: `s${i}`, timestamp: new Date(Date.now() - hoursAgo * 36e5).toISOString(), beanId: b.id, batch: b.batch,
       coffee: b.info.name.value, roaster: b.info.roaster.value, profileTitle: r.profileTitle, doseG: r.doseG,
-      yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, timeS: secs, enjoyment: rating, notes: "", points,
-    });
+      yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, targetYieldG: r.yieldG, targetTimeS: r.targetTimeS ?? null, timeS: secs, enjoyment: rating, notes: "", taste: {},
+      profile: clone(profileTitled(r.profileTitle)), stopReason: null, review: savedReviewOf(`s${i}`), points,
+    };
+    shots.push(savedReviews[`s${i}`]?.shot ? clone(savedReviews[`s${i}`].shot) : generated);
   });
+  for (const [id, entry] of Object.entries(savedReviews)) if (entry?.shot && !shots.some((shot) => shot.id === id)) shots.push(clone(entry.shot));
+  let shotCounter = 0;
+  const nextShotId = () => { while (shots.some((shot) => shot.id === `demo-shot-${shotCounter}`) || savedReviews[`demo-shot-${shotCounter}`]) shotCounter++; return `demo-shot-${shotCounter++}`; };
 
-  function stop(next = "idle") {
+  function stop(next = "idle", stopReason = "user") {
     clearInterval(sim.timer); sim.timer = null;
     const was = sim.state;
     if (was === "espresso" && sim.samples.length > 20) {
       const b = all.find((x) => x.batch === workflow.context.beanBatchId);
       const last = sim.samples.at(-1);
-      shots.push({ id: `s${shots.length}`, timestamp: new Date().toISOString(), beanId: b?.id ?? null, batch: b?.batch ?? null, coffee: b?.info.name.value ?? null, roaster: b?.info.roaster.value ?? null, manual: manualKind(workflow.profile), profileTitle: workflow.profile.title, doseG: workflow.context.targetDoseWeight, yieldG: Math.round(last.w * 10) / 10, timeS: Math.round(last.t), enjoyment: null, notes: "", points: sim.samples.slice() });
+      const id = nextShotId();
+      const shot = { id, timestamp: new Date().toISOString(), beanId: b?.id ?? null, batch: b?.batch ?? null, coffee: b?.info.name.value ?? null, roaster: b?.info.roaster.value ?? null, manual: manualKind(workflow.profile), profileTitle: workflow.profile.title, doseG: workflow.context.targetDoseWeight, yieldG: Math.round(last.w * 10) / 10, targetYieldG: workflow.context.targetYield ?? workflow.profile.target_weight ?? null, targetTimeS: null, timeS: Math.round(last.t), enjoyment: null, notes: "", taste: {}, profile: clone(workflow.profile), stopReason, review: savedReviewOf(id), points: sim.samples.slice() };
+      shots.push(shot);
       if (b) b.used += workflow.context.targetDoseWeight;
     }
     sim.state = next; sim.substate = "idle";
@@ -152,7 +168,9 @@ function makeDemoApi() {
         sim.live = { p, f, tp: x.tp ?? 0, tf: x.tf ?? 0, t, frame: x.frame };
         const w = sim.scale - sim.scaleOffset;
         sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf, frame: x.frame });
-        if ((target > 0 && w >= target - 1.2) || (puck.done && !manualKind(workflow.profile)) || t > 120) { sim.substate = "pouringDone"; return stop(); }
+        if (target > 0 && w >= target - 1.2) { sim.substate = "pouringDone"; return stop("idle", "weight"); }
+        if (puck.done && !manualKind(workflow.profile)) { sim.substate = "pouringDone"; return stop("idle", "profile"); }
+        if (t > 120) { sim.substate = "pouringDone"; return stop("idle", "time"); }
       } else if (state === "steam") {
         p = 1.9 + Math.random() * 0.2; f = settings.steamFlow; sim.steamTemp = Math.max(135, sim.steamTemp - 0.08); sim.substate = "pouring";
         sim.live = { p, f, tp: 0, tf: 0, t };
@@ -287,9 +305,24 @@ function makeDemoApi() {
     },
     async shots(limit = 40) { return (await this.shotPage(0, limit)).items; },
     async shot(id) { return shots.find((s) => s.id === id) || null; },
-    async lastShotWith(title) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).find((s) => s.profileTitle === title) || null; },
+    async lastShotWith(title, profileShape = null) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).find((s) => s.profileTitle === title && (!profileShape || brewProfileShape(s.profile) === profileShape)) || null; },
     async latestShot() { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null; },
-    async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; } },
+    async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; if (a.extras?.crema) s.taste = { ...(s.taste ?? {}), ...a.extras.crema }; } },
+    async review(shotId, feedback = null) {
+      const s = shots.find((x) => x.id === shotId);
+      if (!s) throw new Error("Shot not found");
+      if (feedback) { s.taste = { sourBitter: feedback.sourBitter, body: feedback.body }; if (feedback.enjoyment != null) s.enjoyment = feedback.enjoyment; }
+      const byTime = new Map();
+      for (const p of s.points || []) if (Number.isFinite(p.t) && p.t >= 0) byTime.set(p.t, { t: p.t, p: p.p ?? null, f: p.f ?? null, w: p.w ?? null, temp: p.temp ?? null, tp: p.tp ?? null, tf: p.tf ?? null, targetTemp: p.targetTemp ?? null, frame: Number.isInteger(p.frame) ? p.frame : null, substate: p.substate ?? null, weightFlow: p.weightFlow ?? null });
+      const points = [...byTime.values()].sort((a, b) => a.t - b.t).slice(-1800);
+      const bag = s.batch ? all.find((b) => b.batch === s.batch) : null;
+      const history = s.batch ? shots.filter((x) => x.batch === s.batch && x.id !== s.id && Date.parse(x.timestamp) < Date.parse(s.timestamp)).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 10) : [];
+      const input = { points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG: s.targetYieldG ?? s.profile?.target_weight ?? null, targetTimeS: s.targetTimeS ?? null,
+        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: null } : null, notes: s.notes || null, bean: bag?.info ?? null,
+        installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => ({ timestamp: x.timestamp, profileTitle: x.profileTitle, doseG: x.doseG, yieldG: x.yieldG, enjoyment: x.enjoyment ?? undefined, notes: x.notes || undefined, review: x.review?.review?.summary ?? undefined })) };
+      const saved = { version: 1, review: CE.rulesReview(input), source: "rules", createdAt: new Date().toISOString() };
+      s.review = saved; saveDemoReview(s); return clone(saved);
+    },
     async feedback(shotId, beanId, fb) {
       const s = shots.find((x) => x.id === shotId); const b = byId(beanId);
       if (s && fb.enjoyment != null) s.enjoyment = fb.enjoyment;

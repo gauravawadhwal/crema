@@ -138,7 +138,7 @@ a { color: var(--accent); }
 
 <script>
 "use strict";
-const BOXES = {"tablet-home": {"x": 7.76, "y": 6.28, "w": 22.39, "h": 63.2}, "tablet-pulling": {"x": 30.9, "y": 6.28, "w": 52.54, "h": 92.47}, "tablet-after-shot": {"x": 30.9, "y": 52.9, "w": 52.54, "h": 45.85}, "tablet-steam": {"x": 30.6, "y": 31.56, "w": 38.81, "h": 36.88}, "tablet-profiles": {"x": 7.76, "y": 15.09, "w": 91.04, "h": 41.56}, "tablet-shelf": {"x": 7.76, "y": 1.53, "w": 29.65, "h": 50.5}, "tablet-settings": {"x": 7.76, "y": -0.05, "w": 29.65, "h": 52.24}, "tablet-shots": {"x": 50.28, "y": 18.34, "w": 47.56, "h": 44.81}, "tablet-add-coffee": {"x": 53.81, "y": 12.53, "w": 45, "h": 111.65}};
+const BOXES = {"tablet-home": {"x": 7.76, "y": 6.28, "w": 22.39, "h": 63.07}, "tablet-pulling": {"x": 30.9, "y": 6.28, "w": 52.54, "h": 92.47}, "tablet-after-shot": {"x": 30.9, "y": 48.56, "w": 52.54, "h": 50.19}, "tablet-steam": {"x": 30.6, "y": 31.56, "w": 38.81, "h": 36.88}, "tablet-profiles": {"x": 7.76, "y": 15.09, "w": 91.04, "h": 41.56}, "tablet-shelf": {"x": 7.76, "y": 0.03, "w": 29.65, "h": 55.75}, "tablet-settings": {"x": 7.76, "y": -0.05, "w": 29.65, "h": 52.24}, "tablet-shots": {"x": 50.28, "y": 18.34, "w": 47.56, "h": 44.81}, "tablet-add-coffee": {"x": 53.81, "y": 12.53, "w": 45, "h": 111.65}};
 // Links resolve from where the page is hosted: the site build sets CREMA_DEMO_URL,
 // and on GitHub Pages (<owner>.github.io/<repo>/) the repository is derived from the URL.
 const DEMO = window.CREMA_DEMO_URL || null;
@@ -162,7 +162,7 @@ const SLIDES = [
     text: "Tap Espresso. Pressure, flow, weight and temperature draw live over the profile's targets. The faint curves are your reference shot for this coffee, so you can tell at a glance if this one is on track.",
     facts: ["stops at 40 g", "dashed = targets"] },
   { img: "tablet-after-shot", step: "Dialling in", title: "Rate it, get one change",
-    text: "When the shot ends you see the time, first drops, ratio and peak pressure. A shot that ran fast or slow for the profile gets flagged. Tap how it tasted, and Crema suggests the one thing to change next.",
+    text: "When the shot ends you see the time, first drops, ratio and peak pressure. A shot that ran fast or slow for the profile gets flagged. Ask for a shot review using the recorded curves, and optionally add taste. Crema suggests at most one change, or asks for more evidence.",
     facts: ["sour → grind finer", "set as reference"] },
   { img: "tablet-steam", step: "Milk", title: "Steam the milk",
     text: "Pick a jug preset and tap Steam. A big timer counts down, and Stop is always one tap away. Hot water and flush work the same way.",

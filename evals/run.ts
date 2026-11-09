@@ -40,7 +40,7 @@ const { values: args } = parseArgs({
 
 if (args.help) {
   console.log(`Usage: npx tsx evals/run.ts [options]
-  --task identify|recommend|dialin|all   (default all)
+  --task identify|recommend|dialin|review|all   (default all)
   --provider ${PROVIDER_IDS.join("|")}|rules   (default claude-cli)
   --model <name>        provider's model, e.g. haiku, sonnet, opus, gemini-2.5-flash-lite
   --repeat N            run each case N times to measure consistency (default 1)

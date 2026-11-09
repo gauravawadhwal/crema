@@ -115,3 +115,55 @@ export const DialInAdvice = z.object({
   reasoning: z.string(),
 });
 export type DialInAdvice = z.infer<typeof DialInAdvice>;
+
+/** A bounded telemetry sample sent only when someone asks for a shot review. */
+export const ReviewPoint = z.object({
+  t: z.number().min(0).max(600),
+  p: z.number().min(0).max(20).nullable(),
+  f: z.number().min(0).max(20).nullable(),
+  w: z.number().min(-5).max(500).nullable(),
+  temp: z.number().min(0).max(150).nullable(),
+  tp: z.number().min(0).max(20).nullable(),
+  tf: z.number().min(0).max(20).nullable(),
+  targetTemp: z.number().min(0).max(150).nullable(),
+  frame: z.number().int().min(0).max(100).nullable(),
+  substate: z.string().max(80).nullable(),
+  weightFlow: z.number().min(-20).max(100).nullable(),
+});
+
+const ReviewProfileStep = z.object({
+  name: z.string().max(120).optional(), pump: z.string().max(30).optional(),
+  transition: z.string().max(30).optional(), pressure: z.union([z.string().max(30), z.number()]).optional(),
+  flow: z.union([z.string().max(30), z.number()]).optional(), seconds: z.union([z.string().max(30), z.number()]).optional(),
+  temperature: z.union([z.string().max(30), z.number()]).optional(), weight: z.union([z.string().max(30), z.number()]).optional(),
+  volume: z.union([z.string().max(30), z.number()]).optional(),
+  exit: z.object({ type: z.string().max(30).optional(), condition: z.string().max(30).optional(), value: z.union([z.string().max(30), z.number()]).optional() }).nullable().optional(),
+  limiter: z.object({ value: z.union([z.string().max(30), z.number()]).optional(), range: z.union([z.string().max(30), z.number()]).optional() }).nullable().optional(),
+});
+const ReviewProfile = z.object({ title: z.string().max(160).optional(), beverage_type: z.string().max(60).optional(), target_weight: z.union([z.string().max(30), z.number()]).optional(), steps: z.array(ReviewProfileStep).max(40).optional() }).nullable();
+const ReviewHistory = z.object({
+  timestamp: z.string().max(80), profileTitle: z.string().max(160).nullish(), doseG: z.number().min(0).max(60).nullish(),
+  yieldG: z.number().min(0).max(500).nullish(), enjoyment: z.number().min(0).max(10).nullish(), notes: z.string().max(500).nullish(), review: z.string().max(1000).nullish(),
+});
+export const ReviewBody = z.object({
+  points: z.array(ReviewPoint).max(1800).superRefine((points, ctx) => {
+    for (let i = 1; i < points.length; i++) if (points[i].t <= points[i - 1].t) ctx.addIssue({ code: "custom", path: [i, "t"], message: "times must increase without duplicates" });
+  }), profile: ReviewProfile,
+  doseG: z.number().min(0).max(60).nullable(), yieldG: z.number().min(0).max(500).nullable(),
+  targetYieldG: z.number().min(0).max(500).nullable(),
+  targetTimeS: z.tuple([z.number().min(0).max(600), z.number().min(0).max(600)]).nullable(),
+  stopReason: z.string().max(120).nullable(), feedback: TasteFeedback.extend({ notes: z.string().max(1000).nullable() }).nullable(), bean: BeanInfo.nullable(),
+  notes: z.string().max(1000).nullable().optional(),
+  installedProfiles: z.array(z.string().min(1).max(160)).max(200), history: z.array(ReviewHistory).max(20),
+});
+export type ReviewBody = z.infer<typeof ReviewBody>;
+
+export const ReviewIssue = z.object({
+  kind: z.string().min(1).max(60), what: z.string().min(1).max(300), evidence: z.string().min(1).max(500),
+  severity: z.enum(["info", "caution", "warning"]), fromS: z.number().min(0).max(600).nullable(), toS: z.number().min(0).max(600).nullable(),
+});
+export const ShotReview = z.object({
+  summary: z.string().min(1).max(500), wentWell: z.array(z.string().min(1).max(240)).max(6), issues: z.array(ReviewIssue).max(12),
+  nextShot: DialInAdvice.nullable(), confidence: z.enum(["low", "medium", "high"]), askTaste: z.boolean(),
+});
+export type ShotReview = z.infer<typeof ShotReview>;

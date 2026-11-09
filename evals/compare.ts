@@ -55,7 +55,7 @@ if (files.length !== 2) process.exit(0);
 // ---------------------------------------------------------------- reference vs candidate
 
 const [A, B] = files.map((x) => x.f);
-const LABEL: Record<string, string> = { identify: "roastDate", recommend: "profile", dialin: "move" };
+const LABEL: Record<string, string> = { identify: "roastDate", recommend: "profile", dialin: "move", review: "move" };
 type CaseStat = { passRate: number; label: string };
 const perCase = (f: ResultsFile) => {
   const m = new Map<string, { pass: number; n: number; labels: string[] }>();

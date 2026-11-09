@@ -75,6 +75,8 @@ jobs:
         run: node scripts/e2e-live.cjs
       - name: Bagless and manual brewing
         run: node scripts/e2e-brewing.cjs
+      - name: Saved shot review and fallback
+        run: node scripts/e2e-review.cjs
       - name: Keep screenshots when a check fails
         if: failure()
         uses: actions/upload-artifact@v4

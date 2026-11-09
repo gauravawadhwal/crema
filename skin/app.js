@@ -9,7 +9,7 @@
    API interface (implemented by makeLiveApi below and makeDemoApi in demo.js):
      info, ai { available, on, healthy }, settings { get, set },
      shelf, identify, saveBean, setBeanState, pinBest, recommend, rank, catalog,
-     apply, shots, annotate, feedback, prefs, favourites, presets, maintenance,
+     apply, shots, annotate, feedback, review, prefs, favourites, presets, maintenance,
      machine { setState, tare, recipe, workflowSettings, settings, waterThreshold, presence,
                schedules, display, plugins, info, heartbeat }, subscribe */
 "use strict";
@@ -172,7 +172,7 @@ function makeLiveApi(conn) {
   // The server gives a CLI model up to 300 s per attempt (Gemini 90 s). Identifying a
   // coffee can search the web, so it gets one attempt's worth; a recipe or dial-in
   // falls back to the rules, so waiting longer than 2 minutes isn't worth it.
-  const AI_WAIT = { identify: 330000, transcribe: 60000, recommend: 120000, dialin: 120000 };
+  const AI_WAIT = { identify: 330000, transcribe: 60000, recommend: 120000, dialin: 120000, review: 120000 };
   const D = (p) => `${conn.decaid}/api/v1${p}`;
   const C = (p) => `${conn.crema}${p}`;
   const wsBase = conn.decaidWs;
@@ -196,18 +196,34 @@ function makeLiveApi(conn) {
     finally { if (was !== healthy) window.dispatchEvent(new Event("crema:ai")); }
   };
 
+  // Serialize this client's annotation merges so rapid taste taps cannot overwrite each other.
+  const annotationWrites = new Map();
+  const optionalNumber = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
+
   // ---- shots ----
   const shotPoints = (full) => {
     const m = full.measurements || [];
-    const t0 = m.length ? Date.parse(m[0].machine.timestamp) : 0;
-    return m.map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? 0, f: x.machine.flow ?? 0, w: x.scale?.weight ?? 0, temp: x.machine.mixTemperature, tp: x.machine.targetPressure, tf: x.machine.targetFlow, frame: x.machine.profileFrame ?? null }));
+    const t0 = m.map((x) => Date.parse(x.machine?.timestamp)).find(Number.isFinite);
+    if (t0 == null) return [];
+    const points = m.filter((x) => x.machine).map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? null, f: x.machine.flow ?? null, w: x.scale?.weight ?? null, temp: x.machine.mixTemperature ?? null, tp: x.machine.targetPressure ?? null, tf: x.machine.targetFlow ?? null,
+      targetTemp: x.machine.targetMixTemperature ?? null, frame: x.machine.profileFrame ?? null, substate: x.machine.state?.substate ?? null, weightFlow: x.scale?.weightFlow ?? null }));
+    const ordered = [];
+    for (const point of points) {
+      if (!Number.isFinite(point.t) || point.t < 0) continue;
+      if (ordered.length && point.t === ordered.at(-1).t) ordered[ordered.length - 1] = point;
+      else if (!ordered.length || point.t > ordered.at(-1).t) ordered.push(point);
+    }
+    return ordered;
   };
   const toShot = (s, full) => {
     const ctx = s.workflow?.context || {};
     const points = full ? shotPoints(full) : [];
     return { id: s.id, timestamp: s.timestamp, beanId: null, batch: ctx.beanBatchId, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
-      manual: manualKind(s.workflow?.profile), doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, yieldG: s.annotations?.actualYield ?? (points.length ? points.at(-1).w : ctx.targetYield), timeS: points.length ? Math.round(points.at(-1).t) : null,
-      enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points };
+      manual: manualKind(s.workflow?.profile), doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null, yieldG: s.annotations?.actualYield ?? (points.length ? points.at(-1).w : null), timeS: points.length ? Math.round(points.at(-1).t) : null,
+      enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points,
+      profile: s.workflow?.profile ?? null, stopReason: s.stopReason ?? s.annotations?.stopReason ?? null,
+      review: s.annotations?.extras?.crema?.review ?? null,
+      taste: { sourBitter: s.annotations?.extras?.crema?.sourBitter ?? null, body: s.annotations?.extras?.crema?.body ?? null } };
   };
   // Decaid's shot list gives at most 100 per page and echoes whatever limit was asked
   // for, so a bigger request silently comes back short. Pages are asked for 100 at a
@@ -461,31 +477,93 @@ function makeLiveApi(conn) {
     // One page of history, with each shot's measurements for its chart.
     async shotPage(offset = 0, limit = 20) {
       const page = await j(D(`/shots?limit=${Math.min(limit, SHOT_PAGE)}&offset=${offset}`));
-      const items = await Promise.all((page?.items ?? []).map(async (s) => toShot(s, await fullShot(s.id).catch(() => null))));
+      const items = await Promise.all((page?.items ?? []).map(async (s) => {
+        const full = await fullShot(s.id).catch(() => null);
+        return toShot(full ?? s, full);
+      }));
       return { items, total: page?.total ?? items.length };
     },
     async shots(limit = 15) { return (await api.shotPage(0, limit)).items; },
     // The newest shot (of the last page of summaries) pulled with a profile, in full: its
     // recorded steps time the profile's graph. Summaries carry the profile, not samples.
-    async lastShotWith(title) {
-      const hit = (await j(D(`/shots?limit=${SHOT_PAGE}&offset=0`)))?.items?.find((s) => (s.workflow?.profile?.title ?? s.workflow?.name) === title);
-      return hit ? api.shot(hit.id) : null;
+    async lastShotWith(title, profileShape = null) {
+      const items = (await j(D(`/shots?limit=${SHOT_PAGE}&offset=0`)))?.items ?? [];
+      const matches = items.find((s) => (s.workflow?.profile?.title ?? s.workflow?.name) === title && (!profileShape || brewProfileShape(s.workflow?.profile) === profileShape));
+      return matches ? api.shot(matches.id) : null;
     },
     // One shot by id (a reference shot can be older than any page loaded), or null.
     async shot(id) { const full = await fullShot(id); return full ? toShot(full, full) : null; },
     async latestShot() { const s = await j(D("/shots/latest")).catch((e) => { if (e.status === 404) return null; throw e; }); return s?.id ? api.shot(s.id) : null; },
-    annotate: (id, a) => put(D(`/shots/${encodeURIComponent(id)}`), { annotations: a }),
+    async annotate(id, a) {
+      const pending = (annotationWrites.get(id) ?? Promise.resolve()).catch(() => {}).then(async () => {
+        let patch = a;
+        if (a.extras) {
+          const full = await j(D(`/shots/${encodeURIComponent(id)}`));
+          const current = full.annotations?.extras ?? {};
+          const extras = { ...current, ...a.extras, ...(a.extras.crema ? { crema: { ...(current.crema ?? {}), ...a.extras.crema } } : {}) };
+          patch = { ...a, extras };
+        }
+        return put(D(`/shots/${encodeURIComponent(id)}`), { annotations: patch });
+      });
+      annotationWrites.set(id, pending);
+      try { return await pending; }
+      finally { if (annotationWrites.get(id) === pending) annotationWrites.delete(id); }
+    },
+    async review(shotId, feedback = null) {
+      await annotationWrites.get(shotId);
+      const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
+      const recorded = shotPoints(full);
+      const points = recorded.length <= 1800 ? recorded : Array.from({ length: 1800 }, (_, i) => recorded[Math.round(i * (recorded.length - 1) / 1799)]);
+      const ctx = full.workflow?.context ?? {};
+      const profile = full.workflow?.profile ?? null;
+      const batchId = ctx.beanBatchId ?? null;
+      const beanBag = S.shelf.find((b) => b.batch === batchId);
+      const bean = beanBag?.info ?? null;
+      const installed = await api.library().then((items) => items.map((p) => p.title)).catch(() => []);
+      const history = batchId ? (await batchShots(batchId, 10)).filter((s) => s.id !== shotId && Date.parse(s.timestamp) < Date.parse(full.timestamp)).map((s) => {
+        const saved = s.annotations?.extras?.crema?.review;
+        return { timestamp: s.timestamp, profileTitle: s.workflow?.profile?.title, doseG: s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight, yieldG: s.annotations?.actualYield, enjoyment: s.annotations?.enjoyment, notes: s.annotations?.espressoNotes?.slice(0, 500), review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) };
+      }).slice(0, 10) : [];
+      const targetYieldG = optionalNumber(ctx.targetYield ?? profile?.target_weight);
+      const targetTimeS = full.annotations?.extras?.crema?.targetTimeS ?? ctx.targetTimeS ?? null;
+      const input = {
+        points, profile, doseG: full.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null,
+        yieldG: full.annotations?.actualYield ?? (points.at(-1)?.w ?? null), targetYieldG,
+        targetTimeS: Array.isArray(targetTimeS) && targetTimeS.length === 2 ? targetTimeS : null,
+        stopReason: full.stopReason ?? full.annotations?.stopReason ?? ctx.stopReason ?? null,
+        feedback, notes: full.annotations?.espressoNotes?.slice(0, 1000) ?? null, bean, installedProfiles: installed, history,
+      };
+      let result = null;
+      if (aiOn() && points.length) {
+        try { result = await cremaCall(() => post(C("/api/review"), input, { timeoutMs: AI_WAIT.review })); } catch {}
+      }
+      if (!result?.review) result = { review: E.rulesReview(input), source: "rules" };
+      const saved = { version: 1, review: result.review, source: result.source || "rules", createdAt: new Date().toISOString() };
+      const crema = { review: saved };
+      if (feedback) { crema.sourBitter = feedback.sourBitter; crema.body = feedback.body; }
+      await api.annotate(shotId, { extras: { crema } });
+      return saved;
+    },
     async feedback(shotId, beanId, fb, batchId = null) {
       const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
-      await put(D(`/shots/${encodeURIComponent(shotId)}`), { annotations: { ...(full.annotations ?? {}), ...(fb.enjoyment != null ? { enjoyment: fb.enjoyment } : {}), espressoNotes: fb.notes ?? full.annotations?.espressoNotes, extras: { crema: { sourBitter: fb.sourBitter, body: fb.body } } } });
+      await api.annotate(shotId, { ...(fb.enjoyment != null ? { enjoyment: fb.enjoyment } : {}), ...(fb.notes != null ? { espressoNotes: fb.notes } : {}), extras: { crema: { sourBitter: fb.sourBitter, body: fb.body } } });
       const [{ info, batch }, rec] = await Promise.all([coffee(beanId, batchId), recordOf(beanId)]);
       const shot = E.toPastShot(full);
-      const recipe = rec?.recipe ?? E.rulesRecipe({ bean: info });
+      const fallback = rec?.recipe ?? E.rulesRecipe({ bean: info });
+      const recordedProfile = full.workflow?.profile;
+      const sameProfile = recordedProfile?.title === fallback.profileTitle;
+      const recipe = recordedProfile ? {
+        ...fallback, profileTitle: recordedProfile.title, profileId: null,
+        doseG: full.annotations?.actualDoseWeight ?? full.workflow?.context?.targetDoseWeight ?? fallback.doseG,
+        yieldG: full.workflow?.context?.targetYield ?? fallback.yieldG,
+        tempC: Number.isFinite(Number(recordedProfile.steps?.[0]?.temperature)) ? Number(recordedProfile.steps[0].temperature) : fallback.tempC,
+        targetTimeS: sameProfile ? fallback.targetTimeS : [0, 600],
+      } : fallback;
       if (aiOn()) {
         try {
           const history = (await batchShots(batch?.id, 10)).map(E.toPastShot);
-          const { advice } = await cremaCall(() => post(C("/api/dialin"), { bean: info, recipe, shot, feedback: fb, history }, { timeoutMs: AI_WAIT.dialin }));
-          return { advice, source: "ai" };
+          const { advice, source } = await cremaCall(() => post(C("/api/dialin"), { bean: info, recipe, shot, feedback: fb, history }, { timeoutMs: AI_WAIT.dialin }));
+          return { advice, source: source || "ai" };
         } catch {}
       }
       return { advice: E.rulesDialIn(fb, shot, recipe), source: "rules" };
@@ -618,7 +696,7 @@ const S = {
   appSettings: null, // S.api.settings, once read
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
-  shots: [], selShot: null, cmpShot: null,
+  shots: [], selShot: null, cmpShot: null, reviewPending: new Set(), afterViewToken: 0,
 };
 
 /* ================= chart ================= */
@@ -651,11 +729,15 @@ function drawChart(canvas, pts, o = {}) {
     for (let t = 0; t <= maxT; t += step) ctx.fillText(`${t}s`, x(t), H - 5);
   }
   const line = (data, key, color, y, width, { alpha = 1, dash = null } = {}) => {
-    if (!data?.length || data[0][key] == null) return;
+    if (!data?.length || !data.some((d) => d[key] != null && Number.isFinite(Number(d[key])))) return;
     ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
     if (dash) ctx.setLineDash(dash);
     ctx.beginPath();
-    data.forEach((d, i) => (i ? ctx.lineTo(x(d.t), y(d[key])) : ctx.moveTo(x(d.t), y(d[key]))));
+    let drawing = false;
+    data.forEach((d) => {
+      if (d[key] == null || !Number.isFinite(Number(d[key]))) { drawing = false; return; }
+      if (drawing) ctx.lineTo(x(d.t), y(d[key])); else { ctx.moveTo(x(d.t), y(d[key])); drawing = true; }
+    });
     ctx.stroke(); ctx.restore();
   };
   // The profile's plan (E.profileCurve), dashed: pressure and flow targets, each only
@@ -683,9 +765,10 @@ function drawChart(canvas, pts, o = {}) {
     line(ghost, "f", css("--flow"), yB, 1.5, { alpha: .25 });
     line(ghost, "w", css("--weight"), yW, 1.5, { alpha: .25 });
   }
-  if (pts.length && !compact) {
+  if (pts.length && !compact && pts.some((d) => d.w != null)) {
+    const weights = pts.filter((d) => d.w != null);
     ctx.globalAlpha = .12; ctx.fillStyle = css("--weight"); ctx.beginPath();
-    ctx.moveTo(x(pts[0].t), yW(0)); pts.forEach((d) => ctx.lineTo(x(d.t), yW(d.w))); ctx.lineTo(x(pts.at(-1).t), yW(0)); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.moveTo(x(weights[0].t), yW(0)); weights.forEach((d) => ctx.lineTo(x(d.t), yW(d.w))); ctx.lineTo(x(weights.at(-1).t), yW(0)); ctx.fill(); ctx.globalAlpha = 1;
   }
   if (!compact && targets) {
     line(pts, "tp", css("--pressure"), yB, 1.2, { alpha: .7, dash: [4, 4] });
@@ -696,9 +779,10 @@ function drawChart(canvas, pts, o = {}) {
   line(pts, "f", css("--flow"), yB, compact ? 1.5 : 2);
   line(pts, "p", css("--pressure"), yB, compact ? 1.5 : 2.4);
   if (pts.length && !compact) {
-    const e = pts.at(-1);
+    const e = [...pts].reverse().find((d) => d.p != null || d.f != null || d.w != null);
+    if (!e) return;
     for (const [k, c, y] of [["p", "--pressure", yB], ["f", "--flow", yB], ["w", "--weight", yW]]) {
-      if (e[k] == null) continue;
+      if (e?.[k] == null) continue;
       ctx.fillStyle = css(c); ctx.beginPath(); ctx.arc(x(e.t), y(e[k]), 3.5, 0, Math.PI * 2); ctx.fill();
     }
   }
@@ -1072,11 +1156,12 @@ const planWindow = (plan, cap = 60) => plan.timed === "shot" ? plan.total : Math
 const planTimes = new Map();
 function planTiming(lp) {
   if (!lp?.profile?.steps?.length || !S.api.lastShotWith) return Promise.resolve(null);
-  if (!planTimes.has(lp.title)) planTimes.set(lp.title, S.api.lastShotWith(lp.title).then((shot) => {
+  const key = `${lp.id ?? lp.title}|${lp.profileShape ?? brewProfileShape(lp.profile)}`;
+  if (!planTimes.has(key)) planTimes.set(key, S.api.lastShotWith(lp.title, lp.profileShape ?? brewProfileShape(lp.profile)).then((shot) => {
     const durations = shot ? E.stepDurations(shot.points || [], lp.profile.steps.length) : null;
     return durations ? { durations, shot } : null;
   }, () => null));
-  return planTimes.get(lp.title);
+  return planTimes.get(key);
 }
 function planBody(lp, tempC) {
   return lp?.profile && tempC != null ? E.withTemperature(lp.profile, tempC) : lp?.profile;
@@ -1354,6 +1439,9 @@ async function onShotEnd(finishedId) {
   const context = { ...S.shotContext };
   const shot = finishedId === "latest" ? await justFinishedShot() : await S.api.shot(finishedId).catch(() => null);
   if (shot && !S.shots.some((s) => s.id === shot.id)) S.shots = [shot, ...S.shots];
+  if (shot && context?.targetTimeS && context.profileShape === brewProfileShape(shot.profile)) {
+    S.api.annotate(shot.id, { extras: { crema: { targetTimeS: context.targetTimeS } } }).catch(() => {});
+  }
   S.lastShotId = shot?.id;
   planTimes.clear(); planFor = null; // the next plan can be timed from this shot
   showAfterShot(shot, pts, context);
@@ -1377,11 +1465,12 @@ async function justFinishedShot() {
 }
 function shotMetrics(points, s) {
   const first = points.find((p) => p.w > 0.5);
-  const peak = points.reduce((m, p) => Math.max(m, p.p), 0);
-  const pour = points.filter((p) => first && p.t >= first.t);
+  const pressures = points.map(p => p.p).filter(v => v != null && Number.isFinite(v));
+  const peak = pressures.length ? Math.max(...pressures) : null;
+  const pour = points.filter((p) => first && p.t >= first.t && p.f != null && Number.isFinite(p.f));
   const avgFlow = pour.length ? pour.reduce((a, p) => a + p.f, 0) / pour.length : null;
   const yieldG = s?.yieldG ?? points.at(-1)?.w;
-  const doseG = s?.doseG ?? S.next?.doseG;
+  const doseG = s ? s.doseG : S.next?.doseG;
   return [["Time", points.at(-1) ? `${points.at(-1).t.toFixed(1)}` : s?.timeS, "s"], ["First drops", first ? first.t.toFixed(1) : "–", "s"], ["Yield", fmt1(yieldG), "g"], ["Ratio", doseG && yieldG ? `1:${(yieldG / doseG).toFixed(2)}` : "–", ""], ["Peak", fmt1(peak), "bar"], ["Avg flow", fmt1(avgFlow), "ml/s"]];
 }
 /* Ratings. Decaid stores enjoyment as 0–10, and Crema shows that as five stars in half
@@ -1418,9 +1507,21 @@ function bindStars(el, v, onChange) {
 function metricsHtml(m) {
   return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
 }
+function reviewHtml(saved) {
+  if (!saved?.review) return "";
+  const review = saved.review;
+  const source = String(saved.source || "").toLowerCase().includes("rules") ? "From Crema's shot checks" : "Review from the AI";
+  return `<div class="advice shot-review"><div class="row between"><span class="label">${source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
+    <p>${esc(review.summary)}</p>${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    ${review.issues?.length ? `<div class="label">To watch</div><ul>${review.issues.map((x) => `<li>${esc(x.what)} <span class="muted">${esc(x.evidence)}</span></li>`).join("")}</ul>` : ""}
+    ${review.nextShot ? `<div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>` : ""}
+    ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
+}
 function showAfterShot(shot, pts, context = {}) {
   const p = $("#afterShot");
   p.hidden = false;
+  const viewToken = ++S.afterViewToken;
+  p.dataset.shotId = shot?.id ?? "";
   let rating = shot?.enjoyment ?? null;
   const unsaved = shot ? "" : `<p class="muted small">Decaid hasn't saved this shot yet, so the rating and advice can't be attached. Rate it from Shots in a moment.</p>`;
   const batch = shot ? shot.batch : context.batchId;
@@ -1433,43 +1534,55 @@ function showAfterShot(shot, pts, context = {}) {
   const window = !manual && (shot?.profileTitle ?? context.profileTitle) === r?.profileTitle ? r?.targetTimeS ?? null : null;
   const [lo, hi] = window || [0, 0];
   const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
-  const scale = (id, label, opts) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${v === 0}" aria-pressed="${v === 0}">${t}</button>`).join("")}</div></div>`;
+  const taste = shot?.taste ?? {};
+  const scale = (id, label, opts, initial) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${initial === v}" aria-pressed="${initial === v}">${t}</button>`).join("")}</div></div>`;
   p.innerHTML = `
     <div class="row between"><h2>How was it?</h2>${timing}</div>${unsaved}
     ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
-    ${scale("sb", "Taste", [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]])}
-    ${scale("bd", "Body", [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]])}
+    <div id="tasteControls">${scale("sb", "Taste", [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]], taste.sourBitter)}
+    ${scale("bd", "Body", [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]], taste.body)}<p class="muted small">Choose both to include taste; leave them untouched if you haven't rated this shot.</p></div>
     <div class="row between"><div class="row"><span class="label">Enjoyment</span>${starsHtml(rating, "afterStars")}</div>
-      <div class="row"><button class="btn primary" id="sendTaste">Next adjustment</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
-    <div id="adviceBox"></div>`;
-  const val = (id) => Number($(`#${id} [aria-pressed="true"]`)?.dataset.v ?? 0);
-  if (!bean || manual) {
-    [$("#sb"), $("#bd")].forEach((el) => (el.parentElement.hidden = true));
-    $("#sendTaste").hidden = true;
+      <div class="row"><button class="btn primary" id="reviewShot" ${!shot ? "disabled" : ""}>${shot?.review ? "Review again" : "Review shot"}</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
+    <div id="reviewBox">${reviewHtml(shot?.review)}</div>`;
+  const val = (id) => { const selected = $(`#${id} [aria-pressed="true"]`); return selected ? Number(selected.dataset.v) : null; };
+  if (manual) {
+    $("#tasteControls").hidden = true;
     $("#pinShot").hidden = !bean;
-    if (!bean && shot) {
-      $("#adviceBox").innerHTML = `<div class="field"><label class="label" for="afterNotes">Shot notes</label><textarea id="afterNotes" rows="2">${esc(shot.notes || "")}</textarea></div>`;
-      $("#afterNotes").onchange = (e) => S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes"));
-    }
+  } else $("#pinShot").hidden = !bean;
+  if (!bean && shot) {
+    const notes = document.createElement("div"); notes.className = "field";
+    notes.innerHTML = `<label class="label" for="afterNotes">Shot notes</label><textarea id="afterNotes" rows="2">${esc(shot.notes || "")}</textarea>`;
+    $("#reviewBox").before(notes);
+    $("#afterNotes").onchange = (e) => { shot.notes = e.target.value; S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes")); };
   }
   $$(".seg.tap", p).forEach((g) => $$("button", g).forEach((b) => (b.onclick = () => $$("button", g).forEach((x) => { x.setAttribute("aria-pressed", String(x === b)); x.setAttribute("aria-checked", String(x === b)); }))));
   // Closing the review readies the chart for the next shot: the profile again, not this one.
   $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); if (S.snap?.state?.state !== "espresso") S.live = []; renderLive(); };
   $(".live-col").classList.add("has-after");
   requestAnimationFrame(renderLive);
-  // The rating saves as soon as it's set; asking for the next adjustment is separate.
+  // The rating saves as soon as it's set; asking for a review is separate.
   bindStars($("#afterStars"), rating, (n) => {
     rating = n;
     if (shot) { shot.enjoyment = n; S.api.annotate(shot.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating")); }
   });
-  $("#sendTaste").onclick = async (e) => {
-    if (!shot || !bean) return;
-    e.target.disabled = true;
+  const reviewButton = $("#reviewShot");
+  if (S.reviewPending.has(shot?.id)) reviewButton.disabled = true;
+  reviewButton.onclick = async () => {
+    if (!shot || S.reviewPending.has(shot.id)) return;
+    const sb = val("sb"), body = val("bd");
+    const feedback = !manual && sb != null && body != null ? { sourBitter: sb, body, enjoyment: rating, notes: null } : null;
+    S.reviewPending.add(shot.id); reviewButton.disabled = true; reviewButton.textContent = "Reviewing…";
     try {
-      const { advice, source } = await S.api.feedback(shot.id, bean.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: rating || null, notes: null }, bean.batch);
-      $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div><div class="muted small">${source === "ai" ? "Advice from the AI" : "From Crema's dial-in rules"}</div></div>`;
-    } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
-    e.target.disabled = false;
+      const saved = await S.api.review(shot.id, feedback);
+      shot.review = saved;
+      if (feedback) shot.taste = { sourBitter: feedback.sourBitter, body: feedback.body };
+      if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) $("#reviewBox").innerHTML = reviewHtml(saved);
+    } catch (err) {
+      if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) $("#reviewBox").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    } finally {
+      S.reviewPending.delete(shot.id);
+      if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) { reviewButton.disabled = false; reviewButton.textContent = shot.review ? "Review again" : "Review shot"; }
+    }
   };
   const pinBtn = $("#pinShot");
   const pinLabel = () => (pinBtn.textContent = bean?.bestShotId === shot?.id ? "Remove reference" : "Set as reference");
@@ -2173,6 +2286,7 @@ async function renderShots(more = false) {
 }
 function renderShotDetail() {
   const s = S.shots.find((x) => x.id === S.selShot), c = S.shots.find((x) => x.id === S.cmpShot);
+  if (!s) { $("#shotDetail").innerHTML = ""; return; }
   const bean = S.shelf.find((b) => b.id === s.beanId || (s.batch && b.batch === s.batch));
   $("#shotDetail").innerHTML = `
     <div class="row between"><div><span class="label">${esc(new Date(s.timestamp).toLocaleString())}</span><h2>${esc(s.coffee || "Shot")}</h2></div><span class="muted small">${esc(s.profileTitle || "")}</span></div>
@@ -2181,7 +2295,11 @@ function renderShotDetail() {
     <div class="legend">${legendHtml(false)}${c ? `<span><span class="swatch" style="background:var(--muted)"></span>Faint: ${esc(c.coffee || "")} ${new Date(c.timestamp).toLocaleDateString()}</span>` : ""}</div>
     <div class="row"><span class="label">Rating</span>${starsHtml(s.enjoyment, "detailStars")}</div>
     <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
-    <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>`;
+    ${s.manual ? "" : `<div class="scale-row"><span class="label">Taste</span><div class="seg tap" id="detailSb" role="radiogroup" aria-label="Taste">${[[-2,"Sour"],[-1,"A bit sour"],[0,"Balanced"],[1,"A bit bitter"],[2,"Bitter"]].map(([v,t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${s.taste?.sourBitter === v}" aria-pressed="${s.taste?.sourBitter === v}">${t}</button>`).join("")}</div></div>
+    <div class="scale-row"><span class="label">Body</span><div class="seg tap" id="detailBody" role="radiogroup" aria-label="Body">${[[-2,"Thin"],[-1,"Light"],[0,"Just right"],[1,"Rich"],[2,"Heavy"]].map(([v,t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${s.taste?.body === v}" aria-pressed="${s.taste?.body === v}">${t}</button>`).join("")}</div></div><p class="muted small">Choose both to include taste in a review.</p>`}
+    <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>
+    <div class="row"><button class="btn primary" id="reviewDetail">${s.review ? "Review again" : "Review shot"}</button></div>
+    <div id="detailReview">${reviewHtml(s.review)}</div>`;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
   bindStars($("#detailStars"), s.enjoyment, async (n) => {
     s.enjoyment = n;
@@ -2190,6 +2308,39 @@ function renderShotDetail() {
     await S.api.annotate(s.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating"));
   });
   $("#shotNotes").onchange = async (e) => { s.notes = e.target.value; await S.api.annotate(s.id, { espressoNotes: s.notes }).catch(() => {}); toast("Notes saved"); };
+  for (const [selector, key] of [["#detailSb", "sourBitter"], ["#detailBody", "body"]]) {
+    const group = $(selector);
+    if (!group) continue;
+    $$('button', group).forEach((button) => button.onclick = async () => {
+      const value = Number(button.dataset.v);
+      $$('button', group).forEach((other) => { const selected = other === button; other.setAttribute("aria-pressed", String(selected)); other.setAttribute("aria-checked", String(selected)); });
+      s.taste = { ...(s.taste ?? {}), [key]: value };
+      await S.api.annotate(s.id, { extras: { crema: { [key]: value } } }).catch(() => toast("Couldn't save taste feedback"));
+    });
+  }
+  const reviewButton = $("#reviewDetail");
+  if (S.reviewPending.has(s.id)) reviewButton.disabled = true;
+  reviewButton.onclick = async () => {
+    if (S.reviewPending.has(s.id)) return;
+    const sb = s.taste?.sourBitter, body = s.taste?.body;
+    const feedback = sb != null && body != null ? { sourBitter: sb, body, enjoyment: s.enjoyment, notes: null } : null;
+    S.reviewPending.add(s.id); reviewButton.disabled = true; reviewButton.textContent = "Reviewing…";
+    try {
+      const saved = await S.api.review(s.id, feedback);
+      s.review = saved;
+      const current = S.shots.find((shot) => shot.id === s.id);
+      if (current) current.review = saved;
+      if (S.selShot === s.id && $("#detailReview")) $("#detailReview").innerHTML = reviewHtml(saved);
+    } catch (err) {
+      if (S.selShot === s.id && $("#detailReview")) $("#detailReview").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    } finally {
+      S.reviewPending.delete(s.id);
+      if (S.selShot === s.id) {
+        const currentButton = $("#reviewDetail");
+        if (currentButton) { currentButton.disabled = false; currentButton.textContent = s.review ? "Review again" : "Review shot"; }
+      }
+    }
+  };
   const pin = $("#pinDetail");
   if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShots(); };
 }

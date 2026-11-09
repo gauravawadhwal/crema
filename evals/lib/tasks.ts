@@ -4,6 +4,11 @@
  * grades it. "rules" stands in for a provider to measure the no-AI baseline.
  */
 import path from "node:path";
+import { reviewShot } from "../../server/recommend/review.js";
+import { rulesReview } from "../../server/recommend/review-local.js";
+import type { ShotReviewData } from "../../server/recommend/review-types.js";
+import { reviewFixture } from "./review-fixtures.js";
+import { gradeReview } from "./review-grader.js";
 import { identify, type IdentifyInput } from "../../server/identify.js";
 import { ProviderChain } from "../../server/llm/index.js";
 import { MockProvider } from "../../server/llm/mock.js";
@@ -21,6 +26,7 @@ import {
   type DialInCase,
   type IdentifyCase,
   type RecommendCase,
+  type ReviewCase,
   type TaskName,
 } from "./dataset.js";
 import { errorGrade, finalize, gradeDialIn, gradeIdentify, gradeRecommend, type Grade, type RecommendContext } from "./graders.js";
@@ -69,7 +75,7 @@ export async function runCase<T extends TaskName>(task: T, c: CaseFor<T>, subjec
     if (opts.judge && judgeInput && task !== "identify" && !hasFallback(record)) {
       const jr = new RecordingProvider(opts.judge);
       try {
-        record.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : "dial-in advice", judgeInput, output);
+        record.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", judgeInput, output);
       } catch (e) {
         console.warn(`judge failed on ${c.id}: ${(e as Error).message.slice(0, 200)}`);
       }
@@ -84,7 +90,7 @@ export async function runCase<T extends TaskName>(task: T, c: CaseFor<T>, subjec
 }
 
 function hasFallback(r: RunRecord) {
-  return r.calls.some((c) => c.error) || (r.context as { source?: string } | undefined)?.source?.startsWith("rules (") === true;
+  return r.calls.some((c) => c.error) || (r.context as { source?: string } | undefined)?.source?.startsWith("rules (") === true || (r.context as { fellBack?: boolean } | undefined)?.fellBack === true;
 }
 
 async function execute(task: TaskName, c: unknown, subject: Subject, llm: ProviderChain, today: Date): Promise<{ output: unknown; context?: unknown; judgeInput?: string }> {
@@ -127,6 +133,13 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
     return { output: res.recipe, context, judgeInput };
   }
 
+  if (task === "review") {
+    const rc = c as ReviewCase;
+    const input = reviewFixture(rc.input.fixture);
+    const result = subject.kind === "rules" ? { review: rulesReview(input), source: "rules" } : await reviewShot(llm, input);
+    return { output: result.review, context: { fellBack: subject.kind === "llm" && result.source === "rules" }, judgeInput: JSON.stringify(input) };
+  }
+
   const dc = c as DialInCase;
   const bean = expandBean(dc.input.bean, today);
   const recipe = dialInRecipe(dc, bean);
@@ -146,7 +159,7 @@ export async function rejudge(task: TaskName, r: RunRecord, judgeProvider: LlmPr
   if (task === "identify" || !call || r.output == null || hasFallback(r)) return;
   const jr = new RecordingProvider(judgeProvider);
   try {
-    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : "dial-in advice", call.prompt, r.output);
+    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", call.prompt, r.output);
   } catch (e) {
     console.warn(`judge failed on ${r.caseId}: ${(e as Error).message.slice(0, 200)}`);
     delete r.judge;
@@ -160,6 +173,7 @@ export function gradeRecord(task: TaskName, c: unknown, r: RunRecord): Grade {
   let g: Grade;
   if (task === "identify") g = gradeIdentify((c as IdentifyCase).expect, r.output as BeanInfo);
   else if (task === "recommend") g = gradeRecommend(c as RecommendCase, r.output as Recipe, r.context as RecommendContext);
+  else if (task === "review") g = gradeReview(c as ReviewCase, r.output as ShotReviewData, r.context as { fellBack: boolean });
   else g = gradeDialIn(c as DialInCase, r.output as DialInAdvice, r.context as { fellBack: boolean });
   // Verdicts from an older judge schema are ignored until re-judged.
   return typeof r.judge?.contradictions?.[0] !== "string" && Array.isArray(r.judge?.contradictions) ? finalize([...g.checks, ...judgeChecks(r.judge)], g.labels) : g;

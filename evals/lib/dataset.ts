@@ -12,13 +12,14 @@ import { z } from "zod";
 import { CATALOG, findProfile } from "../../server/profiles/catalog.js";
 import { suggestRecipe } from "../../server/profiles/match.js";
 import type { PastShot } from "../../server/recommend/index.js";
+import { REVIEW_FIXTURES } from "./review-fixtures.js";
 import { BeanInfo, ProcessKind, Recipe, RoastLevel, TasteFeedback } from "../../server/schema.js";
 
 export const EVALS_DIR = path.resolve(import.meta.dirname, "..");
 export const ROOT_DIR = path.resolve(EVALS_DIR, "..");
 export const FIXTURES_DIR = path.join(EVALS_DIR, "fixtures");
 
-export const TASKS = ["identify", "recommend", "dialin"] as const;
+export const TASKS = ["identify", "recommend", "dialin", "review"] as const;
 export type TaskName = (typeof TASKS)[number];
 
 const Split = z.enum(["dev", "holdout"]);
@@ -301,9 +302,23 @@ export function dialInShot(c: DialInCase, recipe: Recipe, today = new Date()): P
   };
 }
 
+// ---------------------------------------------------------------- shot review
+export const ReviewCase = z.object({
+  ...caseBase,
+  input: z.object({ fixture: z.enum(REVIEW_FIXTURES) }).strict(),
+  expect: z.object({
+    accept: z.array(z.union([Move, z.literal("none")])).min(1),
+    requiredIssues: z.array(z.string()).default([]),
+    forbiddenIssues: z.array(z.string()).default([]),
+    askTaste: z.boolean().optional(),
+    noFaults: z.boolean().default(false),
+  }).strict(),
+}).strict();
+export type ReviewCase = z.infer<typeof ReviewCase>;
+
 // ---------------------------------------------------------------- loading
 
-const SCHEMAS = { identify: IdentifyCase, recommend: RecommendCase, dialin: DialInCase } as const;
+const SCHEMAS = { identify: IdentifyCase, recommend: RecommendCase, dialin: DialInCase, review: ReviewCase } as const;
 export type CaseFor<T extends TaskName> = z.infer<(typeof SCHEMAS)[T]>;
 
 export function loadCases<T extends TaskName>(task: T): CaseFor<T>[] {

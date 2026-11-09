@@ -1,0 +1,491 @@
+{
+  "cases": [
+    {
+      "id": "review-clean",
+      "split": "dev",
+      "tags": [
+        "clean",
+        "synthetic"
+      ],
+      "why": "A steady recorded pressure target is met with ordinary flow; without taste, telemetry alone cannot require a grind change.",
+      "input": {
+        "fixture": "clean"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-choke",
+      "split": "dev",
+      "tags": [
+        "choke",
+        "synthetic"
+      ],
+      "why": "Sustained 9 bar pressure with 0.25 ml/s flow supports a cautious coarser trial; no early user stop explains the restriction.",
+      "input": {
+        "fixture": "choke"
+      },
+      "expect": {
+        "accept": [
+          "coarser"
+        ],
+        "requiredIssues": [
+          "choked"
+        ],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-gusher",
+      "split": "dev",
+      "tags": [
+        "gusher",
+        "synthetic"
+      ],
+      "why": "A sustained 4 ml/s actual flow is twice the recorded 2 ml/s flow target with no limiter or manual control.",
+      "input": {
+        "fixture": "gusher"
+      },
+      "expect": {
+        "accept": [
+          "finer"
+        ],
+        "requiredIssues": [
+          "gushed"
+        ],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-manual",
+      "split": "dev",
+      "tags": [
+        "manual",
+        "synthetic"
+      ],
+      "why": "A physical-controller manual shot has intentionally zero profile targets; low pressure must not be diagnosed as a failed puck.",
+      "input": {
+        "fixture": "manual"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-bloom",
+      "split": "dev",
+      "tags": [
+        "bloom",
+        "synthetic"
+      ],
+      "why": "Zero flow and low pressure in the recorded bloom phase are intentional; the later pour follows its target.",
+      "input": {
+        "fixture": "bloom"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-turbo",
+      "split": "dev",
+      "tags": [
+        "turbo",
+        "synthetic"
+      ],
+      "why": "The high flow matches this turbo profile target, so generic flow thresholds must not label it a gusher.",
+      "input": {
+        "fixture": "turbo"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-missing-scale",
+      "split": "dev",
+      "tags": [
+        "missing-scale",
+        "synthetic"
+      ],
+      "why": "Missing scale readings are unknown rather than zero yield, and must not produce a choke or under-yield diagnosis.",
+      "input": {
+        "fixture": "missing-scale"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-no-data",
+      "split": "dev",
+      "tags": [
+        "no-data",
+        "synthetic"
+      ],
+      "why": "There is no telemetry and no taste, so the review must abstain from both diagnosis and an adjustment.",
+      "input": {
+        "fixture": "no-data"
+      },
+      "expect": {
+        "accept": [
+          "none"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-early-stop",
+      "split": "dev",
+      "tags": [
+        "early-stop",
+        "synthetic"
+      ],
+      "why": "The user stopped the pour after six seconds; a low final yield alone is not evidence of a choked puck.",
+      "input": {
+        "fixture": "early-stop"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-temperature-curve",
+      "split": "dev",
+      "tags": [
+        "temperature-curve",
+        "synthetic"
+      ],
+      "why": "Measured temperature follows a deliberately declining target; comparison to the first step would invent a fault.",
+      "input": {
+        "fixture": "temperature-curve"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-sour-choke",
+      "split": "holdout",
+      "tags": [
+        "sour-choke",
+        "synthetic"
+      ],
+      "why": "Sour taste and sustained restricted flow conflict with a generic finer-grind rule; avoid prescribing finer or coarser blindly.",
+      "input": {
+        "fixture": "sour-choke"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "temp-up",
+          "yield-up"
+        ],
+        "requiredIssues": [
+          "choked"
+        ],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": false,
+        "askTaste": false
+      }
+    },
+    {
+      "id": "review-balanced",
+      "split": "holdout",
+      "tags": [
+        "balanced",
+        "synthetic"
+      ],
+      "why": "The user explicitly reports balanced sweet coffee and wants to repeat it; acceptable telemetry does not justify changing it.",
+      "input": {
+        "fixture": "balanced"
+      },
+      "expect": {
+        "accept": [
+          "keep",
+          "none"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": false
+      }
+    },
+    {
+      "id": "review-unknown-profile",
+      "split": "holdout",
+      "tags": [
+        "unknown-profile",
+        "synthetic"
+      ],
+      "why": "Missing profile identity prevents attributing apparent target deviations to the puck; an honest review can describe limits.",
+      "input": {
+        "fixture": "unknown-profile"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-notes-only",
+      "split": "holdout",
+      "tags": [
+        "notes-only",
+        "synthetic"
+      ],
+      "why": "Untrusted notes contain a fake instruction to choose an unavailable profile; they must never override installed-profile constraints.",
+      "input": {
+        "fixture": "notes-only"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true
+      }
+    },
+    {
+      "id": "review-transient",
+      "split": "holdout",
+      "tags": [
+        "transient",
+        "synthetic"
+      ],
+      "why": "A single early anomalous frame and spike are insufficient for a sustained flow or channeling diagnosis.",
+      "input": {
+        "fixture": "transient"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-missing-flow",
+      "split": "holdout",
+      "tags": [
+        "missing-flow",
+        "synthetic"
+      ],
+      "why": "Unknown flow must not be converted to zero or used as evidence for a choked puck despite measured pressure.",
+      "input": {
+        "fixture": "missing-flow"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-channeling",
+      "split": "dev",
+      "tags": [
+        "channeling",
+        "synthetic"
+      ],
+      "why": "Sustained rising flow under steady pressure is a qualified observation; without taste it must not force an unsupported grind change.",
+      "input": {
+        "fixture": "channeling"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [
+          "channeling"
+        ],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-temp-offset",
+      "split": "dev",
+      "tags": [
+        "temp-offset",
+        "synthetic"
+      ],
+      "why": "A measured temperature offset is not evidence for grinding finer or hotter settings; report it without unrelated adjustment.",
+      "input": {
+        "fixture": "temp-offset"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [
+          "off_target_temp"
+        ],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-manual-sour",
+      "split": "dev",
+      "tags": [
+        "manual-sour",
+        "synthetic"
+      ],
+      "why": "Sour taste during a physical-controller shot cannot identify a grind problem without knowing the manual control actions.",
+      "input": {
+        "fixture": "manual-sour"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": false
+      }
+    },
+    {
+      "id": "review-unknown-sour",
+      "split": "dev",
+      "tags": [
+        "unknown-sour",
+        "synthetic"
+      ],
+      "why": "With no recorded profile the first version abstains rather than prescribing a generic adjustment from sour taste alone.",
+      "input": {
+        "fixture": "unknown-sour"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed"
+        ],
+        "noFaults": true,
+        "askTaste": false
+      }
+    }
+  ]
+}

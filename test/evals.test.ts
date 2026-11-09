@@ -6,6 +6,9 @@ import { changeCount, gradeDialIn, gradeIdentify, gradeRecommend, looseEq, prima
 import { judgeChecks } from "../evals/lib/judge.js";
 import { lowerIsBetter, summarize, wilson } from "../evals/lib/report.js";
 import { runCase } from "../evals/lib/tasks.js";
+import { gradeReview } from "../evals/lib/review-grader.js";
+import { reviewFixture } from "../evals/lib/review-fixtures.js";
+import { rulesReview } from "../server/recommend/review-local.js";
 
 const today = new Date("2026-11-05T08:00:00Z");
 
@@ -13,7 +16,7 @@ describe("eval datasets", () => {
   for (const task of TASKS) {
     it(`${task}: every case parses, lints clean and has a reason`, () => {
       const cases = loadCases(task);
-      expect(cases.length).toBeGreaterThanOrEqual(25);
+      expect(cases.length).toBeGreaterThanOrEqual(task === "review" ? 16 : 25);
       expect(new Set(cases.map((c) => c.split))).toEqual(new Set(["dev", "holdout"]));
       for (const c of cases) expect(c.why.length).toBeGreaterThan(20);
     });
@@ -111,6 +114,18 @@ describe("judge checks", () => {
 });
 
 describe("harness", () => {
+  it("grades review fallback honestly and rejects invented findings or multiple changes", async () => {
+    const c = loadCases("review").find(x => x.id === "review-clean")!;
+    const out = rulesReview(reviewFixture("clean"));
+    expect(gradeReview(c, out).pass).toBe(true);
+    expect(gradeReview(c, out, { fellBack: true }).pass).toBe(false);
+    expect(gradeReview(c, { ...out, issues: [{ kind: "choked", what: "Choked", evidence: "invented", severity: "warning", fromS: 0, toS: 500 }] }).pass).toBe(false);
+    expect(gradeReview(c, { ...out, nextShot: { change: "two changes", grindDelta: "finer", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "" } }).pass).toBe(false);
+    const run = await runCase("review", c, { kind: "rules" }, 0, { today });
+    expect(run.grade.pass).toBe(true);
+    expect(summarize("review", [run]).headline["no false alarms"]).toBe(1);
+  });
+
   it("runs the rules baseline and grades it", async () => {
     const [c] = loadCases("dialin").filter((x) => x.id === "dial-sour-fast");
     const r = await runCase("dialin", c, { kind: "rules" }, 0, { today });

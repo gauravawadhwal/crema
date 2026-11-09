@@ -1,0 +1,141 @@
+import { describe, expect, it } from "vitest";
+import { createApp } from "../server/app.js";
+import { ProviderChain } from "../server/llm/index.js";
+import type { LlmProvider } from "../server/llm/types.js";
+import { downsampleReviewPoints, reviewShot } from "../server/recommend/review.js";
+import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
+
+const point = (t: number, frame: number | null = 0, substate: string | null = "pour"): ReviewPoint => ({
+  t, p: 8, f: 2, w: t, temp: 92, tp: 8, tf: null, targetTemp: 92, frame, substate, weightFlow: 2,
+});
+const input = (overrides: Partial<ReviewInput> = {}): ReviewInput => ({
+  points: [point(0), point(10), point(20)], profile: null, doseG: 18, yieldG: 36,
+  targetYieldG: 36, targetTimeS: [25, 35], stopReason: null, feedback: null, bean: null,
+  installedProfiles: ["Installed profile"], history: [], ...overrides,
+});
+const provider = (answer: unknown | ((prompt: string) => unknown) | Error): ProviderChain => {
+  const p: LlmProvider = {
+    id: "mock", billing: "test",
+    async structured(req) {
+      if (answer instanceof Error) throw answer;
+      const value = typeof answer === "function" ? answer(req.prompt) : answer;
+      return req.schema.parse(value) as never;
+    },
+  };
+  return new ProviderChain([p]);
+};
+const cleanReview = (overrides: Record<string, unknown> = {}) => ({
+  summary: "The measured shot tracked its targets.", wentWell: ["Pressure stayed near target."], issues: [],
+  nextShot: null, confidence: "low", askTaste: true, ...overrides,
+});
+
+describe("shot review backend", () => {
+  it("downsamples to 50 points while preserving endpoints and profile boundaries", () => {
+    const points = Array.from({ length: 201 }, (_, i) => point(i / 10, i < 100 ? 0 : 1));
+    const reduced = downsampleReviewPoints(points);
+    expect(reduced).toHaveLength(50);
+    expect(reduced[0].t).toBe(0);
+    expect(reduced.at(-1)?.t).toBe(20);
+    expect(reduced.some((p) => p.t === 10 && p.frame === 1)).toBe(true);
+  });
+
+  it("spreads downsampled points across a long steady shot", () => {
+    const reduced = downsampleReviewPoints(Array.from({ length: 1000 }, (_, i) => point(i)));
+    const gaps = reduced.slice(1).map((p, i) => p.t - reduced[i].t);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(32);
+  });
+
+  it("uses rules with truthful provenance when the model fails", async () => {
+    const result = await reviewShot(provider(new Error("provider unavailable")), input());
+    expect(result.source).toBe("rules");
+    expect(result.review.summary).toBeTruthy();
+  });
+
+  it("serves validated reviews with provider provenance", async () => {
+    const app = createApp({ llm: new ProviderChain(["mock"]) });
+    const res = await app.request("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input()) });
+    expect(res.status).toBe(200);
+    const result = await res.json();
+    expect(result.source).toBe("mock");
+    expect(result.review.askTaste).toBe(true);
+    expect(result.review.nextShot).toBeNull();
+  });
+
+  it("accepts unknown values in previous shots without fabricating ratings or yield", async () => {
+    let prompt = "";
+    const app = createApp({ llm: provider((value) => { prompt = value; return cleanReview(); }) });
+    const history = [{ timestamp: "2026-11-01T00:00:00Z", enjoyment: null, doseG: null, yieldG: null, profileTitle: null }];
+    const res = await app.request("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input({ history })) });
+    expect(res.status).toBe(200);
+    expect((await res.json()).source).toBe("mock");
+    expect(JSON.parse(prompt.split("RECENT HISTORY FOR THIS BAG (bounded, enjoyment 0..10):\n")[1])).toEqual(history);
+  });
+
+  it("asks for missing taste and never asks again when both taste ratings were supplied", async () => {
+    const missing = await reviewShot(provider(cleanReview({ askTaste: false })), input());
+    expect(missing.review.askTaste).toBe(true);
+    const rated = await reviewShot(provider(cleanReview({ askTaste: true })), input({
+      feedback: { sourBitter: -1, body: 0, enjoyment: null, notes: null },
+    }));
+    expect(rated.review.askTaste).toBe(false);
+  });
+
+  it("rejects unsupported profile switches and multi-change model advice", async () => {
+    for (const nextShot of [
+      { change: "Switch profile", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: "Not installed", reasoning: "test" },
+      { change: "Change two things", grindDelta: "finer", yieldDeltaG: 1, tempDeltaC: 0, switchProfile: null, reasoning: "test" },
+    ]) {
+      const result = await reviewShot(provider(cleanReview({ nextShot })), input());
+      expect(result.source).toBe("rules");
+    }
+  });
+
+  it("does not accept an unsupported change without taste or a finding", async () => {
+    const advice = { change: "Grind finer", grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "test" };
+    const clean = input({
+      points: Array.from({ length: 21 }, (_, t) => ({ ...point(t), f: 2, tf: 2, tp: null, p: 6 })),
+      profile: { title: "Installed profile", steps: [{ pump: "flow", flow: "2", seconds: "30" }] },
+    });
+    const result = await reviewShot(provider(cleanReview({ nextShot: advice })), clean);
+    expect(result.source).toBe("rules");
+    expect(result.review.nextShot).toBeNull();
+  });
+
+  it("preserves every selected deterministic finding when the model omits it", async () => {
+    const points = Array.from({ length: 21 }, (_, t) => ({ ...point(t), f: 0.5, tf: 2, tp: null, p: 6 }));
+    const shot = input({ points, profile: { title: "Installed profile", steps: [{ pump: "flow", flow: "2", seconds: "30" }] } });
+    const result = await reviewShot(provider(cleanReview()), shot);
+    expect(result.source).toBe("mock");
+    expect(result.review.issues.map((i: { kind: string }) => i.kind)).toContain("choked");
+  });
+
+  it("does not accept physical adjustments for an unknown or manual profile", async () => {
+    const advice = { change: "Shorten yield", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "test" };
+    for (const profile of [null, { title: "Manual", beverage_type: "manual" }]) {
+      const result = await reviewShot(provider(cleanReview({ nextShot: advice })), input({
+        profile, feedback: { sourBitter: 0, body: -1, enjoyment: 5, notes: null },
+      }));
+      expect(result.source).toBe("rules");
+    }
+  });
+
+  it("ignores model-supplied findings and uses only computed ranges", async () => {
+    const points = Array.from({ length: 21 }, (_, t) => ({ ...point(t), f: 0.5, tf: 2, tp: null, p: 6 }));
+    const shot = input({ points, profile: { title: "Installed profile", steps: [{ pump: "flow", flow: "2", seconds: "30" }] } });
+    const injected = cleanReview({ issues: [{ kind: "choked", what: "Bad shot", evidence: "Observed at 400 s", severity: "warning", fromS: 400, toS: 401 }] });
+    const result = await reviewShot(provider(injected), shot);
+    expect(result.source).toBe("mock");
+    expect(result.review.issues[0].fromS).toBe(2);
+    expect(result.review.issues[0].toS).toBe(20);
+  });
+
+  it("validates malformed and oversized requests at the API boundary", async () => {
+    const app = createApp({ llm: new ProviderChain(["mock"]) });
+    const post = (body: string, headers: Record<string, string> = {}) => app.request("/api/review", {
+      method: "POST", headers: { "content-type": "application/json", ...headers }, body,
+    });
+    expect((await post(JSON.stringify({ points: [], profile: null }))).status).toBe(400);
+    expect((await post("not json")).status).toBe(400);
+    expect((await post("{}", { "content-length": "1000001" })).status).toBe(413);
+  });
+});

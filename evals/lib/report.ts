@@ -93,6 +93,14 @@ export const HEADLINES: Record<TaskName, Record<string, string>> = {
     "judge: no contradictions": "judge.noContradictions",
     "judge: no invented figures": "judge.noInventedFigures",
   },
+  review: {
+    "model answered": "modelAnswered",
+    "appropriate next move": "acceptableMove",
+    "required observations": "requiredIssues",
+    "no false alarms": "noFalseAlarms",
+    "one change": "oneChange",
+    "grounded ranges": "groundedRanges",
+  },
   dialin: {
     "model answered": "modelAnswered",
     "right move": "acceptableMove",
