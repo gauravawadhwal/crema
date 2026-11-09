@@ -33,7 +33,7 @@ recipe onto the machine remains a separate action.
 |---|---|
 | Beans, batches, profiles, workflow, shots, annotations | Decaid |
 | Crema's record per bean: `info` (BeanInfo), `recipe`, `recipeSource`, `photo`, `productImage`, `art`, `bestShotId`, `finished`, `batchId` | Decaid KV `crema/bean:<beanId>` |
-| `settings` (`aiEnabled`), `preferences`, `favourites[5]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
+| `settings` (`aiEnabled`, `grindStart`, `grindStep`), `preferences`, `favourites[5]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
 | Theme, device frame, saved server and Decaid addresses, group-head mode, screen saver | `localStorage` on each device |
 | Cached roaster product photos | Crema server, `CREMA_IMAGES` |
 
@@ -76,7 +76,7 @@ Both must provide:
 |---|---|
 | `demo`, `info.{providers, voice, decaidUrl, server, serverError}` | Mode and display info |
 | `ai.{available, enabled, on, healthy, voice}` | A server is connected; the switch is on; both; the last call succeeded; the server can transcribe voice notes |
-| `settings.get()`, `settings.set(patch)` | `{aiEnabled}` |
+| `settings.get()`, `settings.set(patch)` | `{aiEnabled, grindStart, grindStep}` |
 | `shelf()` | Coffees on the shelf: `{id, batch, info, recipe, recipeSource, photo, productImage, art, weight, remaining, frozen, bestShotId, shots}` |
 | `identify(input, onStep)` | Photos, a typed or spoken description, or a link → BeanInfo. Throws when AI is off |
 | `transcribe(wav)` | A voice note (16 kHz mono WAV) → text, through the server's Gemini. The demo throws: it uses the browser's speech recognition |

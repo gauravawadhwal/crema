@@ -89,7 +89,7 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     await evaluate(() => showProfile('duplicate-mode-test')); await page.click('#baglessProfile');
     await loaded();
     current = await wf();
-    check(current.profile.notes === 'Distinct installed profile' && current.profile.steps[0].temperature === 89 && current.context.coffeeName === null && current.context.coffeeRoaster === null && current.context.grinderSetting === null, 'bag → No bag clears stale metadata and loads the precise duplicate profile');
+    check(current.profile.notes === 'Distinct installed profile' && current.profile.steps[0].temperature === 89 && current.context.coffeeName === null && current.context.coffeeRoaster === null && current.context.grinderSetting === '10', 'bag → No bag clears stale metadata (grind falls back to the default start) and loads the precise duplicate profile');
     const before = await evaluate(() => S.api.shelf().then(s => s[0].remaining));
     await evaluate(() => { S.next.yieldG = 6; S.loaded = false; renderNextShot(); }); await loaded();
     await page.click('[data-run="espresso"]'); await page.waitForFunction(id => S.lastShotId && S.lastShotId !== id, afterBag.id, { timeout: 25000 });

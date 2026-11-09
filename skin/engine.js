@@ -26,6 +26,7 @@ var CremaEngine = (() => {
     DEFAULT_MAINTENANCE: () => DEFAULT_MAINTENANCE,
     DEFAULT_PRESETS: () => DEFAULT_PRESETS,
     DEFAULT_SETTINGS: () => DEFAULT_SETTINGS,
+    GRIND_STEPS: () => GRIND_STEPS,
     baseline: () => baseline,
     beanTraits: () => beanTraits,
     findProfile: () => findProfile,
@@ -883,7 +884,8 @@ var CremaEngine = (() => {
   }
 
   // server/shared/defaults.ts
-  var DEFAULT_SETTINGS = { aiEnabled: true };
+  var DEFAULT_SETTINGS = { aiEnabled: true, grindStart: 10, grindStep: 0.25 };
+  var GRIND_STEPS = [0.1, 0.25, 0.5, 1];
   var DEFAULT_PRESETS = {
     steam: [
       { label: "Cortado", seconds: 15 },
