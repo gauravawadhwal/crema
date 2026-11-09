@@ -13,7 +13,7 @@ and the simulator in this repo (`dev/mock-decaid.ts`), not yet on a real
 machine. Treat real-hardware behaviour as unverified until someone tests it.
 
 Read next, as needed:
-- `docs/implementation-plan.md`: handoff for the November 2026 review recommendations, including Streamline Settings reuse, reliability fixes, compatibility and release checks. Partly done: its progress table and ticked items say what is implemented, and "Suggested next sessions" lists what to pick up.
+- `docs/implementation-plan.md`: the handoff and current plan. Start with "Where things stand" at its top; the progress table and ticked items say what is implemented, and "Suggested next sessions" lists what to pick up.
 - `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
@@ -122,12 +122,18 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 
 ## Status and next steps
 
-Done and tested against the simulator: the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (the `claude-cli` provider is verified with real calls), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site. The AI has an eval suite (`evals/`) with Opus, Sonnet, Haiku and rules baselines.
+Released: v0.2.0 (9 November 2026), the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer.
 
-Not done (see `docs/parity.md` and the README roadmap):
-- testing on a real DE1 and tablet, including the skin install and Decaid's key-value store
-- the Docker image, which hasn't been built in CI
-- `codex-cli` and `gemini-api` providers tested against real accounts
-- profile editor, grinder entities and a numeric grind advisor
-- Home Assistant sensors
-- order-email ingestion
+Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
+- the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site
+- machine-control reliability (plan phase 1): no profile writes mid-shot, link state from `ws/v1/devices`, steam, hot water and flush through the workflow, checking the machine's recipe against the screen, time limits, socket ownership, busy and error states
+- data correctness (plan phase 2): shot history paging and failures, installed Decaid profiles as the library, bags per batch
+- safe image fetching, CI (`verify`, `ui`, `docker`) gating releases and Pages, and the Docker image smoke-tested
+- an AI eval suite (`evals/`) with Opus, Sonnet, Haiku, Codex, Gemini and rules baselines
+
+Not done (details in `docs/implementation-plan.md`):
+- anything on the real tablet or a real DE1 (plan phase 7)
+- Streamline Settings from Crema, the profile-editing hand-off and an evidence-based `docs/parity.md` (plan phase 3; needs the tablet)
+- splitting `skin/app.js` (plan phase 4)
+- voice input inside Decaid: Decaid never gives skins the microphone; hide Speak there and point to the keyboard's microphone (next-session item 10)
+- grinder entities and a numeric grind advisor; Home Assistant sensors; order-email ingestion

@@ -192,7 +192,7 @@ npm run check:tablet
 ## Roadmap
 
 - [ ] Test on a real DE1 and tablet, including installing the skin from a release
-- [ ] Run the `codex-cli` and `gemini-api` providers against real accounts, and tune the prompts with real bag photos
+- [ ] Tune the prompts with real bag photos (every provider has run against real accounts in the evals; the label photos there are rendered, not real)
 - [ ] Home Assistant: expose machine state, shot count and the current coffee as sensors, and add warm-up and sleep automations
 - [ ] Add coffees from roaster order emails, so only the roast-date sticker needs photographing
 - [ ] Grinder entities and a numeric grind advisor
