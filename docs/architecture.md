@@ -39,6 +39,27 @@ recipe onto the machine remains a separate action.
 
 Defaults for the KV entries are in `server/shared/defaults.ts`.
 
+Coffee association is optional. The local `current` choice distinguishes an
+intentional No bag selection from an empty/loading shelf; `baglessRecipe` remembers
+that device's standalone next shot. Refresh/retry never auto-select a bag over
+that choice. New favourites explicitly record whether they are bagless, their
+installed profile id and manual mode; older favourites retain their behavior.
+
+The installed library includes espresso profiles and Decaid's two GHC manual
+profiles. Manual profiles remain excluded from recommendation candidates. Manual
+selection requires `machine.info().GHC === true` and uses the installed step data,
+not a generated paddle profile. Its initial zero weight target means manual stop;
+an explicit weight target is optional and physical validation remains pending.
+
+Every profile load, with or without a bag, goes through the same serialized,
+mid-shot-gated path. Bagless loads explicitly clear coffee identity and grind
+notes; omitted nullable context fields would retain stale Decaid values. Loads
+reset the workflow's water-volume override to inherit the installed profile (or
+disable it for the manual profiles). Reconciliation distinguishes same-title
+profiles using their structure and relative temperature curve. The completed
+shot's stored context determines inventory and reference/feedback attribution;
+the next selected bag is never used to identify the shot just finished.
+
 ## The rules engine (`skin/engine.js`)
 
 `server/engine.ts` re-exports the profile catalog, ranking, recipes, dial-in rules and defaults. `scripts/build-engine.mjs` bundles it with esbuild into `skin/engine.js`, a classic script that sets `window.CremaEngine`. The file is committed so the skin has no build step. `npm test` fails if it's stale; rebuild with `npm run build:engine`.
@@ -63,7 +84,7 @@ Both must provide:
 | `setBeanState(id, {frozen?, finished?})`, `pinBest(id, shotId)` | Bag state and reference shot |
 | `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |
 | `rank(beanId)`, `catalog()` | Candidate ranking, profile catalog |
-| `apply(beanId, recipe, grinderSetting)` | Load the recipe onto the machine |
+| `apply(beanId, recipe, grinderSetting, batchId)` | Load the recipe onto the machine; null bean id means No bag |
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |

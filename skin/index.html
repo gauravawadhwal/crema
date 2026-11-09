@@ -243,12 +243,17 @@ button.chip { cursor: pointer; }
 details summary { cursor: pointer; color: var(--muted); font-size: .84rem; }
 details[open] summary { margin-bottom: 8px; }
 
-.favs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.fav-wrap { position: relative; min-width: 0; }
+.stop-choice { border: 0; background: transparent; color: var(--fg); cursor: pointer; }
+.coffee-choice { display: grid; gap: 3px; min-height: 44px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
+.coffee-choice .pill { justify-self: start; }
+.coffee-line.bagless { grid-template-columns: minmax(0, 1fr); }
+.favs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 44px; gap: 6px; }
+.fav-wrap { min-width: 0; }
 .fav { display: grid; align-content: center; gap: 1px; width: 100%; min-height: 56px; padding: 6px 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; text-align: center; font-size: .7rem; line-height: 1.2; overflow: hidden; }
 .fav strong { font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fav.empty { border-style: dashed; color: var(--muted); }
-.fav-edit { position: absolute; top: 2px; right: 2px; width: 24px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; font-size: .8rem; line-height: 1; }
+.fav-wrap .fav { min-width: 0; min-height: 44px; }
+.fav-edit { flex: 0 0 44px; width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--fg); cursor: pointer; font-size: 1.25rem; line-height: 1; }
 
 .readouts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .readout { display: grid; gap: 0; min-width: 0; }
@@ -500,6 +505,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .coffee-line { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; }
   .coffee-line .bag { width: 48px; height: 58px; }
   .coffee-name { font-size: 1rem; }
+  .coffee-choice { gap: 1px; }
   .field-row { min-height: 40px; padding-top: 6px; grid-template-columns: 58px minmax(0, 1fr); }
   .stepper { grid-template-columns: 40px minmax(0, 1fr) 40px; }
   .stepper button { height: 38px; }
@@ -519,7 +525,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) and (max-width: 1250px) {
   .demo-banner { display: none; }
-  #view-brew { grid-template-columns: minmax(240px, 270px) minmax(0, 1fr) minmax(160px, 176px); }
+  #view-brew { grid-template-columns: 320px minmax(0, 1fr) minmax(160px, 176px); }
   .readouts { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
   .readout .v { font-size: 1.02rem; }
   .readout .label { font-size: .62rem; }

@@ -109,7 +109,45 @@ LLM_PROVIDERS=claude-cli npm start
 
 Keep it running with whatever you use for services (systemd, a process manager, your NAS's app runner).
 
-### Connecting the tablet to it
+### Brewing without a bag
+
+On Brew, tap the coffee name and choose **No bag**. Open Profiles, choose an
+installed profile and tap **Brew without a bag**. Adjust dose, yield, temperature
+and the optional grind note, then **Load onto machine** before using the physical
+start button. Crema's Espresso button loads unsaved changes before starting.
+Choosing No bag on screen does not change the profile already on the machine
+until you load one. With no selected profile, Crema's Espresso button is disabled.
+
+The profile's own temperature and target are used. An Off yield means manual
+stopping; tap it to set a weight target. Weight targets require a working scale.
+No bag is remembered on that device, including across reloads and shelf updates.
+Shots still appear in history with ratings and notes, and no bag inventory is
+deducted. Select a bag from the coffee name to return to bag-based brewing.
+
+### Manual flow and pressure
+
+Open Profiles and choose **Manual flow** or **Manual pressure**. Use it with the
+selected bag, or tap **Brew without a bag**. These load Decaid's installed
+`GHC/manual flow control` or `GHC/manual pressure control` profile: adjust the
+extraction on the physical group-head controller. They do not add tablet paddles.
+Load before starting; adjust temperature as usual. The initial weight target is
+Off; tap it for an optional weight target. Manual stop still respects the
+profile's time limits. Scale stopping with a manual profile needs a supervised
+check on the physical machine before relying on it.
+
+Manual choices are unavailable when Decaid reports no group-head controller or
+cannot confirm one. If a manual profile isn't visible, show/restore it in Decaid
+or Streamline and reopen Profiles. Crema does not install or unhide it for you.
+The demo's controller movements are simulated, not a physical-controller test.
+
+### Editing favourites
+
+Tap the large **⋯** button beside the five favourites, then choose a slot to
+rename, replace or clear. The edit target is at least 44 × 44 px and is separate
+from the buttons that load favourites. A favourite saved in No bag mode restores
+that mode rather than attaching whichever bag is currently selected.
+
+### Connecting the tablet to the server
 
 On the tablet, open Crema → Settings → Connections → Crema server → **Change**, and enter `http://<server>:8787`. Each device saves its own server address; phones opened from the server use it automatically.
 

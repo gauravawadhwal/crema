@@ -17,7 +17,7 @@ confirming against a real machine.
 |---|---|---|
 | Home screen fits the tablet with no scrolling | Stock | ✅ tested at 1340×800 and scaled sizes down to 1005×552, before and after a shot (`scripts/check-tablet-fit.cjs`) |
 | Espresso, Steam, Hot water, Flush, Stop buttons | Stock, Streamline | ✅ right-hand column (phone: top) |
-| Hide start buttons on group-head-controller machines | Streamline | ✅ "Start from the group head" setting; Stop and presets still work |
+| Disable on-screen start buttons | Streamline | ✅ "Use only the machine's start buttons", per device; physical controls and Stop unaffected |
 | Sleep / wake button | Stock, Streamline, Lumen | ✅ rail (tablet), top bar (phone) |
 | Live pressure, flow, weight, temperature | Stock, all skins | ✅ readouts + chart, targets dashed |
 | Shot timer and phase (preinfusion / pouring) | Stock, Lumen | ✅ |
@@ -79,7 +79,9 @@ confirming against a real machine.
 
 | Feature | Where | Crema |
 |---|---|---|
-| Browse profiles with notes | Stock, Streamline | ✅ 31-profile community catalog with filters |
+| Browse profiles with notes | Stock, Streamline | ✅ installed Decaid library; community guide adds notes and filters |
+| Brew without registering/selecting a bag | Streamline | ✅ No bag, direct installed-profile selection, history and ratings; no bag inventory deduction |
+| Manual flow / pressure | Decaid GHC profiles | ✅ installed manual profiles, physical controller required; physical interaction and manual-profile scale stopping remain unverified |
 | Recommendations for the coffee | — | ✅ rules ranking + AI choice, with reasons |
 | Hide / restore built-ins | Streamline | ⬜ |
 | Profile editor (steps, D-Flow, A-Flow) | Stock, Streamline, plugins | ⬜ use Decaid's editor; Crema shows and loads profiles |

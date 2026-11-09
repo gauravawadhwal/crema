@@ -1,8 +1,52 @@
 # Bagless and manual brewing: review and implementation plan
 
-Reviewed 9 November 2026. **Planned, not implemented.** Requested outcome: brew
+Reviewed 9 November 2026. **Implemented in software on `codex/brewing-modes`;
+not released to the NAS/tablet.** Requested outcome: brew
 directly from installed profiles without registering a bag, and offer manual
 flow/pressure brewing using the capabilities Decaid and Streamline already have.
+
+## Implementation record
+
+- No bag selection and its next recipe persist per device, including across
+  reload, shelf refresh and failed shelf reads. Installed-profile detail sheets
+  offer direct bagless brewing with the profile's own temperature/weight target.
+- Nullable coffee/grind context fields are explicitly cleared; zero stopping
+  targets are preserved. Profile identity includes the step structure, notes,
+  limits and relative temperature curve, distinguishing same-title records.
+- New favourites retain profile ids and explicit bagless/manual state. Older
+  slots retain their selection behavior. Editing uses a separate 44 × 44 px menu
+  button beside the five load buttons, then a full-size slot chooser.
+- Manual flow/pressure select the installed GHC profiles and require a reported
+  controller. They support a zero target (manual stop) or an explicit weight
+  target and shift all step temperatures together. No tablet paddle is added.
+- Shot attribution follows the recorded shot, with a shot-start fallback. Ratings
+  and notes work without a bag; bag-specific advice/reference actions are hidden.
+  All profile loads retain the shared queue and mid-shot gate; a preparation
+  changed while loading is not marked loaded or started as if it still matched.
+- `scripts/e2e-brewing.cjs`, also run by CI, covers these paths against the local
+  simulator and the built demo, including empty shelf, duplicate titles, stale
+  metadata clearing, inventory, changing the next bag mid-shot, favourites, missing
+  profiles/controller, temperature shifting and the compact tablet/phone layout.
+
+The remaining sections retain the original design and acceptance rationale.
+Physical GHC behavior, manual-profile scale stopping and installation on the real
+tablet remain supervised acceptance work, not claims made by the demo.
+
+Desktop Decaid 0.9.1 verification: the development ZIP was installed through its
+local install API and selected as the active skin. The served app/demo/engine/data
+scripts and raw HTML asset were checked byte-for-byte against this checkout.
+The initial direct-folder setting reported a path but did not serve readable
+files, so this is a verified installed snapshot, not a claimed working live-edit
+folder. Reinstall the ZIP after later source changes when repeating this check.
+The native window showed the new coffee selector and favourites menu.
+
+With only `MockDe1` and `MockScale` connected, the actual Decaid API accepted
+explicitly cleared coffee fields (omitted on serialization), recorded a full
+bagless simulated brew, and reported `targetWeight` stopping. A very short
+4 g test ended before producing a saved shot; the full 36 g case passed. The
+original simulator workflow was restored. That simulator reports `GHC: false`,
+and the UI correctly blocks manual selection; it cannot establish physical
+controller behavior. No commands were sent to the NAS/tablet or physical machine.
 
 ## Evidence and limits
 
