@@ -146,6 +146,25 @@ curl -F query="Square Mile Red Brick" http://<server>:8787/api/identify
 
 Crema covers day-to-day settings: steam, hot water and flush, sleep and wake schedules, display, maintenance reminders, AI and connections. Machine settings it changes are written to Decaid, so other skins see them too. Some things live elsewhere:
 
+Live fan, steam/hot-water temperatures and flows, flush settings and idle-sleep
+values are read from Decaid. Opening Settings does not apply Crema defaults or
+reset these values. A missing machine value is unavailable, not replaced by a
+guessed number. Existing Decaid values may include earlier user or skin changes;
+they are not necessarily factory defaults.
+
+Crema's named steam durations, hot-water volumes and flush-time presets are
+convenience recipes defined by Crema (or edited by you), not Decaid factory
+defaults. Tapping a preset or starting that operation from Crema applies its
+duration/volume, while keeping the workflow's temperature and flow settings.
+The manual steam preset uses a 255-second cap, not unlimited steaming.
+
+“Use only the machine's start buttons” is a preference for this device: it
+disables Crema's Espresso, Steam, Hot water and Flush start buttons and leaves Stop
+available. It does not change the physical group-head controls. Theme and clock
+choices are also saved separately on each device. Machine settings are shared
+through Decaid. Sleep timeout follows Decaid's 0–240 minute range (0 disables the
+idle timer); the refill warning is a water height in millimetres, not a percentage.
+
 - **Decaid:** installing and switching skins, connecting the machine and scale, and plugin settings such as your Visualizer account.
 - **The [Streamline Settings](https://github.com/decentespresso/streamline-setting) plugin** (optional): Streamline's full machine settings, including calibration, firmware, cleaning and steam modes. Install it from Decaid's Plugins screen with its release ZIP, or with `curl -X POST http://<tablet-ip>:8080/api/v1/plugins/install/github-release -H 'Content-Type: application/json' -d '{"repo":"decentespresso/streamline-setting"}'`. Then open `http://<tablet-ip>:8080/api/v1/plugins/streamline-settings.reaplugin/ui` in any browser on your network. Its skin preferences (language, units, zoom) apply to Streamline only, not Crema.
 - **The Streamline skin:** profile editing and importing profiles from Visualizer. Switch skins in Decaid, then switch back to Crema; Crema's data stays in Decaid.

@@ -61,7 +61,6 @@ function applyWorkflowSettings() {
 let presence: Json = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
 const schedules: Json[] = [{ id: randomUUID(), time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }];
 let display: Json = { wakeLockEnabled: true, wakeLockOverride: false, brightness: 80, requestedBrightness: 80, lowBatteryBrightnessActive: false, platformSupported: { brightness: true, wakeLock: true } };
-let waterWarning = 20;
 
 // ---------------- the simulated machine ----------------
 const sim = {
@@ -176,7 +175,7 @@ setInterval(() => {
     sim.group = Math.min(92.8, sim.group + 0.6);
     if (sim.group >= 92.8) sim.state = "idle";
   } else if (sim.state === "idle") sim.group = 92.6 + Math.random() * 0.3;
-  if (presence.userPresenceEnabled && sim.state === "idle" && Date.now() - sim.lastActive > presence.sleepTimeoutMinutes * 60_000) sim.state = "sleeping";
+  if (presence.userPresenceEnabled && presence.sleepTimeoutMinutes > 0 && sim.state === "idle" && Date.now() - sim.lastActive > presence.sleepTimeoutMinutes * 60_000) sim.state = "sleeping";
   if (sim.state !== "steam") sim.steamTemp = Math.min(150, sim.steamTemp + 0.2);
 }, 1000);
 
@@ -302,8 +301,12 @@ const server = createServer(async (req, res) => {
       return send(res, 200, settings);
     }
     if (p === "/api/v1/machine/waterLevels") {
-      if (m === "POST") waterWarning = (await body(req)).warningThresholdPercentage ?? waterWarning;
-      return send(res, 200, { currentLevel: Math.round(sim.water), refillLevel: sim.refill, warningThresholdPercentage: waterWarning });
+      if (m === "POST") {
+        const b = await body(req);
+        if (typeof b.refillLevel !== "number" || !Number.isFinite(b.refillLevel)) return send(res, 400, { error: "refillLevel must be a number in mm" });
+        sim.refill = Math.trunc(b.refillLevel);
+      }
+      return send(res, 200, { currentLevel: Math.round(sim.water), refillLevel: sim.refill });
     }
     if (p === "/api/v1/machine/heartbeat" && m === "POST") {
       sim.lastActive = Date.now();
@@ -322,7 +325,12 @@ const server = createServer(async (req, res) => {
     }
     // presence & display
     if (p === "/api/v1/presence/settings") {
-      if (m === "POST") presence = { ...presence, ...(await body(req)) };
+      if (m === "POST") {
+        const b = await body(req);
+        if (("sleepTimeoutMinutes" in b && !Number.isInteger(b.sleepTimeoutMinutes)) || ("userPresenceEnabled" in b && typeof b.userPresenceEnabled !== "boolean")) return send(res, 400, { error: "Invalid presence setting" });
+        if ("sleepTimeoutMinutes" in b) b.sleepTimeoutMinutes = Math.max(0, Math.min(240, b.sleepTimeoutMinutes));
+        presence = { ...presence, ...b };
+      }
       return send(res, 200, { ...presence, schedules });
     }
     if (p === "/api/v1/presence/schedules") {

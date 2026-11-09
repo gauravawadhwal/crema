@@ -78,7 +78,6 @@ function makeDemoApi() {
   let presence = { userPresenceEnabled: true, sleepTimeoutMinutes: 30 };
   const schedules = [{ id: "w1", time: "06:45", daysOfWeek: [1, 2, 3, 4, 5], enabled: true }, { id: "w2", time: "08:30", daysOfWeek: [6, 7], enabled: true }];
   let display = { brightness: 80, platformSupported: { brightness: true } };
-  let waterWarning = 20;
   let workflow = { profile: { title: all[0].recipe.profileTitle }, context: { targetDoseWeight: 18, targetYield: 36, beanBatchId: all[0].batch } };
   let presets = {
     steam: [{ label: "Cortado", seconds: 15 }, { label: "Flat white", seconds: 25 }, { label: "Latte", seconds: 35 }, { label: "Manual", seconds: 0 }],
@@ -190,7 +189,7 @@ function makeDemoApi() {
     } else if (sim.state === "sleeping") { sim.group = Math.max(30, sim.group - 1.5); emit("ready", { status: "not_heating" }); }
     else if (sim.state === "idle") { sim.group = 92.5 + Math.random() * 0.3; sim.steamTemp = Math.min(150, sim.steamTemp + 0.6); }
     if (!sim.timer) snapshot();
-    emit("water", { currentLevel: Math.round(sim.water), refillLevel: sim.refill, warningThresholdPercentage: waterWarning });
+    emit("water", { currentLevel: Math.round(sim.water), refillLevel: sim.refill });
     emit("scale", { connected: true, weight: Math.round((sim.scale - sim.scaleOffset) * 10) / 10, batteryLevel: sim.battery });
   }, 1000);
   setInterval(() => { if (sim.timer) emit("scale", { connected: true, weight: Math.round((sim.scale - sim.scaleOffset) * 10) / 10, batteryLevel: sim.battery }); }, 200);
@@ -327,7 +326,7 @@ function makeDemoApi() {
         set: async (p) => { for (const k of Object.keys(wf)) if (p[k]) Object.assign(wf[k], p[k]); },
       },
       settings: { get: async () => ({ ...settings }), set: async (p) => { settings = { ...settings, ...p }; } },
-      async waterThreshold(pct) { waterWarning = pct; },
+      async waterThreshold(mm) { sim.refill = settingNumber(mm, SETTING_LIMITS.sWaterWarn); snapshot(); },
       async refill() { sim.water = 58; if (sim.state === "needsWater") sim.state = "idle"; snapshot(); },
       presence: { get: async () => ({ ...presence }), set: async (p) => { presence = { ...presence, ...p }; } },
       schedules: {

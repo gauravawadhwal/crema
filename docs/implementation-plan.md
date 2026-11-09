@@ -21,6 +21,11 @@ and untested assumptions. Read it before changing behaviour.
 
 ## Outcome and boundaries
 
+Additional brewing work requested on 9 November 2026: see
+[Bagless and manual brewing](bagless-manual-plan.md) for the installed-Decaid
+review, product behavior, implementation order and acceptance checks. This is
+planned work; it has not changed the shipped bag-based brewing behavior.
+
 Deliver a dependable custom daily interface for the user's Decent DE1, with clear
 access to existing specialist functionality and a small ongoing maintenance burden.
 
@@ -73,6 +78,59 @@ separate supervised step; implement and test locally first.
 
 ### Suggested next sessions
 
+**Recommended immediate order after the bagless/manual review (9 November 2026).**
+This recommendation updates the priority of the older numbered list below; it
+does not mark tablet checks complete or authorize a release.
+
+**User-reported brewing baseline (9 November 2026):** the user completed an
+existing brew on the real machine and reports that it appeared to work and the
+coffee came out quite good. If reviewing history, exclude the latest shot; the
+relevant brew is the one immediately before it at the time of this report. No
+shot ID or independent workflow/telemetry audit was captured here. Treat this as
+the practical baseline for proceeding with bagless development, not completion
+of all phase 7 checks. Do not require the user to repeat this baseline brew.
+The automated saved-shot regression in item 1 remains part of implementation.
+
+**Live read-only verification (9 November 2026):** subsequently reached the NAS
+Crema server and the tablet's Decaid API through its existing proxy. The tablet
+reports Crema 0.2.0 installed from its release and a DE1Pro with GHC. Excluding
+the latest shot as requested, the second-newest saved shot has the expected
+coffee/batch association, Extractamundo Dos! profile, 21 g dose and 45 g target.
+Its annotations record 43.5 g actual yield; Decaid records `targetWeight` as the
+stop reason. Its 116 measurements span about 28.8 seconds. The final captured
+scale sample is 42.29 g, distinct from the annotated final yield; scale-stop
+projection and trailing drips were not independently audited. This verifies a
+real completed shot with recorded workflow and telemetry, not every control,
+inventory or reconnection case. All requests were GETs; no settings or machine
+state changed. No need to repeat the baseline brew.
+
+1. **Establish a complete bag-based shot regression, then develop bagless brewing.**
+   Use the current installed-profile workflow to check load → start → stop → saved
+   shot, including profile, dose, yield and bag attribution. Extend that same check
+   for No bag, metadata clearing and unchanged inventory. This closes the relevant
+   phase 6 verification gap as part of the feature, rather than postponing the
+   feature for an unrelated cleanup project. Keep existing Stop/start and mid-shot
+   profile guards. Detailed scope: [bagless/manual plan](bagless-manual-plan.md).
+2. **Validate bagless brewing in desktop Decaid's simulator, then on the tablet.**
+   Retest the existing phone-to-tablet shelf-refresh fix in that tablet session.
+   A confirmed failure in profile loading, Stop, history or attribution takes
+   priority over adding further brewing modes. Local implementation can proceed
+   while the supervised tablet session is pending; daily-use/release readiness
+   still needs the applicable validation.
+3. **Add the two physical-controller manual modes as a separate change.** Build on
+   the optional bag association from item 1; verify controller capability,
+   zero-target semantics and scale-stop behavior as described in the feature plan.
+4. **Resume specialist-settings access and the remaining maintenance work.**
+   Streamline Settings/profile-editor hand-off (phase 3), broader frontend splitting
+   (phase 4), stop reasons, step previews and refreshed demo media need not precede
+   bagless brewing. Extract only small boundaries needed by the feature. The
+   already-confirmed Speak-button issue is a small independent fix and can ship
+   separately without holding up bagless work.
+
+The feature extends phase 2 (profiles, bags and shot correctness), uses phase 1's
+existing control safeguards, and carries phase 6/7 verification. Its new work is
+planned even though the original phase 2 scope is marked done in software.
+
 Each is a self-contained piece of work that ends in its own PR. Order agreed with the
 user on 8 November 2026: get the UI checks into CI and a way back to Decaid in place,
 then tag a release and take a first, short look on the tablet before the rest of
@@ -119,6 +177,21 @@ Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 
 Small follow-up: the README screenshots and walkthrough still show the old boxed
 rating buttons (`refresh-demo-assets` skill; no AI reseeding needed).
+
+### UI revision reported 9 November 2026
+
+Settings correctness takes priority over the planned bagless feature. See the
+[settings review](settings-review.md) for upstream defaults, steam recommendations,
+fan-threshold behavior and local fixes for numeric bounds, refill-warning units
+and the misleading group-head-toggle label. No live machine defaults were reset;
+NAS/tablet deployment is pending.
+
+- [ ] **Make the favourites edit button easier to tap.** The user reports that
+  the “⋯” button next to each favourite is too small. Current `.fav-edit` is only
+  24 × 22 px. Enlarge its tap target to at least 44 × 44 px without overlapping
+  the favourite's load action, keep the edit affordance obvious, and verify it
+  on the tablet and phone plus the tight tablet-fit sizes. This is a requested
+  follow-up, not implemented in the settings fixes.
 
 ## First tablet feedback — 9 November 2026
 

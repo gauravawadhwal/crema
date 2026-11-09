@@ -486,7 +486,7 @@ function makeLiveApi(conn) {
         };
       },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
-      waterThreshold: (pct) => post(D("/machine/waterLevels"), { warningThresholdPercentage: pct }),
+      waterThreshold: (mm) => post(D("/machine/waterLevels"), { refillLevel: settingNumber(mm, SETTING_LIMITS.sWaterWarn) }),
       presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
       schedules: {
         list: () => j(D("/presence/schedules")),
@@ -699,7 +699,7 @@ function renderStatus() {
   const s = unlinked() ? null : S.snap, st = s?.state?.state || "unknown";
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
   const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
-  const low = S.water && tank < (S.water.warningThresholdPercentage ?? 20);
+  const low = S.water && S.water.currentLevel <= S.water.refillLevel;
   const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
   $("#status").innerHTML = `
     <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
@@ -1952,7 +1952,20 @@ function renderShotDetail() {
 
 /* ================= settings ================= */
 function sw(id, checked) { return `<label class="switch"><input type="checkbox" id="${id}" ${checked ? "checked" : ""}><span></span></label>`; }
-function mini(id, value, stepV, unit) { return `<div class="mini"><button type="button" data-mini="${id}:-${stepV}" aria-label="Less">−</button><input id="${id}" inputmode="decimal" value="${value ?? ""}" aria-label="${unit}"><button type="button" data-mini="${id}:${stepV}" aria-label="More">+</button></div>`; }
+// Decaid 0.9.1 REST: sleep 0..240 (0 disables idle sleep). DE1 fan MMR:
+// 0..50, also enforced by installed Streamline 0.2.23. Decaid's water-level
+// form uses 0..30 mm. These are edit limits, never replacement machine defaults.
+const SETTING_LIMITS = { sFan: [0, 50, 1], sSleepMin: [0, 240, 1], sWaterWarn: [0, 30, 1] };
+function settingNumber(value, limits) {
+  if (value == null || String(value).trim() === "" || !Number.isFinite(Number(value))) throw new Error("Enter a number");
+  const n = Number(value);
+  return limits ? clamp(round(n, limits[2]), limits[0], limits[1]) : n;
+}
+function mini(id, value, stepV, unit) {
+  const available = value != null && Number.isFinite(Number(value)), limits = SETTING_LIMITS[id];
+  const disabled = available ? "" : "disabled";
+  return `<div class="mini"><button type="button" data-mini="${id}:-${stepV}" aria-label="Less" ${disabled}>−</button><input id="${id}" type="number" step="${stepV}" ${limits ? `min="${limits[0]}" max="${limits[1]}"` : ""} inputmode="decimal" value="${available ? value : ""}" placeholder="Unavailable" aria-label="${unit}" ${disabled}><button type="button" data-mini="${id}:${stepV}" aria-label="More" ${disabled}>+</button></div>`;
+}
 function seg(id, options, value) { return `<div class="seg" id="${id}">${options.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(value)}">${l}</button>`).join("")}</div>`; }
 async function renderSettings() {
   const el = $("#settings");
@@ -1985,21 +1998,21 @@ async function renderSettings() {
   </div>
 
   <div class="panel stack"><h2>Machine</h2>
-    <div class="set-row first"><span>Start from the group head<span class="hint">For machines with a group head controller: Crema sets recipes and presets, and you start shots on the machine</span></span>${sw("sGhc", S.ghc)}</div>
-    <div class="set-row"><span>Low water warning<span class="hint">Percent of the tank</span></span>${mini("sWaterWarn", 20, 5, "%")}</div>
+    <div class="set-row first"><span>Use only the machine's start buttons<span class="hint">Disables Crema's Espresso, Steam, Hot water and Flush buttons on this device. The group-head controls always work; Stop stays available</span></span>${sw("sGhc", S.ghc)}</div>
+    <div class="set-row"><span>Refill warning level<span class="hint">Water height in mm, as reported by Decaid</span></span>${mini("sWaterWarn", S.water?.refillLevel, 5, "mm")}</div>
     ${ms ? `<div class="set-row"><span>Tablet USB charging</span>${sw("sUsb", ms.usb === true || ms.usb === "enable")}</div>
-    <div class="set-row"><span>Fan threshold</span>${mini("sFan", ms.fan, 5, "°C")}</div>` : ""}
+    <div class="set-row"><span>Fan threshold<span class="hint">Current Decaid value. DE1 accepts 0–50 °C; Crema does not set a default</span></span>${mini("sFan", ms.fan, 5, "°C")}</div>` : ""}
   </div>
 
   <div class="panel stack"><h2>Sleep and wake</h2>
     ${pres ? `<div class="set-row first"><span>Sleep when idle</span>${sw("sPresence", pres.userPresenceEnabled)}</div>
-    <div class="set-row"><span>After<span class="hint">Minutes without use</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
+    <div class="set-row"><span>After<span class="hint">0–240 minutes without use. 0 turns off the idle sleep timer</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
     <span class="label">Wake schedules</span>
     <div class="stack" style="gap:6px" id="scheds">${scheds.map((s) => `<div class="sched"><span class="num">${esc(s.time)}</span><div class="days">${DAYS.map((d, i) => `<button type="button" data-day="${esc(s.id)}:${i + 1}" aria-pressed="${!s.daysOfWeek.length || s.daysOfWeek.includes(i + 1)}">${d}</button>`).join("")}</div>${sw(`en-${s.id}`, s.enabled)}<button class="btn small ghost" data-del="${esc(s.id)}">Remove</button></div>`).join("") || '<p class="muted small">None yet.</p>'}</div>
     <div class="row"><div class="field" style="flex:1"><label class="label" for="newWake">Add a wake time</label><input type="time" id="newWake" value="06:45"></div><button class="btn" id="addWake" style="align-self:end">Add</button></div>
   </div>
 
-  <div class="panel stack"><h2>Display</h2>
+  <div class="panel stack"><h2>Display</h2><p class="muted small">Theme and clock choices are saved on this device. Machine settings are shared through Decaid.</p>
     <div class="stack" style="gap:8px"><span class="label">Theme</span>
       <div class="skins">${SKINS.map((k) => `<button type="button" class="skin" data-skin="${k.id}" aria-pressed="${currentSkin() === k.id}">
         <span class="pv" style="background:${k.bg}">${k.pv.map((c) => `<i style="background:${c}"></i>`).join("")}</span><b>${k.name}</b><span>${k.note}</span></button>`).join("")}</div></div>
@@ -2035,7 +2048,7 @@ async function renderSettings() {
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
-  const num = (id) => parseFloat($(`#${id}`)?.value);
+  const num = (id) => settingNumber($(`#${id}`)?.value, SETTING_LIMITS[id]);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
     sSteamT: () => setWorkflowSetting("steamSettings", "targetTemperature", num("sSteamT")),
@@ -2045,16 +2058,32 @@ async function renderSettings() {
     sFlushF: () => setWorkflowSetting("rinseData", "flow", num("sFlushF")),
     sFlushT: () => setWorkflowSetting("rinseData", "targetTemperature", num("sFlushT")),
     sWaterWarn: () => m.waterThreshold(num("sWaterWarn")),
-    sFan: () => m.settings.set({ fan: num("sFan") }),
-    sSleepMin: () => m.presence.set({ sleepTimeoutMinutes: num("sSleepMin") }),
+    sFan: async () => { await m.settings.set({ fan: num("sFan") }); return (await m.settings.get()).fan; },
+    sSleepMin: async () => { await m.presence.set({ sleepTimeoutMinutes: num("sSleepMin") }); return (await m.presence.get()).sleepTimeoutMinutes; },
     mBack: () => S.api.maintenance.set({ backflushEveryShots: num("mBack") }),
     mDesc: () => S.api.maintenance.set({ descaleEveryDays: num("mDesc") }),
   };
   for (const [id, fn] of Object.entries(handlers)) {
     const input = $(`#${id}`); if (!input) continue;
-    const run = async () => { try { await fn(); if (!id.startsWith("p")) toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); } };
+    let saved = input.value, saving = false;
+    const run = async () => {
+      if (saving) return;
+      const buttons = $$(`[data-mini^="${id}:"]`);
+      saving = true; input.disabled = true; buttons.forEach((b) => (b.disabled = true));
+      try {
+        input.value = String(num(id));
+        const actual = await fn();
+        if (id === "sFan" || id === "sSleepMin") {
+          if (actual == null || !Number.isFinite(Number(actual))) throw new Error("Decaid didn't return the saved value");
+          input.value = String(actual);
+        }
+        saved = input.value;
+        if (!id.startsWith("p")) toast("Saved");
+      } catch (e) { input.value = saved; toast(`Couldn't save: ${e.message}`); }
+      finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
+    };
     input.onchange = run;
-    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { const d = parseFloat(b.dataset.mini.split(":")[1]); input.value = String(round((parseFloat(input.value) || 0) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
+    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { if (saving || input.disabled) return; const d = Number(b.dataset.mini.split(":")[1]); input.value = String(round(Number(input.value) + d, Math.abs(d) < 1 ? 0.1 : 1)); run(); }));
   }
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
   const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
