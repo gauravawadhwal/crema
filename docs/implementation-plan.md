@@ -1,7 +1,18 @@
 # Crema implementation handoff
 
-Created: 6 November 2026. Status: **in progress** (last updated 8 November 2026). The
+Created: 6 November 2026. Status: **in progress** (last updated 9 November 2026). The
 progress table and the ticked items below say what is done; everything else is still planned.
+
+**Where things stand (9 November 2026).** Phases 1, 2 and 5 are done in software, and
+phase 6 mostly. v0.2.0 is released and is the first install on the user's DE1 tablet.
+Nothing has been verified on the real tablet or a real DE1 yet; everything was tested
+against `dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its simulated machine. Next:
+the tablet session (phase 7, next-session item 3), then phase 3 (Streamline Settings and
+the profile-editing hand-off), which needs the tablet first. Without the tablet, the
+open software work is phase 4 (splitting `skin/app.js`), the end-to-end shot test
+(phase 6), "why the shot stopped" and the other Streamline improvements, and the voice
+fix (next-session item 10). The user merges nothing by hand: agents open a PR per piece
+of work and merge it once CI's `verify` job passes; tagging a release is the user's call.
 
 This is the execution plan requested by the user after the project review. It covers
 all review recommendations, including reuse of Streamline Settings. The supporting
@@ -375,13 +386,16 @@ the Android tablet.
   is ignored until the machine reports the first (or 3 s pass). Stop stays enabled
   while a start is pending. `scripts/e2e-controls.cjs` covers this in the demo, the
   built demo and (`--url`) desktop Decaid.
-- Also done: recipe loads are held during a shot (see phase 1).
-- Remaining: see phase 1's task list, reordered after checking Decaid and Streamline.
+- Since then the whole phase 1 task list is done in software (#12–#19); see phase 1.
 
 - [ ] Record the Decaid, Streamline and Streamline Settings release versions/commits
   inspected. Identify minimum supported capabilities from evidence, not guesses.
   Record the actual tablet/Android WebView versions when accessible; do not block
   local implementation on obtaining them.
+  *Partly done: desktop Decaid 0.9.1 (build 3027, commit `14361a94`), Streamline.js
+  0.2.23 and Insight 0.2.7 (skin comparison), and Decaid's and Streamline's `main` as
+  read on 8–9 November 2026 are recorded where they were used. Still needed: the
+  tablet's Decaid and Android WebView versions, and Streamline Settings' release.*
 - [x] Make browser tests reproducible from the repository: declare Playwright,
   document browser installation, and use a Node version supported by all test tools.
   *Done: `playwright` is a dev dependency (locked in `package-lock.json`); README,
@@ -392,8 +406,11 @@ the Android tablet.
 - [ ] Capture small, anonymized upstream fixtures or schema-based contract tests
   for workflow, machine/device/scale streams, profiles, shots and store values.
   Note each fixture's upstream version. Do not create fixtures solely from Crema's mock.
-- [ ] Exercise the skin in actual desktop Decaid using its supported development
+- [x] Exercise the skin in actual desktop Decaid using its supported development
   workflow when available. Keep hardware-free simulation explicitly identified.
+  *Done: Decaid 0.9.1 on macOS with `MockDe1`, through live-edit, an installed
+  package, and this repo's `skin/` served locally and pointed at `:8080`. Each finding
+  says it was the simulated machine. See the phase 0 findings and the skin comparison.*
 
 Acceptance: a fresh checkout can install dependencies and run the documented local
 checks; fixtures identify their provenance; supported and unverified combinations
@@ -736,11 +753,11 @@ explicit support in the calling skin. Verify these against the selected release.
 - [ ] Reconcile settings/workflow when returning (phase 1), without resetting
   changes to remembered Crema defaults. Retain the selected bag and appropriate
   unsaved work. Avoid navigating away during an active machine operation.
-- [ ] Add a dashboard exit using the supported host capability when available,
+- [x] Add a dashboard exit using the supported host capability when available,
   with sensible browser-only behaviour. Distinguish the native dashboard from
   Streamline's settings and the separate Decaid settings plugin.
-  *Implemented and tested with a stand-in host (see finding 1); tick once it works in
-  Decaid's WebView on the tablet.*
+  *Done in software: Settings → Decaid → Open Decaid, tested with a stand-in host (see
+  finding 1). Still to confirm in Decaid's WebView on the tablet (phase 7).*
 - [ ] Test the tablet-served skin, phone direct to Decaid, phone through Crema's
   proxy, no AI server, AI off, demo mode and plugin removal/update.
 
@@ -783,8 +800,11 @@ mark the whole matrix complete based on one working link.
   doesn't check argument shapes or return types, which shared types would.*
 - [ ] Validate external/persisted values at adapter boundaries and define migration
   versions. Keep pure recommendation logic in the shared engine, not copied into UI.
-- [ ] Define subscription cleanup and ownership so reconnects/navigation do not
+- [x] Define subscription cleanup and ownership so reconnects/navigation do not
   accumulate handlers. Keep fixtures and mocks exercising the same public contract.
+  *Done with phase 1's socket ownership (#18): one slot per stream, close and detach
+  before reopening, `subscribe` returns `{ close, reopenMachine }` in both backends;
+  `e2e-live.cjs` checks one socket per stream after reconnects.*
 - [ ] Preserve static packaging and the single-file demo. If build inputs change,
   update packaging and demo tools in the same change.
 
@@ -839,15 +859,14 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
   rating and reference. Add phase 1 failure/race cases, API-contract cases, two-client
   changes, multiple bags and settings round trips. Remove success-on-missing-data
   shortcuts where they can hide a broken scenario.
-- [ ] Add a CI verification job and gate skin release/Pages publishing on applicable
+- [x] Add a CI verification job and gate skin release/Pages publishing on applicable
   checks. Verify the generated engine before rebuilding it so drift is detected.
   Build and test the exact distributable files, including the extracted skin ZIP.
-  *Partly done: `.github/workflows/ci.yml` runs on pull requests and pushes to `main`
-  (typecheck, `npm test` including engine freshness, skin syntax, built demo matches
-  source, skin ZIP check), and `release.yml` and `pages.yml` call it first. It passed
-  on GitHub for PR #6 and the merge to `main` (8 November 2026); the release path
-  hasn't run yet because no tag exists. The Playwright UI checks run in a parallel
-  `ui` job and upload screenshots when one fails.*
+  *Done: `.github/workflows/ci.yml` runs on pull requests and pushes to `main`:
+  `verify` (typecheck, `npm test` including engine freshness, skin syntax, built demo
+  matches source, skin ZIP check), `ui` (the Playwright checks, screenshots kept on
+  failure) and `docker` (image smoke test). `release.yml` and `pages.yml` call it
+  first. The release path has run for v0.1.0, v0.1.1 and v0.2.0.*
 - [ ] Preserve root `index.html`, skin metadata, relative asset paths and semantic
   version tags. Include the actual project repository in release metadata where
   appropriate. Do not ship test tooling or credentials inside the skin.
