@@ -47,8 +47,13 @@ Run what applies, in this order. Each command exits non-zero on failure.
    ```
    To poke at it by hand, run `npm run mock:decaid` and `DECAID_URL=http://localhost:8080 LLM_PROVIDERS=mock npm start`, open `http://localhost:8787`, and check `curl localhost:8080/api/v1/workflow` and `curl localhost:8080/api/v1/store/crema`.
 
+7. **Docker image**: needed for changes to `Dockerfile`, `.dockerignore`, `package.json` dependencies or how `server/main.ts` starts. Needs Docker; CI's `docker` job runs it too.
+   ```bash
+   node scripts/docker-smoke.mjs
+   ```
+
 Notes:
 - Playwright is a dev dependency, so `npm install` brings it. Its Chromium needs a one-off `npx playwright install chromium`; skip that if the environment already provides a Chromium build for this Playwright version.
-- CI's `ui` job runs steps 3–6 on every pull request, so a failure there means the same as a local failure.
+- CI's `ui` job runs steps 3–6 and its `docker` job step 7 on every pull request, so a failure there means the same as a local failure.
 - Bare `?demo` on a wide desktop window opens the device frame. The scripts add `&full` to test the app itself.
 - When stopping background servers, kill by PID. `pkill -f <pattern>` can kill your own shell.

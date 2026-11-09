@@ -1,8 +1,9 @@
 # Checks every pull request and push to main. The release and Pages workflows
 # call this first, so a failing check stops a skin release or a site deploy.
 #
-# Two jobs run side by side: `verify` (types, unit and server tests, generated files,
-# the skin ZIP) and `ui` (the Playwright checks in a real Chromium).
+# Three jobs run side by side: `verify` (types, unit and server tests, generated files,
+# the skin ZIP), `ui` (the Playwright checks in a real Chromium) and `docker` (the
+# optional server's image builds and works, with the mock AI; no secrets needed).
 name: CI
 
 on:
@@ -79,3 +80,22 @@ jobs:
           name: ui-screenshots
           path: ui-shots/
           retention-days: 7
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # For the simulated Decaid the container's proxy talks to.
+      - run: npm ci
+      - name: Server image builds and serves (mock AI, simulator)
+        run: node scripts/docker-smoke.mjs
+      # The image the docs suggest for a Claude or ChatGPT subscription.
+      - name: Image with the AI CLIs builds and they start
+        run: |
+          docker build --build-arg AI_CLIS="@anthropic-ai/claude-code @openai/codex" -t crema-cli .
+          docker run --rm crema-cli sh -c 'claude --version && codex --version'

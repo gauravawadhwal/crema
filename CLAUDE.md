@@ -63,6 +63,7 @@ node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
 node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
 node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
+node scripts/docker-smoke.mjs        # builds the server image and checks it with the mock AI (needs Docker)
 ```
 
 AI evals (real model calls cost money; `--provider rules` is free; see the `ai-evals` skill):
@@ -88,7 +89,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 
 - **Server**: TypeScript ESM, Zod for every input that crosses a boundary, Hono routes. A Zod error becomes a 400.
 - **Web app**: plain JS, no framework and no build step. One HTML file holds all CSS. `app.js` and `demo.js` are classic scripts sharing globals, so don't redeclare a top-level name in both.
-- **Two backends, one interface**: `makeLiveApi` (app.js) and `makeDemoApi` (demo.js) implement the same object. Any new capability needs both, and usually `dev/mock-decaid.ts` too.
+- **Two backends, one interface**: `makeLiveApi` (app.js) and `makeDemoApi` (demo.js) implement the same object. Any new capability needs both, and usually `dev/mock-decaid.ts` too. `e2e-live.cjs` fails if a member exists in only one of them.
 - **The server is optional.** Everything except AI must work with no Crema server, with the server down, and with AI switched off (`settings.aiEnabled`). AI calls go through `cremaCall` and every one has a rules fallback. Don't add server routes the app depends on for non-AI features.
 - **Decaid holds all the data**: beans, batches, profiles, workflow and shots, plus Crema's own records and settings in its key-value store (namespace `crema`). The server stores nothing but cached product photos.
 - **Logic shared by server and browser lives in `server/`** and reaches the app through `skin/engine.js`. Don't copy it into app.js; rebuild the bundle.

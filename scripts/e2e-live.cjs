@@ -91,6 +91,25 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     // ---- 1. machine only ----
     await open(`decaid=http://localhost:${MOCK}`);
     check(await S(() => S.api && !S.api.demo), "runs live against the machine with no Crema server");
+    // The live and demo backends implement one interface (CLAUDE.md, "Two backends, one
+    // interface"). Compare their members, two levels deep, so adding a capability to one
+    // and forgetting the other fails here. `info` holds display values, not members.
+    const DEMO_ONLY = ["machine.refill()"]; // the demo's "Refill (demo)" button; a real tank is refilled by hand
+    const contract = await S(() => {
+      const shape = (o, pre = "", depth = 0, out = []) => {
+        for (const k of Object.keys(o)) {
+          const v = o[k], path = pre ? `${pre}.${k}` : k;
+          if (typeof v === "function") out.push(`${path}()`);
+          else if (v && typeof v === "object" && !Array.isArray(v) && depth < 2 && k !== "info") shape(v, path, depth + 1, out);
+          else out.push(path);
+        }
+        return out;
+      };
+      const live = new Set(shape(S.api)), demo = new Set(shape(makeDemoApi()));
+      return { onlyLive: [...live].filter((x) => !demo.has(x)), onlyDemo: [...demo].filter((x) => !live.has(x)) };
+    });
+    const drift = [...contract.onlyLive.map((x) => `live only: ${x}`), ...contract.onlyDemo.filter((x) => !DEMO_ONLY.includes(x)).map((x) => `demo only: ${x}`)];
+    check(!drift.length, "the live and demo backends have the same members", drift.join(", "));
     check(await page.isHidden("#demoBanner"), "no demo banner");
     check(await S(() => !S.api.ai.available && !S.api.ai.on), "AI reported unavailable");
     await page.goto(`http://localhost:${SKIN}/?full#add`); await page.waitForTimeout(800);
