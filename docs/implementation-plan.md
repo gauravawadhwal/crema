@@ -53,7 +53,7 @@ separate supervised step; implement and test locally first.
 |---|---|---|---|
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
 | 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
-| 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Ratings and shot history done; profiles and bags next (user: no custom profiles; prepare for two bags of one coffee) |
+| 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Done in software: ratings, shot history (#22), installed profiles (#23), bags per batch. Unverified on the tablet |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
@@ -618,18 +618,50 @@ pagination behaviour rather than the current permissive mock.
 
 ### Beans, batches and persistence
 
-- [ ] Make bag-specific state refer to a batch. Support two active bags of the same
+- [x] Make bag-specific state refer to a batch. Support two active bags of the same
   coffee with different roast dates, frozen state and remaining quantity.
-- [ ] Finishing one bag must not archive other bags. Buying a new bag must not
+  *Done: the shelf has one row per open Decaid batch (`key` = the batch, `id` = the
+  coffee). Roast date, weight, frozen, remaining and shot count come from the bag;
+  identification, recipe, reference shot and photos from the coffee, shared by its
+  bags. Loading a recipe, recommending and dial-in pass the bag, so the workflow and
+  history are the bag's. Shelf and Brew say "Bag 2 of 2" when there are several; the
+  shelf has Another bag and Set what's left.*
+- [x] Finishing one bag must not archive other bags. Buying a new bag must not
   silently discard the existing recipe or reference-shot association.
-- [ ] Define the source of truth for remaining weight, including manual changes
+  *Done: finishing archives that batch; the coffee is archived only with its last
+  open bag. Adding a coffee that's already known adds a bag and keeps the record's
+  recipe, reference shot and photos (before, it reset them).*
+- [x] Define the source of truth for remaining weight, including manual changes
   or consumption recorded through another skin; avoid double counting.
-- [ ] Introduce versioned, idempotent migration of existing `bean:<id>` records.
+  *Decided: Decaid doesn't reduce `weightRemaining` on a shot (its
+  `decrementBatchWeight` has no caller in the app; checked on `main`). So remaining =
+  the bag's weight less the doses of espresso shots recorded against the bag (from
+  any skin that records it), plus a correction. Crema writes the result to the
+  batch's `weightRemaining` after each shot and remembers what it wrote; if the field
+  has changed since (Decaid or another skin), that change becomes the correction
+  instead of being overwritten. Set what's left sets the correction. Writes set a
+  value rather than subtracting, so nothing is counted twice.*
+- [x] Introduce versioned, idempotent migration of existing `bean:<id>` records.
   Preserve shared bean data, recipes, reference IDs and unknown fields where possible.
   Test interrupted migration/retry and document backup/rollback implications.
-- [ ] Check tablet/phone read-modify-write conflicts for settings and favourites;
+  *Not needed: Crema hasn't been installed anywhere with real data (confirmed with
+  the user, 9 November 2026). The record format didn't change: per-bag state lives
+  in Decaid's batches plus a new `bag:<batchId>` key, and old records (one coffee,
+  one `batchId`) read as before; a coffee with no batch shows as one row.*
+- [x] Check tablet/phone read-modify-write conflicts for settings and favourites;
   use upstream concurrency facilities if supported, otherwise document and minimize
   conflict behaviour rather than claiming atomic multi-client updates.
+  *Decaid's key-value store has no conditional writes (no If-Match), so updates are
+  last-writer-wins. Minimized: each bag's correction is its own key, apart from the
+  coffee record that recipes are written to, and record patches re-read just before
+  writing. Settings, favourites and presets are whole-object writes: if the tablet
+  and a phone change them within the same moment, the later one wins.*
+  *`e2e-live.cjs` covers the plan's acceptance case: add a second bag, freeze one,
+  brew from each (the workflow records each bag), per-bag remaining written to
+  Decaid, a change made elsewhere kept, set by hand, buying another bag through Add
+  keeping the recipe and reference, another device seeing the same bags, finishing
+  one bag (others stay) and the last (coffee leaves the shelf). Brew fits all five
+  tablet sizes with a two-bag coffee.*
 
 Acceptance: add two bags, freeze one, brew from each, finish one, reload from another
 device and retain the other bag plus its history. Existing installations migrate

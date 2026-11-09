@@ -366,6 +366,71 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await page.unroute(profilesUrl);
       await S(async () => { S.library = null; S.current.recipe = null; await selectBean(S.current.id, { quiet: true }); });
     }
+
+    // Bags: each is one of Decaid's batches with its own roast date, frozen state and
+    // weight; the coffee's recipe and reference shot are shared.
+    {
+      const batchOf = async (id) => (await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${id}`)).json();
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.reload();
+      await page.waitForFunction(() => S.current?.recipe && S.shelfLoaded, null, { timeout: 15000 });
+      const coffeeId = await S(() => S.current.id), bag1 = await S(() => S.current.key);
+      await S(() => loadOntoMachine(true));
+      const pinnedShot = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots?limit=1`)).json()).items[0].id;
+      await page.evaluate(async (id) => { await S.api.pinBest(S.current.id, id); }, pinnedShot);
+      // Add a second bag from the shelf.
+      await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector(`[data-addbag="${bag1}"]`, { timeout: 10000 });
+      await page.click(`[data-addbag="${bag1}"]`); await page.fill("#bagRoast", "2026-11-01"); await page.fill("#bagWeight", "500"); await page.click("#confirmBag");
+      await page.waitForFunction((id) => S.shelf.filter((b) => b.id === id).length === 2, coffeeId, { timeout: 10000 }).catch(() => {});
+      const two = await page.evaluate((id) => S.shelf.filter((b) => b.id === id).map((b) => ({ key: b.key, bag: `${b.bagNo}/${b.bags}`, roast: b.info.roastDate?.value, weight: b.weight, recipe: b.recipe?.profileTitle })), coffeeId);
+      const bag2 = two.find((b) => b.key !== bag1)?.key;
+      check(two.length === 2 && two.every((b) => b.recipe && b.recipe === two[0].recipe) && two.some((b) => b.roast === "2026-11-01" && b.weight === 500), `a second bag gets its own roast date and weight and shares the recipe (${JSON.stringify(two)})`);
+      check(await page.evaluate(() => /Bag 2 of 2/.test(document.querySelector("#shelf").textContent)), "the shelf says which bag is which");
+      // Freeze one.
+      await page.click(`[data-freeze="${bag2}"]`); await page.waitForTimeout(400);
+      check((await batchOf(bag2)).frozen === true && (await batchOf(bag1)).frozen !== true, "freezing one bag leaves the other alone");
+      // Brew from each: the workflow records the bag.
+      await page.evaluate((k) => selectBean(k, { quiet: true }), bag2); await S(() => { S.loaded = false; return loadOntoMachine(true); });
+      const w2 = (await wfGet()).context.beanBatchId;
+      await page.evaluate((k) => selectBean(k, { quiet: true }), bag1); await S(() => { S.loaded = false; return loadOntoMachine(true); });
+      const w1 = (await wfGet()).context.beanBatchId;
+      check(w2 === bag2 && w1 === bag1, "loading from each bag records that bag in the workflow");
+      // What's left is per bag, counted from its shots, written back to Decaid.
+      await dev("shots/seed", { count: 3, batchId: bag2, dose: 18 });
+      const left2 = await page.evaluate(async (k) => { const b = S.shelf.find((x) => x.key === k); return S.api.syncRemaining(b.id, b.batch); }, bag2);
+      check(left2 === 500 - 54 && (await batchOf(bag2)).weightRemaining === 446, `a bag's remaining is its weight less its own shots, and Decaid gets it (${left2})`);
+      // Changed elsewhere (Decaid or another skin): taken as a correction, not overwritten.
+      await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag2}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ weightRemaining: 400 }) });
+      await dev("shots/seed", { count: 1, batchId: bag2, dose: 18 });
+      const adopted = await page.evaluate(async (k) => (await S.api.shelf()).find((x) => x.key === k).remaining, bag2);
+      check(adopted === 400 - 18 || adopted === 400, `a remaining weight changed elsewhere is kept (${adopted})`);
+      // Set by hand.
+      await page.evaluate(async () => { await refreshShelf(); }); await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#shelf`);
+      await page.waitForSelector(`[data-left="${bag2}"]`, { timeout: 10000 }); await page.click(`[data-left="${bag2}"]`); await page.fill("#leftG", "300"); await page.click("#confirmLeft"); await page.waitForTimeout(500);
+      check((await batchOf(bag2)).weightRemaining === 300 && await page.evaluate(async (k) => (await S.api.shelf()).find((x) => x.key === k).remaining, bag2) === 300, "what's left can be set by hand, and Decaid gets it");
+      // Buying another bag through Add keeps the recipe and the reference shot.
+      const again = await page.evaluate(async () => { const info = JSON.parse(JSON.stringify(S.current.info)); info.roastDate = { value: "2026-11-05", source: "bag" }; info.weightGrams = 250; return S.api.saveBean(info, null, "photo"); });
+      const kept = await page.evaluate(async (id) => (await S.api.shelf()).filter((b) => b.id === id).map((b) => ({ recipe: b.recipe?.profileTitle, best: b.bestShotId })), coffeeId);
+      check(again.anotherBag && kept.length === 3 && kept.every((b) => b.recipe && b.best === pinnedShot), `buying another bag keeps the coffee's recipe and reference shot (${JSON.stringify(kept)})`);
+      // Another device sees the same bags.
+      const other = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      await other.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#shelf`);
+      await other.waitForFunction(() => S.shelfLoaded, null, { timeout: 15000 });
+      const seen = await other.evaluate((id) => S.shelf.filter((b) => b.id === id).map((b) => ({ key: b.key, frozen: b.frozen })), coffeeId);
+      check(seen.length === 3 && seen.find((b) => b.key === bag2)?.frozen === true, "another device sees the same bags and their state");
+      await other.close();
+      // Finish one bag: the others stay, with the recipe.
+      await page.evaluate(async () => { await refreshShelf(); renderShelf(); });
+      await page.click(`[data-finish="${bag2}"]`); await page.click("#confirmFinish"); await page.waitForTimeout(800);
+      const afterFinish = await page.evaluate((id) => S.shelf.filter((b) => b.id === id).map((b) => b.key), coffeeId);
+      const bean = await (await fetch(`http://localhost:${MOCK}/api/v1/beans/${coffeeId}`)).json();
+      check(afterFinish.length === 2 && !afterFinish.includes(bag2) && (await batchOf(bag2)).archived === true && !bean.archived, "finishing one bag leaves the coffee's other bags on the shelf");
+      // Finish the rest: the coffee moves off the shelf.
+      for (const k of afterFinish) { await page.evaluate(async (key) => { const b = S.shelf.find((x) => x.key === key); await S.api.setBeanState(b.id, { finished: true }, b.batch); await refreshShelf(); }, k); }
+      const gone = await page.evaluate((id) => S.shelf.some((b) => b.id === id), coffeeId);
+      check(!gone && (await (await fetch(`http://localhost:${MOCK}/api/v1/beans/${coffeeId}`)).json()).archived === true, "finishing its last bag moves the coffee off the shelf");
+      // Bring it back for the steps that follow.
+      await page.evaluate(async (id) => { const r = await S.api.addBag(id, { weight: 250 }); await refreshShelf(); await selectBean(r.key, { quiet: true }); }, coffeeId);
+    }
     const kv = await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema`)).json();
     check(kv.some((k) => k.startsWith("bean:")), "Crema's record is stored in Decaid's key-value store");
     const fb = await S(async () => { const [shot] = await S.api.shots(1); return shot ? S.api.feedback(shot.id, S.current.id, { sourBitter: -1, body: 0, enjoyment: 6, notes: null }) : { source: "no shot" }; });

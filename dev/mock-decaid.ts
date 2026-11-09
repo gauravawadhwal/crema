@@ -384,11 +384,13 @@ const server = createServer(async (req, res) => {
     if ((match = p.match(/^\/api\/v1\/beans\/([^/]+)\/batches$/))) {
       if (m === "POST") {
         const input = await body(req);
-        const bt = { id: randomUUID(), beanId: match[1], weightRemaining: input.weight ?? null, frozen: false, ...input };
+        const bt = { id: randomUUID(), beanId: match[1], weightRemaining: input.weight ?? null, frozen: false, archived: false, createdAt: new Date().toISOString(), ...input };
         batches.push(bt);
         return send(res, 201, bt);
       }
-      return send(res, 200, batches.filter((b) => b.beanId === match![1]));
+      // Like Decaid: archived (finished) bags are left out unless asked for.
+      const all = url.searchParams.get("includeArchived") === "true";
+      return send(res, 200, batches.filter((b) => b.beanId === match![1] && (all || !b.archived)));
     }
     if ((match = p.match(/^\/api\/v1\/bean-batches\/([^/]+)$/))) {
       const bt = batches.find((x) => x.id === match![1]);
