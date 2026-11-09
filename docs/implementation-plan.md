@@ -135,6 +135,14 @@ regression keeps two clients open before adding a bag, checks the automatic upda
 and clicks “Brew this” on both phone and tablet. Real tablet upgrade/retest pending;
 this feedback does not complete phase 7.
 
+Local verification: typecheck and all 167 unit tests passed; app/demo/engine syntax,
+source and built demo click-throughs at phone/tablet sizes, live simulator checks,
+and skin ZIP validation passed. The new two-client regression covers automatic bag
+arrival, preserved unsaved recipe edits, retained inventory on read failure, and
+both “Brew this” buttons. The built demo was regenerated and screenshots reviewed.
+No CSS/layout, upstream API, engine or Docker changes; no real-machine commands or
+live data migration. Real Decaid/tablet validation and release installation pending.
+
 ## Findings from writing the user setup guide (7 November 2026)
 
 Writing a step-by-step setup guide for the user surfaced these gaps. Each one belongs
