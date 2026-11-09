@@ -5,8 +5,9 @@ import { identify } from "./identify.js";
 import { cacheImage, findProductImage, isPlaceholderImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
 import type { AudioInput, ImageInput } from "./llm/types.js";
-import { dialIn, recommend } from "./recommend/index.js";
-import { BeanInfo, Recipe, TasteFeedback } from "./schema.js";
+import { dialInWithSource, recommend } from "./recommend/index.js";
+import { reviewShot } from "./recommend/review.js";
+import { BeanInfo, Recipe, ReviewBody, TasteFeedback } from "./schema.js";
 
 const IdentifyText = z.object({
   query: z.string().max(300).optional(),
@@ -143,7 +144,22 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
   /** Taste feedback on a shot → the one change to make next. */
   app.post("/api/dialin", async (c) => {
     const body = DialInBody.parse(await c.req.json());
-    return c.json({ advice: await dialIn(llm, body) });
+    return c.json(await dialInWithSource(llm, body));
+  });
+
+  /** Curves + optional taste → an evidence-bound shot review, only on request. */
+  app.post("/api/review", async (c) => {
+    const length = Number(c.req.header("content-length") ?? 0);
+    if (length > 1_000_000) return c.json({ error: "review request too large" }, 413);
+    const raw = await c.req.text();
+    if (Buffer.byteLength(raw, "utf8") > 1_000_000) return c.json({ error: "review request too large" }, 413);
+    let decoded: unknown;
+    try { decoded = JSON.parse(raw); }
+    catch { return c.json({ error: "invalid JSON request body" }, 400); }
+    const body = ReviewBody.parse(decoded);
+    // The currently installed profile snapshot is authoritative. The server
+    // never substitutes a catalogue profile with the same title.
+    return c.json(await reviewShot(llm, body));
   });
 
   /** Download a roaster product photo once and serve it from here (works when the tablet is offline). */

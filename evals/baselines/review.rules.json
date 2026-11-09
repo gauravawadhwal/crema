@@ -1,0 +1,1750 @@
+{
+ "meta": {
+  "task": "review",
+  "subject": "rules",
+  "provider": "rules",
+  "model": null,
+  "judge": null,
+  "startedAt": "2026-11-09T21:45:52.746Z",
+  "git": {
+   "commit": "0c8c11d48fce4c47b1dbfca8c1ab86b0351f254a",
+   "dirty": true
+  },
+  "repeats": 1,
+  "filter": null,
+  "prompts": {},
+  "label": "final-rules"
+ },
+ "summary": {
+  "cases": 20,
+  "runs": 20,
+  "errors": 0,
+  "passRate": 1,
+  "passCI": [
+   0.839,
+   1
+  ],
+  "passAllRepeats": 1,
+  "meanScore": 1,
+  "headline": {
+   "model answered": 1,
+   "appropriate next move": 1,
+   "required observations": 1,
+   "no false alarms": 1,
+   "one change": 1,
+   "grounded ranges": 1
+  },
+  "checks": {
+   "modelAnswered": {
+    "pass": 20,
+    "n": 20
+   },
+   "acceptableMove": {
+    "pass": 20,
+    "n": 20
+   },
+   "requiredIssues": {
+    "pass": 20,
+    "n": 20
+   },
+   "noFalseAlarms": {
+    "pass": 20,
+    "n": 20
+   },
+   "oneChange": {
+    "pass": 20,
+    "n": 20
+   },
+   "validSwitch": {
+    "pass": 20,
+    "n": 20
+   },
+   "groundedRanges": {
+    "pass": 20,
+    "n": 20
+   },
+   "askTaste": {
+    "pass": 19,
+    "n": 19
+   }
+  },
+  "tags": {
+   "balanced": {
+    "pass": 1,
+    "n": 1
+   },
+   "synthetic": {
+    "pass": 20,
+    "n": 20
+   },
+   "bloom": {
+    "pass": 1,
+    "n": 1
+   },
+   "channeling": {
+    "pass": 1,
+    "n": 1
+   },
+   "choke": {
+    "pass": 1,
+    "n": 1
+   },
+   "clean": {
+    "pass": 1,
+    "n": 1
+   },
+   "early-stop": {
+    "pass": 1,
+    "n": 1
+   },
+   "gusher": {
+    "pass": 1,
+    "n": 1
+   },
+   "manual": {
+    "pass": 1,
+    "n": 1
+   },
+   "manual-sour": {
+    "pass": 1,
+    "n": 1
+   },
+   "missing-flow": {
+    "pass": 1,
+    "n": 1
+   },
+   "missing-scale": {
+    "pass": 1,
+    "n": 1
+   },
+   "no-data": {
+    "pass": 1,
+    "n": 1
+   },
+   "notes-only": {
+    "pass": 1,
+    "n": 1
+   },
+   "sour-choke": {
+    "pass": 1,
+    "n": 1
+   },
+   "temp-offset": {
+    "pass": 1,
+    "n": 1
+   },
+   "temperature-curve": {
+    "pass": 1,
+    "n": 1
+   },
+   "transient": {
+    "pass": 1,
+    "n": 1
+   },
+   "turbo": {
+    "pass": 1,
+    "n": 1
+   },
+   "unknown-profile": {
+    "pass": 1,
+    "n": 1
+   },
+   "unknown-sour": {
+    "pass": 1,
+    "n": 1
+   }
+  },
+  "splits": {
+   "holdout": {
+    "pass": 6,
+    "n": 6
+   },
+   "dev": {
+    "pass": 14,
+    "n": 14
+   }
+  },
+  "latencyMs": {
+   "p50": 0,
+   "p95": 2,
+   "max": 2
+  },
+  "cost": {
+   "usdTotal": null,
+   "usdPerRun": null,
+   "inputTokens": 0,
+   "outputTokens": 0,
+   "calls": 0
+  },
+  "judgeCostUsd": null
+ },
+ "records": [
+  {
+   "caseId": "review-balanced",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "balanced",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": {
+     "change": "Keep it as it is",
+     "grindDelta": "same",
+     "yieldDeltaG": 0,
+     "tempDeltaC": 0,
+     "switchProfile": null,
+     "reasoning": "You marked the taste and body as balanced."
+    },
+    "confidence": "medium",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move keep; accept keep, none"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "keep",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-bloom",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "bloom",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-channeling",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "channeling",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "wentWell": [],
+    "issues": [
+     {
+      "kind": "channeling",
+      "what": "Flow rose steadily while pressure stayed near its target.",
+      "evidence": "28.0s in frame 1: four successive flow bins rose from 1.2 to 2.7 ml/s while pressure averaged 9.0 bar against 9.0 bar.",
+      "severity": "caution",
+      "fromS": 2,
+      "toS": 30
+     }
+    ],
+    "nextShot": null,
+    "confidence": "medium",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed channeling"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": "channeling"
+    }
+   }
+  },
+  {
+   "caseId": "review-choke",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "choke",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "wentWell": [],
+    "issues": [
+     {
+      "kind": "choked",
+      "what": "Flow stayed very low while pressure remained high.",
+      "evidence": "28.0s in frame 1: pressure target 9.0, measured 9.0 bar, flow 0.3 ml/s.",
+      "severity": "caution",
+      "fromS": 2,
+      "toS": 30
+     }
+    ],
+    "nextShot": {
+     "change": "Grind coarser",
+     "grindDelta": "coarser",
+     "yieldDeltaG": 0,
+     "tempDeltaC": 0,
+     "switchProfile": null,
+     "reasoning": "Flow was persistently very low during a steady pressure hold; a small coarser step may reduce resistance."
+    },
+    "confidence": "medium",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move coarser; accept coarser"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed choked"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "coarser",
+     "findings": "choked"
+    }
+   }
+  },
+  {
+   "caseId": "review-clean",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "clean",
+    "synthetic"
+   ],
+   "ms": 2,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-early-stop",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "early-stop",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-gusher",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "gusher",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "wentWell": [],
+    "issues": [
+     {
+      "kind": "gushed",
+      "what": "Flow stayed well above the profile's flow target.",
+      "evidence": "28.0s in frame 1: flow target 2.0, measured 4.0 ml/s, flow 4.0 ml/s.",
+      "severity": "caution",
+      "fromS": 2,
+      "toS": 30
+     }
+    ],
+    "nextShot": {
+     "change": "Grind finer",
+     "grindDelta": "finer",
+     "yieldDeltaG": 0,
+     "tempDeltaC": 0,
+     "switchProfile": null,
+     "reasoning": "Flow or pressure was far from the profile target for a sustained window; a small finer step may add resistance."
+    },
+    "confidence": "medium",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move finer; accept finer"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed gushed"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "findings": "gushed"
+    }
+   }
+  },
+  {
+   "caseId": "review-manual",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "manual",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-manual-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "manual-sour",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-missing-flow",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "missing-flow",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-missing-scale",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "missing-scale",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-no-data",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "no-data",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-notes-only",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "notes-only",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": {
+     "change": "Keep it as it is",
+     "grindDelta": "same",
+     "yieldDeltaG": 0,
+     "tempDeltaC": 0,
+     "switchProfile": null,
+     "reasoning": "You marked the taste and body as balanced."
+    },
+    "confidence": "medium",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move keep; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "keep",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-sour-choke",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "sour-choke",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "wentWell": [],
+    "issues": [
+     {
+      "kind": "choked",
+      "what": "Flow stayed very low while pressure remained high.",
+      "evidence": "28.0s in frame 1: pressure target 9.0, measured 9.0 bar, flow 0.3 ml/s.",
+      "severity": "caution",
+      "fromS": 2,
+      "toS": 30
+     }
+    ],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, temp-up, yield-up"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed choked"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": "choked"
+    }
+   }
+  },
+  {
+   "caseId": "review-temp-offset",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "temp-offset",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [
+     {
+      "kind": "off_target_temp",
+      "what": "Recorded temperature averaged below its target.",
+      "evidence": "Mean offset -3.0 °C across 121 paired readings.",
+      "severity": "info",
+      "fromS": 0,
+      "toS": 30
+     }
+    ],
+    "nextShot": null,
+    "confidence": "medium",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed off_target_temp"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": "off_target_temp"
+    }
+   }
+  },
+  {
+   "caseId": "review-temperature-curve",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "temperature-curve",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-transient",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "transient",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-turbo",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "turbo",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-unknown-profile",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "unknown-profile",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-unknown-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "unknown-sour",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "wentWell": [],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  }
+ ],
+ "inputs": {}
+}

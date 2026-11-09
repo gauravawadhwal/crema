@@ -27,6 +27,7 @@ var CremaEngine = (() => {
     DEFAULT_PRESETS: () => DEFAULT_PRESETS,
     DEFAULT_SETTINGS: () => DEFAULT_SETTINGS,
     GRIND_STEPS: () => GRIND_STEPS,
+    analyzeShot: () => analyzeShot,
     baseline: () => baseline,
     beanTraits: () => beanTraits,
     findProfile: () => findProfile,
@@ -37,6 +38,7 @@ var CremaEngine = (() => {
     rankProfiles: () => rankProfiles,
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
+    rulesReview: () => rulesReview,
     shotSim: () => shotSim,
     simulateShot: () => simulateShot,
     stepDurations: () => stepDurations,
@@ -1117,6 +1119,221 @@ var CremaEngine = (() => {
       }
     }
     return out;
+  }
+
+  // server/profiles/analysis.ts
+  var finite = (n) => n != null && Number.isFinite(n);
+  var number = (v) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  function stepAt(profile, frame) {
+    if (frame == null || !Number.isInteger(frame) || frame < 0) return null;
+    return profile.steps?.[frame] ?? null;
+  }
+  function skippedStep(profile, step, target) {
+    const title = `${profile.title ?? ""} ${step.name ?? ""}`.toLowerCase();
+    if (profile.beverage_type === "manual" || /turbo|bloom|pre.?infusion/.test(title)) return true;
+    if (target <= 0 || number(step.limiter?.value) != null && number(step.limiter?.value) > 0) return true;
+    if ((step.pump === "flow" || step.pump === "Flow") && target > 3) return true;
+    return false;
+  }
+  function targetAndActual(input, point) {
+    const step = stepAt(input.profile, point.frame);
+    if (!step || point.frame == null) return null;
+    if (step.pump !== "flow" && step.pump !== "pressure") return null;
+    const pump = step.pump === "flow" ? "flow" : "pressure";
+    const target = pump === "pressure" ? point.tp : point.tf;
+    const actual = pump === "pressure" ? point.p : point.f;
+    if (!finite(target) || !finite(actual) || target <= 0 || skippedStep(input.profile, step, target)) return null;
+    return { pump, target, actual, step };
+  }
+  function analyzeShot(input) {
+    const issues = [];
+    const profile = input.profile;
+    const points = [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
+    const targets = points.map((p) => ({ p, data: profile ? targetAndActual(input, p) : null }));
+    const windows = [];
+    let run = [];
+    const flush = () => {
+      if (run.length < 6) {
+        run = [];
+        return;
+      }
+      const first = run[0], last = run.at(-1);
+      if (last.p.t - first.p.t < 8 || !first.data) {
+        run = [];
+        return;
+      }
+      const settled = run.filter(({ p, data }) => p.t - first.p.t >= 2 && data != null);
+      if (settled.length < 5 || settled.at(-1).p.t - settled[0].p.t < 5) {
+        run = [];
+        return;
+      }
+      const ts = settled.map((x) => x.data.target);
+      if (Math.max(...ts) - Math.min(...ts) > 0.25) {
+        run = [];
+        return;
+      }
+      windows.push({
+        frame: first.p.frame,
+        start: settled[0].p.t,
+        end: settled.at(-1).p.t,
+        target: ts.reduce((a, b) => a + b, 0) / ts.length,
+        actuals: settled.map((x) => x.data.actual),
+        flows: settled.map((x) => finite(x.p.f) ? x.p.f : null),
+        pump: first.data.pump,
+        step: first.data.step
+      });
+      run = [];
+    };
+    for (const entry of targets) {
+      const current = entry.data;
+      const prev = run.at(-1);
+      const compatible = current && prev?.data && entry.p.frame === prev.p.frame && current.pump === prev.data.pump && Math.abs(current.target - prev.data.target) <= 0.25 && entry.p.t - prev.p.t <= 1.5;
+      if (!compatible) flush();
+      if (current) run.push(entry);
+    }
+    flush();
+    for (const w of windows) {
+      const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+      const actual = avg(w.actuals);
+      const flowValues = w.flows.filter(finite);
+      const flowCoverage = flowValues.length / w.flows.length;
+      const flow = avg(flowValues);
+      if (actual == null) continue;
+      const ratio = actual / w.target;
+      let kind = null;
+      let what = "";
+      if (w.pump === "flow" && ratio <= 0.55) {
+        kind = "choked";
+        what = "Flow stayed well below the profile's flow target.";
+      } else if (w.pump === "flow" && ratio >= 1.55) {
+        kind = "gushed";
+        what = "Flow stayed well above the profile's flow target.";
+      } else if (w.pump === "pressure" && ratio <= 0.55 && flowCoverage >= 0.8 && flow != null && flow >= 3.5) {
+        kind = "gushed";
+        what = "Pressure stayed well below target while flow remained high.";
+      } else if (w.pump === "pressure" && flowCoverage >= 0.8 && flow != null && flow <= 0.5 && actual >= 4) {
+        kind = "choked";
+        what = "Flow stayed very low while pressure remained high.";
+      }
+      if (kind) {
+        issues.push({
+          kind,
+          what,
+          evidence: `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}: ${w.pump} target ${w.target.toFixed(1)}, measured ${actual.toFixed(1)}${w.pump === "pressure" ? " bar" : " ml/s"}${flow == null ? "" : `, flow ${flow.toFixed(1)} ml/s`}.`,
+          severity: "caution",
+          fromS: w.start,
+          toS: w.end
+        });
+      }
+      const pressureStable = Math.max(...w.actuals) - Math.min(...w.actuals) <= Math.max(0.5, w.target * 0.15);
+      if (w.pump === "pressure" && w.end - w.start >= 15 && flow != null && flowCoverage >= 0.8 && Math.abs(actual / w.target - 1) <= 0.15 && pressureStable && actual >= 4.5 && flowValues.length >= 8 && Math.max(...flowValues) <= 3) {
+        const binCount = 4;
+        const bins = Array.from({ length: binCount }, (_, i) => {
+          const start = Math.floor(i * flowValues.length / binCount);
+          const end = Math.floor((i + 1) * flowValues.length / binCount);
+          return avg(flowValues.slice(start, end));
+        });
+        const riseSteps = bins.slice(1).filter((value, i) => value != null && bins[i] != null && value >= bins[i] + 0.1).length;
+        const startFlow = bins[0], endFlow = bins.at(-1);
+        if (startFlow != null && endFlow != null && riseSteps >= 3 && startFlow >= 0.4 && endFlow - startFlow >= 0.8 && endFlow >= startFlow * 1.5) {
+          issues.push({
+            kind: "channeling",
+            what: "Flow rose steadily while pressure stayed near its target.",
+            evidence: `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}: four successive flow bins rose from ${startFlow.toFixed(1)} to ${endFlow.toFixed(1)} ml/s while pressure averaged ${actual.toFixed(1)} bar against ${w.target.toFixed(1)} bar.`,
+            severity: "caution",
+            fromS: w.start,
+            toS: w.end
+          });
+        }
+      }
+    }
+    const tempPairs = points.flatMap((p) => {
+      if (!finite(p.temp)) return [];
+      const target = finite(p.targetTemp) ? p.targetTemp : number(stepAt(profile ?? {}, p.frame)?.temperature);
+      return target == null ? [] : [{ p, delta: p.temp - target }];
+    });
+    const meanTemp = tempPairs.length ? tempPairs.reduce((n, x) => n + x.delta, 0) / tempPairs.length : null;
+    if (tempPairs.length >= 5 && tempPairs.at(-1).p.t - tempPairs[0].p.t >= 4 && meanTemp != null && Math.abs(meanTemp) > 1.5) {
+      const fromS = tempPairs[0].p.t, toS = tempPairs.at(-1).p.t;
+      issues.push({
+        kind: "off_target_temp",
+        what: `Recorded temperature averaged ${meanTemp > 0 ? "above" : "below"} its target.`,
+        evidence: `Mean offset ${meanTemp > 0 ? "+" : ""}${meanTemp.toFixed(1)} \xB0C across ${tempPairs.length} paired readings.`,
+        severity: "info",
+        fromS,
+        toS
+      });
+    }
+    const well = windows.filter((w) => {
+      if (issues.some((issue) => issue.fromS === w.start && issue.toS === w.end)) return false;
+      const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
+      return Math.abs(avg / w.target - 1) <= 0.2;
+    });
+    const wentWell = well.length ? ["The controlled pressure or flow target stayed close to its recorded target."] : [];
+    return {
+      issues,
+      wentWell,
+      metrics: { recordedPoints: points.length, usableTemperaturePoints: tempPairs.length, meanTemperatureOffsetC: meanTemp, observedWindows: windows.length }
+    };
+  }
+
+  // server/recommend/review-local.ts
+  function grindAdvice(direction, reason) {
+    const finer = direction === "finer";
+    return {
+      change: finer ? "Grind finer" : "Grind coarser",
+      grindDelta: finer ? "finer" : "coarser",
+      yieldDeltaG: 0,
+      tempDeltaC: 0,
+      switchProfile: null,
+      reasoning: reason
+    };
+  }
+  function tasteAdvice(input) {
+    const f = input.feedback;
+    if (!f) return null;
+    if (f.sourBitter <= -1) return grindAdvice("finer", "The shot tasted sour; finer grinding is a small extraction adjustment.");
+    if (f.sourBitter >= 1) return grindAdvice("coarser", "The shot tasted bitter; coarser grinding is a small extraction adjustment.");
+    if (f.body <= -1) return { change: "Shorten the yield by 3 g for more body", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted thin; a slightly shorter yield may add body." };
+    if (f.body >= 2) return { change: "Lengthen the yield by 3 g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted heavy; a slightly longer yield may add clarity." };
+    if (f.sourBitter === 0 && f.body === 0) return { change: "Keep it as it is", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "You marked the taste and body as balanced." };
+    return null;
+  }
+  function rulesReview(input) {
+    const analysis = analyzeShot(input);
+    const issues = analysis.issues;
+    const hasChoke = issues.some((i) => i.kind === "choked");
+    const hasGush = issues.some((i) => i.kind === "gushed");
+    const manual = input.profile?.beverage_type === "manual";
+    let nextShot = null;
+    let conflict = false;
+    if (input.feedback) {
+      const tasted = tasteAdvice(input);
+      conflict = hasChoke && input.feedback.sourBitter <= -1 || hasGush && input.feedback.sourBitter >= 1;
+      const explicitBalance = input.feedback.sourBitter === 0 && input.feedback.body === 0;
+      if (!conflict && (explicitBalance || !manual && input.profile != null)) nextShot = tasted;
+    } else if (!manual && hasChoke && !hasGush) {
+      nextShot = grindAdvice("coarser", "Flow was persistently very low during a steady pressure hold; a small coarser step may reduce resistance.");
+    } else if (!manual && hasGush && !hasChoke) {
+      nextShot = grindAdvice("finer", "Flow or pressure was far from the profile target for a sustained window; a small finer step may add resistance.");
+    }
+    const summary = issues.length ? "The recorded curves show a sustained difference from the profile in at least one part of the shot." : analysis.metrics.observedWindows ? "No sustained curve issue stood out in the recorded, comparable parts of the profile." : "There is not enough comparable telemetry to draw a conclusion from this shot.";
+    let confidence = "low";
+    if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
+    if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";
+    if (conflict) confidence = "low";
+    return {
+      summary,
+      wentWell: analysis.wentWell,
+      issues,
+      nextShot,
+      confidence,
+      askTaste: input.feedback == null
+    };
   }
   return __toCommonJS(engine_exports);
 })();

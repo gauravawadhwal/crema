@@ -277,9 +277,9 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .phase { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; }
 .clock { font-family: var(--font-mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
 
-.controls { display: grid; gap: 10px; }
-.ctl { display: grid; gap: 6px; padding: 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
-.ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: .98rem; text-align: left; }
+.controls { display: grid; gap: 10px; min-width: 0; }
+.ctl { display: grid; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
+.ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: .98rem; text-align: left; }
 .ctl-btn .sub { white-space: nowrap; margin-left: auto; font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-weight: 400; }
 .ctl-btn.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .ctl-btn.go .sub { color: var(--accent-ink); opacity: .75; }
@@ -290,6 +290,7 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .stop-btn { width: 100%; min-height: 64px; border-radius: var(--r); border: 0; background: var(--surface-2); color: var(--muted); font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .06em; cursor: pointer; }
 .stop-btn.active { background: var(--stop); color: #fff; }
 .ghc-note { font-size: .78rem; color: var(--muted); }
+.stop-wrap, .ghc-note { min-width: 0; }
 
 .taste { display: grid; gap: 12px; }
 .scale-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; align-items: center; }
@@ -537,6 +538,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .readout .v { font-size: 1.02rem; }
   .readout .label { font-size: .62rem; }
   .ctl .presets .preset { padding: 3px 6px; }
+  .ctl-btn .sub { white-space: normal; max-width: 56%; line-height: 1.15; text-align: right; overflow-wrap: anywhere; }
+  .ghc-note { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
   .legend { display: none; }

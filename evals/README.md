@@ -1,6 +1,6 @@
 # Crema AI evals
 
-Crema calls a model in three places. This suite measures each one against
+Crema calls a model in four places. This suite measures each one against
 labelled cases, so you can change a prompt, a provider or a model and know
 whether the result got better or worse, and by how much it costs.
 
@@ -9,6 +9,7 @@ whether the result got better or worse, and by how much it costs.
 | `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page, a typed or dictated description, and/or a query | 27 self-contained + 9 live web |
 | `recommend` | `recommend()` in `server/recommend/index.ts` | `Recipe`: one profile among the installed candidates, plus dose, yield, temperature and guidance | 32 |
 | `dialin` | `dialIn()` in `server/recommend/index.ts` | `DialInAdvice`: the one change to make after a shot | 28 |
+| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded observations, narrative and at most one next-shot change | 20 synthetic |
 
 The runner calls those real functions, with the real prompts and the real
 post-processing (rules fallback, profile-title matching), and swaps only the
@@ -47,6 +48,41 @@ Any provider in `server/llm/` works: `claude-cli`, `codex-cli`,
 `anthropic-api`, `gemini-api` (e.g. `--provider gemini-api --model
 gemini-2.5-flash-lite`), and `mock`. `--provider rules` runs Crema's
 deterministic fallback in place of a model.
+
+## Shot review baseline — 10 November 2026
+
+The first review baseline uses synthetic telemetry, not calibrated physical shots.
+Findings and their time ranges are computed by code; the model writes the narrative
+and next step. The runner exercises the shipped validation and rules fallback.
+
+| Run | Pass | Model answered | Grounded ranges / one change / no false alarms |
+|---|---|---|---|
+| Rules, all 20 cases | 20/20 (100%) | n/a | 100% / 100% / 100% |
+| Haiku, 14 development cases × 3 | 40/42 (95%) | 42/42 (100%) | 100% / 100% / 100% |
+| Haiku, 6 original holdout cases rechecked × 1 | 6/6 (100%) | 6/6 (100%) | 100% / 100% / 100% |
+
+Saved as `review.rules.json`, `review.claude-cli-haiku-dev.json` and
+`review.claude-cli-haiku-holdout.json` in `baselines/`, with reports alongside.
+The remaining development misses were two conservative abstentions on a gusher.
+The first untouched holdout scored 5/6 (83%): the model asked for taste despite
+supplied ratings. Final code derives that flag from the input; a regression test
+covers both directions. The original holdout was then rechecked and passed 6/6.
+That recheck is **not a fresh holdout**; its first run is also committed as
+`review.claude-cli-haiku-initial-holdout.json`. No prompt tuning used holdout content,
+and no provider default changed.
+
+The earlier development prompt allowed model-authored issues and caused excessive
+fallbacks. Restricting the model to narrative, while retaining canonical findings
+in code, raised development pass rate from 26% to 93% before the taste-state correction.
+The final development and holdout recheck together reported $0.028 at the CLI's list-price estimate. These small
+synthetic sets establish software behavior, not diagnostic accuracy or prose quality;
+real-shot calibration and human review remain required.
+
+```bash
+npm run eval -- --task review --provider rules
+npm run eval -- --task review --provider claude-cli --model haiku --split dev --repeat 3
+npm run eval:compare -- evals/baselines/review.claude-cli-haiku-dev.json evals/results/<new>.json
+```
 
 ## Current results
 
@@ -272,12 +308,19 @@ Each case has an `id`, a `split`, `tags` for slicing, the `input`, the
   field that says "astringent" while the sliders read balanced, a turbo shot
   that's fast by design, and six failed shots that justify switching profile.
 
+- **review**: reproducible curves in `lib/review-fixtures.ts` cover settled normal
+  shots, sustained low/high flow, qualified flow rise, missing telemetry and scale,
+  manual and unknown profiles, bloom/turbo, temperature curves, early stops,
+  conflicting taste and embedded instructions. Checks cover required/forbidden
+  findings, supported moves, exact installed-profile switches, one change, bounded
+  ranges, missing taste and whether the model fell back to rules.
+
 Coffees that recur are defined once in a file's `beans` map and referenced
 with `ref`; real sample coffees are referenced by name with `sample`. Roast
 dates and shot history are written relative to the run (`roastDaysAgo`,
 `daysAgo`), so rest status means the same on any day.
 
-### Graders (`lib/graders.ts`)
+### Graders (`lib/graders.ts`, `lib/review-grader.ts`)
 
 Graders are code, not models. Each case becomes a list of named checks.
 **Critical** checks are the ones a user would call a wrong answer (wrong
@@ -293,7 +336,7 @@ users, but the eval shouldn't.
 
 ### Model-graded checks (`lib/judge.ts`, optional)
 
-`--judge` adds three non-critical checks to recommend and dialin. The judge
+`--judge` adds three non-critical checks to recommend, dialin and review. The judge
 never decides the profile or the move; code does that.
 
 - **no contradictions**: nothing in the text conflicts with the input. Each

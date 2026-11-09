@@ -23,13 +23,20 @@ const out = process.argv[2] ? path.resolve(process.argv[2]) : fs.mkdtempSync(pat
 const url = process.argv[3] || "file://" + path.resolve(__dirname, "../skin/index.html") + "?demo&full";
 fs.mkdirSync(out, { recursive: true });
 
-// Page height and width against the viewport, and each Brew column's overflow in px.
+// Page bounds plus vertical and horizontal overflow inside each Brew column.
 const measure = (p) => p.evaluate(() => ({
   sh: document.documentElement.scrollHeight,
   sw: document.documentElement.scrollWidth,
   ih: innerHeight,
   iw: innerWidth,
-  cols: [...document.querySelectorAll("#view-brew > .stack")].map((c) => ({ name: c.className.split(" ")[1], over: c.scrollHeight - c.clientHeight })),
+  cols: [...document.querySelectorAll("#view-brew > .stack")].map((c) => {
+    const rect = c.getBoundingClientRect();
+    const escaped = [...c.children].filter((child) => {
+      const r = child.getBoundingClientRect();
+      return r.width > 0 && (r.left < rect.left - 1 || r.right > rect.right + 1);
+    }).map((child) => `${child.id || child.className || child.tagName}`);
+    return { name: c.className.split(" ")[1], overY: c.scrollHeight - c.clientHeight, overX: c.scrollWidth - c.clientWidth, escaped };
+  }),
 }));
 
 (async () => {
@@ -43,8 +50,12 @@ const measure = (p) => p.evaluate(() => ({
       const where = `${w}x${h} (${label}) ${stage}`;
       if (m.sh > m.ih) problems.push(`${where}: page scrolls (${m.sh}px in ${m.ih}px)`);
       if (m.sw > m.iw) problems.push(`${where}: page scrolls sideways (${m.sw}px in ${m.iw}px)`);
-      for (const c of m.cols) if (c.over > 1) problems.push(`${where}: ${c.name} column clipped by ${c.over}px`);
-      const cols = m.cols.map((c) => `${c.name} ${c.over > 1 ? `CLIPPED ${c.over}px` : "ok"}`).join(", ");
+      for (const c of m.cols) {
+        if (c.overY > 1) problems.push(`${where}: ${c.name} column clips vertically by ${c.overY}px`);
+        if (c.overX > 1) problems.push(`${where}: ${c.name} column overflows horizontally by ${c.overX}px`);
+        if (c.escaped.length) problems.push(`${where}: ${c.name} children extend past the column (${c.escaped.join(", ")})`);
+      }
+      const cols = m.cols.map((c) => `${c.name} ${c.overY > 1 ? `Y ${c.overY}px` : "Y ok"}/${c.overX > 1 ? `X ${c.overX}px` : "X ok"}${c.escaped.length ? ` escaped: ${c.escaped.join("|")}` : ""}`).join(", ");
       console.log(`${where}: ${m.sh}/${m.ih}${m.sh > m.ih ? " SCROLLS" : " fits"}; columns: ${cols}`);
     };
     try {
@@ -61,6 +72,10 @@ const measure = (p) => p.evaluate(() => ({
       await p.waitForTimeout(400);
       check("after shot", await measure(p));
       await p.screenshot({ path: `${out}/fit-${w}x${h}-after.png` });
+      await p.click("#reviewShot");
+      await p.waitForFunction(() => document.querySelector("#reviewBox")?.textContent.trim().length > 0);
+      check("review shown", await measure(p));
+      await p.screenshot({ path: `${out}/fit-${w}x${h}-review.png` });
     } catch (e) {
       errs.push(e.message.split("\n")[0]);
     }

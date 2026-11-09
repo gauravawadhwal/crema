@@ -63,6 +63,13 @@ export function mockBean(prompt: string): BeanInfo {
 
 const mockAnswers: Record<string, (prompt: string) => unknown> = {
   BeanInfo: mockBean,
+  ShotReview: (prompt) => {
+    const section = (label: string) => prompt.split(label)[1]?.split("\n\n")[0]?.split("\n").slice(1).join("\n");
+    const findings = JSON.parse(section("DETERMINISTIC OBSERVATIONS") || "[]");
+    const feedback = JSON.parse(section("TASTE (null") || "null");
+    return { summary: "(mock) Review of the recorded shot. Taste it before deciding what to change.", wentWell: [], issues: findings,
+      nextShot: null, confidence: "low", askTaste: feedback == null };
+  },
   // Picks the top-ranked candidate from the prompt, like a model that agrees with the rules.
   Recipe: (prompt) => {
     const cards = prompt.slice(prompt.indexOf("CANDIDATE PROFILES"));

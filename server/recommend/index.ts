@@ -81,16 +81,24 @@ export async function dialIn(
   llm: ProviderChain,
   input: { bean: BeanInfo; recipe: Recipe; shot: PastShot; feedback: TasteFeedback; history?: PastShot[] },
 ): Promise<DialInAdvice> {
+  return (await dialInWithSource(llm, input)).advice;
+}
+
+export async function dialInWithSource(
+  llm: ProviderChain,
+  input: { bean: BeanInfo; recipe: Recipe; shot: PastShot; feedback: TasteFeedback; history?: PastShot[] },
+): Promise<{ advice: DialInAdvice; source: string }> {
   try {
     const guidance = findProfile(input.recipe.profileTitle)?.dialIn ?? null;
-    return await llm.structured({
+    const advice = await llm.structured({
       system: DIAL_SYSTEM,
       prompt: JSON.stringify({ ...input, profileAuthorGuidance: guidance }),
       schema: DialInAdvice,
       schemaName: "DialInAdvice",
     });
+    return { advice, source: llm.lastUsed ?? "llm" };
   } catch {
-    return rulesDialIn(input.feedback, input.shot, input.recipe);
+    return { advice: rulesDialIn(input.feedback, input.shot, input.recipe), source: "rules" };
   }
 }
 

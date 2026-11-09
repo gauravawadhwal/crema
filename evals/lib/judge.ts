@@ -42,7 +42,7 @@ You get the exact input the assistant received and its answer. Judge only the an
 
 Do not reward length. Do not judge whether the chosen profile or move is right; other checks cover that.`;
 
-export async function judge(llm: ProviderChain, kind: "recipe" | "dial-in advice", input: string, answer: unknown): Promise<JudgeVerdict> {
+export async function judge(llm: ProviderChain, kind: "recipe" | "dial-in advice" | "shot review", input: string, answer: unknown): Promise<JudgeVerdict> {
   return llm.structured({
     system: SYSTEM,
     prompt: `THE ASSISTANT'S INPUT:\n<input>\n${input}\n</input>\n\nTHE ASSISTANT'S ANSWER (${kind}):\n<answer>\n${JSON.stringify(answer, null, 1)}\n</answer>\n\nGrade the answer.`,

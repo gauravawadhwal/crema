@@ -85,9 +85,10 @@ Both must provide:
 | `recommend(beanId, {rulesOnly})` | `{recipe, candidates, source}`. `source` is the AI provider, `"rules"`, or `"rules (AI unavailable)"` |
 | `rank(beanId)`, `catalog()` | Candidate ranking, profile catalog |
 | `apply(beanId, recipe, grinderSetting, batchId)` | Load the recipe onto the machine; null bean id means No bag |
-| `lastShotWith(title)` | The newest shot pulled with that profile, in full, or null. Its `points` carry the step number (`frame`, Decaid's `profileFrame`), which times the profile's graph |
+| `lastShotWith(title, profileShape?)` | The newest shot with the matching title and recorded profile shape, in full, or null. Its `points` carry the step number (`frame`, Decaid's `profileFrame`), which times the profile's graph |
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
-| `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` `"ai"` or `"rules"` |
+| `review(shotId, feedback?)` | Recorded curves/profile and optional explicit taste → saved `{version, review, source, createdAt}`. Local checks work without AI; requests never apply settings. Stored in `annotations.extras.crema.review`; unrelated extras are preserved |
+| `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` provider id or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `recipe`, `workflowSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat`. `recipe()` is what the machine holds now, as `{profileTitle, doseG, yieldG, tempC, grind, batchId}` (the demo returns null until something is loaded); `workflowSettings` reads and writes only the workflow's `steamSettings`, `hotWaterData` and `rinseData` (never the profile); `settings` is left with fan and USB |
 | `subscribe({snapshot, scale, water, ready, devices, lost})` | Live streams; returns `{close, reopenMachine}`. `lost("machine" \| "devices")` reports a closed stream (it reconnects with backoff). `devices` is Decaid's device list (`ws/v1/devices`, first answered by `GET /api/v1/devices`): the machine's link state and connection errors. The demo sends one "connected" frame |
@@ -136,6 +137,21 @@ BeanInfo ──► rules baseline (roast, rest, grind hint)                     
 ```
 
 `docs/investigation.md` has the reasoning, plus real results for nine ONA and Haven coffees.
+
+## Shot review
+
+`server/profiles/analysis.ts` computes conservative observations from recorded
+samples; `server/recommend/review-local.ts` supplies local advice. Both are bundled
+into the browser engine. `POST /api/review` validates a bounded `ReviewInput`, calls
+the provider chain and returns `{review, source}` with rules fallback. The model
+receives sampled curves, the recorded profile, observations and bounded earlier-shot
+context. Missing measurements/taste are null. Suggested changes are advisory only.
+
+Saved reviews use version 1 at `annotations.extras.crema.review` and carry creation
+time and source. Reopening a shot reads that value without making an AI call;
+Review again explicitly replaces it. Chart shading and follow-up chat are deferred.
+The legacy `/api/dialin` now also returns source so provider failures cannot be
+mislabelled as AI answers.
 
 ## Packaging
 

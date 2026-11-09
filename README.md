@@ -15,6 +15,7 @@ It runs on the DE1's tablet in place of the stock Decent interface, and the same
 - **Crema** is such a skin, plus an optional server at home:
   - The skin is the interface you touch: machine controls, live shot chart, coffee shelf, profiles, shot history and settings. It controls the machine through Decaid and keeps its own data in Decaid too, so it works on the tablet alone. Its rules pick a profile, recipe and dial-in changes for each coffee.
   - The optional server adds AI: it identifies coffees from a bag photo, a description you type or say, or a link, and makes the profile choice and dial-in advice with an LLM (a Claude or ChatGPT subscription via their CLIs, or an API key). AI can be switched off in Settings, and if the server stops answering, the rules take over.
+- **Shot review** is available after brewing and in history. Tap **Review shot** to inspect recorded curves with optional taste feedback. Local checks work without the server; AI adds interpretation when enabled. The review is saved with the shot and suggests at most one change, without applying machine settings.
 - **On a phone** it's the same web app, added to the home screen from the browser. There's no app store app.
 
 **To install it, see [docs/install.md](docs/install.md).**
@@ -25,7 +26,7 @@ All from the demo: a 1340 × 800 landscape tablet (the DE1 tablet size) and an i
 
 | | |
 |---|---|
-| ![Home screen](docs/screenshots/tablet-home.png) **Home screen.** The next shot with its matched profile and recipe, the live chart, and the machine controls. | ![After a shot](docs/screenshots/tablet-after-shot.png) **After a shot.** Metrics, a too-fast/slow check for the profile, taste feedback and the next adjustment. |
+| ![Home screen](docs/screenshots/tablet-home.png) **Home screen.** The next shot with its matched profile and recipe, the live chart, and the machine controls. | ![After a shot](docs/screenshots/tablet-after-shot.png) **After a shot.** Metrics, a too-fast/slow check for the profile, optional taste feedback and a saved shot review. |
 | ![Profiles](docs/screenshots/tablet-profiles.png) **Profiles.** The AI's pick for this coffee with its reasons, the rules' ranking, and 31 community profiles. | ![Add a coffee](docs/screenshots/tablet-add-coffee.png) **Add a coffee.** Every fact is tagged as from the bag, the web, or a guess to check. |
 | ![Shelf](docs/screenshots/tablet-shelf.png) **Shelf.** Rest window, grams left and a reorder nudge for each bag. | ![Shots](docs/screenshots/tablet-shots.png) **Shots.** History with metrics, and one shot overlaid on another. |
 | ![Steam](docs/screenshots/tablet-steam.png) **Steam.** Jug presets, a countdown and a big Stop button. | ![Settings](docs/screenshots/tablet-settings.png) **Settings.** Your setup, steam and water, wake schedules, display and maintenance. |
@@ -156,7 +157,8 @@ The server is stateless: it answers questions and stores nothing but cached prod
 | `POST` | `/api/identify` | multipart `images[]`, `query`, `description` (with `today`, YYYY-MM-DD), `url`, `offline` → coffee record |
 | `POST` | `/api/transcribe` | multipart `audio` (WAV, up to 4 MB) → `{text, provider}`. Needs `GEMINI_API_KEY`; 501 without one |
 | `POST` | `/api/recommend` | `{bean, profileTitles?, history?, preferences?}` → recipe chosen by the AI among the installed profiles |
-| `POST` | `/api/dialin` | `{bean, recipe, shot, feedback, history?}` → the next adjustment |
+| `POST` | `/api/dialin` | `{bean, recipe, shot, feedback, history?}` → `{advice, source}` |
+| `POST` | `/api/review` | Recorded profile/curves, optional taste and earlier shots → `{review, source}`; saved by the client in Decaid |
 | `POST` | `/api/images/cache` | `{url}` → a cached copy of a roaster's product photo |
 | `GET` | `/api/images/:file` | cached product photos |
 | any | `/decaid/*` | proxy to Decaid's REST API when `DECAID_URL` is set, for the app opened from the server |

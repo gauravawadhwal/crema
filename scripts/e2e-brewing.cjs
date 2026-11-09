@@ -96,7 +96,7 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     const baglessShot = await evaluate(() => S.api.latestShot());
     check(!baglessShot.batch && !baglessShot.coffee && !baglessShot.roaster, 'bagless shots save without coffee metadata');
     check(await evaluate(() => S.api.shelf().then(s => s[0].remaining)) === before, 'bagless brewing does not deduct bag inventory');
-    check(await page.isHidden('#pinShot') && await page.isHidden('#sendTaste'), 'bagless shots hide bag-specific actions');
+    check(await page.isHidden('#pinShot') && await page.isVisible('#reviewShot'), 'bagless shots offer review without a bag-specific reference action');
     await page.fill('#afterNotes', 'Bagless note'); await page.locator('#afterNotes').press('Tab');
     await page.waitForFunction(async id => (await S.api.shot(id)).notes === 'Bagless note', baglessShot.id);
     await evaluate(() => S.api.annotate(S.lastShotId, { enjoyment: 8 }));
