@@ -1793,12 +1793,23 @@ function makeDemoApi() {
   }, 1000);
   setInterval(() => { if (sim.timer) emit("scale", { connected: true, weight: Math.round((sim.scale - sim.scaleOffset) * 10) / 10, batteryLevel: sim.battery }); }, 200);
 
+  // One entry per bag; a coffee's bags share its id (and its recipe and reference shot).
   const byId = (id) => all.find((b) => b.id === id);
+  const byBag = (id, batch) => (batch && all.find((b) => b.id === id && b.batch === batch)) || byId(id);
+  const sameCoffee = (id) => all.filter((b) => b.id === id);
   const shelfItem = (b) => ({
-    id: b.id, batch: b.batch, info: b.info, recipe: b.recipe, recipeSource: b.recipeSource, photo: b.photo || null,
+    key: b.batch, id: b.id, batch: b.batch, info: b.info, recipe: b.recipe, recipeSource: b.recipeSource, photo: b.photo || null,
     productImage: b.productImage, art: b.art, weight: b.weight, remaining: Math.max(0, b.weight - b.used),
-    frozen: b.frozen, bestShotId: b.bestShotId, shots: shots.filter((s) => s.beanId === b.id).length,
+    frozen: b.frozen, bestShotId: b.bestShotId, shots: shots.filter((s) => (s.batch ? s.batch === b.batch : s.beanId === b.id)).length,
+    bags: shelf().filter((x) => x.id === b.id).length, bagNo: shelf().filter((x) => x.id === b.id).indexOf(b) + 1,
   });
+  let bagSeq = 0;
+  const newBag = (b, { roastDate = null, weight = null } = {}) => {
+    const n = { ...clone({ ...b, timer: undefined }), batch: `${b.batch}-bag${++bagSeq}`, weight: weight ?? b.weight, used: 0, frozen: false, finished: false, shelf: true,
+      info: { ...clone(b.info), ...(roastDate ? { roastDate: { value: roastDate, source: "bag" } } : {}) } };
+    all.push(n);
+    return n;
+  };
 
   return {
     demo: true,
@@ -1836,20 +1847,24 @@ function makeDemoApi() {
         const b = { id: `manual-${n}`, batch: `manual-batch-${n}`, info: clone(info), weight: info.weightGrams ?? 250, used: 0, shelf: true, finished: false, frozen: false,
           photo: photo || null, productImage: null, art: "photo", bestShotId: null, byDrink: null, recipe: null, recipeSource: null };
         all.push(b);
-        return { id: b.id };
+        return { id: b.id, batch: b.batch, key: b.batch };
       }
       const b = byId(info.__demoId) || all[0];
       delete info.__demoId;
+      // A coffee already on the shelf: this is another bag; its recipe and reference stay.
+      if (b.shelf && !b.finished) { const n = newBag(b, { roastDate: info.roastDate?.value, weight: info.weightGrams }); return { id: n.id, batch: n.batch, key: n.batch, anotherBag: true }; }
       Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo, art: art || "product", used: 0 });
-      return { id: b.id };
+      return { id: b.id, batch: b.batch, key: b.batch };
     },
-    async setBeanState(id, patch) { Object.assign(byId(id), patch); },
-    async pinBest(id, shotId) { byId(id).bestShotId = shotId; },
+    async setBeanState(id, patch, batch = null) { Object.assign(byBag(id, batch), patch); },
+    async addBag(id, opts = {}) { const n = newBag(byId(id), opts); return { id: n.id, batch: n.batch, key: n.batch }; },
+    async syncRemaining(id, batch) { const b = byBag(id, batch); return Math.max(0, b.weight - b.used); },
+    async pinBest(id, shotId) { sameCoffee(id).forEach((b) => (b.bestShotId = shotId)); },
     async recommend(id, opts = {}) {
       const b = byId(id);
       await wait(opts.rulesOnly ? 150 : 900);
       const r = recipeFor(b);
-      b.recipe = r.recipe; b.recipeSource = r.source;
+      sameCoffee(id).forEach((x) => { x.recipe = r.recipe; x.recipeSource = r.source; });
       return r;
     },
     async rank(id) { return recipeFor(byId(id)).candidates; },
@@ -1857,8 +1872,8 @@ function makeDemoApi() {
     async library() {
       return D.catalog.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.character, steps: 0, targetWeight: p.recipe.yieldG, tempC: p.recipe.tempC, guide: p }));
     },
-    async apply(id, recipe, grinderSetting) {
-      const b = byId(id);
+    async apply(id, recipe, grinderSetting, batch = null) {
+      const b = byBag(id, batch);
       workflow = { profile: { title: recipe.profileTitle }, context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: b.batch, grinderSetting: grinderSetting ?? "" }, tempC: recipe.tempC, applied: true };
       sim.group = recipe.tempC;
       await wait(250);
@@ -2130,11 +2145,37 @@ function makeLiveApi(conn) {
   };
 
   // ---- one coffee, assembled from Decaid + Crema's record ----
-  async function coffee(beanId) {
+  // A coffee is Decaid's bean plus Crema's record (identification, recipe, reference
+  // shot, photos), shared by all its bags. A bag is one of Decaid's batches: roast date,
+  // weight, frozen and finished belong to it. `batchId` picks the bag; without one, the
+  // bag Crema last added.
+  async function coffee(beanId, batchId = null) {
     const [bean, rec, batches] = await Promise.all([j(D(`/beans/${beanId}`)), recordOf(beanId), j(D(`/beans/${beanId}/batches?includeArchived=false`)).catch(() => [])]);
-    const batch = batches.find((x) => x.id === rec?.batchId) ?? batches[0] ?? null;
+    const batch = (batchId && batches.find((x) => x.id === batchId)) || batches.find((x) => x.id === rec?.batchId) || batches[0] || null;
     return { bean, rec, batch, info: rec?.info ?? infoFromDecaidBean(bean, batch) };
   }
+  // How much of a bag is left. Decaid doesn't reduce a batch's weightRemaining when a
+  // shot is pulled, so Crema counts it: the bag's weight, less the doses of espresso
+  // shots recorded against it (from any skin that records the bag), plus a correction.
+  // Crema writes the result to weightRemaining so Decaid and other skins see it, and
+  // remembers what it wrote; if weightRemaining has changed since (set in Decaid or
+  // another skin), that change becomes the correction instead of being overwritten.
+  // Each bag's correction is its own key, so the tablet and a phone writing a recipe
+  // and a bag at the same time can't overwrite each other's change.
+  const bagKey = (batchId) => `bag:${batchId}`;
+  const bagUse = async (batch) => {
+    const shots = await shotSummaries({ batchId: batch.id }).then((all) => all.filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)), () => null);
+    const used = shots ? shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0) : null;
+    const state = await kvGet(bagKey(batch.id), {}).catch(() => ({}));
+    let adjust = state.adjust ?? 0;
+    const weight = batch.weight ?? null;
+    if (used != null && weight != null && batch.weightRemaining != null && state.written != null && Math.abs(batch.weightRemaining - state.written) > 0.5) {
+      adjust = batch.weightRemaining - (weight - used);
+      await kvSet(bagKey(batch.id), { ...state, adjust, written: batch.weightRemaining }).catch(() => {});
+    }
+    const remaining = weight != null && used != null ? Math.max(0, Math.round(weight - used + adjust)) : used == null ? null : batch.weightRemaining ?? null;
+    return { shots, used, adjust, remaining, state };
+  };
   const installedProfiles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso");
   const installedTitles = async () => (await installedProfiles()).map((p) => p.profile.title);
 
@@ -2171,27 +2212,29 @@ function makeLiveApi(conn) {
       async set(p) { settings = { ...settings, ...p }; await kvSet("settings", settings); return { ...settings }; },
     },
 
+    // One row per open bag. `id` is the coffee (shared data), `batch` and `key` the bag.
     async shelf() {
       const beans = await j(D("/beans?includeArchived=false"));
       const rows = await Promise.all(beans.map(async (b) => {
         const [rec, batches] = await Promise.all([recordOf(b.id).catch(() => null), j(D(`/beans/${b.id}/batches?includeArchived=false`)).catch(() => [])]);
-        if (rec?.finished) return null;
-        const batch = batches.find((x) => x.id === rec?.batchId) ?? batches[0] ?? null;
-        const info = rec?.info ?? infoFromDecaidBean(b, batch);
-        // If the shots can't be read, how much is left is unknown, not "all of it".
-        const shots = batch?.id ? await shotSummaries({ batchId: batch.id }).then((all) => all.filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)), () => null) : [];
-        const grams = shots ? shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0) : null;
-        const weight = batch?.weight ?? info.weightGrams ?? null;
-        return {
-          id: b.id, batch: batch?.id ?? null, info, recipe: rec?.recipe ?? null, recipeSource: rec?.recipeSource ?? (rec?.recipe ? "saved" : null),
-          photo: rec?.photo ?? null, productImage: rec?.productImage ?? info.imageUrl ?? null, art: rec?.art,
-          weight, remaining: weight != null && grams != null ? Math.max(0, Math.round(weight - grams)) : grams == null ? null : batch?.weightRemaining ?? null,
-          frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: shots ? shots.length : null,
-        };
+        const open = batches.filter((x) => !x.archived);
+        if (rec?.finished && !open.length) return [];
+        const info = rec?.info ?? infoFromDecaidBean(b, open[0] ?? null);
+        const bags = open.length ? open : [null];
+        return Promise.all(bags.map(async (batch, i) => {
+          const use = batch ? await bagUse(batch) : { shots: [], remaining: null };
+          const weight = batch ? batch.weight ?? null : info.weightGrams ?? null;
+          return {
+            key: batch?.id ?? `bean:${b.id}`, id: b.id, batch: batch?.id ?? null, bags: bags.length, bagNo: i + 1,
+            info: { ...info, ...(batch?.roastDate ? { roastDate: { value: batch.roastDate.slice(0, 10), source: info.roastDate?.source ?? "bag" } } : {}), weightGrams: weight },
+            recipe: rec?.recipe ?? null, recipeSource: rec?.recipeSource ?? (rec?.recipe ? "saved" : null),
+            photo: rec?.photo ?? null, productImage: rec?.productImage ?? info.imageUrl ?? null, art: rec?.art,
+            weight, remaining: use.remaining, frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: use.shots ? use.shots.length : null,
+          };
+        }));
       }));
-      return rows.filter(Boolean);
+      return rows.flat();
     },
-
     async identify({ files, query, description, url, offline }, onStep) {
       if (!aiOn()) throw new Error(conn.crema == null ? "Identifying needs a Crema server. Enter the details by hand instead." : "AI features are off. Enter the details by hand, or switch AI on in Settings.");
       onStep(0, [files?.length ? "Reading the bag and finding the roaster's page" : "Looking up the coffee", "Building the record"]);
@@ -2219,6 +2262,8 @@ function makeLiveApi(conn) {
           variety: info.variety.value, altitude: info.altitudeMasl.value, notes: info.tastingNotes.value?.join(", ") ?? null,
         });
       } else if (bean.archived) await put(D(`/beans/${bean.id}`), { archived: false });
+      // Another bag of a coffee already known: keep its recipe, reference shot and photos.
+      const prev = await recordOf(bean.id).catch(() => null);
       const batch = await post(D(`/beans/${bean.id}/batches`), {
         roastDate: info.roastDate.value ? `${info.roastDate.value}T00:00:00Z` : null, roastLevel: info.roastLevel.value, weight: info.weightGrams,
       });
@@ -2230,18 +2275,50 @@ function makeLiveApi(conn) {
         try { productImage = conn.crema + (await post(C("/api/images/cache"), { url: productImage })).path; }
         catch { productImage = null; info = { ...info, imageUrl: null }; if (art === "product") art = photo ? "photo" : null; }
       }
-      await kvSet(`bean:${bean.id}`, { info, recipe: null, recipeSource: null, photo: photo || null, productImage, art: art || (productImage ? "product" : "photo"), bestShotId: null, finished: false, batchId: batch.id, addedAt: new Date().toISOString() });
-      return { id: bean.id };
+      await kvSet(`bean:${bean.id}`, {
+        ...(prev || {}), info, recipe: prev?.recipe ?? null, recipeSource: prev?.recipeSource ?? null,
+        photo: photo || prev?.photo || null, productImage: productImage || prev?.productImage || null, art: art || prev?.art || (productImage ? "product" : "photo"),
+        bestShotId: prev?.bestShotId ?? null, finished: false, batchId: batch.id, addedAt: prev?.addedAt ?? new Date().toISOString(),
+      });
+      return { id: bean.id, batch: batch.id, key: batch.id, anotherBag: !!prev };
     },
-    async setBeanState(id, patch) {
-      const { batch } = await coffee(id);
-      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen });
-      if (patch.finished !== undefined) { await put(D(`/beans/${id}`), { archived: patch.finished }); await patchRecord(id, { finished: patch.finished }); }
+    // Another bag of a coffee on the shelf (or finished): a new batch, same record.
+    async addBag(beanId, { roastDate = null, weight = null } = {}) {
+      const bean = await j(D(`/beans/${beanId}`));
+      if (bean.archived) await put(D(`/beans/${beanId}`), { archived: false });
+      const batch = await post(D(`/beans/${beanId}/batches`), { roastDate: roastDate ? `${roastDate}T00:00:00Z` : null, weight: weight ?? null });
+      await patchRecord(beanId, { finished: false, batchId: batch.id });
+      return { id: beanId, batch: batch.id, key: batch.id };
+    },
+    // After a shot, or when you say how much is left: write the bag's remaining to Decaid.
+    async syncRemaining(beanId, batchId, setTo = null) {
+      if (!batchId) return null;
+      const batch = await j(D(`/bean-batches/${batchId}`));
+      const use = await bagUse(batch);
+      let remaining = use.remaining;
+      if (setTo != null && batch.weight != null && use.used != null) {
+        remaining = Math.max(0, Math.round(setTo));
+        await kvSet(bagKey(batchId), { ...use.state, adjust: remaining - (batch.weight - use.used), written: remaining });
+      } else await kvSet(bagKey(batchId), { ...use.state, adjust: use.adjust, written: remaining });
+      if (remaining != null) await put(D(`/bean-batches/${batchId}`), { weightRemaining: remaining });
+      return remaining;
+    },
+    // Frozen and finished are a bag's. Finishing one bag leaves the coffee's others on
+    // the shelf; the coffee itself is archived only when its last open bag is finished.
+    async setBeanState(id, patch, batchId = null) {
+      const { batch } = await coffee(id, batchId);
+      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen, freezeDate: patch.frozen ? new Date().toISOString() : null });
+      if (patch.finished === true) {
+        if (batch) await put(D(`/bean-batches/${batch.id}`), { archived: true });
+        const others = (await j(D(`/beans/${id}/batches?includeArchived=false`)).catch(() => [])).filter((x) => x.id !== batch?.id && !x.archived);
+        if (!others.length) { await put(D(`/beans/${id}`), { archived: true }); await patchRecord(id, { finished: true }); }
+      }
+      if (patch.finished === false) { await put(D(`/beans/${id}`), { archived: false }); await patchRecord(id, { finished: false }); }
     },
     pinBest: (id, shotId) => patchRecord(id, { bestShotId: shotId }),
 
     async recommend(beanId, opts = {}) {
-      const [{ info, batch }, titles, prefs] = await Promise.all([coffee(beanId), installedTitles(), api.prefs.get()]);
+      const [{ info, batch }, titles, prefs] = await Promise.all([coffee(beanId, opts.batchId), installedTitles(), api.prefs.get()]);
       const history = (await batchShots(batch?.id, 15)).map(E.toPastShot);
       let out = null, aiFailed = false;
       if (!opts.rulesOnly && aiOn()) {
@@ -2277,8 +2354,8 @@ function makeLiveApi(conn) {
         tempC: Number(p.profile.steps?.[0]?.temperature) || null, guide: guide.get(p.profile.title.toLowerCase()) ?? null,
       }));
     },
-    async apply(beanId, recipe, grinderSetting) {
-      const [{ info, batch }, profiles] = await Promise.all([coffee(beanId), j(D("/profiles?visibility=visible"))]);
+    async apply(beanId, recipe, grinderSetting, batchId = null) {
+      const [{ info, batch }, profiles] = await Promise.all([coffee(beanId, batchId), j(D("/profiles?visibility=visible"))]);
       // By id when the recipe has one (two installed profiles can share a title), else by title.
       const profile = (recipe.profileId && profiles.find((p) => p.id === recipe.profileId)) || profiles.find((p) => p.profile.title === recipe.profileTitle);
       if (!profile) throw new Error(`The profile "${recipe.profileTitle}" isn't on the machine`);
@@ -2299,10 +2376,10 @@ function makeLiveApi(conn) {
     async shot(id) { const full = await fullShot(id); return full ? toShot(full, full) : null; },
     async latestShot() { const s = await j(D("/shots/latest")).catch((e) => { if (e.status === 404) return null; throw e; }); return s?.id ? api.shot(s.id) : null; },
     annotate: (id, a) => put(D(`/shots/${encodeURIComponent(id)}`), { annotations: a }),
-    async feedback(shotId, beanId, fb) {
+    async feedback(shotId, beanId, fb, batchId = null) {
       const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
       await put(D(`/shots/${encodeURIComponent(shotId)}`), { annotations: { ...(full.annotations ?? {}), ...(fb.enjoyment != null ? { enjoyment: fb.enjoyment } : {}), espressoNotes: fb.notes ?? full.annotations?.espressoNotes, extras: { crema: { sourBitter: fb.sourBitter, body: fb.body } } } });
-      const [{ info, batch }, rec] = await Promise.all([coffee(beanId), recordOf(beanId)]);
+      const [{ info, batch }, rec] = await Promise.all([coffee(beanId, batchId), recordOf(beanId)]);
       const shot = E.toPastShot(full);
       const recipe = rec?.recipe ?? E.rulesRecipe({ bean: info });
       if (aiOn()) {
@@ -2624,11 +2701,11 @@ function renderNextShot() {
   }
   if (!b) { el.innerHTML = `<h2>No coffee yet</h2><p class="muted">Add a bag to get a profile and recipe matched to it.</p><div><a class="btn primary" href="#add">Add coffee</a></div>`; return; }
   const i = b.info, n = S.next, r = b.recipe, rest = restOf(i);
-  const idx = S.shelf.findIndex((x) => x.id === b.id);
+  const idx = S.shelf.findIndex((x) => x.key === b.key);
   const ratio = n ? (n.yieldG / n.doseG).toFixed(1) : "–";
   el.innerHTML = `
     <div class="coffee-line">${bagArt(b)}
-      <div style="min-width:0"><div class="label">${esc(i.roaster.value)}</div><div class="coffee-name">${esc(i.name.value)}</div>
+      <div style="min-width:0"><div class="label">${esc(i.roaster.value)}${b.bags > 1 ? ` · Bag ${b.bagNo} of ${b.bags}` : ""}</div><div class="coffee-name">${esc(i.name.value)}</div>
         <div class="row" style="gap:6px;margin-top:3px"><span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}</span>${b.frozen ? '<span class="pill plain">Frozen</span>' : ""}</div></div>
       <div class="cycler">${S.shelf.length > 1 ? `<button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button>` : ""}</div>
     </div>
@@ -2650,7 +2727,7 @@ function renderNextShot() {
       <div class="muted small">Target ${r.targetTimeS?.[0] ?? "–"}–${r.targetTimeS?.[1] ?? "–"} s · ${esc(r.grindHint || "")}</div>
       ${r.alternatives?.length ? `<div class="muted small">Also try: ${r.alternatives.map((a) => esc(a.profileTitle)).join(", ")}</div>` : ""}</div></details>` : ""}
     ` : b.recipeSource === "none" ? `<p class="muted">None of the profiles on this machine is in Crema's guide, so there's no recommendation for this coffee. Choose one of the installed profiles.</p><div><a class="btn primary" href="#profiles">Choose a profile</a></div>` : `<p class="muted">Working out a recipe…</p>`}`;
-  const go = (d) => selectBean(S.shelf[(idx + d + S.shelf.length) % S.shelf.length].id);
+  const go = (d) => selectBean(S.shelf[(idx + d + S.shelf.length) % S.shelf.length].key);
   if ($("#prevBean")) { $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1); }
   if (!n) return;
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
@@ -2707,7 +2784,7 @@ async function loadNow(silent, queued) {
   wfWrites++;
   const recipe = { ...(b.recipe || {}), profileTitle: n.profileTitle, profileId: n.profileId ?? null, doseG: n.doseG, yieldG: n.yieldG, tempC: n.tempC, targetTimeS: n.targetTimeS || b.recipe?.targetTimeS || [25, 35], grindHint: b.recipe?.grindHint || "", restAdvice: null, dialIn: b.recipe?.dialIn || "", rationale: b.recipe?.rationale || [], alternatives: b.recipe?.alternatives || [] };
   try {
-    await S.api.apply(b.id, recipe, n.grind || undefined);
+    await S.api.apply(b.id, recipe, n.grind || undefined, b.batch);
     wfWrites++;
     S.loaded = true; renderNextShot();
     if (!silent) toast(`Loaded ${n.profileTitle}: ${n.doseG} g → ${n.yieldG} g at ${n.tempC} °C`);
@@ -2776,15 +2853,17 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
   return wfReading;
 }
 
-async function selectBean(id, opts = {}) {
-  S.current = S.shelf.find((b) => b.id === id) || S.shelf[0] || null;
-  local.set("current", S.current?.id);
+// Shelf rows are bags: `key` picks one; a coffee id (from a favourite, or saved before
+// bags) picks that coffee's first bag.
+async function selectBean(key, opts = {}) {
+  S.current = S.shelf.find((b) => b.key === key) || S.shelf.find((b) => b.id === key) || S.shelf[0] || null;
+  local.set("current", S.current?.key);
   if (S.current && !S.current.recipe) {
     const b = S.current;
     S.recommending = b.id;
     renderNextShot();
     if (!$("#view-profiles").hidden) renderProfiles();
-    try { const out = await S.api.recommend(b.id); b.recipe = out.recipe; b.recipeSource = out.source; } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
     finally { if (S.recommending === b.id) S.recommending = null; }
     // Profiles may have been drawn while waiting (Add sends you there first).
     if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
@@ -3043,7 +3122,10 @@ async function onShotEnd(finishedId) {
   if (shot && !S.shots.some((s) => s.id === shot.id)) S.shots = [shot, ...S.shots];
   S.lastShotId = shot?.id;
   showAfterShot(shot, pts);
-  if (S.current) S.current.remaining = S.current.remaining != null ? Math.max(0, S.current.remaining - (S.next?.doseG ?? 18)) : null;
+  if (S.current?.batch && shot) {
+    const b = S.current;
+    S.api.syncRemaining(b.id, b.batch).then((r) => { if (r != null) b.remaining = r; }).catch(() => {});
+  } else if (S.current) S.current.remaining = S.current.remaining != null ? Math.max(0, S.current.remaining - (S.next?.doseG ?? 18)) : null;
 }
 // Decaid saves the shot a moment after the machine stops. Ratings and the reference
 // must go to this shot, not the one before it, so wait (up to ~6 s) for a newest shot
@@ -3135,7 +3217,7 @@ function showAfterShot(shot, pts) {
     if (!shot || !S.current) return;
     e.target.disabled = true;
     try {
-      const { advice, source } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: rating || null, notes: null });
+      const { advice, source } = await S.api.feedback(shot.id, S.current.id, { sourBitter: val("sb"), body: val("bd"), enjoyment: rating || null, notes: null }, S.current.batch);
       $("#adviceBox").innerHTML = `<div class="advice"><div class="label">Next shot</div><strong>${esc(advice.change)}</strong><div class="muted">${esc(advice.reasoning)}</div><div class="muted small">${source === "ai" ? "Advice from the AI" : "From Crema's dial-in rules"}</div></div>`;
     } catch (err) { $("#adviceBox").innerHTML = `<p class="error">${esc(err.message)}</p>`; }
     e.target.disabled = false;
@@ -3143,7 +3225,7 @@ function showAfterShot(shot, pts) {
   $("#pinShot").onclick = async () => {
     if (!shot || !S.current) return;
     await S.api.pinBest(S.current.id, shot.id);
-    S.current.bestShotId = shot.id; S.ghost = pts.length ? pts : shot.points;
+    sameCoffee(S.current.id, (x) => (x.bestShotId = shot.id)); S.ghost = pts.length ? pts : shot.points;
     toast("Pinned as the reference shot for this coffee"); renderLive();
   };
 }
@@ -3194,43 +3276,77 @@ async function renderShelf() {
     const i = b.info, rest = restOf(i);
     const left = b.remaining != null && b.weight ? clamp((b.remaining / b.weight) * 100, 0, 100) : null;
     const shotsLeft = b.remaining != null ? Math.floor(b.remaining / (b.recipe?.doseG ?? 18)) : null;
-    return `<article class="panel bean-card ${S.current?.id === b.id ? "current" : ""}">
+    const bagNote = b.bags > 1 ? `<span class="pill plain">Bag ${b.bagNo} of ${b.bags}${i.roastDate?.value ? ` · roasted ${esc(i.roastDate.value)}` : ""}</span>` : "";
+    return `<article class="panel bean-card ${S.current?.key === b.key ? "current" : ""}">
       <div class="coffee-head">${bagArt(b, "lg")}<div style="min-width:0" class="stack" style="gap:2px"><div><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2>
-        <div class="muted small">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div></div>
+        <div class="muted small">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div>${bagNote ? `<div>${bagNote}</div>` : ""}</div>
         ${i.tastingNotes?.value?.length ? `<div class="tags">${i.tastingNotes.value.slice(0, 3).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div></div>
       ${restBar(rest)}
+      ${b.remaining == null && b.batch && b.shots == null ? `<div class="muted small">Couldn't count what's left: Decaid's shots didn't load.</div>` : ""}
       ${left != null ? `<div class="stack" style="gap:6px"><div class="row between"><span class="label">Left</span><span class="num muted small">${b.remaining} / ${b.weight} g · about ${shotsLeft} shots</span></div><div class="grams"><div style="width:${left}%"></div></div>
         ${shotsLeft != null && shotsLeft <= 4 ? '<span class="pill warn" style="justify-self:start">Running low. Time to reorder</span>' : ""}</div>` : ""}
       <div class="muted small">${esc(b.recipe ? `${b.recipe.profileTitle} · ${fmt1(b.recipe.doseG)}→${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C` : "No recipe yet")}</div>
       <div class="row">
-        <button class="btn small ${S.current?.id === b.id ? "" : "primary"}" data-brew="${esc(b.id)}">${S.current?.id === b.id ? "Brewing" : "Brew this"}</button>
-        <button class="btn small ghost" data-freeze="${esc(b.id)}">${b.frozen ? "Thaw" : "Freeze"}</button>
-        <button class="btn small ghost" data-finish="${esc(b.id)}">Finished</button>
+        <button class="btn small ${S.current?.key === b.key ? "" : "primary"}" data-brew="${esc(b.key)}">${S.current?.key === b.key ? "Brewing" : "Brew this"}</button>
+        <button class="btn small ghost" data-freeze="${esc(b.key)}">${b.frozen ? "Thaw" : "Freeze"}</button>
+        <button class="btn small ghost" data-finish="${esc(b.key)}">Finished</button>
+        <button class="btn small ghost" data-addbag="${esc(b.key)}">Another bag</button>
+        ${b.batch && b.weight ? `<button class="btn small ghost" data-left="${esc(b.key)}">Set what's left</button>` : ""}
         ${i.productUrl ? `<a class="btn small ghost" href="${esc(i.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}
       </div></article>`;
   }).join("");
   $$("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
+  const bag = (key) => S.shelf.find((x) => x.key === key);
   $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
-    const b = S.shelf.find((x) => x.id === btn.dataset.freeze);
-    await S.api.setBeanState(b.id, { frozen: !b.frozen }); b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
+    const b = bag(btn.dataset.freeze);
+    await S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch); b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
   }));
   $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
-    const b = S.shelf.find((x) => x.id === btn.dataset.finish);
-    openSheet(`<h2>Finished ${esc(b.info.name.value)}?</h2><p class="muted">It moves off your shelf. Its shots stay in your history.</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
+    const b = bag(btn.dataset.finish);
+    const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
+    openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
     $("#confirmFinish").onclick = async () => {
-      await S.api.setBeanState(b.id, { finished: true });
+      await S.api.setBeanState(b.id, { finished: true }, b.batch);
       closeSheet(); await refreshShelf();
-      if (S.current?.id === b.id) await selectBean(S.shelf[0]?.id, { quiet: true });
-      renderShelf(); toast("Moved off the shelf");
+      if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
+      renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
+    };
+  }));
+  $$("[data-addbag]").forEach((btn) => (btn.onclick = () => {
+    const b = bag(btn.dataset.addbag);
+    openSheet(`<h2>Another bag of ${esc(b.info.name.value)}</h2><p class="muted">It gets its own roast date, frozen state and weight, and shares this coffee's recipe and reference shot.</p>
+      <div class="field"><label class="label" for="bagRoast">Roast date</label><input type="date" id="bagRoast" max="${new Date().toISOString().slice(0, 10)}"></div>
+      <div class="field"><label class="label" for="bagWeight">Weight</label><input id="bagWeight" inputmode="decimal" value="${esc(String(b.weight || 250))}" aria-label="Grams"></div>
+      <div class="row"><button class="btn primary" id="confirmBag">Add bag</button></div>`);
+    $("#confirmBag").onclick = async () => {
+      const w = parseFloat($("#bagWeight").value);
+      try {
+        const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
+        closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
+        if (!S.current) await selectBean(added.key, { quiet: true });
+      } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
+    };
+  }));
+  $$("[data-left]").forEach((btn) => (btn.onclick = () => {
+    const b = bag(btn.dataset.left);
+    openSheet(`<h2>How much is left?</h2><p class="muted">Crema counts it from your shots. Correct it here if you've weighed the bag, spilled some or brewed it another way.</p>
+      <div class="field"><label class="label" for="leftG">Grams left</label><input id="leftG" inputmode="decimal" value="${esc(String(b.remaining ?? b.weight))}" aria-label="Grams left"></div>
+      <div class="row"><button class="btn primary" id="confirmLeft">Save</button></div>`);
+    $("#confirmLeft").onclick = async () => {
+      const g = parseFloat($("#leftG").value);
+      if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
+      try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
     };
   }));
 }
 async function refreshShelf() { S.shelf = await S.api.shelf(); }
+// A coffee's recipe and reference shot are shared by all its bags on the shelf.
+const sameCoffee = (id, fn) => S.shelf.filter((x) => x.id === id).forEach(fn);
 async function retryShelf() {
   S.shelfLoaded = false; renderNextShot();
   await refreshShelf().then(() => (S.shelfError = null), (e) => { S.shelf = []; S.shelfError = e.message; });
   S.shelfLoaded = true;
-  await selectBean(local.get("current", null) || S.shelf[0]?.id, { quiet: true });
+  await selectBean(local.get("current", null) || S.shelf[0]?.key, { quiet: true });
   await reconcileWorkflow({ boot: true });
 }
 
@@ -3535,9 +3651,16 @@ function renderReview(info, photo) {
       files = []; $("#thumbs").innerHTML = ""; pending = null; $("#reviewPanel").innerHTML = introFor(addMode);
       $("#addForm").reset();
       await refreshShelf();
-      const b = S.shelf.find((x) => x.id === saved.id); if (b) b.recipe = null;
-      location.hash = "#profiles";
-      await selectBean(saved.id);
+      if (saved.anotherBag) {
+        // Another bag of a coffee you have: its recipe and reference shot carry over.
+        location.hash = "#brew";
+        await selectBean(saved.key);
+        toast(`Added another bag of ${S.current?.info.name.value ?? "this coffee"}. Its recipe carries over`);
+      } else {
+        const b = S.shelf.find((x) => x.key === saved.key); if (b) b.recipe = null;
+        location.hash = "#profiles";
+        await selectBean(saved.key);
+      }
     } catch (err) { toast(`Couldn't save: ${err.message}`); e.target.disabled = false; }
   };
   $("#discardBean").onclick = () => { pending = null; $("#reviewPanel").innerHTML = introFor(addMode); };
@@ -3605,7 +3728,7 @@ async function renderProfiles() {
       const again = $("#askAgain");
       if (again) again.onclick = async () => {
         again.disabled = true; again.textContent = "Asking…";
-        try { const out = await S.api.recommend(b.id); b.recipe = out.recipe; b.recipeSource = out.source; setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(e.message); again.disabled = false; }
+        try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(e.message); again.disabled = false; }
       };
     } catch (e) { rec.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
   } else rec.innerHTML = "";
@@ -3832,7 +3955,7 @@ async function renderSettings() {
   </div>` : ""}`;
 
   // ---- wire up ----
-  const savePrefs = async (patch) => { S.prefs = await S.api.prefs.set(patch); for (const b of S.shelf) b.recipe = null; S.current && (await selectBean(S.current.id, { quiet: true })); toast("Saved. Recommendations updated"); };
+  const savePrefs = async (patch) => { S.prefs = await S.api.prefs.set(patch); for (const b of S.shelf) b.recipe = null; S.current && (await selectBean(S.current.key, { quiet: true })); toast("Saved. Recommendations updated"); };
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
@@ -4122,7 +4245,7 @@ async function boot() {
   // Start on the coffee the machine holds, if it's on the shelf, then take its recipe.
   const onMachine = await S.api.machine.recipe?.().catch(() => null);
   const machineBean = onMachine?.batchId && S.shelf.find((b) => b.batch === onMachine.batchId);
-  await selectBean(machineBean?.id || local.get("current", null) || S.shelf[0]?.id, { quiet: true });
+  await selectBean(machineBean?.key || local.get("current", null) || S.shelf[0]?.key, { quiet: true });
   await reconcileWorkflow({ boot: true });
   const recheck = () => document.visibilityState === "visible" && reconcileWorkflow();
   document.addEventListener("visibilitychange", recheck);

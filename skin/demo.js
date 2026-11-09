@@ -195,12 +195,23 @@ function makeDemoApi() {
   }, 1000);
   setInterval(() => { if (sim.timer) emit("scale", { connected: true, weight: Math.round((sim.scale - sim.scaleOffset) * 10) / 10, batteryLevel: sim.battery }); }, 200);
 
+  // One entry per bag; a coffee's bags share its id (and its recipe and reference shot).
   const byId = (id) => all.find((b) => b.id === id);
+  const byBag = (id, batch) => (batch && all.find((b) => b.id === id && b.batch === batch)) || byId(id);
+  const sameCoffee = (id) => all.filter((b) => b.id === id);
   const shelfItem = (b) => ({
-    id: b.id, batch: b.batch, info: b.info, recipe: b.recipe, recipeSource: b.recipeSource, photo: b.photo || null,
+    key: b.batch, id: b.id, batch: b.batch, info: b.info, recipe: b.recipe, recipeSource: b.recipeSource, photo: b.photo || null,
     productImage: b.productImage, art: b.art, weight: b.weight, remaining: Math.max(0, b.weight - b.used),
-    frozen: b.frozen, bestShotId: b.bestShotId, shots: shots.filter((s) => s.beanId === b.id).length,
+    frozen: b.frozen, bestShotId: b.bestShotId, shots: shots.filter((s) => (s.batch ? s.batch === b.batch : s.beanId === b.id)).length,
+    bags: shelf().filter((x) => x.id === b.id).length, bagNo: shelf().filter((x) => x.id === b.id).indexOf(b) + 1,
   });
+  let bagSeq = 0;
+  const newBag = (b, { roastDate = null, weight = null } = {}) => {
+    const n = { ...clone({ ...b, timer: undefined }), batch: `${b.batch}-bag${++bagSeq}`, weight: weight ?? b.weight, used: 0, frozen: false, finished: false, shelf: true,
+      info: { ...clone(b.info), ...(roastDate ? { roastDate: { value: roastDate, source: "bag" } } : {}) } };
+    all.push(n);
+    return n;
+  };
 
   return {
     demo: true,
@@ -238,20 +249,24 @@ function makeDemoApi() {
         const b = { id: `manual-${n}`, batch: `manual-batch-${n}`, info: clone(info), weight: info.weightGrams ?? 250, used: 0, shelf: true, finished: false, frozen: false,
           photo: photo || null, productImage: null, art: "photo", bestShotId: null, byDrink: null, recipe: null, recipeSource: null };
         all.push(b);
-        return { id: b.id };
+        return { id: b.id, batch: b.batch, key: b.batch };
       }
       const b = byId(info.__demoId) || all[0];
       delete info.__demoId;
+      // A coffee already on the shelf: this is another bag; its recipe and reference stay.
+      if (b.shelf && !b.finished) { const n = newBag(b, { roastDate: info.roastDate?.value, weight: info.weightGrams }); return { id: n.id, batch: n.batch, key: n.batch, anotherBag: true }; }
       Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo, art: art || "product", used: 0 });
-      return { id: b.id };
+      return { id: b.id, batch: b.batch, key: b.batch };
     },
-    async setBeanState(id, patch) { Object.assign(byId(id), patch); },
-    async pinBest(id, shotId) { byId(id).bestShotId = shotId; },
+    async setBeanState(id, patch, batch = null) { Object.assign(byBag(id, batch), patch); },
+    async addBag(id, opts = {}) { const n = newBag(byId(id), opts); return { id: n.id, batch: n.batch, key: n.batch }; },
+    async syncRemaining(id, batch) { const b = byBag(id, batch); return Math.max(0, b.weight - b.used); },
+    async pinBest(id, shotId) { sameCoffee(id).forEach((b) => (b.bestShotId = shotId)); },
     async recommend(id, opts = {}) {
       const b = byId(id);
       await wait(opts.rulesOnly ? 150 : 900);
       const r = recipeFor(b);
-      b.recipe = r.recipe; b.recipeSource = r.source;
+      sameCoffee(id).forEach((x) => { x.recipe = r.recipe; x.recipeSource = r.source; });
       return r;
     },
     async rank(id) { return recipeFor(byId(id)).candidates; },
@@ -259,8 +274,8 @@ function makeDemoApi() {
     async library() {
       return D.catalog.map((p) => ({ id: `demo:${p.title}`, title: p.title, author: p.author, notes: p.character, steps: 0, targetWeight: p.recipe.yieldG, tempC: p.recipe.tempC, guide: p }));
     },
-    async apply(id, recipe, grinderSetting) {
-      const b = byId(id);
+    async apply(id, recipe, grinderSetting, batch = null) {
+      const b = byBag(id, batch);
       workflow = { profile: { title: recipe.profileTitle }, context: { targetDoseWeight: recipe.doseG, targetYield: recipe.yieldG, beanBatchId: b.batch, grinderSetting: grinderSetting ?? "" }, tempC: recipe.tempC, applied: true };
       sim.group = recipe.tempC;
       await wait(250);
