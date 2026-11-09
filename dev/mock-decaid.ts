@@ -417,13 +417,35 @@ const server = createServer(async (req, res) => {
       }
       return send(res, 200, workflow);
     }
+    // Like Decaid 0.9.1: newest first, at most 100 per page, and the reply echoes the
+    // limit that was asked for even when it gave fewer (so a client can't trust it).
     if (m === "GET" && p === "/api/v1/shots") {
-      const limit = Number(url.searchParams.get("limit") ?? 20);
+      const asked = Number(url.searchParams.get("limit") ?? 20);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
       const batch = url.searchParams.get("beanBatchId");
       const items = shots.filter((s) => !batch || s.workflow.context.beanBatchId === batch);
-      return send(res, 200, { items: items.slice(0, limit).map(({ measurements, ...rest }) => rest), total: items.length, limit, offset: 0 });
+      const page = items.slice(offset, offset + Math.min(asked, 100));
+      return send(res, 200, { items: page.map(({ measurements, ...rest }) => rest), total: items.length, limit: asked, offset });
     }
-    if (m === "GET" && p === "/api/v1/shots/latest") return send(res, 200, shots[0] ?? null);
+    if (m === "GET" && p === "/api/v1/shots/latest") {
+      const { measurements, ...rest } = shots[0] ?? ({} as Json);
+      return send(res, 200, shots[0] ? rest : null);
+    }
+    // dev helper: add `count` older shots (for paging tests), optionally for one bag
+    if (m === "POST" && p === "/dev/shots/seed") {
+      const b = await body(req);
+      const oldest = shots.length ? Date.parse(shots[shots.length - 1].timestamp) : Date.now();
+      for (let i = 1; i <= Number(b.count ?? 0); i++) {
+        const t = new Date(oldest - i * 60000).toISOString();
+        shots.push({
+          id: `seed-${t.replace(/[:.]/g, "-")}`, timestamp: t,
+          measurements: [{ machine: { timestamp: t, state: { state: "espresso", substate: "pouring" }, flow: 2, pressure: 9, mixTemperature: 93 }, scale: { timestamp: t, weight: 36 } }],
+          workflow: { name: "Crema", profile: { title: b.profileTitle ?? "Adaptive v2" }, context: { targetDoseWeight: b.dose ?? 18, targetYield: 36, beanBatchId: b.batchId ?? null } },
+          annotations: { actualDoseWeight: b.dose ?? 18, actualYield: 36 },
+        });
+      }
+      return send(res, 200, { total: shots.length });
+    }
     if ((match = p.match(/^\/api\/v1\/shots\/([^/]+)$/))) {
       const s = shots.find((x) => x.id === match![1]);
       if (!s) return send(res, 404, { error: "not found" });

@@ -53,7 +53,7 @@ separate supervised step; implement and test locally first.
 |---|---|---|---|
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
 | 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
-| 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Started: ratings use Decaid's 0–10 directly, shown as half stars |
+| 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Ratings and shot history done; profiles and bags next (user: no custom profiles; prepare for two bags of one coffee) |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
@@ -264,9 +264,10 @@ Not started. Each names the phase it fits. None blocks the tablet session.
 5. **One-tap preset strips for dose, yield and temperature (deferred product work).**
    Streamline puts a preset strip under each stepper. Crema has strips for steam, water
    and flush only. Check the tablet fit after any change.
-6. **Shots from other skins show as "Unknown coffee" (phase 2, history).** The Streamline
+6. ~~**Shots from other skins show as "Unknown coffee" (phase 2, history).**~~ The Streamline
    shot's workflow carried no bean. If Decaid records a `coffeeName` or batch in the
-   shot's context, use it before falling back to "Unknown coffee".
+   shot's context, use it before falling back to "Unknown coffee". *Done: the coffee
+   name, else the shelf coffee whose bag the shot recorded, else "No coffee recorded".*
 7. **Capture Decaid's own screens next time (phase 7).** Its dashboard (devices, skins,
    plugins) wasn't captured: the window was on another macOS Space behind a full-screen
    app, so background clicks couldn't reach it. Doing this needs a short spell of
@@ -564,12 +565,30 @@ existing profiles are not unexpectedly rewritten.
   have come from Crema. Preserve data unless provenance supports a migration.
   *No migration: stored values are read as they are. Crema hasn't been released, so
   only test installs can hold old 1–5 ratings, which now show at half their stars.*
-- [ ] Implement bounded pagination for inventory/maintenance and browsing. Fetch
+- [x] Implement bounded pagination for inventory/maintenance and browsing. Fetch
   a pinned reference by its ID instead of searching only the latest 40 shots.
-- [ ] Respect the distinction between shot summaries and full measurements. Avoid
+  *Done: counts page through Decaid's list 100 at a time and stop at `total`
+  (`shotSummaries`; the echoed `limit` is never trusted), and the backflush count
+  stops at the last backflush, since Decaid lists newest first (checked on 0.9.1).
+  History loads 20 at a time with "Show more". The reference shot is fetched by id
+  (`api.shot`).*
+- [x] Respect the distinction between shot summaries and full measurements. Avoid
   fetching every full shot solely to count doses or display a history page.
-- [ ] Surface fetch failures separately from empty history; verify the just-finished
+  *Done: bag consumption and the backflush count use list summaries only. Full shots
+  are fetched for the visible history page (for its charts), the reference, and the
+  just-finished shot, instead of 40 full shots at each of those points.*
+- [x] Surface fetch failures separately from empty history; verify the just-finished
   shot is available before attaching ratings/reference state to it.
+  *Done: a failed history load says "Couldn't load your shots" with Try again; a bag
+  whose shots can't be read shows remaining and shot count as unknown, not full; the
+  backflush count shows "–". At a shot's start the app notes the newest shot id, and
+  at the end waits (up to ~6 s) for a newer one before attaching the rating or
+  reference; if Decaid hasn't saved it, the after-shot panel says so. The simulator
+  now pages like Decaid (100 cap, echoed limit, offset) and can seed old shots.
+  `e2e-live.cjs`: 130 extra shots counted per bag and for backflush, an old reference
+  shown, 20-at-a-time history, failed history and bag counts, a slow save rated
+  correctly, and an unsaved shot explained. Read-only check on desktop Decaid 0.9.1:
+  paging, `total`, latest and by-id shots with measurements, a missing id as null.*
 
 Acceptance: five stars writes the upstream maximum and reads back correctly; upstream
 ratings display consistently; >100 shots are counted accurately; an old reference
