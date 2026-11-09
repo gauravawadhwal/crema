@@ -163,7 +163,40 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       check(after.loaded && !after.held, "and it shows as loaded");
     }
 
-    // 7. A normal start still works.
+    // 7. Espresso pressed while a manual load is still on its way waits for it,
+    //    instead of writing the recipe a second time.
+    if (!hasRecipe) console.log("skip a start waits for a load already on its way (no coffee on the shelf, so no recipe)");
+    else {
+      await reset();
+      await tap('[data-step="dose:1"]'); // the recipe now needs loading
+      await p.evaluate(() => { window.__applies = []; });
+      await hold("apply");
+      await tap("#loadBtn");
+      await tap('[data-run="espresso"]');
+      await p.waitForTimeout(300);
+      await release();
+      await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 }).catch(() => {});
+      const ov = await p.evaluate(() => ({ applies: window.__applies.length, state: S.snap?.state?.state }));
+      check(ov.applies === 1 && ov.state === "espresso", "a start waits for a load already on its way, and the recipe is written once", JSON.stringify(ov));
+      await tap("#stopBtn");
+    }
+
+    // 8. Nothing starts while the machine is in a state that isn't ready (error,
+    //    cleaning, firmware update...). Stop stays available.
+    await reset();
+    const busy = await p.evaluate(async () => {
+      const out = {};
+      for (const st of ["error", "descaling", "fwUpgrade"]) {
+        onSnapshot({ ...S.snap, state: { state: st, substate: "idle" } });
+        const sent = window.__calls.length;
+        await startOp("flush");
+        out[st] = { start: document.querySelector('[data-run="flush"]').disabled, stop: !document.querySelector("#stopBtn").disabled, sent: window.__calls.length - sent, banner: st === "error" ? /reports an error/.test(document.querySelector("#alerts").textContent) : null };
+      }
+      return out;
+    });
+    check(Object.values(busy).every((x) => x.start && x.stop && x.sent === 0) && busy.error.banner, "no start in error, descaling or firmware states; Stop stays; an error gets a banner", JSON.stringify(busy));
+
+    // 9. A normal start still works.
     await reset();
     await tap('[data-run="flush"]');
     await p.waitForFunction(() => S.snap?.state?.state === "flush", null, { timeout: 5000 }).catch(() => {});

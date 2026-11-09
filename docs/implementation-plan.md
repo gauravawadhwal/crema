@@ -52,7 +52,7 @@ separate supervised step; implement and test locally first.
 | Phase | Work | Dependencies | Status / evidence |
 |---|---|---|---|
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
-| 1 | Machine-control reliability | Minimal test setup from 0 | Mostly done (PRs #12, #13, #14, #16, #17 and the socket PR): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Left: overlapping preparation paths, busy/error states; all unverified on the tablet |
+| 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Started: ratings use Decaid's 0–10 directly, shown as half stars |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
@@ -83,9 +83,9 @@ phase 1, so real-hardware findings can reshape phases 1–3.
 4. **Rest of phase 1**, reworked after checking Decaid and Streamline (see phase 1,
    "What to reuse"). *Done on 8–9 November 2026: profile writes held during a shot
    (#12), link state from `/ws/v1/devices` (#13), steam/hot water/flush through the
-   workflow (#14), workflow reconciliation (#16), time limits (#17) and socket
-   ownership. Left: preparation from other paths overlapping a start, and
-   busy/error states. Then the tablet session (item 8) to confirm it on real
+   workflow (#14), workflow reconciliation (#16), time limits (#17), sockets (#18),
+   then overlapping loads and busy/error states. Phase 1's software
+   work is complete; the tablet session (item 8) has to confirm it on real
    hardware.*
 5. ~~**Image-fetch security**~~ (phase 5). *Done in PR #10.*
 6. **Rest of phase 2**: installed Decaid profiles as the library, shot pagination and
@@ -303,12 +303,16 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   message, and exactly one write of the latest recipe after; with the gate removed
   it fails. Remaining gap: a load already in flight when the machine starts a shot
   (from the group head) still lands.*
-- [ ] Prevent duplicate starts and overlapping preparation requests. A response
+- [x] Prevent duplicate starts and overlapping preparation requests. A response
   failure/timeout must not result in an automatic retry of a machine-start command.
-  *Partly done: a second start is ignored while one is preparing or until the machine
+  *Done: a second start is ignored while one is preparing or until the machine
   reports it (`isStarting`), and a failed start only shows a toast; nothing retries
-  (checked in the source, not by a test). Not yet covered: preparation started from
-  other paths, such as Load onto machine or a settings write, overlapping a start.*
+  (checked in the source, not by a test). Recipe loads now run one at a time
+  (`loadChain`): each reads the screen when its turn comes, and one queued behind
+  another is skipped if that one already left the recipe on the machine, so
+  Espresso pressed during a manual load waits for it and the recipe is written once
+  (`e2e-controls.cjs`; fails with the queue removed). Preset writes overlapping a
+  start only touch steam, hot water or flush fields and are idempotent.*
 - [x] **Link state from `/ws/v1/devices`.** Edge-triggered, first frame a baseline.
   Show "Machine disconnected" (not stale numbers), block new starts but never Stop,
   and show `profileUploadFailed` while Decaid retries. The simulator needs the stream.
@@ -404,8 +408,15 @@ as of 8 November 2026. Check them against the Decaid version on the tablet.
   that never answers (gives up at 15 s, says so, Stop works, Try again recovers).
   The Shelf view itself still shows an empty list on a failed load (phase 2,
   "surface fetch failures").*
-- [ ] Handle missing/error/busy states using documented capabilities. Preserve
+- [x] Handle missing/error/busy states using documented capabilities. Preserve
   group-head-controller use and stop-at-weight responsibility in Decaid.
+  *Done: start buttons are disabled, and `startOp` refuses, in Decaid's not-ready
+  states (asleep, needs water, error, booting, steam rinse, cleaning, descaling,
+  transport mode, firmware update); heating and preheating are left to the DE1.
+  Stop is never blocked. The error state gets a banner (with Open Decaid inside
+  Decaid). Missing machine and link were handled earlier (#13, #18). The
+  group-head setting and Decaid's stop-at-weight are unchanged. State names come
+  from Decaid's API; which ones a real DE1 reports in each situation is unverified.*
 
 Acceptance tests: delay a settings/profile response, press Stop, release it and
 assert no start; double-tap start; load a recipe during a shot and assert nothing is
