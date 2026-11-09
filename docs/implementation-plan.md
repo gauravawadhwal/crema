@@ -120,6 +120,29 @@ Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 Small follow-up: the README screenshots and walkthrough still show the old boxed
 rating buttons (`refresh-demo-assets` skill; no AI reseeding needed).
 
+## First tablet feedback — 9 November 2026
+
+The user added a second bag from a phone. The already-open tablet did not show it
+until leaving and reopening the skin. Confirmed in source: no background shelf
+refresh existed. A reported “Brew this” failure remains unconfirmed: the user later
+found the bag with the Brew screen's arrow, and a recipe lookup may have been pending.
+Keep selection and machine loading behaviour unchanged until reproduced.
+
+Fix in this checkout: refresh visible live clients' shelves every five seconds and
+on focus/resume. Preserve the selected bag and unsaved recipe values, retain the
+last shelf on failures, and avoid overlapping background reads. The live browser
+regression keeps two clients open before adding a bag, checks the automatic update,
+and clicks “Brew this” on both phone and tablet. Real tablet upgrade/retest pending;
+this feedback does not complete phase 7.
+
+Local verification: typecheck and all 167 unit tests passed; app/demo/engine syntax,
+source and built demo click-throughs at phone/tablet sizes, live simulator checks,
+and skin ZIP validation passed. The new two-client regression covers automatic bag
+arrival, preserved unsaved recipe edits, retained inventory on read failure, and
+both “Brew this” buttons. The built demo was regenerated and screenshots reviewed.
+No CSS/layout, upstream API, engine or Docker changes; no real-machine commands or
+live data migration. Real Decaid/tablet validation and release installation pending.
+
 ## Findings from writing the user setup guide (7 November 2026)
 
 Writing a step-by-step setup guide for the user surfaced these gaps. Each one belongs

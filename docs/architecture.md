@@ -23,6 +23,12 @@
 
 ## Data
 
+Visible live clients refresh the shelf every five seconds and on focus/resume,
+so a bag added from a phone appears on an already-open tablet. Reads do not overlap;
+failed background reads keep the last shelf, and refreshes retain the selected bag
+and unsaved next-shot edits. “Brew this” selects a bag on that device; loading its
+recipe onto the machine remains a separate action.
+
 | What | Where |
 |---|---|
 | Beans, batches, profiles, workflow, shots, annotations | Decaid |

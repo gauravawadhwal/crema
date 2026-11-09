@@ -396,6 +396,13 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await S(() => loadOntoMachine(true));
       const pinnedShot = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots?limit=1`)).json()).items[0].id;
       await page.evaluate(async (id) => { await S.api.pinBest(S.current.id, id); }, pinnedShot);
+      await page.setViewportSize({ width: 390, height: 844 });
+      // Keep a second device open before the addition: a reload mustn't be needed.
+      const tablet = await browser.newPage({ viewport: { width: 1340, height: 800 } });
+      await tablet.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#shelf`);
+      await tablet.waitForFunction(() => S.shelfLoaded && S.current?.recipe, null, { timeout: 15000 });
+      await tablet.evaluate(() => { step("dose:1"); });
+      const editedDose = await tablet.evaluate(() => S.next.doseG);
       // Add a second bag from the shelf.
       await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector(`[data-addbag="${bag1}"]`, { timeout: 10000 });
       await page.click(`[data-addbag="${bag1}"]`); await page.fill("#bagRoast", "2026-11-01"); await page.fill("#bagWeight", "500"); await page.click("#confirmBag");
@@ -404,6 +411,23 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       const bag2 = two.find((b) => b.key !== bag1)?.key;
       check(two.length === 2 && two.every((b) => b.recipe && b.recipe === two[0].recipe) && two.some((b) => b.roast === "2026-11-01" && b.weight === 500), `a second bag gets its own roast date and weight and shares the recipe (${JSON.stringify(two)})`);
       check(await page.evaluate(() => /Bag 2 of 2/.test(document.querySelector("#shelf").textContent)), "the shelf says which bag is which");
+      await tablet.waitForFunction((key) => S.shelf.some((b) => b.key === key), bag2, { timeout: 12000 });
+      check(await tablet.locator(`[data-brew="${bag2}"]`).count() === 1, "an already-open tablet receives a bag added on another device without reloading");
+      check(await tablet.evaluate((dose) => S.next.doseG === dose && !S.loaded, editedDose), "inventory refresh preserves the tablet's unsaved recipe edits");
+      await tablet.route("**/api/v1/beans?includeArchived=false", (route) => route.abort());
+      await tablet.evaluate(() => syncShelf());
+      check(await tablet.evaluate((key) => S.shelf.some((b) => b.key === key), bag2), "a failed background inventory read keeps the existing shelf");
+      await tablet.unroute("**/api/v1/beans?includeArchived=false");
+      // Exercise the button, rather than bypassing it with selectBean().
+      await page.click(`[data-brew="${bag2}"]`);
+      await page.waitForFunction((key) => location.hash === "#brew" && S.current?.key === key, bag2);
+      check(await S(() => S.current.key) === bag2, "Brew this selects the second bag through the UI");
+      await tablet.click(`[data-brew="${bag2}"]`);
+      await tablet.waitForFunction((key) => location.hash === "#brew" && S.current?.key === key, bag2);
+      check(await tablet.evaluate((key) => S.current.key === key, bag2), "Brew this selects the second bag on the tablet");
+      await tablet.close();
+      await page.setViewportSize({ width: 1340, height: 800 });
+      await page.goto(`http://localhost:${SKIN}/?full#shelf`);
       // Freeze one.
       await page.click(`[data-freeze="${bag2}"]`); await page.waitForTimeout(400);
       check((await batchOf(bag2)).frozen === true && (await batchOf(bag1)).frozen !== true, "freezing one bag leaves the other alone");
