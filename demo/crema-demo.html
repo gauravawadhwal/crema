@@ -2201,6 +2201,31 @@ function makeDemoApi() {
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Like el.innerHTML = html, but keeps the elements already there wherever the markup
+// has the same shape, changing only text and attributes. For anything redrawn on every
+// machine or scale update (several times a second): a tap only counts if the finger
+// goes down and up on the same element, so a button replaced mid-tap loses the tap.
+function patchHtml(el, html) {
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  patchChildren(el, t.content);
+}
+function patchChildren(el, from) {
+  const want = [...from.childNodes];
+  want.forEach((n, i) => {
+    const cur = el.childNodes[i];
+    if (!cur || cur.nodeName !== n.nodeName || (n.nodeType === 1 && cur.id !== n.id)) {
+      if (cur) el.replaceChild(n, cur); else el.appendChild(n);
+    } else if (n.nodeType !== 1) {
+      if (cur.nodeValue !== n.nodeValue) cur.nodeValue = n.nodeValue;
+    } else {
+      for (const a of [...cur.attributes]) if (!n.hasAttribute(a.name)) cur.removeAttribute(a.name);
+      for (const a of n.attributes) if (cur.getAttribute(a.name) !== a.value) cur.setAttribute(a.name, a.value);
+      patchChildren(cur, n);
+    }
+  });
+  while (el.childNodes.length > want.length) el.lastChild.remove();
+}
 const local = {
   get(k, d) { try { const v = localStorage.getItem("crema:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("crema:" + k, JSON.stringify(v)); } catch {} },
@@ -2931,14 +2956,14 @@ function renderStatus() {
   const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
   const low = S.water && S.water.currentLevel <= S.water.refillLevel;
   const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
-  $("#status").innerHTML = `
+  patchHtml($("#status"), `
     <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
     <span class="chip"><span class="muted">Group</span><span class="num">${fmt1(s?.groupTemperature ?? s?.mixTemperature)}°</span></span>
     <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
     ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
     <button class="chip" type="button" id="scaleChip" title="Tap to tare">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</button>
     ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
-    ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`;
+    ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`);
   $("#scaleChip").onclick = tare;
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
@@ -3427,7 +3452,7 @@ function renderReadouts() {
   const s = (!unlinked() && S.snap) || {};
   const w = S.scale.connected ? S.scale.weight : null;
   const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"], ["Steam", s.steamTemperature, "°C", "--muted"]];
-  $("#readouts").innerHTML = items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join("");
+  patchHtml($("#readouts"), items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join(""));
   const wr = $("#weightReadout"); if (wr) wr.onclick = tare;
 }
 function renderLive() {
@@ -3443,7 +3468,7 @@ function renderLive() {
   $("#chartEmpty").hidden = pts.length > 0;
   $("#chartEmpty").classList.toggle("over-plan", !!plan);
   $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
-  $("#legend").innerHTML = legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId);
+  patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId));
   const clear = $("#clearRef");
   if (clear) clear.onclick = () => setReference(S.current, null);
   $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
@@ -3649,9 +3674,9 @@ function opOverlay() {
   const title = { steam: "Steaming", hotWater: "Hot water", flush: "Flushing" }[kind];
   const detail = kind === "steam" ? `Steam ${Math.round(S.snap.steamTemperature ?? 0)} °C · ${fmt1(S.snap.flow)} ml/s` : kind === "hotWater" ? `${p?.water[sel.water]?.ml ?? "–"} ml · ${S.scale.connected ? `${fmt1(S.scale.weight)} g in the cup` : `${fmt1(S.snap.flow)} ml/s`}` : `Group ${fmt1(S.snap.groupTemperature)} °C`;
   o.hidden = false;
-  $("#opCard").innerHTML = `<span class="label">${title}</span><div class="op-time">${t.toFixed(0)}<small style="font-size:1.4rem" class="muted"> s</small></div>
+  patchHtml($("#opCard"), `<span class="label">${title}</span><div class="op-time">${t.toFixed(0)}<small style="font-size:1.4rem" class="muted"> s</small></div>
     ${total ? `<div class="op-bar"><div style="width:${clamp((t / total) * 100, 0, 100)}%"></div></div><div class="muted">${Math.max(0, total - t).toFixed(0)} s left</div>` : '<div class="muted">Runs until you stop it</div>'}
-    <div>${esc(detail)}</div><button class="stop-btn active" id="opStop">STOP</button>`;
+    <div>${esc(detail)}</div><button class="stop-btn active" id="opStop">STOP</button>`);
   $("#opStop").onclick = stopMachine;
 }
 
