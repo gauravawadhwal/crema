@@ -125,12 +125,13 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 
 ## Status and next steps
 
-Released: v0.2.0 (9 November 2026), the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer.
+Released: v0.3.0 (9 November 2026): bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier the same day, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; updating that tablet to v0.3.0 is the first in-place upgrade.
 
 Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
 - the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site
 - machine-control reliability (plan phase 1): no profile writes mid-shot, link state from `ws/v1/devices`, steam, hot water and flush through the workflow, checking the machine's recipe against the screen, time limits, socket ownership, busy and error states
 - data correctness (plan phase 2): shot history paging and failures, installed Decaid profiles as the library, bags per batch
+- brewing without a bag, manual flow and pressure profiles, and profile graphs timed from past shots (`server/profiles/curve.ts`), with a reference shot you can remove
 - safe image fetching, CI (`verify`, `ui`, `docker`) gating releases and Pages, and the Docker image smoke-tested
 - an AI eval suite (`evals/`) with Opus, Sonnet, Haiku, Codex, Gemini and rules baselines
 
