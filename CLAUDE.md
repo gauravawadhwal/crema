@@ -14,7 +14,7 @@ plan). Broader real-tablet acceptance and physical manual-controller behavior re
 unverified.
 
 Read next, as needed:
-- `docs/implementation-plan.md`: the handoff and current plan. Start with "Where things stand" at its top; the progress table and ticked items say what is implemented, and "Suggested next sessions" lists what to pick up.
+- `docs/implementation-plan.md`: the handoff and current plan. Start with "Where things stand" at its top; the progress table and ticked items say what is implemented, and "Next" lists what to pick up. Dated status updates and superseded lists are in `docs/history.md`.
 - `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
@@ -110,7 +110,7 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 - **Tablet layout**: the home screen must fit one screen at 1340×800 and the scaled sizes down to 1005×552, before and after a shot. Run `check-tablet-fit.cjs` after any layout or spacing change.
 - **Themes**: theme tokens use `html:root[data-skin=…]` so they outrank the light/dark blocks. Charts read CSS variables at draw time, so call `route(false)` to redraw after a change. Verde is the default (`DEFAULT_SKIN` in app.js, and `data-skin="verde"` on `<html>` in index.html); keep the two in step. See `docs/design.md`.
 - **Ratings are Decaid's 0–10, untouched.** The UI shows them as half stars (one point each); don't convert to or from 1–5 anywhere, including AI prompts and eval data. Decaid rejects values outside 0–10, and `null`.
-- **Temperature**: DE1 profiles set a temperature per step. Apply a recipe temperature by shifting every step (`withTemperature` in `server/app.ts`); never set only the first step.
+- **Temperature**: DE1 profiles set a temperature per step. Apply a recipe temperature by shifting every step (`withTemperature` in `server/recommend/local.ts`); never set only the first step.
 - **Steam, hot water and flush are workflow fields.** Write them with `machine.workflowSettings` (`steamSettings`, `hotWaterData`, `rinseData`), not `POST /machine/shotSettings`, which Decaid doesn't copy back into the workflow. Decaid stores any number, so keep values inside `WF_LIMITS` (integers for temperatures, durations, volumes).
 - **Never write the workflow's profile during a shot.** Decaid sends it to the DE1 at once, even mid-shot, replacing the steps being poured. `loadOntoMachine` holds the load until the shot ends (`S.heldLoad`); any new path that writes `profile` to `/workflow` must go through it.
 - **Before building machine plumbing, check Decaid and Streamline.** Decaid has `/ws/v1/devices` for link state and workflow fields for steam, hot water and flush; Streamline has solved reconnects and outside workflow changes. Streamline is GPL-3.0, so learn from it but don't copy its code into this MIT repo (implementation plan, phase 1).
@@ -127,7 +127,9 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 
 ## Status and next steps
 
-Released: v0.4.1 (10 November 2026): shot review fixed for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in the review). v0.4.0 (10 November 2026): AI shot review (shot checks with no AI, an optional AI review, saved on the shot in Decaid), a shared grind start value and stepper, and buttons that stay put when panels redraw. v0.3.0 (9 November 2026) added bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier on 9 November, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; updating that tablet to a later release is the first in-place upgrade.
+Released: v0.4.1 (10 November 2026): shot review fixed for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in the review). v0.4.0 (10 November 2026): AI shot review (shot checks with no AI, an optional AI review, saved on the shot in Decaid), a shared grind start value and stepper, and buttons that stay put when panels redraw. v0.3.0 (9 November 2026) added bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier on 9 November, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; the user reports the tablet has since been upgraded in place through v0.4.1 and is in daily use.
+
+In review, not merged or released: the 10 November code review (PR #41) and its fixes, namely server hardening (#42), silent failures and Speak hidden inside Decaid (#43), control decisions under unit tests in `server/control/` (#44), a cheaper shelf poll (#45) and safer shared-record writes (#46). Checked against the simulator and CI only. The rest of F4 (rest-table export, shared taste/review piece) is in progress.
 
 Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
 - the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site
@@ -139,8 +141,7 @@ Done in software and tested against the simulator and desktop Decaid 0.9.1 with 
 
 Not done (details in `docs/implementation-plan.md`):
 - broader real-tablet acceptance, including upgrade/restore and physical controls (plan phase 7; one baseline brew is already verified)
-- Streamline Settings from Crema, the profile-editing hand-off and an evidence-based `docs/parity.md` (plan phase 3; needs the tablet)
-- splitting `skin/app.js` (plan phase 4)
-- voice input inside Decaid: Decaid never gives skins the microphone; hide Speak there and point to the keyboard's microphone (next-session item 10)
+- Streamline Settings from Crema, the profile-editing hand-off and an evidence-based `docs/parity.md` (plan phase 3)
+- splitting `skin/app.js` and `tsc --checkJs` for the skin (plan phase 4, after #44; optional)
 - AI shot review real-shot calibration and tablet acceptance: the first software version is implemented (`docs/shot-review-plan.md`)
 - grinder entities and a numeric grind advisor; Home Assistant sensors; order-email ingestion

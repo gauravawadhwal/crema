@@ -6,8 +6,8 @@ profile's targets), together with taste when the user gives it, and says what
 went well, what didn't and the one change to make next. Only run when asked.
 
 Builds on `server/profiles/curve.ts` (profile plan and real step timings from
-`profileFrame`), merged in PR #31. Tracked as next-session item 11 in the
-[implementation plan](implementation-plan.md).
+`profileFrame`), merged in PR #31. Tracked in the
+[implementation plan](implementation-plan.md) (history: "Suggested next sessions", item 11, in [history.md](history.md)).
 
 ## First-version scope and implementation record
 
