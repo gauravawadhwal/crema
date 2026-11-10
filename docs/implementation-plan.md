@@ -879,6 +879,14 @@ existing profiles are not unexpectedly rewritten.
 
 ### Ratings and shot history
 
+- [x] **UI feedback, 10 November:** independently scrolling shot list and detail
+  panes above the phone breakpoint; status and heading remain visible. Selection,
+  comparison and reference changes retain loaded older rows and list position;
+  a newly selected shot opens at the top of its detail. Phone keeps normal stacked
+  page scrolling. Source/built-demo regression in `e2e-shot-history.cjs` covers
+  wheel boundaries, paging, keyboard access, phone resizing and empty/error states.
+  Implemented in this change; not yet released or checked on the tablet.
+
 - [x] Convert between Crema's five-star UI and Decaid's rating scale at the adapter
   boundary, consistently for detail edits, feedback, reads and AI history inputs.
   Specify handling for fractional ratings and unrated values.
