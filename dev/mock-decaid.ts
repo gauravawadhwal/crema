@@ -90,10 +90,10 @@ const sim = {
 };
 
 
-function stop(next = "idle") {
+function stop(next = "idle", stopReason = "apiStop") {
   if (sim.timer) clearInterval(sim.timer);
   sim.timer = null;
-  if (sim.state === "espresso" && sim.samples.length > 10) recordShot();
+  if (sim.state === "espresso" && sim.samples.length > 10) recordShot(stopReason);
   sim.state = next;
   sim.substate = next === "idle" ? "idle" : next;
   sim.live = { pressure: 0, flow: 0, targetPressure: 0, targetFlow: 0, elapsed: 0, profileFrame: 0 };
@@ -134,7 +134,7 @@ function run(state: string) {
       // stop at weight, with the usual lag
       if ((target > 0 && sim.scaleWeight - sim.scaleOffset >= target - 1.2) || (puck!.done && workflow.profile?.beverage_type !== "manual") || t >= 120) {
         sim.substate = "pouringDone";
-        return stop();
+        return stop("idle", target > 0 && sim.scaleWeight - sim.scaleOffset >= target - 1.2 ? "targetWeight" : "machineEnded");
       }
     } else if (state === "steam") {
       p = 1.8 + Math.random() * 0.2; f = Number(settings.steamFlow);
@@ -152,12 +152,13 @@ function run(state: string) {
   }, 100);
 }
 
-function recordShot() {
+function recordShot(stopReason: string | null = null) {
   const ctx = workflow.context ?? {};
   const start = Date.now() - sim.samples.length * 100;
   const shot = {
     id: `shot-${new Date().toISOString().replace(/[:.]/g, "-")}`,
     timestamp: new Date().toISOString(),
+    stopReason,
     measurements: sim.samples.filter((_, i) => i % 2 === 0).map((s) => ({
       machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" }, flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), targetFlow: s.tf, targetPressure: s.tp, profileFrame: s.frame, mixTemperature: +s.temp.toFixed(1) },
       scale: { timestamp: new Date(start + s.t * 1000).toISOString(), weight: +s.w.toFixed(1) },

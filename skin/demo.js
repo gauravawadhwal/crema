@@ -157,7 +157,7 @@ function makeDemoApi() {
   }
   const nextShotId = () => { while (shots.some((shot) => shot.id === `demo-shot-${shotCounter}`) || savedReviews[`demo-shot-${shotCounter}`]) shotCounter++; return `demo-shot-${shotCounter++}`; };
 
-  function stop(next = "idle", stopReason = "user") {
+  function stop(next = "idle", stopReason = "apiStop") {
     clearInterval(sim.timer); sim.timer = null;
     const was = sim.state;
     if (was === "espresso" && sim.samples.length > 20) {
@@ -198,9 +198,9 @@ function makeDemoApi() {
         sim.live = { p, f, tp: x.tp ?? 0, tf: x.tf ?? 0, t, frame: x.frame };
         const w = sim.scale - sim.scaleOffset;
         sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf, frame: x.frame });
-        if (target > 0 && w >= target - 1.2) { sim.substate = "pouringDone"; return stop("idle", "weight"); }
-        if (puck.done && !manualKind(workflow.profile)) { sim.substate = "pouringDone"; return stop("idle", "profile"); }
-        if (t > 120) { sim.substate = "pouringDone"; return stop("idle", "time"); }
+        if (target > 0 && w >= target - 1.2) { sim.substate = "pouringDone"; return stop("idle", "targetWeight"); }
+        if (puck.done && !manualKind(workflow.profile)) { sim.substate = "pouringDone"; return stop("idle", "machineEnded"); }
+        if (t > 120) { sim.substate = "pouringDone"; return stop("idle", "machineEnded"); }
       } else if (state === "steam") {
         p = 1.9 + Math.random() * 0.2; f = settings.steamFlow; sim.steamTemp = Math.max(135, sim.steamTemp - 0.08); sim.substate = "pouring";
         sim.live = { p, f, tp: 0, tf: 0, t };

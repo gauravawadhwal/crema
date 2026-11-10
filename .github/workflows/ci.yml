@@ -87,6 +87,9 @@ jobs:
       - name: Stop and start races, built single-file demo
         if: matrix.group == 'controls'
         run: node scripts/e2e-controls.cjs --built
+      - name: Captured pour context and guarded Skip
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-pour-context.cjs && node scripts/e2e-pour-context.cjs --built
       - name: Recipe value sheet and hold controls
         if: matrix.group == 'controls'
         run: node scripts/e2e-values.cjs --shots ui-shots/values

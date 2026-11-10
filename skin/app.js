@@ -2939,6 +2939,7 @@ function renderShotList(scrollTop = $("#shotList").scrollTop) {
   renderShotFilters(names);
   const visible = shotCoffeeFilter == null ? S.shots : S.shots.filter((x) => shotCoffee(x) === shotCoffeeFilter);
   if (!visible.some((x) => x.id === S.selShot)) S.selShot = visible[0]?.id ?? null;
+  if (S.cmpShot === S.selShot) S.cmpShot = null;
   const olderBtn = S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "";
   if (!visible.length) {
     list.innerHTML = `<p class="muted">No loaded shots of ${esc(shotCoffeeFilter)}.${olderBtn ? " Older shots may have some." : ""}</p>${olderBtn}`;
@@ -2952,7 +2953,9 @@ function renderShotList(scrollTop = $("#shotList").scrollTop) {
       <label class="cmp-label"><input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}><span>Compare</span></label></div>`).join("") + olderBtn;
   list.scrollTop = scrollTop;
   const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
-  requestAnimationFrame(() => visible.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
+  // Capture these canvases: another filter/render may replace them before this frame.
+  const sparks = [...list.querySelectorAll("[data-spark]")];
+  requestAnimationFrame(() => visible.forEach((s, i) => { if (sparks[i]?.isConnected) drawChart(sparks[i], s.points, { compact: true, maxT: 50, maxW: 60 }); }));
   $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShotList(); list.querySelector(`[data-open="${CSS.escape(S.selShot)}"]`)?.focus({ preventScroll: true }); }));
   $$("[data-cmp]").forEach((b) => (b.onchange = () => { const id = b.dataset.cmp; S.cmpShot = b.checked ? id : null; renderShotList(); list.querySelector(`[data-cmp="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }); }));
   renderShotDetail();

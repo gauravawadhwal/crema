@@ -58,6 +58,21 @@ const url = "file://" + path.resolve(__dirname, "../skin/index.html") + "?demo&f
   await p.locator(".cmp-label input:not([disabled])").first().check();
   assert(await p.evaluate(() => !!S.cmpShot), "Compare overlays a second shot");
 
+  // Filtering to the compared coffee must not compare its new selection with itself.
+  const filtered = await p.evaluate(() => {
+    shotCoffeeFilter = null;
+    S.selShot = S.shots[0].id;
+    const other = S.shots.find(s => shotCoffee(s) !== shotCoffee(S.shots[0]));
+    S.cmpShot = other.id;
+    renderShotList(); // Queue charts for All, then replace their canvases in this frame.
+    shotCoffeeFilter = shotCoffee(other);
+    renderShotList(0);
+    return { selected: S.selShot, compared: S.cmpShot, expected: other.id };
+  });
+  assert.equal(filtered.selected, filtered.expected);
+  assert.equal(filtered.compared, null, "filtering clears comparison with the selected shot");
+  await p.waitForTimeout(100); // Let both queued chart callbacks run; pageerror is checked below.
+
   // Settings: the section index scrolls its card into view.
   await open("settings");
   const goto = p.locator("#settingsIndex [data-goto]");

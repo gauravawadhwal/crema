@@ -16,6 +16,29 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**11 November 2026 — reviewed UI consolidation, PR #61**
+
+- Consolidates PRs #54–#60 and the completed WS 9 commit in PR #62 with WS 4.
+  Merge commits retain each workstream's history. WS 9's old remote WIP is preserved;
+  its completed local commit is published as `codex/ws9-other-screens`.
+- Review fixed WS 4's Stop position: the enlarged button now contains the entire
+  resting hit area at all five tablet sizes. The nominal 300×96 minimum expands
+  vertically on taller tablets because the resting Stop sits above Favourites.
+- Shot recipe/profile snapshots are copied and remain independent of next-shot edits.
+  Missing metadata and frames stay unknown; Skip requires a known non-final step,
+  a live link, a non-manual profile and no pending Skip request. Socket loss keeps Stop.
+- Demo and mock records now use Decaid's recorded stop reasons. The favourites
+  regression asserts controls are hidden while pouring and separately exercises a
+  queued favourite load. This fixes the failed brewing check in the original PR #61.
+- WS 9 review fixed self-comparison after changing coffee filters and stale chart
+  callbacks after the filtered list is replaced. Shared chart changes preserve both
+  pour overlays and profile thumbnails; Settings retains WS 6 hold/save behavior.
+- Focused checks passed: control races and Stop coverage, captured pour context
+  (source and built), WS 9 screens/filter transitions, WS 6 values, and typecheck.
+  Broad CI runs on the consolidated branch; see PR #61 for the final check results.
+- Remaining: WS 5 after-shot layout, WS 8 phone and WS 11 finish. WS 7 has a stopped
+  WIP branch and is not included. No physical tablet/DE1 or NAS validation or release.
+
 **10 November 2026 — WS 6 completed on `ui/ws6-value-sheet`**
 
 - Dose, Yield and Temp tiles open one draft sheet with tabs, a snapping pointer/keyboard
@@ -156,16 +179,16 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 
 | WS | Work | Size | Depends on | Status / evidence |
 |---|---|---|---|---|
-| 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #56 open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
-| 2 | Quick fixes for measured defects | S | 1 | PR #58 open, not merged. 15 allowlist entries removed (121 left); npm test, typecheck, check-targets, check-tablet-fit, e2e-controls (with the new Stop assertion at five sizes) and e2e-demo pass; --built, live, brewing, review and shot-history scripts not run. |
-| 3 | Brew at rest | M | 2 | Implemented on `ui/ws3-brew-at-rest`; focused checks pass, PR pending |
-| 4 | Pour mode | L | 3 | Implemented on `ui/ws4-pour-mode`; `e2e-controls.cjs` (with pour-mode, skip-step, socket-drop and 1005×552 checks) passes |
+| 1 | Guard rails: tokens, target check, stress fixture | S | none | Included via PR #56 in consolidation #61; guard rails and stress fixture. |
+| 2 | Quick fixes for measured defects | S | 1 | Included via PR #58 in consolidation #61; Brew quick fixes. |
+| 3 | Brew at rest | M | 2 | Included via PR #59 in consolidation #61; Brew controls, idle plan and favourites. |
+| 4 | Pour mode | L | 3 | Implemented and reviewed in #61 with WS 4a (#55); Stop containment, captured shot context, guarded Skip and socket-loss checks pass. |
 | 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
-| 6 | Value sheet and steppers | M | 3 | Implemented on `ui/ws6-value-sheet`; focused values, tablet fit and targets pass; 5 allowlist entries removed (116 remain). Broader suites left to CI. Not merged or hardware-tested. |
-| 7 | Feedback layer | M | 2 | Not started |
+| 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
+| 7 | Feedback layer | M | 2 | Stopped WIP branch; not included in consolidation. Resume against consolidated main. |
 | 8 | Phone | M | 4 | Not started |
-| 9 | Shelf, Profiles, Shots, Settings | M | 2 | PR open (stacked on #56), not merged. Shelf: Brew this plus a More sheet, equal card heights, filter chips, skeletons. Profiles: step thumbnails, AI pick shown once. Shots: coffee filter, labelled Compare, metrics row fixed. Settings: section index (tablet), 44 px controls. 95 allowlist entries removed (93 `ws: 9` + 2 `ws: 6` settings steppers; 41 left); `npm test`, typecheck, `check-targets`, `check-tablet-fit`, `e2e-shot-history` and `e2e-screens` pass. Not run on the tablet; result pills wait for WS 5. |
-| 10 | Sleep screen and sound | S | 2 | PR open, not merged. `e2e-sleep.cjs` (source and built) covers tap vs hold to wake with machine state asserted, early release, reduced motion, keyboard, persistence and the chime; full suite run; real tablet touch and audio unverified |
+| 9 | Shelf, Profiles, Shots, Settings | M | 2 | Completed commit 4a4123c published in PR #62 and included in #61; Shelf, Profiles, Shots and Settings. Filter regressions fixed during review. Result pills wait for WS 5. |
+| 10 | Sleep screen and sound | S | 2 | Included via PR #57 in consolidation #61; opt-in hold-to-wake and chime. Real tablet touch/audio unverified. |
 | 11 | Motion and finish | S | all | Not started |
 
 Order: 1, then 2, then 3 with 7, then 4 with 9, then 5 with 6, then 8 with 10, then 11.
