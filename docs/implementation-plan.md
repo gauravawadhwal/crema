@@ -11,11 +11,13 @@ v0.4.1 (shot review fixed for real shots). The user reports the tablet was upgra
 place through each release to v0.4.1 and is in daily use without problems, so a
 supervised tablet session is not planned and agents should not ask for tablet access
 unless the user offers it. A code review the same day found problems this plan had not
-listed (see "Code review and findings"). Fixes for F1, F2, F3 and F5, and the control
-logic under unit tests (phase 4 re-scoped), are open as PRs #42 to #46, checked against
-the simulator and CI but not merged and not seen on the tablet; the review itself is in
-PR #41. Agents open a PR per piece of work and do not merge; tagging a release is the
-user's call. Software checks use `dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
+listed (see "Code review and findings"). The fixes for F1 to F5 and the control logic
+under unit tests (phase 4 re-scoped) were merged into `main` on 10 November 2026 as
+PRs #42 to #46 and #48, with the review itself (#41) and the plan trim (#47). Nothing
+has been released or tagged since v0.4.1, and none of it has run on the tablet: it is
+checked against the simulator and CI only. Agents open a PR per piece of work and do
+not merge; tagging a release is the user's call. Software checks use
+`dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
 simulated machine. The [review record](review-2026-11-06.md) separates reproductions,
 source findings and untested assumptions; read it before changing behaviour.
 
@@ -24,22 +26,24 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-1. **Finish F4** (in progress): export the rest-window table through `server/engine.ts`
-   and delete the copy in `skin/app.js`; make one shared taste-scale and Review-button
-   piece for `showAfterShot` and `renderShotDetail`.
-2. **Streamline Settings entry and the parity audit** (phase 3). Build and check it
-   against desktop Decaid; the user confirms on the tablet in normal use.
-3. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
+1. **The next release** (tagging is the user's call) **and its in-place tablet
+   upgrade.** It would be the first time the merged review work runs on the tablet.
+2. **Flaky check, in progress** (separate branch): `e2e-live.cjs` sometimes fails
+   "inventory refresh preserves the tablet's unsaved recipe edits". Being investigated;
+   not yet explained.
+3. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
+   is ready with desktop Decaid. Build and check it against desktop Decaid; the user
+   confirms on the tablet in normal use.
+4. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
    shared JSDoc type for the API object, which turns the live/demo contract into a type
    check. Splitting the file further is optional after PR #44.
-4. **Held until there is a reason:** shot-review threshold calibration (needs more real
+5. **Held until there is a reason:** shot-review threshold calibration (needs more real
    shots with taste recorded); grinder entities and a numeric grind advisor; Home
    Assistant sensors; order-email ingestion (see "Deferred product work").
-5. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
+6. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
    request for a tablet session.
 
-After #41 to #46 merge, tick the F1 to F5 items as merged and describe `server/control/`
-in `docs/architecture.md`. Housekeeping (F6) is the user's call.
+Housekeeping (F6) is the user's call.
 
 ## Still unverified on hardware
 
@@ -60,9 +64,10 @@ for a tablet session:
 
 A review of `main` at PR #40, made by reading `server/` and all of `skin/app.js` rather
 than this plan. 207 unit tests and the typecheck passed locally and CI was green; the
-Playwright checks were not run locally. The fixes are in open PRs (#42 to #46, with
-the F4 remainder in progress). They are verified against the simulator and CI only:
-not merged, not on the tablet. The checkboxes below are ticked on that basis.
+Playwright checks were not run locally. The fixes are PRs #42 to #46 (with
+the F4 remainder). All were merged on 10 November 2026 and are not released. They are
+verified against the simulator and CI only, not on the tablet. The checkboxes below are
+ticked on that basis.
 
 ### What the review concluded
 
@@ -85,14 +90,14 @@ one before fixing it.
 - [x] **"Notes saved" shows even when the save failed.** The `#shotNotes` handler in
   `renderShotDetail` swallows the error from `api.annotate` and then toasts success.
   Fix: toast success only when the write resolves, and say so when it fails.
-  *Done: PR #43, simulator and CI; not yet merged.*
+  *Done: PR #43 (merged 10 November 2026; simulator and CI, not on the tablet).*
 - [x] **"Recommendations updated" is only true for the current coffee.** `savePrefs` in
   `renderSettings` sets `recipe = null` on every shelf row in memory and re-selects the
   current coffee. The next `refreshShelf` reads the other coffees' old recipes back from
   Decaid's key-value store, so they are never recomputed. Fix: either clear the stored
   recipes for the other coffees (so each is recomputed when next selected), or mark
   them stale in the record; then make the toast say what happened.
-  *Done: PR #43 (`resetRecipes`), simulator and CI; not yet merged.*
+  *Done: PR #43 (`resetRecipes`; merged 10 November 2026, simulator and CI, not on the tablet).*
 - [x] **Many buttons fail silently.** These handlers await a request with no error
   handling: Freeze/Thaw and "Mark finished" (`renderShelf`), wake-schedule day toggles,
   enable switches, Add and Remove, USB charging, sleep-when-idle, "Done today" for
@@ -101,7 +106,7 @@ one before fixing it.
   so a failed request shows nothing. Fix: a global handler that toasts "Couldn't do
   that: …", plus explicit handling where the UI must roll back (switches that stay
   flipped after a failed write).
-  *Done: PR #43 (global failure toast, with rollback where a switch stays flipped), simulator and CI; not yet merged.*
+  *Done: PR #43 (global failure toast, with rollback where a switch stays flipped; merged 10 November 2026, simulator and CI, not on the tablet).*
 - [x] **A shot whose machine socket drops mid-pour never shows the after-shot panel.**
   `subscribe` marks a snapshot `finished` only when the previous state was `espresso`,
   and the socket's `onLost` resets that previous state. `onSnapshot` has the same
@@ -109,7 +114,7 @@ one before fixing it.
   panel, no bag weight update, and "Loads after this shot" stays until the next load.
   Fix: remember that a shot was running across a reconnect, and treat the first
   non-espresso snapshot after it as the end.
-  *Done: PR #43 (it also holds a profile write during the gap), simulator and CI; not yet merged.*
+  *Done: PR #43 (it also holds a profile write during the gap; merged 10 November 2026, simulator and CI, not on the tablet).*
 
 **F2. Shelf polling**
 
@@ -121,13 +126,13 @@ one before fixing it.
   cycle to detect changes. The tablet serves all of this while also running the
   machine. Fix: poll a cheap change signal (the bean list and batch lists), and do the
   full read only when it differs, on focus, and after a shot.
-  *Done: PR #45, simulator and CI; not yet merged. Idle poll down from 17 to 6 requests for 4 coffees; full reads only while a just-added coffee waits for its recipe.*
+  *Done: PR #45 (merged 10 November 2026; simulator and CI, not on the tablet). Idle poll down from 17 to 6 requests for 4 coffees; full reads only while a just-added coffee waits for its recipe.*
 - [x] **A read path writes.** `bagUse` writes a weight correction to the key-value
   store when it sees `weightRemaining` changed elsewhere, and it runs inside the 5 s
   poll on every device, so two devices can write the same correction at once. Fix: do
   the correction in `syncRemaining` (after a shot, or when the user sets what's left),
   not in `shelf()`.
-  *Done: PR #45 (correction moved to `syncRemaining`), simulator and CI; not yet merged. Bagless shots no longer get another coffee's info in reviews.*
+  *Done: PR #45 (correction moved to `syncRemaining`; merged 10 November 2026, simulator and CI, not on the tablet). Bagless shots no longer get another coffee's info in reviews.*
 
 **F3. Shared records can lose updates across devices**
 
@@ -135,7 +140,7 @@ one before fixing it.
   patch over the copy this device read earlier, then writes the whole object. A phone
   changing the grind step can undo the tablet's AI switch. Fix: re-read before writing,
   as `prefs.set` and `maintenance.set` already do.
-  *Done: PR #46, simulator and CI; not yet merged.*
+  *Done: PR #46 (merged 10 November 2026; simulator and CI, not on the tablet).*
 - [x] **Coffee records are read-modify-write with no guard.** `patchRecord` and
   `saveBean` read `bean:<id>`, merge and write it back; `recommend` rewrites `info` and
   `recipe` together. Two devices acting on the same coffee within a request's time can
@@ -144,23 +149,28 @@ one before fixing it.
   before each write and merge only the fields being changed; consider splitting fields
   that change independently into their own keys, as bags already do (`bag:<batchId>`).
   Any key change needs a migration (phase 4, "define migration versions").
-  *Done: PR #46: every `bean:<id>` writer re-reads and merges a patch. Keys not split: judged not worth a migration for now. Simulator and CI; not yet merged.*
+  *Done: PR #46: every `bean:<id>` writer re-reads and merges a patch. Keys not split: judged not worth a migration for now. Merged 10 November 2026; simulator and CI, not on the tablet.*
 
 **F4. Structure and duplication**
 
-- [ ] **The rest-window table is copied into `app.js`** (`REST` and `restOf`, marked
+- [x] **The rest-window table is copied into `app.js`** (`REST` and `restOf`, marked
   "mirror"). The source is `server/recommend/rules.ts`. Export it through
   `server/engine.ts` and delete the copy, per this repo's own convention.
-  *In progress (a separate PR).*
+  *Done: PR #48 (merged 10 November 2026; simulator and CI, not on the tablet). The
+  app calls `E.restOf` from `rules.ts`. One difference: the shelf pill now infers the
+  roast level as the recommender does (`roastedFor` filter reads as light, omni as
+  medium-light) when none is stated.*
 - [x] **The live API reaches into the UI.** `api.review` reads `S.shelf` for the coffee,
   and `api.machine.waterThreshold` uses `settingNumber` and `SETTING_LIMITS` from the
   settings view. Pass these in as arguments so the API layer has no dependency on UI
   state; this is a precondition for typing or extracting it.
-  *Done: PR #44, simulator and CI; not yet merged.*
-- [ ] **The taste scales and the Review button are written twice**, in `showAfterShot`
+  *Done: PR #44 (merged 10 November 2026; simulator and CI, not on the tablet).*
+- [x] **The taste scales and the Review button are written twice**, in `showAfterShot`
   and `renderShotDetail`, with slightly different behaviour (one saves taste on tap,
   the other only with a review). Make one shared piece.
-  *In progress (a separate PR).*
+  *Done: PR #48 (merged 10 November 2026; simulator and CI, not on the tablet). Shared
+  `tasteScalesHtml`, `bindTasteScales` and `bindReviewButton`. Taste now saves on tap
+  in the after-shot panel too, and a failed save puts the previous answer back.*
 - [x] **Doc drift:** `CLAUDE.md` says `withTemperature` is in `server/app.ts`; it is in
   `server/recommend/local.ts`.
   *Done: fixed in the docs trim (this PR).*
@@ -169,21 +179,21 @@ one before fixing it.
 
 - [x] **No upload limit on `/api/identify`.** Photos are read into memory with no size
   or count limit. Add a body limit (the app sends at most four photos).
-  *Done: PR #42, simulator and CI; not yet merged.*
+  *Done: PR #42 (merged 10 November 2026; simulator and CI, not on the tablet).*
 - [x] **Any web page can call the server.** `/api/*` allows every origin and the server
   listens on all interfaces with no authentication, so a page open in a browser on the
   LAN could spend AI calls. The `/decaid/*` proxy adds no exposure Decaid doesn't
   already have on the LAN. Fix: restrict CORS to configured origins (an environment
   variable, defaulting to the Decaid skin origin and same origin). Authentication is
   not proposed.
-  *Done: PR #42 (`CORS_ORIGINS`), simulator and CI; not yet merged.*
+  *Done: PR #42 (`CORS_ORIGINS`; merged 10 November 2026, simulator and CI, not on the tablet).*
 - [x] **`ProviderChain.lastUsed` is shared between requests.** Two simultaneous
   requests can report each other's provider as the source. Return the provider with the
   result instead.
-  *Done: PR #42 (provider returned with each result), simulator and CI; not yet merged.*
+  *Done: PR #42 (provider returned with each result; merged 10 November 2026, simulator and CI, not on the tablet).*
 - [x] **Minor:** 500 responses return the raw error message; `dialInWithSource` falls
   back to rules without logging why (`recommend` and `reviewShot` do log).
-  *Done: PR #42 (generic 500s, dial-in fallback logged), simulator and CI; not yet merged.*
+  *Done: PR #42 (generic 500s, dial-in fallback logged; merged 10 November 2026, simulator and CI, not on the tablet).*
 
 **F6. This plan and the repository**
 
@@ -246,7 +256,7 @@ separate supervised step; implement and test locally first.
 | 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Done in software: ratings, shot history (#22), installed profiles (#23), bags per batch. Unverified on the tablet |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
-| 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | In progress. Re-scoped on 10 November 2026: control, load-hold, reconcile, start-gate and bag-weight decisions moved to `server/control/` with vitest (PR #44, simulator and CI; in review, not merged). File splitting and `tsc --checkJs` later (see "Next") |
+| 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | In progress. Re-scoped on 10 November 2026: control, load-hold, reconcile, start-gate and bag-weight decisions moved to `server/control/` with vitest (PR #44, merged 10 November 2026; simulator and CI, not on the tablet), with the shelf, record-merge and rest-table logic added by #45, #46 and #48. File splitting and `tsc --checkJs` later (see "Next") |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
 | 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. The complete saved-shot regression is covered by `e2e-brewing.cjs`. Left: backup/restore docs; repository in the manifest |
 | 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Started: one real brew and saved workflow/telemetry checked. User-reported on 10 November 2026: upgraded in place to v0.4.1 and in daily use without problems. Edge cases not yet seen are listed under "Still unverified on hardware" |
@@ -339,7 +349,7 @@ the microphone is refused. It isn't a bug or a setting:
 
 What works, and what to do:
 
-- [x] **Hide Speak inside Decaid from the start.** *(Done in PR #43, simulator and CI; not yet merged, not on the tablet.)* Today Crema shows Speak, the first
+- [x] **Hide Speak inside Decaid from the start.** *(Done in PR #43, merged 10 November 2026; simulator and CI, not on the tablet.)* Today Crema shows Speak, the first
   tap fails, then `noMicrophone()` hides it and suggests the keyboard. `window.decentApp`
   exists only in Decaid's WebView, where the microphone is always denied, so Crema can
   skip straight to the hint: "Tap the box, then the microphone on your keyboard." The
@@ -923,7 +933,8 @@ mark the whole matrix complete based on one working link.
 
 **Re-scoped on 10 November 2026** (see "Code review and findings"). **Control logic done
 in PR #44** (`server/control/`: reconcile, load-hold, snapshot-transition, start-gate
-and bag-weight decisions, with vitest; simulator and CI, in review, not merged). Start with the logic that has no unit tests: move the start/stop,
+and bag-weight decisions, with vitest; merged 10 November 2026, simulator and CI, not
+on the tablet). Later PRs added the new-row and shared-record modules there. Start with the logic that has no unit tests: move the start/stop,
 load-hold, workflow-reconcile and bag-weight decisions into functions in `server/`
 that take state and return what to do, shipped to the app through `skin/engine.js` and
 tested by vitest. The Decaid adapter (`makeLiveApi`) is already the cleanest part of
