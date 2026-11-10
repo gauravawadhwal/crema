@@ -202,7 +202,17 @@ function makeLiveApi(conn) {
   const kvGet = async (key, fallback) => { try { return (await j(kvUrl(key))) ?? fallback; } catch (e) { if (e.status === 404) return fallback; throw e; } };
   const kvSet = (key, value) => post(kvUrl(key), value);
   const recordOf = (beanId) => kvGet(`bean:${beanId}`, null);
-  const patchRecord = async (beanId, patch) => kvSet(`bean:${beanId}`, { ...((await recordOf(beanId)) || {}), ...patch });
+  // Shared with other devices and with no revision in Decaid's store: re-read right before
+  // writing and change only the fields in the patch. `patch` may be a function of the fresh
+  // record (return null to write nothing), so a caller's decision uses the record it merges into.
+  const patchRecord = async (beanId, patch) => {
+    const fresh = await recordOf(beanId);
+    const p = typeof patch === "function" ? patch(fresh) : patch;
+    if (!p) return fresh;
+    const next = E.mergeRecord(fresh, p);
+    await kvSet(`bean:${beanId}`, next);
+    return next;
+  };
 
   let settings = { ...E.DEFAULT_SETTINGS };
   const aiOn = () => !!(settings.aiEnabled && conn.crema != null);
@@ -329,7 +339,13 @@ function makeLiveApi(conn) {
     },
     settings: {
       async get() { settings = { ...E.DEFAULT_SETTINGS, ...(await kvGet("settings", {})) }; return { ...settings }; },
-      async set(p) { settings = { ...settings, ...p }; await kvSet("settings", settings); return { ...settings }; },
+      // Re-read first so a field another device changed since this one loaded survives.
+      async set(p) {
+        const fresh = await kvGet("settings", {});
+        await kvSet("settings", E.mergeRecord(fresh, p));
+        settings = { ...E.DEFAULT_SETTINGS, ...fresh, ...p };
+        return { ...settings };
+      },
     },
 
     // A cheap read for the 5 s poll: the open coffees, their open bags (which carry
@@ -407,11 +423,8 @@ function makeLiveApi(conn) {
         try { productImage = conn.crema + (await post(C("/api/images/cache"), { url: productImage })).path; }
         catch { productImage = null; info = { ...info, imageUrl: null }; if (art === "product") art = photo ? "photo" : null; }
       }
-      await kvSet(`bean:${bean.id}`, {
-        ...(prev || {}), info, recipe: prev?.recipe ?? null, recipeSource: prev?.recipeSource ?? null,
-        photo: photo || prev?.photo || null, productImage: productImage || prev?.productImage || null, art: art || prev?.art || (productImage ? "product" : "photo"),
-        bestShotId: prev?.bestShotId ?? null, finished: false, batchId: batch.id, addedAt: prev?.addedAt ?? new Date().toISOString(),
-      });
+      // Re-read and merge: a reference shot or recipe another device wrote meanwhile stays.
+      await patchRecord(bean.id, (fresh) => E.saveBeanPatch(fresh, { info, photo: photo || null, productImage, art: art || null, batchId: batch.id, now: new Date().toISOString() }));
       return { id: bean.id, batch: batch.id, key: batch.id, anotherBag: !!prev };
     },
     // Another bag of a coffee on the shelf (or finished): a new batch, same record.
@@ -450,7 +463,7 @@ function makeLiveApi(conn) {
     pinBest: (id, shotId) => patchRecord(id, { bestShotId: shotId }),
 
     async recommend(beanId, opts = {}) {
-      const [{ info, batch }, titles, prefs] = await Promise.all([coffee(beanId, opts.batchId), installedTitles(), api.prefs.get()]);
+      const [{ info, batch, rec: read }, titles, prefs] = await Promise.all([coffee(beanId, opts.batchId), installedTitles(), api.prefs.get()]);
       const history = (await batchShots(batch?.id, 15)).map(E.toPastShot);
       let out = null, aiFailed = false;
       if (!opts.rulesOnly && aiOn()) {
@@ -465,7 +478,7 @@ function makeLiveApi(conn) {
       // is no recipe, and the app asks you to pick one of the installed profiles.
       const installed = new Set(titles.map((t) => t.toLowerCase()));
       if (out.recipe && !installed.has(out.recipe.profileTitle.toLowerCase())) out = { ...out, recipe: null, source: "none" };
-      await patchRecord(beanId, { info, recipe: out.recipe, recipeSource: out.source, batchId: batch?.id ?? null });
+      await patchRecord(beanId, (fresh) => E.recommendPatch(fresh, { recipe: out.recipe, source: out.source, info, batchId: batch?.id ?? null }, read));
       return out;
     },
     // Preferences change what's recommended. Drop the saved recipe of every coffee except the
@@ -474,8 +487,7 @@ function makeLiveApi(conn) {
     async resetRecipes(exceptBeanId = null) {
       const beans = await j(D("/beans?includeArchived=true"));
       await Promise.all(beans.filter((b) => b.id !== exceptBeanId).map(async (b) => {
-        const rec = await recordOf(b.id);
-        if (rec?.recipe) await kvSet(`bean:${b.id}`, { ...rec, recipe: null, recipeSource: null });
+        await patchRecord(b.id, (fresh) => (fresh?.recipe ? { recipe: null, recipeSource: null } : null));
       }));
     },
     async rank(beanId) {

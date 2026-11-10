@@ -717,8 +717,51 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       const again = await page.evaluate(async () => { const info = JSON.parse(JSON.stringify(S.current.info)); info.roastDate = { value: "2026-11-05", source: "bag" }; info.weightGrams = 250; return S.api.saveBean(info, null, "photo"); });
       const kept = await page.evaluate(async (id) => (await S.api.shelf()).filter((b) => b.id === id).map((b) => ({ recipe: b.recipe?.profileTitle, best: b.bestShotId })), coffeeId);
       check(again.anotherBag && kept.length === 3 && kept.every((b) => b.recipe && b.best === pinnedShot), `buying another bag keeps the coffee's recipe and reference shot (${JSON.stringify(kept)})`);
+      // Two devices changing the same shared record (F3). Decaid's store has no revisions, so
+      // "the other device" is a direct write into it at the moment this page is between its
+      // read and its write.
+      {
+        const kvUrl = (k) => `http://localhost:${MOCK}/api/v1/store/crema/${encodeURIComponent(k)}`;
+        const kvRead = async (k) => (await (await fetch(kvUrl(k))).json()) ?? {};
+        const kvWrite = (k, v) => fetch(kvUrl(k), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(v) });
+        const rkey = "bean:" + coffeeId;
+        // Settings: this page loaded its copy; the other device then changes a different field.
+        const settingsBefore = await kvRead("settings");
+        await page.evaluate(() => S.api.settings.get());
+        await kvWrite("settings", { ...settingsBefore, grindStep: 0.75 });
+        await page.evaluate(() => S.api.settings.set({ aiEnabled: false }));
+        const sNow = await kvRead("settings");
+        check(sNow.grindStep === 0.75 && sNow.aiEnabled === false, `a setting changed here keeps one changed on another device meanwhile (${JSON.stringify(sNow)})`);
+        await kvWrite("settings", settingsBefore);
+        await page.evaluate(() => S.api.settings.get());
+        // Another bag of a known coffee: the other device pins a reference shot while this one is adding the bag.
+        const record0 = await kvRead(rkey);
+        let saveRoute = true;
+        await page.route(new RegExp(`/api/v1/beans/${coffeeId}/batches$`), async (route) => {
+          if (saveRoute && route.request().method() === "POST") { saveRoute = false; await kvWrite(rkey, { ...(await kvRead(rkey)), bestShotId: "pinned-elsewhere" }); }
+          await route.continue();
+        });
+        const extraBag = await page.evaluate(async () => { const info = JSON.parse(JSON.stringify(S.current.info)); info.roastDate = { value: "2026-11-06", source: "bag" }; info.weightGrams = 250; return S.api.saveBean(info, null, "photo"); });
+        await page.unroute(new RegExp(`/api/v1/beans/${coffeeId}/batches$`));
+        const r1 = await kvRead(rkey);
+        check(r1.bestShotId === "pinned-elsewhere" && !!r1.recipe, `saving another bag keeps a reference shot pinned on another device meanwhile (${r1.bestShotId})`);
+        // Recommending (the AI can take seconds): the other device pins a shot and edits the notes meanwhile.
+        const shotsRoute = new RegExp(`/api/v1/shots\\?beanBatchId=`);
+        let recRoute = true;
+        await page.route(shotsRoute, async (route) => {
+          if (recRoute) { recRoute = false; const cur = await kvRead(rkey); await kvWrite(rkey, { ...cur, bestShotId: "pinned-2", info: { ...cur.info, tastingNotes: { value: ["edited elsewhere"], source: "you" } } }); }
+          await route.continue();
+        });
+        await page.evaluate((id) => S.api.recommend(id, { rulesOnly: true }), coffeeId);
+        await page.unroute(shotsRoute);
+        const r2 = await kvRead(rkey);
+        check(r2.bestShotId === "pinned-2" && r2.info?.tastingNotes?.value?.[0] === "edited elsewhere" && !!r2.recipe, `recommending writes only the recipe: a pin and an edit made elsewhere meanwhile survive (${r2.bestShotId}, ${JSON.stringify(r2.info?.tastingNotes?.value)})`);
+        await kvWrite(rkey, { ...r2, bestShotId: record0.bestShotId ?? null, info: record0.info, batchId: record0.batchId });
+        await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${extraBag.batch}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ archived: true }) });
+        await page.evaluate(async () => { await refreshShelf(); });
+      }
       // Another device sees the same bags.
-      const other = await browser.newPage({ viewport: { width: 390, height: 844 } });
+      const other =await browser.newPage({ viewport: { width: 390, height: 844 } });
       await other.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#shelf`);
       await other.waitForFunction(() => S.shelfLoaded, null, { timeout: 15000 });
       const seen = await other.evaluate((id) => S.shelf.filter((b) => b.id === id).map((b) => ({ key: b.key, frozen: b.frozen })), coffeeId);
