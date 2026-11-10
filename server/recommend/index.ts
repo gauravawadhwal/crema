@@ -63,12 +63,12 @@ export async function recommend(llm: ProviderChain, input: RecommendInput): Prom
   ].join("\n\n");
 
   try {
-    const recipe = await llm.structured({ system: SYSTEM, prompt, schema: Recipe, schemaName: "Recipe" });
+    const { value: recipe, provider } = await llm.structuredWithProvider({ system: SYSTEM, prompt, schema: Recipe, schemaName: "Recipe" });
     const match = candidates.find((c) => c.title.toLowerCase() === recipe.profileTitle.toLowerCase());
     if (!match) return out(rulesRecipe(input, ranked), "rules (model chose an unknown profile)");
     recipe.profileTitle = match.title;
     recipe.alternatives = recipe.alternatives.filter((a) => candidates.some((c) => c.title === a.profileTitle));
-    return out(recipe, llm.lastUsed ?? "llm");
+    return out(recipe, provider);
   } catch (e) {
     console.warn(`recommend: falling back to rules: ${(e as Error).message}`);
     return out(rulesRecipe(input, ranked), "rules (AI unavailable)");
@@ -90,14 +90,15 @@ export async function dialInWithSource(
 ): Promise<{ advice: DialInAdvice; source: string }> {
   try {
     const guidance = findProfile(input.recipe.profileTitle)?.dialIn ?? null;
-    const advice = await llm.structured({
+    const { value: advice, provider } = await llm.structuredWithProvider({
       system: DIAL_SYSTEM,
       prompt: JSON.stringify({ ...input, profileAuthorGuidance: guidance }),
       schema: DialInAdvice,
       schemaName: "DialInAdvice",
     });
-    return { advice, source: llm.lastUsed ?? "llm" };
-  } catch {
+    return { advice, source: provider };
+  } catch (e) {
+    console.warn(`dialin: falling back to rules: ${(e as Error).message}`);
     return { advice: rulesDialIn(input.feedback, input.shot, input.recipe), source: "rules" };
   }
 }

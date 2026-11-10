@@ -1,4 +1,4 @@
-import type { ImageInput } from "./llm/types.js";
+import type { ImageInput, ProviderId } from "./llm/types.js";
 import type { ProviderChain } from "./llm/index.js";
 import { safeFetch, type SafeFetchOptions } from "./safe-fetch.js";
 import { BeanInfo } from "./schema.js";
@@ -61,6 +61,11 @@ When the user describes the bag in their own words (often dictated, so expect sp
 - Ignore filler, false starts and corrections ("no, sorry, I mean"); the last version they said wins.`;
 
 export async function identify(llm: ProviderChain, input: IdentifyInput): Promise<BeanInfo> {
+  return (await identifyWithProvider(llm, input)).info;
+}
+
+/** identify(), plus the id of the provider that answered. */
+export async function identifyWithProvider(llm: ProviderChain, input: IdentifyInput): Promise<{ info: BeanInfo; provider: ProviderId }> {
   if (!input.images?.length && !input.query && !input.description && !input.url && !input.pageText) {
     throw new Error("provide at least one of images, query, description, url or pageText");
   }
@@ -80,7 +85,7 @@ export async function identify(llm: ProviderChain, input: IdentifyInput): Promis
   );
   parts.push("Return the BeanInfo record.");
 
-  const info = await llm.structured({
+  const { value: info, provider } = await llm.structuredWithProvider({
     system: SYSTEM,
     prompt: parts.join("\n"),
     schema: BeanInfo,
@@ -88,7 +93,7 @@ export async function identify(llm: ProviderChain, input: IdentifyInput): Promis
     images: input.images,
     web: !input.offline,
   });
-  return tidyConfirmations(preferRoasterPages(await dropDeadLinks(await resolveGroundingLinks(info))));
+  return { info: tidyConfirmations(preferRoasterPages(await dropDeadLinks(await resolveGroundingLinks(info)))), provider };
 }
 
 /**

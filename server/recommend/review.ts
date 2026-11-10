@@ -134,9 +134,9 @@ export async function reviewShot(llm: ProviderChain, input: ReviewInput): Promis
       `INSTALLED PROFILES (the only allowed switchProfile values):\n${JSON.stringify(input.installedProfiles)}`,
       `RECENT HISTORY FOR THIS BAG (bounded, enjoyment 0..10):\n${JSON.stringify(input.history.slice(0, 10))}`,
     ].join("\n\n");
-    const raw = await llm.structured({ system: SYSTEM, prompt, schema: ReviewNarrative, schemaName: "ShotReview" });
+    const { value: raw, provider } = await llm.structuredWithProvider({ system: SYSTEM, prompt, schema: ReviewNarrative, schemaName: "ShotReview" });
     const review = validateReview(ShotReview.parse({ ...raw, issues: findings }), findings, input, analysis.metrics);
-    return { review, source: llm.lastUsed ?? "llm" };
+    return { review, source: provider };
   } catch (e) {
     console.warn(`review: falling back to rules: ${(e as Error).message}`);
     return fallback(input);

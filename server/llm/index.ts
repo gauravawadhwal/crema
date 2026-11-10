@@ -31,7 +31,6 @@ export function makeProvider(id: ProviderId, opts: { model?: string } = {}): Llm
  */
 export class ProviderChain implements Omit<LlmProvider, "id" | "billing" | "transcribe"> {
   readonly providers: LlmProvider[];
-  lastUsed: ProviderId | null = null;
 
   /** Provider ids (built with their defaults) or ready-made providers. */
   constructor(providers: (ProviderId | LlmProvider)[]) {
@@ -77,12 +76,18 @@ export class ProviderChain implements Omit<LlmProvider, "id" | "billing" | "tran
   }
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
+    return (await this.structuredWithProvider(req)).value;
+  }
+
+  /**
+   * Like structured(), and says which provider answered. The provider travels
+   * with the result, so simultaneous requests can't report each other's.
+   */
+  async structuredWithProvider<T extends z.ZodType>(req: StructuredRequest<T>): Promise<{ value: z.infer<T>; provider: ProviderId }> {
     const errors: string[] = [];
     for (const p of this.providers) {
       try {
-        const out = await p.structured(req);
-        this.lastUsed = p.id;
-        return out;
+        return { value: await p.structured(req), provider: p.id };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         errors.push(msg);

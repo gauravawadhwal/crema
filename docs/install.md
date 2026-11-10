@@ -169,6 +169,7 @@ Everything is set with environment variables on the server.
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | none, `gemini-2.5-flash` | For `gemini-api`, billed per token. A key also switches on speaking into "Describe it" (Gemini writes down your voice note), even when `LLM_PROVIDERS` doesn't list `gemini-api` |
 | `GEMINI_VOICE_MODEL` | `GEMINI_MODEL` | The Gemini model that transcribes voice notes. Each tablet or phone can switch to its own speech recognition instead, in Settings → AI features |
 | `DECAID_URL` | none | Decaid on the tablet, such as `http://<tablet-ip>:8080`. Only needed to open the app from the server. Use an address phones can reach: they connect to its live streams directly |
+| `CORS_ORIGINS` | none | Extra web pages allowed to call `/api/*`, as exact origins separated by commas (`http://nas.local:9000,https://crema.example.org`). Always allowed without setting it: the server's own address, any `http://` page on port 3000 (Decaid serving the skin on the tablet) and `localhost`/`127.0.0.1` on any port. Other pages get 403, so a website open on your network can't spend your AI calls. `*` allows every page |
 | `PORT`, `HOST` | `8787`, `0.0.0.0` | Where the server listens |
 | `CREMA_IMAGES` | `data/images` | Cached roaster product photos |
 
