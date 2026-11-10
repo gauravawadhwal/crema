@@ -1,14 +1,6 @@
 {
   "about": "Known failures of scripts/check-targets.cjs. Each entry names the workstream in docs/ui-plan.md that fixes it. Delete an entry when its failure is fixed: the check fails on entries that no longer fail. Do not add entries for new work.",
   "entries": [
-    {"key": "phone brew small #controls button.preset[data-preset]", "ws": 3, "reason": "Steam, hot water and flush preset chips (36.1 x 30 px at 390 x 844). WS 3 replaces them with split buttons and the preset sheet."},
-    {"key": "phone brew small #nextShot summary", "ws": 3, "reason": "\"Why this profile\" disclosure (324 x 20.2 px at 390 x 844). WS 3 lays out the next-shot card."},
-    {"key": "phone chrome small #scaleChip", "ws": 3, "reason": "Scale status chip (tap to tare) (136.2 x 32 px at 390 x 844). WS 3 adds the scale tile with a Tare button."},
-    {"key": "tablet brew small #controls button.ctl-btn[data-run]", "ws": 3, "reason": "Operation buttons at the two shortest tablet heights (162 x 38 px at 1005 x 552). WS 3 sets the control heights."},
-    {"key": "tablet brew small #controls button.preset[data-preset]", "ws": 3, "reason": "Steam, hot water and flush preset chips (33.3 x 28 px at 1340 x 800). WS 3 replaces them with split buttons and the preset sheet."},
-    {"key": "tablet brew small #nextShot summary", "ws": 3, "reason": "\"Why this profile\" disclosure (274 x 20.2 px at 1340 x 800). WS 3 lays out the next-shot card."},
-    {"key": "tablet brew small #weightReadout", "ws": 3, "reason": "Weight readout button (tap to tare) (127.6 x 39.8 px at 1340 x 800). WS 3 adds the scale tile with a Tare button."},
-    {"key": "tablet chrome small #scaleChip", "ws": 3, "reason": "Scale status chip (tap to tare) (130.8 x 28 px at 1340 x 800). WS 3 adds the scale tile with a Tare button."},
     {"key": "phone brew clipped #sb button[data-v]", "ws": 5, "reason": "\"Balanced\" is wider than its taste button. WS 5 lays out the taste scale."},
     {"key": "phone brew covers-text #sb button[data-v] over #sb button[data-v]", "ws": 5, "reason": "A taste button overlaps its neighbour's label. WS 5 lays out the taste scale."},
     {"key": "phone brew small #afterStars", "ws": 5, "reason": "Rating stars after a shot (174.8 x 34.4 px at 390 x 844). WS 5 lays out the after-shot panel."},

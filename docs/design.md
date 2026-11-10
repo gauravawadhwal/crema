@@ -76,3 +76,20 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 - Errors say what went wrong and what to do ("Can't reach the machine. Check that Decaid is running…").
 - Numbers carry units, and ratios are written `1:2.2`.
 - Avoid jargon the user didn't choose. Profile names are shown exactly as on the machine.
+
+### Brew at rest (WS 3)
+
+Steam, Hot water and Flush use split buttons: the main area starts the selected
+preset and the disclosure opens its selection sheet. Selecting a preset never
+starts an operation; editing stays in Settings. The scale tile shows weight and
+battery with a separate Tare button. Status and chart weight readings are passive.
+Stop is pinned to the bottom of the tablet control column and stays in the same
+rectangle before, during and after a shot. The machine-start-only setting labels
+Espresso “Start at group head”.
+
+At rest, a proportional step rail sits above the plan chart, and series labels are
+drawn directly beside the dashed plan lines when they fit. The live readings and
+clock stay hidden until an operation or recorded trace exists. The rail hides at
+the two shortest tablet heights. Favourite cards retain their carousel and edit
+behaviour, adding coffee artwork (a neutral initial tile when absent) and a small
+pressure sparkline from the installed profile.

@@ -57,7 +57,7 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.waitForSelector("#reviewBox .advice", { timeout: 5000 }); await snap("3-after", true);
   });
   await step("steam", async () => {
-    await p.click('[data-preset="steam:0"]'); await p.click('[data-run="steam"]');
+    await p.click('[data-presets="steam"]'); await p.click('[data-preset="steam:0"]'); await p.click('[data-run="steam"]');
     await p.waitForSelector("#opOverlay:not([hidden])", { timeout: 5000 }); await snap("4-steam");
     await p.click("#opStop"); await p.waitForTimeout(600);
   });

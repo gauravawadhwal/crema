@@ -797,7 +797,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     });
     for (const [kind, preset, field, group, wfField] of [["steam", "steam:1", "targetSteamDuration", "steamSettings", "duration"], ["hotWater", "water:2", "targetHotWaterVolume", "hotWaterData", "volume"], ["flush", "flush:2", null, "rinseData", "duration"]]) {
       await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForTimeout(1000);
-      await page.click(`[data-preset="${preset}"]`); await page.waitForTimeout(400);
+      await page.click(`[data-presets="${preset.split(":")[0]}"]`); await page.click(`[data-preset="${preset}"]`); await page.waitForTimeout(400);
       await page.click(`[data-run="${kind}"]`);
       const ran = await page.waitForFunction((k) => S.snap?.state?.state === k, kind, { timeout: 5000 }).then(() => true, () => false);
       const want = await page.evaluate((pr) => { const [k, i] = pr.split(":"); const x = S.presets[k][i]; return x.seconds ?? x.ml; }, preset);

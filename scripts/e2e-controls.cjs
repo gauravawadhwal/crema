@@ -223,7 +223,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       window.__tares = 0; const t = S.api.machine.tare; S.api.machine.tare = (...a) => { window.__tares++; return t(...a); };
       window.__redraw = setInterval(() => { S.scale = { ...S.scale, connected: true, weight: (S.scale.weight || 0) + 0.1 }; renderStatus(); renderReadouts(); }, 50);
     });
-    for (const sel of ["#scaleChip", "#weightReadout"]) {
+    for (const sel of ["#tareBtn"]) {
       await p.evaluate(() => (window.__tares = 0));
       for (let i = 0; i < 3; i++) { await press(sel); await p.waitForTimeout(150); }
       const n = await p.evaluate(() => window.__tares);

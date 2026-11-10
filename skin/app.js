@@ -815,6 +815,20 @@ function drawChart(canvas, pts, o = {}) {
     planLine("tp", css("--pressure"), yB, 1.8, .85);
     planLine("tf", css("--flow"), yB, 1.8, .85);
     ctx.restore();
+    if (!pts.length) {
+      const used = [];
+      ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
+      for (const [key, color, y, title, unit] of [["tp", "--pressure", yB, "pressure ", " bar"], ["tf", "--flow", yB, "flow ", " ml/s"], ["temp", "--temp", yT, "", " °C"]]) {
+        const point = plan.points.find((p) => p[key] != null && p.t > 0 && p.t <= maxT);
+        if (!point) continue;
+        const label = `${title}${fmtC(point[key])}${unit}`, width = ctx.measureText(label).width;
+        if (width > iw) continue;
+        const yy = clamp(y(point[key]) - 6, pad.t + 12, H - pad.b - 4), xx = Math.min(x(point.t) + 6, W - pad.r - width);
+        if (used.some((r) => Math.abs(r.y - yy) < 16 && xx < r.x + r.w && xx + width > r.x)) continue;
+        ctx.fillStyle = css("--surface"); ctx.fillRect(xx - 2, yy - 11, width + 4, 14);
+        ctx.fillStyle = css(color); ctx.fillText(label, xx, yy); used.push({ x: xx, y: yy, w: width });
+      }
+    }
   }
   if (ghost?.length) {
     line(ghost, "p", css("--pressure"), yB, 1.5, { alpha: .25 });
@@ -921,10 +935,10 @@ function renderStatus() {
     <span class="chip"><span class="muted">Group</span><span class="num">${fmt1(s?.groupTemperature ?? s?.mixTemperature)}°</span></span>
     <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
     ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
-    <button class="chip" type="button" id="scaleChip" title="Tap to tare">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</button>
+    <span class="chip" id="scaleChip">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</span>
     ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
     ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`);
-  $("#scaleChip").onclick = tare;
+
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
 }
@@ -1227,7 +1241,7 @@ function planBody(lp, tempC) {
 }
 let planFor = null;
 async function refreshPlan() {
-  if (!S.library && !S.libraryLoading) S.libraryLoading = S.api.library().then((l) => (S.library = l), () => null).finally(() => (S.libraryLoading = null));
+  if (!S.library && !S.libraryLoading) S.libraryLoading = S.api.library().then((l) => { S.library = l; renderFavs(); return l; }, () => null).finally(() => (S.libraryLoading = null));
   if (!S.library) await S.libraryLoading;
   const lp = nextProfile(), tempC = S.next?.tempC;
   const key = lp ? `${lp.id}|${tempC}` : null;
@@ -1320,6 +1334,17 @@ function bindFavouriteCarousel() {
     if (performance.now() < ignoreClickUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
 }
+function favouriteArt(f) {
+  const bean = f.beanId && S.shelf.find((b) => b.id === f.beanId), src = bean && artSrc(bean);
+  return `<span class="fav-art" aria-hidden="true">${src ? `<img src="${esc(src)}" alt="">` : esc(bean?.info?.name?.value?.[0] || "·")}</span>`;
+}
+function favouriteSpark(f) {
+  const lp = S.library?.find((p) => f.profileId ? p.id === f.profileId : p.title === f.profileTitle);
+  const plan = lp && E.profileCurve(lp.profile);
+  const points = plan?.points.filter((p) => p.tp != null);
+  if (!points?.length || !plan.total) return "";
+  return `<svg class="fav-spark" viewBox="0 0 80 24" aria-hidden="true"><polyline points="${points.map((p) => `${p.t / plan.total * 80},${23 - clamp(p.tp, 0, 12) / 12 * 22}`).join(" ")}"/></svg>`;
+}
 function renderFavs(revealSlot) {
   bindFavouriteCarousel();
   const list = $("#favs"), left = list.scrollLeft, busy = FAV_UI.saving || FAV_UI.loading;
@@ -1327,7 +1352,7 @@ function renderFavs(revealSlot) {
   const selected = chosen != null && S.favourites[chosen] && favouriteSelected(S.favourites[chosen])
     ? chosen : S.favourites.findIndex((f) => f && favouriteSelected(f));
   patchHtml(list, S.favourites.map((f, i) => f ? `<button class="fav" id="fav-${i}" ${FAV_UI.editing ? `data-favedit="${i}"` : `data-fav="${i}" aria-pressed="${i === selected}"`} title="${esc(f.name)} · ${esc(f.profileTitle)}" aria-label="${FAV_UI.editing ? "Edit" : "Load"} favourite ${esc(f.name)}" ${busy ? "disabled" : ""}>
-    <strong>${esc(f.name)}</strong><span class="fav-profile">${esc(f.profileTitle)}</span>${FAV_UI.editing ? '<span class="fav-action">Rename, replace or clear</span>' : `<span class="num fav-recipe">${fmtC(f.doseG)} → ${f.yieldG > 0 ? `${fmtC(f.yieldG)} g` : "manual"}<span class="fav-temp"> · ${fmtC(f.tempC)}°</span></span>`}</button>` : "").join("")
+    ${favouriteArt(f)}<strong>${esc(f.name)}</strong><span class="fav-profile">${esc(f.profileTitle)}</span>${FAV_UI.editing ? '<span class="fav-action">Rename, replace or clear</span>' : `<span class="num fav-recipe">${fmtC(f.doseG)} → ${f.yieldG > 0 ? `${fmtC(f.yieldG)} g` : "manual"}<span class="fav-temp"> · ${fmtC(f.tempC)}°</span></span>`}${favouriteSpark(f)}</button>` : "").join("")
     + `<button class="fav empty" id="addFav" ${busy || !S.next ? "disabled" : ""}><span class="fav-plus" aria-hidden="true">+</span><strong>Save current recipe</strong><span class="fav-profile">${S.next ? esc(S.current?.info.name.value || S.next.profileTitle) : "Choose a recipe first"}</span></button>`);
   favouriteScroll(left, false);
   $("#editFavs").textContent = FAV_UI.editing ? "Done" : "Edit";
@@ -1409,23 +1434,29 @@ function renderControls() {
   const disabled = S.ghc || !S.snap || unlinked() || NOT_READY.includes(st);
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
-  const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
-  $("#controls").innerHTML = `
-    <div class="ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
-    <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
-    <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
-    <div class="ctl"><button class="ctl-btn" data-run="flush" ${disabled || busy ? "disabled" : ""}>Flush<span class="sub">${flush.seconds} s</span></button>${chips("flush", p.flush)}</div>
-    <div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap || isStarting() ? "" : "disabled"}>STOP</button>
-      ${S.ghc ? '<span class="ghc-note">Your machine starts from the group head controller. Crema sets the recipe and presets; press the group head to start.</span>' : ""}</div>`;
+  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${esc(preset.label)} · ${detail}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
+  patchHtml($("#controls"), `
+    <div class="ctl espresso-ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.ghc ? "Start at group head" : S.next ? `${fmtC(S.next.doseG)} → ${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
+    ${split("Steam", "steam", "steam", steam, steam.seconds ? `${steam.seconds} s` : "until stopped")}
+    ${split("Hot water", "hotWater", "water", water, `${water.ml} ml`)}
+    ${split("Flush", "flush", "flush", flush, `${flush.seconds} s`)}
+    <div class="ctl split-ctl scale-tile"><div class="scale-reading"><span class="num">${S.scale.connected ? `${fmt1(S.scale.weight)} g` : "No scale"}</span><span class="muted small">${S.scale.connected ? `Scale${S.scale.batteryLevel != null ? ` · ${S.scale.batteryLevel}%` : ""}` : "Connect a scale to tare"}</span></div><button class="preset-open" id="tareBtn" ${S.scale.connected ? "" : "disabled"}>Tare</button></div>
+    <div class="stop-wrap"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap || isStarting() ? "" : "disabled"}>STOP</button></div>`);
+  $("#controls").title = S.ghc ? "Use the group head controller to start. Crema sets the recipe and presets." : "";
   $$("[data-run]").forEach((b) => (b.onclick = () => startOp(b.dataset.run)));
-  $$("[data-preset]").forEach((b) => (b.onclick = async () => {
-    const [kind, idx] = b.dataset.preset.split(":");
-    S.presets.selected[kind] = Number(idx);
-    renderControls();
-    await S.api.presets.set(S.presets).catch(() => {});
-    await pushPresetSettings(kind).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
-  }));
+  $$("[data-presets]").forEach((b) => (b.onclick = () => openPresetSheet(b.dataset.presets)));
+  $("#tareBtn").onclick = tare;
   $("#stopBtn").onclick = stopMachine;
+}
+function openPresetSheet(kind) {
+  const title = { steam: "Steam", water: "Hot water", flush: "Flush" }[kind];
+  openSheet(`<h2>${title} preset</h2><div class="stack">${S.presets[kind].map((p, i) => `<button class="btn preset-choice" data-preset="${kind}:${i}" aria-pressed="${S.presets.selected[kind] === i}"><span>${esc(p.label)}</span><span class="num">${kind === "water" ? `${p.ml} ml` : p.seconds ? `${p.seconds} s` : "Until stopped"}</span></button>`).join("")}</div>`);
+  $$("[data-preset]").forEach((b) => (b.onclick = async () => {
+    const [k, idx] = b.dataset.preset.split(":");
+    S.presets.selected[k] = Number(idx); closeSheet(); renderControls();
+    await S.api.presets.set(S.presets).catch(() => {});
+    await pushPresetSettings(k).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
+  }));
 }
 // Ranges for the workflow's steam, hot water and flush fields. Decaid accepts any
 // number (even a negative volume) and wants integers for temperatures, durations
@@ -1518,14 +1549,26 @@ function stopMachine() {
 
 /* ================= live panel + running overlay ================= */
 const PHASE = { preinfusion: "Preinfusion", pouring: "Pouring", pouringDone: "Done", preparingForShot: "Preparing" };
+function renderScaleTile() {
+  const el = $(".scale-reading");
+  if (el) { el.firstElementChild.textContent = S.scale.connected ? `${fmt1(S.scale.weight)} g` : "No scale"; el.lastElementChild.textContent = S.scale.connected ? `Scale${S.scale.batteryLevel != null ? ` · ${S.scale.batteryLevel}%` : ""}` : "Connect a scale to tare"; }
+  const tareButton = $("#tareBtn"); if (tareButton) tareButton.disabled = !S.scale.connected;
+}
+// Shared with pour mode: descriptors are { name, detail, weight, state?, progress? }.
+function stepsRailHtml(steps) {
+  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .08;
+  return steps.map((step) => `<div class="step ${step.state === "now" ? "now" : step.state === "done" ? "done" : ""}" style="flex-grow:${Math.max(minimum, Number(step.weight) || 1)}"><strong>${esc(step.name)}</strong><span>${esc(step.detail)}</span>${step.progress != null ? `<progress max="1" value="${clamp(step.progress, 0, 1)}"></progress>` : ""}</div>`).join("");
+}
 function renderReadouts() {
   const s = (!unlinked() && S.snap) || {};
   const w = S.scale.connected ? S.scale.weight : null;
-  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"]];
+  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight"], ["Temp", s.mixTemperature, "°C", "--temp"]];
   if (s.state?.state === "steam") items.push(["Steam", s.steamTemperature, "°C", "--muted"]);
   $("#readouts").style.setProperty("--cols", items.length);
-  patchHtml($("#readouts"), items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join(""));
-  const wr = $("#weightReadout"); if (wr) wr.onclick = tare;
+  patchHtml($("#readouts"), items.map(([k, v, u, c]) => `<div class="readout" ${k === "Weight" ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></div>`).join(""));
+  $("#readouts").hidden = !shotRunning() && !["steam", "hotWater", "flush"].includes(s.state?.state) && !S.live.length;
+  $("#shotClock").hidden = $("#readouts").hidden;
+  renderScaleTile();
 }
 function renderLive() {
   const target = S.next?.yieldG ?? 36;
@@ -1533,6 +1576,9 @@ function renderLive() {
   // Before a shot the chart shows what the loaded profile asks for (S.plan); once one
   // starts, the machine's own targets take over.
   const plan = pts.length ? null : S.plan;
+  const rail = $("#planSteps");
+  rail.hidden = !plan;
+  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: `${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
   const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
   drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;

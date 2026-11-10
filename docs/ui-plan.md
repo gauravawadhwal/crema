@@ -14,13 +14,31 @@ agents. Checked against the demo and simulator only, not the tablet.
 Mono's repository has no licence file. Use it for ideas only: copy no code, icons or
 artwork from it. The same applies to Streamline (GPL-3.0).
 
+## Handoff log
+
+**10 November 2026 — WS 3, `ui/ws3-brew-at-rest`**
+
+- Split operation buttons open preset sheets; selecting writes the same workflow
+  settings without starting. Scale tile owns Tare; status and chart weights are passive.
+  Stop is pinned at the bottom, and preserves its rectangle across shot states.
+- Added the pre-shot rail and direct chart labels, hidden idle readings, coffee art
+  and installed-profile pressure sparklines on favourite cards. No storage changes.
+- Removed all eight WS 3 target exceptions; 113 entries remain for other workstreams.
+- Focused verification: syntax, tablet fit (all five sizes, before/after/review),
+  touch targets (normal/stress), control races, demo click-through, and unchanged
+  favourites-only checks (live/built) passed. Reviewed normal/stress screenshots at
+  1340×800, 1005×552 and 390×844 plus Nordic and the preset sheet.
+- No full unit suite, live suite, hardware checks or CI wait, per the user's lighter
+  verification instruction. Long-profile stress at 1005×552 still clips the existing
+  next-shot card; WS 6 owns its profile clamp/fields. WS 4 can reuse the rail below.
+
 ## Status
 
 | WS | Work | Size | Depends on | Status / evidence |
 |---|---|---|---|---|
 | 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #56 open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
 | 2 | Quick fixes for measured defects | S | 1 | PR #58 open, not merged. 15 allowlist entries removed (121 left); npm test, typecheck, check-targets, check-tablet-fit, e2e-controls (with the new Stop assertion at five sizes) and e2e-demo pass; --built, live, brewing, review and shot-history scripts not run. |
-| 3 | Brew at rest | M | 2 | Not started |
+| 3 | Brew at rest | M | 2 | Implemented on `ui/ws3-brew-at-rest`; focused checks pass, PR pending |
 | 4 | Pour mode | L | 3 | Not started |
 | 5 | After the shot | M | 4 | Not started |
 | 6 | Value sheet and steppers | M | 3 | Not started |
@@ -263,6 +281,13 @@ Done when: the allowlist has no Brew entries; `e2e-brewing.cjs --favourites-only
 passes unchanged; the screen fits from 1340×800 to 1005×552 with Stop visible.
 
 ### WS 4 — Pour mode (L)
+
+Shared rail from WS 3: `stepsRailHtml(descriptors)` returns escaped HTML for
+`{ name, detail, weight, state?, progress? }` entries. Put it in `.steps-rail`;
+children use `.step`, `.now`, `.done`. `weight` controls proportional width with a
+minimum share; `progress` is a clamped 0–1 native progress bar. WS 4 can supply its
+own step state/detail while retaining this markup and styles.
+
 
 - Pure logic first: `server/control/steps.ts`, tested in `test/control.test.ts`. From
   the profile's steps, the current frame index and the live points, return each step's
