@@ -64,6 +64,8 @@ export interface ReconcileInput {
   adopt: boolean;
   /** First read after the page opened. */
   boot: boolean;
+  /** The panel's recipe changed while the machine's was being read (an edit made during the read). */
+  editedDuringRead?: boolean;
 }
 
 export type ReconcileOutcome =
@@ -81,7 +83,9 @@ export function reconcileOutcome(i: ReconcileInput): ReconcileOutcome {
   // A recipe recorded against another bag is another coffee's, whatever its numbers.
   const otherCoffee = i.noBag ? !!(m.batchId || m.coffeeName || m.coffeeRoaster) : !!m.batchId && m.batchId !== i.currentBatch;
   if (!otherCoffee && recipeMatches(m, i.next)) return { kind: "same", markLoaded: !i.loaded };
-  const unsaved = !i.loaded && !i.boot;
+  // At boot the panel holds the coffee's recipe, not a decision, so the machine's wins;
+  // an edit made while the (slow) read was out is a decision, and stays.
+  const unsaved = !i.loaded && (!i.boot || !!i.editedDuringRead);
   if (!i.adopt || unsaved) return { kind: "differs" };
   const forThisBag = i.noBag ? !otherCoffee && m.profileShape === i.next.profileShape : !!m.batchId && m.batchId === i.currentBatch;
   if (!forThisBag || !m.profileTitle) return { kind: "other" };

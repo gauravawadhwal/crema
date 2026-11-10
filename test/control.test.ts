@@ -67,6 +67,10 @@ describe("reconcileOutcome", () => {
   it("on boot the panel has no unsaved edits, so an outside change to this bag is adopted", () => {
     expect(reconcileOutcome({ ...base, machine: machine({ doseG: 20 }), loaded: false, boot: true })).toEqual({ kind: "adopt", lookupProfile: false });
   });
+  it("on boot, an edit made while the machine's recipe was being read is kept, not adopted over", () => {
+    expect(reconcileOutcome({ ...base, machine: machine({ doseG: 20 }), loaded: false, boot: true, editedDuringRead: true })).toEqual({ kind: "differs" });
+    expect(reconcileOutcome({ ...base, machine: machine({ doseG: 20 }), loaded: false, boot: true, editedDuringRead: false })).toEqual({ kind: "adopt", lookupProfile: false });
+  });
   it("adopts when the panel matched the machine and the machine's change is recorded for this bag", () => {
     expect(reconcileOutcome({ ...base, machine: machine({ doseG: 20 }) })).toEqual({ kind: "adopt", lookupProfile: false });
   });

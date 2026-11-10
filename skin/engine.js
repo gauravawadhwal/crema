@@ -1481,7 +1481,7 @@ var CremaEngine = (() => {
     const m = i.machine;
     const otherCoffee = i.noBag ? !!(m.batchId || m.coffeeName || m.coffeeRoaster) : !!m.batchId && m.batchId !== i.currentBatch;
     if (!otherCoffee && recipeMatches(m, i.next)) return { kind: "same", markLoaded: !i.loaded };
-    const unsaved = !i.loaded && !i.boot;
+    const unsaved = !i.loaded && (!i.boot || !!i.editedDuringRead);
     if (!i.adopt || unsaved) return { kind: "differs" };
     const forThisBag = i.noBag ? !otherCoffee && m.profileShape === i.next.profileShape : !!m.batchId && m.batchId === i.currentBatch;
     if (!forThisBag || !m.profileTitle) return { kind: "other" };
