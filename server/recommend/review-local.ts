@@ -1,4 +1,4 @@
-import { analyzeShot } from "../profiles/analysis.js";
+import { analyzeShot, type ShotAnalysis, type ShotFacts } from "../profiles/analysis.js";
 import type { ReviewInput, ShotReviewData } from "./review-types.js";
 import type { DialInAdvice } from "../schema.js";
 
@@ -20,6 +20,42 @@ function tasteAdvice(input: ReviewInput): DialInAdvice | null {
   if (f.body >= 2) return { change: "Lengthen the yield by 3 g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted heavy; a slightly longer yield may add clarity." };
   if (f.sourBitter === 0 && f.body === 0) return { change: "Keep it as it is", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "You marked the taste and body as balanced." };
   return null;
+}
+
+const STOPS: Record<string, string> = {
+  targetWeight: "stopped at the target weight", targetVolume: "stopped at the target volume",
+  machineEnded: "ended by the machine", apiStop: "stopped from the app", userStop: "stopped by hand",
+};
+
+/** One plain sentence of what the shot did, from measured facts only. */
+export function factsSentence(f: ShotFacts): string | null {
+  const parts: string[] = [];
+  const g = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} g`;
+  if (f.yieldG != null) parts.push(f.doseG != null ? `${g(f.yieldG)} from ${g(f.doseG)} (1:${f.ratio!.toFixed(1)})` : g(f.yieldG));
+  if (f.durationS != null && f.durationS >= 5) {
+    const pre = f.preinfusionS != null && f.preinfusionS >= 1 ? `, ${Math.round(f.preinfusionS)} s of it preinfusion` : "";
+    parts.push(`${parts.length ? "in" : "ran for"} ${Math.round(f.durationS)} s${pre}`);
+  }
+  const stop = f.stopReason ? STOPS[f.stopReason] : null;
+  if (!parts.length) return null;
+  const sentence = parts.join(" ") + (stop ? `, ${stop}` : "");
+  return sentence[0].toUpperCase() + sentence.slice(1) + ".";
+}
+
+function rulesSummary(a: ShotAnalysis): string {
+  const curveIssue = a.issues.some((i) => i.kind !== "off_target_temp");
+  const temp = a.issues.find((i) => i.kind === "off_target_temp");
+  const lines = [factsSentence(a.facts)];
+  if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) lines.push("There is not enough telemetry to draw a conclusion from this shot.");
+  else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
+  else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
+  else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
+  else lines.push("No step held a steady target long enough to compare, so this describes the shot rather than grading it.");
+  if (temp && a.metrics.meanTemperatureOffsetC != null) {
+    const d = a.metrics.meanTemperatureOffsetC;
+    lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} °C ${d > 0 ? "above" : "below"} its target.`);
+  }
+  return lines.filter(Boolean).join(" ");
 }
 
 /** Deterministic, local shot review. It never changes machine settings. */
@@ -45,11 +81,7 @@ export function rulesReview(input: ReviewInput): ShotReviewData {
     nextShot = grindAdvice("finer", "Flow or pressure was far from the profile target for a sustained window; a small finer step may add resistance.");
   }
 
-  const summary = issues.length
-    ? "The recorded curves show a sustained difference from the profile in at least one part of the shot."
-    : analysis.metrics.observedWindows
-      ? "No sustained curve issue stood out in the recorded, comparable parts of the profile."
-      : "There is not enough comparable telemetry to draw a conclusion from this shot.";
+  const summary = rulesSummary(analysis);
   let confidence: ShotReviewData["confidence"] = "low";
   if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
   if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";

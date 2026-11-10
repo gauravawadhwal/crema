@@ -24,6 +24,8 @@ export interface ProfileStepLike {
   temperature?: string | number;
   weight?: string | number;
   volume?: string | number;
+  /** "coffee" targets the group (coffee) temperature, "water" the mix temperature. */
+  sensor?: string;
   exit?: { type?: string; condition?: string; value?: string | number } | null;
   limiter?: { value?: string | number; range?: string | number } | null;
 }

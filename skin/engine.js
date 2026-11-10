@@ -1135,13 +1135,14 @@ var CremaEngine = (() => {
   function skippedStep(profile, step, target) {
     const title = `${profile.title ?? ""} ${step.name ?? ""}`.toLowerCase();
     if (profile.beverage_type === "manual" || /turbo|bloom|pre.?infusion/.test(title)) return true;
-    if (target <= 0 || number(step.limiter?.value) != null && number(step.limiter?.value) > 0) return true;
+    if (target <= 0) return true;
     if ((step.pump === "flow" || step.pump === "Flow") && target > 3) return true;
     return false;
   }
   function targetAndActual(input, point) {
     const step = stepAt(input.profile, point.frame);
     if (!step || point.frame == null) return null;
+    if (point.substate && !/^pour/i.test(point.substate)) return null;
     if (step.pump !== "flow" && step.pump !== "pressure") return null;
     const pump = step.pump === "flow" ? "flow" : "pressure";
     const target = pump === "pressure" ? point.tp : point.tf;
@@ -1251,10 +1252,32 @@ var CremaEngine = (() => {
         }
       }
     }
+    const knownPhases = new Set(points.map((p) => p.substate).filter(Boolean)).size > 1;
+    const startT = points[0]?.t ?? 0;
+    let lastTarget = null, changedAt = -Infinity, hottest = -Infinity;
     const tempPairs = points.flatMap((p) => {
-      if (!finite(p.temp)) return [];
-      const target = finite(p.targetTemp) ? p.targetTemp : number(stepAt(profile ?? {}, p.frame)?.temperature);
-      return target == null ? [] : [{ p, delta: p.temp - target }];
+      if (knownPhases && !(p.substate && /^pour/i.test(p.substate))) {
+        const t = finite(p.targetGroupTemp) ? p.targetGroupTemp : finite(p.targetTemp) ? p.targetTemp : null;
+        if (t != null && t >= 20 && p.substate && /^preinfusion/i.test(p.substate)) hottest = Math.max(hottest, t);
+        return [];
+      }
+      if (!knownPhases && p.t - startT < 8) return [];
+      const step = stepAt(profile ?? {}, p.frame);
+      const sensor = step?.sensor?.toLowerCase();
+      const group = finite(p.groupTemp) && finite(p.targetGroupTemp) ? { actual: p.groupTemp, target: p.targetGroupTemp } : null;
+      let pair;
+      if (sensor === "coffee") pair = group;
+      else if (sensor === "water" || !group) {
+        const target = finite(p.targetTemp) ? p.targetTemp : number(step?.temperature);
+        pair = finite(p.temp) && target != null ? { actual: p.temp, target } : null;
+      } else pair = group;
+      if (!pair || pair.target < 20) return [];
+      if (lastTarget == null || Math.abs(pair.target - lastTarget) > 1) changedAt = p.t;
+      lastTarget = pair.target;
+      const steppedDown = pair.target < hottest - 1;
+      hottest = Math.max(hottest, pair.target);
+      if (steppedDown || p.t - changedAt < 3) return [];
+      return [{ p, delta: pair.actual - pair.target }];
     });
     const meanTemp = tempPairs.length ? tempPairs.reduce((n, x) => n + x.delta, 0) / tempPairs.length : null;
     if (tempPairs.length >= 5 && tempPairs.at(-1).p.t - tempPairs[0].p.t >= 4 && meanTemp != null && Math.abs(meanTemp) > 1.5) {
@@ -1274,10 +1297,56 @@ var CremaEngine = (() => {
       return Math.abs(avg / w.target - 1) <= 0.2;
     });
     const wentWell = well.length ? ["The controlled pressure or flow target stayed close to its recorded target."] : [];
+    const facts = shotFacts(input, points);
     return {
       issues,
       wentWell,
-      metrics: { recordedPoints: points.length, usableTemperaturePoints: tempPairs.length, meanTemperatureOffsetC: meanTemp, observedWindows: windows.length }
+      facts,
+      metrics: {
+        recordedPoints: points.length,
+        usableTemperaturePoints: tempPairs.length,
+        meanTemperatureOffsetC: meanTemp,
+        observedWindows: windows.length,
+        enoughTelemetry: points.length >= 20 && (facts.durationS ?? 0) >= 10
+      }
+    };
+  }
+  var round2 = (n, places = 1) => n == null ? null : Math.round(n * 10 ** places) / 10 ** places;
+  function shotFacts(input, sorted) {
+    const points = sorted ?? [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
+    const phased = points.some((p) => p.substate);
+    const brewing = phased ? points.filter((p) => p.substate && /^(pour|preinfusion)/i.test(p.substate)) : points;
+    const span = (xs) => xs.length > 1 ? xs.at(-1).t - xs[0].t : null;
+    const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+    const pour = phased ? brewing.filter((p) => /^pour/i.test(p.substate)) : brewing;
+    const preinfusion = phased ? brewing.filter((p) => /^preinfusion/i.test(p.substate)) : [];
+    const weights = brewing.map((p) => ({ t: p.t, w: finite(p.w) && p.w >= -5 ? p.w : null }));
+    let firstDripsS = null;
+    for (let i = 0; i + 2 < weights.length; i++) {
+      if ([0, 1, 2].every((k) => (weights[i + k].w ?? -1) >= 1)) {
+        firstDripsS = weights[i].t;
+        break;
+      }
+    }
+    const pressures = brewing.map((p) => p.p).filter(finite);
+    const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
+    const yieldG = finite(input.yieldG) && input.yieldG > 0 ? input.yieldG : null;
+    return {
+      brewStartS: round2(brewing[0]?.t ?? null),
+      brewEndS: round2(brewing.at(-1)?.t ?? null),
+      durationS: round2(span(brewing)),
+      preinfusionS: round2(span(preinfusion)),
+      pourS: round2(phased ? span(pour) : null),
+      firstDripsS: round2(firstDripsS),
+      doseG,
+      yieldG,
+      targetYieldG: finite(input.targetYieldG) && input.targetYieldG > 0 ? input.targetYieldG : null,
+      ratio: doseG && yieldG ? round2(yieldG / doseG) : null,
+      stopReason: input.stopReason,
+      peakPressureBar: round2(pressures.length ? Math.max(...pressures) : null),
+      pourMeanPressureBar: round2(avg(pour.map((p) => p.p).filter(finite))),
+      pourMeanFlowMlS: round2(avg(pour.map((p) => p.f).filter(finite))),
+      weightGlitches: points.filter((p) => finite(p.w) && p.w < -5).length
     };
   }
 
@@ -1303,6 +1372,41 @@ var CremaEngine = (() => {
     if (f.sourBitter === 0 && f.body === 0) return { change: "Keep it as it is", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "You marked the taste and body as balanced." };
     return null;
   }
+  var STOPS = {
+    targetWeight: "stopped at the target weight",
+    targetVolume: "stopped at the target volume",
+    machineEnded: "ended by the machine",
+    apiStop: "stopped from the app",
+    userStop: "stopped by hand"
+  };
+  function factsSentence(f) {
+    const parts = [];
+    const g = (n) => `${Number.isInteger(n) ? n : n.toFixed(1)} g`;
+    if (f.yieldG != null) parts.push(f.doseG != null ? `${g(f.yieldG)} from ${g(f.doseG)} (1:${f.ratio.toFixed(1)})` : g(f.yieldG));
+    if (f.durationS != null && f.durationS >= 5) {
+      const pre = f.preinfusionS != null && f.preinfusionS >= 1 ? `, ${Math.round(f.preinfusionS)} s of it preinfusion` : "";
+      parts.push(`${parts.length ? "in" : "ran for"} ${Math.round(f.durationS)} s${pre}`);
+    }
+    const stop = f.stopReason ? STOPS[f.stopReason] : null;
+    if (!parts.length) return null;
+    const sentence = parts.join(" ") + (stop ? `, ${stop}` : "");
+    return sentence[0].toUpperCase() + sentence.slice(1) + ".";
+  }
+  function rulesSummary(a) {
+    const curveIssue = a.issues.some((i) => i.kind !== "off_target_temp");
+    const temp = a.issues.find((i) => i.kind === "off_target_temp");
+    const lines = [factsSentence(a.facts)];
+    if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) lines.push("There is not enough telemetry to draw a conclusion from this shot.");
+    else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
+    else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
+    else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
+    else lines.push("No step held a steady target long enough to compare, so this describes the shot rather than grading it.");
+    if (temp && a.metrics.meanTemperatureOffsetC != null) {
+      const d = a.metrics.meanTemperatureOffsetC;
+      lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} \xB0C ${d > 0 ? "above" : "below"} its target.`);
+    }
+    return lines.filter(Boolean).join(" ");
+  }
   function rulesReview(input) {
     const analysis = analyzeShot(input);
     const issues = analysis.issues;
@@ -1321,7 +1425,7 @@ var CremaEngine = (() => {
     } else if (!manual && hasGush && !hasChoke) {
       nextShot = grindAdvice("finer", "Flow or pressure was far from the profile target for a sustained window; a small finer step may add resistance.");
     }
-    const summary = issues.length ? "The recorded curves show a sustained difference from the profile in at least one part of the shot." : analysis.metrics.observedWindows ? "No sustained curve issue stood out in the recorded, comparable parts of the profile." : "There is not enough comparable telemetry to draw a conclusion from this shot.";
+    const summary = rulesSummary(analysis);
     let confidence = "low";
     if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
     if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";

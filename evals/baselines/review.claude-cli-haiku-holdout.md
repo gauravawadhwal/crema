@@ -1,12 +1,12 @@
-# Eval: review · claude-cli:haiku · final-taste-state-recheck
+# Eval: review · claude-cli:haiku
 
-2026-11-09T21:55:16.800Z · commit 0c8c11d4 (uncommitted changes) · 6 cases × 1 repeats · filter holdout
+2026-11-10T01:00:09.609Z · commit d89715b3 (uncommitted changes) · 7 cases × 1 repeats · filter holdout
 
-Prompts: ShotReview 06403d6295
+Prompts: ShotReview 4ff5a4ebfa
 
 | Metric | Value |
 |---|---|
-| Pass rate | **100%** (95% CI 61–100%) |
+| Pass rate | **100%** (95% CI 65–100%) |
 | Mean score | 1 |
 | model answered | 100% |
 | appropriate next move | 100% |
@@ -14,34 +14,37 @@ Prompts: ShotReview 06403d6295
 | no false alarms | 100% |
 | one change | 100% |
 | grounded ranges | 100% |
-| Errors | 0 of 6 runs |
-| Latency | p50 6.0 s, p95 11.2 s |
-| Cost (list price) | $0.004 total, $0.0007 per run |
-| Tokens | 49,723 in, 5,893 out |
+| Errors | 0 of 7 runs |
+| Latency | p50 6.3 s, p95 14.5 s |
+| Cost (list price) | $0.013 total, $0.0018 per run |
+| Tokens | 55,862 in, 9,571 out |
 
 ## Checks
 
 | Check | Pass |
 |---|---|
-| acceptableMove | 100% (6/6) |
-| askTaste | 100% (5/5) |
-| groundedRanges | 100% (6/6) |
-| modelAnswered | 100% (6/6) |
-| noFalseAlarms | 100% (6/6) |
-| oneChange | 100% (6/6) |
-| requiredIssues | 100% (6/6) |
-| validSwitch | 100% (6/6) |
+| acceptableMove | 100% (7/7) |
+| askTaste | 100% (6/6) |
+| groundedRanges | 100% (7/7) |
+| modelAnswered | 100% (7/7) |
+| noFalseAlarms | 100% (7/7) |
+| oneChange | 100% (7/7) |
+| requiredIssues | 100% (7/7) |
+| validSwitch | 100% (7/7) |
 
 ## Slices
 
 | Tag | Pass |
 |---|---|
-| split: holdout | 100% (6/6) |
+| split: holdout | 100% (7/7) |
 | balanced | 100% (1/1) |
+| limiter | 100% (1/1) |
 | missing-flow | 100% (1/1) |
 | notes-only | 100% (1/1) |
+| real-shape | 100% (1/1) |
 | sour-choke | 100% (1/1) |
-| synthetic | 100% (6/6) |
+| synthetic | 100% (7/7) |
+| taste | 100% (1/1) |
 | transient | 100% (1/1) |
 | unknown-profile | 100% (1/1) |
 

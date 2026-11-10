@@ -119,3 +119,85 @@ describe("conservative shot analysis", () => {
     })).nextShot).toBeNull();
   });
 });
+
+// Shapes taken from real Decaid shots: a preinfusion phase, then a main pour on
+// a pressure step that carries a flow limiter, as in Extractamundo Dos! and
+// Gentle and sweet. The reviews of those shots graded nothing in v0.4.0.
+describe("real Decaid shot shapes", () => {
+  const limited = (limiter: string): ProfileLike => ({
+    title: "Two step", beverage_type: "espresso", steps: [
+      { name: "preinfusion", pump: "flow", flow: "8", seconds: "20", temperature: "88", sensor: "coffee" },
+      { name: "rise and hold", pump: "pressure", pressure: "6", seconds: "40", temperature: "88", sensor: "coffee", limiter: { value: limiter, range: "1" } },
+    ],
+  });
+  // 4 samples a second: 2 s preparing, 6 s preinfusion, 22 s pouring.
+  const shot = (pour: Partial<ReviewPoint> = {}, overrides: (p: ReviewPoint) => Partial<ReviewPoint> = () => ({})): ReviewPoint[] =>
+    Array.from({ length: 120 }, (_, i) => {
+      const t = i / 4;
+      const phase = t < 2 ? "preparingForShot" : t < 8 ? "preinfusion" : "pouring";
+      const base: ReviewPoint = phase === "pouring"
+        ? { t, p: 6, f: 1.6, w: (t - 8) * 1.7, temp: 92, tp: 6, tf: 0, targetTemp: 93, groupTemp: 87.5, targetGroupTemp: 88, frame: 1, substate: phase, weightFlow: 1.7, ...pour }
+        : { t, p: 2, f: 7, w: 0, temp: 85, tp: 0, tf: 8, targetTemp: 94, groupTemp: 68, targetGroupTemp: 88, frame: 0, substate: phase, weightFlow: 0 };
+      return { ...base, ...overrides(base) };
+    });
+  const real = (points: ReviewPoint[], profile: ProfileLike = limited("4")) => input({ points, profile, doseG: 18, yieldG: 34.6, targetYieldG: 36, stopReason: "targetWeight" });
+
+  it("grades a main pour whose flow limiter never engaged", () => {
+    const result = analyzeShot(real(shot()));
+    expect(result.metrics.observedWindows).toBe(1);
+    expect(result.issues).toEqual([]);
+    expect(result.wentWell.length).toBe(1);
+  });
+
+  it("grades an engaged limiter without calling the shortfall a fault", () => {
+    // Pressure settles under 6 bar while flow sits above a 1 ml/s limit.
+    const result = analyzeShot(real(shot({ p: 5.4, f: 1.9 }), limited("1")));
+    expect(result.metrics.observedWindows).toBe(1);
+    expect(result.issues).toEqual([]);
+  });
+
+  it("still finds a choke on a limited step", () => {
+    const result = analyzeShot(real(shot({ p: 6, f: 0.3 })));
+    expect(result.issues.map((x) => x.kind)).toContain("choked");
+  });
+
+  it("never grades Decaid's preinfusion phase, whatever the step is called", () => {
+    const profile: ProfileLike = { title: "Plain", steps: [{ name: "Fill", pump: "pressure", pressure: "8", seconds: "20" }] };
+    const points = Array.from({ length: 60 }, (_, i) => ({ t: i / 4, p: 1.5, f: 7, w: 0, temp: 92, tp: 8, tf: 0, targetTemp: 92, frame: 0, substate: "preinfusion", weightFlow: 0 }));
+    const result = analyzeShot(input({ profile, points }));
+    expect(result.metrics.observedWindows).toBe(0);
+    expect(result.issues).toEqual([]);
+  });
+
+  it("compares a coffee-sensor step on group temperature, not the mix water", () => {
+    // The mix runs 1 °C under its own target; the group is 0.5 °C under 88.
+    expect(analyzeShot(real(shot())).issues.map((x) => x.kind)).not.toContain("off_target_temp");
+    expect(analyzeShot(real(shot({ temp: 80, targetTemp: 93 }))).issues.map((x) => x.kind)).not.toContain("off_target_temp");
+    const hot = analyzeShot(real(shot({ groupTemp: 91 })));
+    expect(hot.issues.map((x) => x.kind)).toContain("off_target_temp");
+    expect(hot.metrics.meanTemperatureOffsetC).toBeCloseTo(3, 1);
+  });
+
+  it("leaves out preinfusion and a profile that steps down to cooler water", () => {
+    // Preinfusion reads 20 °C cold on the group; it must not drag the mean.
+    expect(analyzeShot(real(shot())).metrics.meanTemperatureOffsetC).toBeCloseTo(-0.5, 1);
+    // A step down from 88 to 73: the machine can't cool, so running hot is expected.
+    const stepped = analyzeShot(real(shot({ groupTemp: 79, targetGroupTemp: 73 })));
+    expect(stepped.issues.map((x) => x.kind)).not.toContain("off_target_temp");
+    expect(stepped.metrics.usableTemperaturePoints).toBe(0);
+  });
+
+  it("measures the shot's facts and ignores a cup bump", () => {
+    const facts = analyzeShot(real(shot({}, (p) => p.t === 12 ? { w: -124 } : {}))).facts;
+    expect(facts).toMatchObject({ brewStartS: 2, durationS: 27.8, preinfusionS: 5.8, pourS: 21.8, doseG: 18, yieldG: 34.6, ratio: 1.9, stopReason: "targetWeight", weightGlitches: 1 });
+    expect(facts.firstDripsS).toBe(8.8);
+    expect(facts.pourMeanPressureBar).toBe(6);
+  });
+
+  it("says what the shot did in the rules summary, and admits when there is too little", () => {
+    expect(rulesReview(real(shot())).summary).toMatch(/^34\.6 g from 18 g \(1:1\.9\) in 28 s, 6 s of it preinfusion, stopped at the target weight\. /);
+    const thin = rulesReview(input({ points: shot().slice(0, 7), profile: limited("4"), yieldG: null }));
+    expect(thin.summary).toBe("There is not enough telemetry to draw a conclusion from this shot.");
+  });
+});
+

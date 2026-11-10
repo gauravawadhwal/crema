@@ -9,7 +9,7 @@ whether the result got better or worse, and by how much it costs.
 | `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page, a typed or dictated description, and/or a query | 27 self-contained + 9 live web |
 | `recommend` | `recommend()` in `server/recommend/index.ts` | `Recipe`: one profile among the installed candidates, plus dose, yield, temperature and guidance | 32 |
 | `dialin` | `dialIn()` in `server/recommend/index.ts` | `DialInAdvice`: the one change to make after a shot | 28 |
-| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded observations, narrative and at most one next-shot change | 20 synthetic |
+| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded observations, narrative and at most one next-shot change | 22 synthetic |
 
 The runner calls those real functions, with the real prompts and the real
 post-processing (rules fallback, profile-title matching), and swaps only the
@@ -77,6 +77,31 @@ in code, raised development pass rate from 26% to 93% before the taste-state cor
 The final development and holdout recheck together reported $0.028 at the CLI's list-price estimate. These small
 synthetic sets establish software behavior, not diagnostic accuracy or prose quality;
 real-shot calibration and human review remain required.
+
+### Real-shot fixes — 10 November 2026
+
+Replaying the first 12 real Decaid shots showed the v0.4.0 review never helped: 8
+requests were rejected (Decaid's `-1` "no target" and a cup bump below −5 g), and
+the rest graded no step, because every main pour carried a flow limiter, so the
+model's answer was replaced with "not enough comparable telemetry". Limited steps
+and smooth phases are now graded, Decaid's preinfusion phase is not, temperature
+is compared on the sensor each step controls and only during a settled pour, and
+a well-recorded shot keeps the model's narrative even when no step can be graded.
+The prompt now carries measured shot facts (time, yield, ratio, phases). Two cases
+model the real shape (`review-limited-pour`, dev; `review-limited-pour-sour`,
+holdout).
+
+| Run | Pass | Model answered | Grounded ranges / one change / no false alarms |
+|---|---|---|---|
+| Rules, all 22 cases | 22/22 (100%) | n/a | 100% / 100% / 100% |
+| Haiku, 15 development cases × 3 | 42/45 (93%) | 44/45 (98%) | 100% / 100% / 100% |
+| Haiku, 7 holdout cases × 1 | 7/7 (100%) | 7/7 (100%) | 100% / 100% / 100% |
+
+Against the previous development baseline (95%), the shared cases agree on the
+move 93% of the time; the misses are two conservative abstentions (one choke, one
+gusher) and one rules fallback on an unknown-profile case, each in one of three
+repeats. These replace the baselines above; the holdout has now been seen once
+more, so it is not fresh.
 
 ```bash
 npm run eval -- --task review --provider rules

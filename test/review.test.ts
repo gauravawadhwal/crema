@@ -4,6 +4,7 @@ import { ProviderChain } from "../server/llm/index.js";
 import type { LlmProvider } from "../server/llm/types.js";
 import { downsampleReviewPoints, reviewShot } from "../server/recommend/review.js";
 import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
+import { ReviewBody } from "../server/schema.js";
 
 const point = (t: number, frame: number | null = 0, substate: string | null = "pour"): ReviewPoint => ({
   t, p: 8, f: 2, w: t, temp: 92, tp: 8, tf: null, targetTemp: 92, frame, substate, weightFlow: 2,
@@ -127,6 +128,39 @@ describe("shot review backend", () => {
     expect(result.source).toBe("mock");
     expect(result.review.issues[0].fromS).toBe(2);
     expect(result.review.issues[0].toS).toBe(20);
+  });
+
+  it("accepts Decaid's -1 'no target' and a cup bump instead of rejecting the review", async () => {
+    // A de1app import records -1 for the pump not in control; a tare mid-shot reads -124 g.
+    const points = Array.from({ length: 21 }, (_, t) => ({ ...point(t), tp: t < 10 ? -1 : 6, tf: t < 10 ? 4 : -1, w: t === 12 ? -124.19 : t }));
+    const app = createApp({ llm: new ProviderChain(["mock"]) });
+    const res = await app.request("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input({ points, yieldG: -124.19 })) });
+    expect(res.status).toBe(200);
+    const parsed = ReviewBody.parse(input({ points, yieldG: -124.19 }));
+    expect(parsed.points[0]).toMatchObject({ tp: null, tf: 4 });
+    expect(parsed.points[12].w).toBeNull();
+    expect(parsed.yieldG).toBeNull();
+  });
+
+  it("keeps the model's description of a well-recorded shot that has no gradable step", async () => {
+    // Long, steady telemetry on an unknown profile: nothing to grade, plenty to describe.
+    const points = Array.from({ length: 120 }, (_, i) => ({ ...point(i / 4), substate: i < 8 ? "preinfusion" : "pouring" }));
+    let prompt = "";
+    const summary = "30 s shot, 36 g from 18 g (1:2.0). Pressure held near 8 bar throughout.";
+    const result = await reviewShot(provider((p: string) => { prompt = p; return cleanReview({ summary, confidence: "high" }); }), input({ points }));
+    expect(result.review.summary).toBe(summary);
+    expect(result.review.wentWell).toEqual(["Pressure stayed near target."]);
+    expect(result.review.confidence).toBe("low");
+    const facts = JSON.parse(prompt.split("SHOT FACTS (measured by code from every sample; null means not measured):\n")[1].split("\n")[0]);
+    expect(facts).toMatchObject({ gradedWindows: 0, doseG: 18, yieldG: 36, ratio: 2, preinfusionS: 1.8 });
+    expect(facts.weightGlitches).toBeUndefined();
+  });
+
+  it("replaces the model's narrative when the shot has too few samples to describe", async () => {
+    const result = await reviewShot(provider(cleanReview({ confidence: "high" })), input());
+    expect(result.review.summary).toMatch(/^There is not enough telemetry/);
+    expect(result.review.wentWell).toEqual([]);
+    expect(result.review.confidence).toBe("low");
   });
 
   it("validates malformed and oversized requests at the API boundary", async () => {
