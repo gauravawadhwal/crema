@@ -6,8 +6,9 @@ progress table and the ticked items below say what is done; everything else is s
 **Where things stand (10 November 2026).** Phases 1, 2 and 5 are done in software, and
 phase 6 mostly. v0.2.0 is released and is the first install on the user's DE1 tablet;
 v0.3.0 (No bag and manual brewing, profile graphs, removable reference) followed the
-same day, and v0.4.0 (10 November 2026: AI shot review, grind stepper, stable buttons)
-after it; installing either on the tablet is the first in-place upgrade.
+same day, then v0.4.0 (10 November 2026: AI shot review, grind stepper, stable buttons)
+and v0.4.1 (shot review fixed for real shots); installing a later release on the tablet
+is the first in-place upgrade.
 One real brew has since been reported successful and its saved workflow/measurements
 inspected read-only (see the live-verification note below). Broader tablet acceptance
 is pending. Software checks use `dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
@@ -217,7 +218,7 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    workflow passed, `crema-skin.zip` checked); v0.1.1 fixed comparison bugs 1–3, and
    v0.2.0 (9 November 2026: phase 2 done in software, Docker in CI) is the first
    install, so the tablet session covers phases 1 and 2. v0.3.0 (9 November 2026) and
-   v0.4.0 (10 November 2026) followed; upgrading the tablet to the latest tests phase 7's
+   v0.4.0 and v0.4.1 (10 November 2026) followed; upgrading the tablet to the latest tests phase 7's
    "upgrade without losing records".* From `main`. The release workflow runs CI
    and checks the ZIP first. Not a pre-release: Decaid's GitHub Release install asks for
    `releases/latest` unless `includePrerelease` is set (`lib/src/util/github_archive.dart`
@@ -253,7 +254,7 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    on 10 November 2026, showed it never produced a usable review in v0.4.0: Decaid's
    `-1` "no target" and cup bumps made the server reject 8 of them, the rules
    fallback took over silently, and the rest graded no step (each main pour had a
-   flow limiter) so the model's answer was replaced. Fixed after v0.4.0; see "Real
+   flow limiter) so the model's answer was replaced. Fixed in v0.4.1 (PR #38); see "Real
    shots" in [shot-review-plan.md](shot-review-plan.md). Thresholds still need
    calibration on more shots, especially with taste recorded.
 
@@ -1047,7 +1048,7 @@ Do not expand this targeted fix into an unrelated authentication/platform redesi
   `verify` (typecheck, `npm test` including engine freshness, skin syntax, built demo
   matches source, skin ZIP check), `ui` (the Playwright checks, screenshots kept on
   failure) and `docker` (image smoke test). `release.yml` and `pages.yml` call it
-  first. The release path has run for v0.1.0, v0.1.1, v0.2.0, v0.3.0 and v0.4.0.*
+  first. The release path has run for v0.1.0, v0.1.1, v0.2.0, v0.3.0, v0.4.0 and v0.4.1.*
 - [ ] Preserve root `index.html`, skin metadata, relative asset paths and semantic
   version tags. Include the actual project repository in release metadata where
   appropriate. Do not ship test tooling or credentials inside the skin.
