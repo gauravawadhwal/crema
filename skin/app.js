@@ -828,7 +828,7 @@ function drawChart(canvas, pts, o = {}) {
       const used = [];
       ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
       for (const [key, color, y, title, unit] of [["tp", "--pressure", yB, "pressure ", " bar"], ["tf", "--flow", yB, "flow ", " ml/s"], ["temp", "--temp", yT, "", " °C"]]) {
-        const point = plan.points.find((p) => p[key] != null && p.t > 0 && p.t <= maxT);
+        const point = plan.points.filter((p) => p[key] != null && p.t > 0 && p.t <= maxT).reduce((best, p) => (!best || p[key] > best[key] ? p : best), null);
         if (!point) continue;
         const label = `${title}${fmtC(point[key])}${unit}`, width = ctx.measureText(label).width;
         if (width > iw) continue;
@@ -1363,6 +1363,7 @@ function nextProfile() {
 }
 // How much of a plan to show: all of it when timed from a shot; limits can add up to
 // minutes, so cap those.
+const sameText = (a, b) => String(a).replace(/\s+/g, "").toLowerCase() === String(b).replace(/\s+/g, "").toLowerCase();
 const planWindow = (plan, cap = 60) => plan.timed === "shot" ? plan.total : Math.min(plan.total, cap);
 const planTimes = new Map();
 function planTiming(lp) {
@@ -1609,7 +1610,7 @@ function renderControls() {
   const disabled = S.ghc || !S.snap || unlinked() || NOT_READY.includes(st);
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
-  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${esc(preset.label)} · ${detail}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
+  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${sameText(preset.label, detail) ? esc(detail) : `${esc(preset.label)} · ${detail}`}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
   patchHtml($("#controls"), `
     <div class="ctl espresso-ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.ghc ? "Start at group head" : S.next ? `${fmtC(S.next.doseG)} → ${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
     ${split("Steam", "steam", "steam", steam, steam.seconds ? `${steam.seconds} s` : "until stopped")}
@@ -1731,7 +1732,7 @@ function renderScaleTile() {
 }
 // Shared with pour mode: descriptors are { name, detail, weight, state?, progress? }.
 function stepsRailHtml(steps) {
-  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .08;
+  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .11;
   return steps.map((step) => `<div class="step ${step.state === "now" ? "now" : step.state === "done" ? "done" : ""}" style="flex-grow:${Math.max(minimum, Number(step.weight) || 1)}"><strong>${esc(step.name)}</strong><span>${esc(step.detail)}</span>${step.progress != null ? `<progress max="1" value="${clamp(step.progress, 0, 1)}"></progress>` : ""}</div>`).join("");
 }
 function stepDetailText(step) {
@@ -1810,6 +1811,7 @@ function renderReadouts() {
   renderScaleTile();
   if (shotRunning() && !$("#view-brew").hidden) renderPour();
 }
+let pourMaxT = 0;
 function renderLive() {
   const target = shotRunning() ? S.shotContext?.yieldG ?? 0 : S.next?.yieldG ?? 36;
   const pts = S.live;
@@ -1822,16 +1824,28 @@ function renderLive() {
     const nowT = lastT ?? (pts.at(-1)?.t ?? 0);
     const curIdx = prog.index;
     const curStart = start[curIdx] ?? nowT;
+    // What the last shot with this profile took, when the pre-shot plan was timed from
+    // one and still describes the profile being poured. A step's time limit is only its
+    // ceiling, so a plan drawn at the limits runs far past where the shot will end.
+    const timedPlan = S.plan?.timed === "shot" && S.plan.steps.length === rawSteps.length && S.next?.profileTitle === S.shotContext?.profileTitle ? S.plan : null;
+    const expectedStep = (idx) => { const st = timedPlan?.steps[idx]; return st ? Math.max(0, st.end - st.start) : null; };
     const durs = rawSteps.map((st, idx) => {
       const lim = Math.max(0, Number(st.seconds) || 0);
       if (idx < curIdx) return Math.max(0, (start[idx + 1] ?? curStart) - (start[idx] ?? 0));
-      if (idx === curIdx) return Math.max(lim, nowT - curStart + 2);
-      return lim;
+      if (idx === curIdx) return Math.max(expectedStep(idx) ?? lim, nowT - curStart + 2);
+      return expectedStep(idx) ?? lim;
     });
     const livePlan = rawSteps.length && curIdx != null ? E.profileCurve(prof, durs) : null;
     const curPlanStep = curIdx != null ? livePlan?.steps[curIdx] : null;
     const shade = curPlanStep ? [curStart, Math.max(nowT, curPlanStep.end)] : null;
-    const maxT = Math.max(40, Math.ceil(nowT / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, livePlan ? Math.ceil(planWindow(livePlan) / 10) * 10 : 0);
+    // The axis covers the shot's expected length (the last shot's, else where the scale
+    // says it will finish), never less than 40 s, and widens 10 s at a time shortly
+    // before the trace reaches the edge. It only grows within a shot, so drawn lines
+    // hold still between steps; plan beyond the edge is simply not shown yet.
+    if (nowT < 1) pourMaxT = 0;
+    const expectedEnd = Math.max(timedPlan ? timedPlan.total : 0, prog?.etaS != null ? nowT + prog.etaS : 0, S.ghost ? S.ghost.at(-1).t : 0);
+    pourMaxT = Math.max(pourMaxT, 40, Math.ceil((nowT + 3) / 10) * 10, Math.ceil(Math.min(expectedEnd, 120) / 10) * 10);
+    const maxT = pourMaxT;
     drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan: livePlan, targets: false, ahead: nowT, shade, endLabels: true });
     return;
   }
@@ -1840,7 +1854,7 @@ function renderLive() {
   const plan = pts.length ? null : S.plan;
   const rail = $("#planSteps");
   rail.hidden = !plan;
-  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: `${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
+  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: plan.timed === "shot" && step.end - step.start < .05 ? "not reached" : `${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
   const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
   drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;

@@ -735,6 +735,10 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   #controls .stop-wrap { margin-top: auto; }
   #controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
   #controls > * { flex-shrink: 0; }
+  /* At rest the tiles share the column's spare height, so Stop isn't left below a gap. */
+  body:not(.pouring) #controls > .ctl { flex: 1 1 auto; max-height: calc(var(--hit) * 2 + var(--s-12)); }
+  body:not(.pouring) #controls > .espresso-ctl { max-height: calc(var(--hit) * 3 + var(--s-16)); }
+  body:not(.pouring) #controls > .ctl > .ctl-btn, body:not(.pouring) #controls > .ctl > .scale-reading { height: 100%; }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
   #nextShot { gap: var(--s-4); }
