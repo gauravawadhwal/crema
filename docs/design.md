@@ -56,6 +56,9 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 | Desktop / wide | `max-width 1180` breakpoint | Controls wrap under the chart |
 | Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, next shot and favourites carousel |
 | Shots (`min-width 761`) | Fixed-height workspace | Status and heading stay visible; the shot list and detail panel scroll independently. Selecting a shot preserves the list position and starts its detail at the top; phone keeps stacked page scrolling |
+| Shelf | Cards of equal height | Each card has one primary action, "Brew this" (or "Brewing"), and a square More button that opens a sheet with Freeze or Thaw, Finished, Another bag, Set what's left and the roaster's page. Origin and recipe lines clamp to two lines and the tasting notes to one row. Chips above the grid filter by All, In its window, Resting and Running low (this device only) |
+| Shots, list | Filter and compare | Chips above the list narrow the loaded shots to one coffee (they scroll sideways; "Show more" still pages the whole history). Each row has a labelled Compare control at full touch size |
+| Settings (tablet and desktop) | Section index | A sticky strip of the card titles scrolls the chosen card into view; the phone keeps the single column without it |
 | Desktop demo, top-level | `showDeviceFrame()` | The app in a 1340×800 (or 390×844) iframe inside a bezel, scaled to fit; `?full` opts out |
 
 **Target device:** a 1340×800 landscape Android tablet, the size the community Lumen skin also targets (for example an 8.7-inch Samsung Galaxy Tab A-series). Android may scale web pages, so the tablet layout is tested at 1340×800, 1340×752 (nav bar), 1206×720, 1005×600 and 1005×552 by `scripts/check-tablet-fit.cjs`.

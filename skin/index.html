@@ -62,6 +62,7 @@
   --s-24: 24px;
   --hit: 44px;
   --hit-tight: 40px;
+  --hit-now: var(--hit); /* the target size that applies at this screen height */
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -360,7 +361,26 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 
 /* ---------- shelf ---------- */
 .shelf { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
-.bean-card { display: grid; gap: 12px; align-content: start; }
+.bean-card { display: flex; flex-direction: column; gap: 12px; }
+.bean-card > * { min-width: 0; }
+.bean-text { align-content: start; grid-template-columns: minmax(0, 1fr); }
+.bean-text > * { min-width: 0; }
+.bean-card .tags { flex-wrap: nowrap; overflow: hidden; }
+.bean-card .tag { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clamp2, .clip1 { overflow-wrap: anywhere; }
+.clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.clip1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bean-card h2 { line-height: 1.2; }
+.bean-card .pill.plain { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.card-actions { display: flex; gap: var(--s-8); margin-top: auto; }
+.card-actions .btn { min-height: var(--hit-now); }
+.more-btn { flex: none; width: var(--hit-now); padding: 0; }
+.more-list .btn { width: 100%; justify-content: flex-start; min-height: var(--hit-now); }
+.skeleton-card { display: grid; gap: var(--s-12); align-content: start; min-height: 260px; }
+.sk { border-radius: 10px; background: var(--surface-2); animation: sk-pulse 1.6s ease-in-out infinite; }
+.sk-head { height: 116px; } .sk-line { height: 14px; } .sk-line.short { width: 60%; } .sk-btn { height: var(--hit); margin-top: auto; }
+.skeleton-row { height: 62px; margin-bottom: var(--s-8); }
+@keyframes sk-pulse { 50% { opacity: .55; } }
 .bean-card.current { border-color: var(--accent); }
 .coffee-head { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 14px; align-items: center; }
 .rest { display: grid; gap: 6px; }
@@ -426,8 +446,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .cand ul { margin: 0; padding-left: 18px; font-size: .84rem; display: grid; gap: 2px; }
 .caution { color: var(--warn); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.fchip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: .8rem; min-height: 32px; }
-.fchip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.fchip { padding: 5px var(--s-16); border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: var(--t-m); min-height: var(--hit-now); }
+.fchip[aria-pressed="true"], .fchip[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .cat-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
 .cat-card { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; align-content: start; }
 .cat-card:hover { border-color: var(--muted); }
@@ -438,32 +458,42 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 /* ---------- shots ---------- */
 .shots-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: start; }
 .shot-list { display: grid; gap: 8px; }
-.shot-row { display: grid; grid-template-columns: 22px 110px minmax(0,1fr); gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; width: 100%; }
+.shot-row { display: grid; grid-template-columns: 110px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; width: 100%; }
 .shot-row.sel { border-color: var(--accent); }
 .shot-row.cmp { border-color: var(--flow); }
 .shot-row canvas { width: 110px; height: 40px; }
 .shot-row .open { border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; min-width: 0; display: grid; gap: 2px; }
 .shot-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .8rem; color: var(--muted); }
-.shot-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--flow); }
+.shot-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--flow); margin: 0; }
+.cmp-label { display: flex; align-items: center; gap: var(--s-8); min-height: var(--hit-now); min-width: var(--hit-now); padding-inline: var(--s-12); border-radius: 10px; cursor: pointer; font-size: var(--t-m); color: var(--muted); }
+.cmp-label:has(input:checked) { color: var(--fg); }
+.cmp-label:has(input:disabled) { opacity: .45; cursor: default; }
+.shot-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.shot-filters .fchip { flex: none; max-width: 240px; }
+.shot-filters .clip1 { display: block; }
+#shotDetail { grid-auto-rows: max-content; }
+#shotDetail .stars:not(.static) { padding-block: 7px; }
+#shotDetail .stars:not(.static) .stars-fill { inset: 7px auto 7px 0; }
+#shotDetail .seg.tap button { min-height: var(--hit-now); }
 
 /* ---------- settings ---------- */
 .settings { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); align-items: start; }
-.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 46px; border-top: 1px solid var(--line); padding-top: 8px; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 56px; border-top: 1px solid var(--line); padding-top: 8px; }
 .set-row.first { border-top: 0; padding-top: 0; }
 .set-row .hint { display: block; font-size: .78rem; color: var(--muted); }
-.mini { display: grid; grid-template-columns: 34px 66px 34px; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.mini button { border: 0; background: var(--surface-2); height: 36px; cursor: pointer; }
-.mini input { width: 100%; border: 0; background: var(--bg); text-align: center; height: 36px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.switch { position: relative; width: 48px; height: 28px; flex: none; }
+.mini { display: grid; grid-template-columns: var(--hit-now) 72px var(--hit-now); align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.mini button { border: 0; background: var(--surface-2); height: var(--hit-now); cursor: pointer; }
+.mini input { width: 100%; border: 0; background: var(--bg); text-align: center; height: var(--hit-now); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.switch { position: relative; width: 48px; height: var(--hit-now); flex: none; }
 .switch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; z-index: 1; }
-.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
+.switch span { position: absolute; inset: calc(50% - 14px) 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
 .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s; }
 .switch input:checked + span { background: var(--accent); border-color: var(--accent); }
 .switch input:checked + span::after { transform: translateX(20px); background: var(--accent-ink); }
 .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sched { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-.days { display: flex; gap: 3px; flex-wrap: wrap; }
-.days button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: transparent; font-size: .72rem; cursor: pointer; }
+.days { display: flex; gap: 0; flex-wrap: wrap; }
+.days button { width: var(--hit-now); height: var(--hit-now); border-radius: 8px; border: 1px solid var(--line); background: transparent; font-size: .72rem; cursor: pointer; }
 .days button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* ---------- device frame (demo on a desktop) ---------- */
@@ -509,7 +539,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .readouts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .facts { grid-template-columns: minmax(0, 1fr) auto; }
   .facts .k { grid-column: 1 / -1; padding-bottom: 0; }
-  .shot-row { grid-template-columns: 22px 80px minmax(0,1fr); }
+  .shot-row { grid-template-columns: 80px minmax(0,1fr); }
+  .cmp-label { grid-column: 1 / -1; justify-self: start; }
   .shot-row canvas { width: 80px; }
   h1 { font-size: 1.4rem; }
   .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
@@ -627,6 +658,26 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .shots-grid { min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #shotList, #shotDetail { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; align-content: start; }
 }
+/* ---------- Shelf, Profiles, Shots and Settings (UI plan, WS 9) ---------- */
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) { :root { --hit-now: var(--hit-tight); } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#view-shelf .btn.small, #view-profiles .btn.small, #view-shots .btn.small, #view-settings .btn.small { min-height: var(--hit-now); }
+.prof-thumb { display: block; width: 100%; height: 36px; }
+.cand h3, .cat-card h3 { min-width: 0; }
+.cand.shown-above { grid-column: 1 / -1; padding: var(--s-8) var(--s-16); border-style: dashed; background: transparent; align-content: center; }
+.cand.shown-above h3 { font-size: var(--t-m); }
+#view-settings .seg button { min-height: var(--hit-now); min-width: var(--hit-now); }
+#view-settings input[type="range"] { height: var(--hit-now); }
+.set-index { position: sticky; top: 0; z-index: 5; display: flex; gap: var(--s-8); overflow-x: auto; scrollbar-width: thin; padding-block: var(--s-8); background: var(--bg); }
+.set-index .fchip { flex: none; }
+#settings > .panel { scroll-margin-top: calc(var(--hit-now) + var(--s-24)); }
+@media (max-width: 760px) {
+  .set-index { display: none; }
+  #view-settings .set-row:has(.seg) { grid-template-columns: minmax(0, 1fr); }
+  #view-settings .sched { padding-inline: 4px; }
+  #shotDetail .scale-row { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  #shotDetail .seg.tap button { font-size: var(--t-xs); padding-inline: 2px; overflow-wrap: anywhere; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -683,6 +734,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <!-- SHELF -->
       <section id="view-shelf" class="stack" hidden>
         <div class="row between"><h1>Coffee shelf</h1><a class="btn primary" href="#add">Add coffee</a></div>
+        <div class="chips shelf-filters" id="shelfFilters" role="radiogroup" aria-label="Filter coffees" hidden></div>
         <div class="shelf" id="shelf"></div>
       </section>
 
@@ -759,7 +811,10 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 
       <!-- SHOTS -->
       <section id="view-shots" class="stack" hidden>
-        <div class="row between"><h1>Shots</h1><span class="muted small">Tick a second shot to compare</span></div>
+        <div class="stack" style="gap:var(--s-8)">
+          <div class="row between"><h1>Shots</h1><span class="muted small">Choose Compare on a second shot to overlay it</span></div>
+          <div class="chips shot-filters" id="shotFilters" role="radiogroup" aria-label="Filter by coffee" hidden></div>
+        </div>
         <div class="shots-grid">
           <div class="shot-list" id="shotList" role="region" aria-label="Shot list" tabindex="0"></div>
           <div class="panel stack" id="shotDetail" role="region" aria-label="Shot details" tabindex="0"><p class="muted">Pick a shot to see its curves.</p></div>
@@ -769,6 +824,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <!-- SETTINGS -->
       <section id="view-settings" class="stack" hidden>
         <h1>Settings</h1>
+        <nav class="set-index" id="settingsIndex" aria-label="Settings sections"></nav>
         <div class="settings" id="settings"></div>
       </section>
     </div>
