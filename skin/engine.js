@@ -39,6 +39,7 @@ var CremaEngine = (() => {
     inferRoast: () => inferRoast,
     isStarting: () => isStarting,
     loadDecision: () => loadDecision,
+    mergeRecord: () => mergeRecord,
     near: () => near,
     outlineProfile: () => outlineProfile,
     planAt: () => planAt,
@@ -46,11 +47,13 @@ var CremaEngine = (() => {
     pruneNewRows: () => pruneNewRows,
     rankProfiles: () => rankProfiles,
     recipeMatches: () => recipeMatches,
+    recommendPatch: () => recommendPatch,
     reconcileOutcome: () => reconcileOutcome,
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
     rulesReview: () => rulesReview,
     sameGrind: () => sameGrind,
+    saveBeanPatch: () => saveBeanPatch,
     shotAcrossOnLoss: () => shotAcrossOnLoss,
     shotRunning: () => shotRunning,
     shotSim: () => shotSim,
@@ -1577,5 +1580,31 @@ var CremaEngine = (() => {
     const since = tracked.get(key);
     return since != null && now - since < windowMs;
   };
+
+  // server/control/record.ts
+  var definedOnly = (patch) => Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== void 0));
+  var mergeRecord = (fresh, patch) => ({ ...fresh ?? {}, ...definedOnly(patch) });
+  function recommendPatch(fresh, out, started) {
+    const patch = { recipe: out.recipe ?? null, recipeSource: out.source ?? null };
+    if (!fresh?.info) patch.info = out.info;
+    const was = started?.batchId ?? null;
+    const now = fresh?.batchId ?? null;
+    if (now === was && now !== out.batchId) patch.batchId = out.batchId;
+    return patch;
+  }
+  function saveBeanPatch(fresh, add) {
+    const f = fresh ?? {};
+    const patch = { info: add.info, finished: false, batchId: add.batchId };
+    if (!("recipe" in f)) patch.recipe = null;
+    if (!("recipeSource" in f)) patch.recipeSource = null;
+    if (!("bestShotId" in f)) patch.bestShotId = null;
+    if (!f.addedAt) patch.addedAt = add.now;
+    if (add.photo) patch.photo = add.photo;
+    else if (!("photo" in f)) patch.photo = null;
+    if (add.productImage) patch.productImage = add.productImage;
+    else if (!("productImage" in f)) patch.productImage = null;
+    patch.art = add.art || f.art || (add.productImage ? "product" : "photo");
+    return patch;
+  }
   return __toCommonJS(engine_exports);
 })();
