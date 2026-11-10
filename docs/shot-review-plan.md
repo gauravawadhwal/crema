@@ -260,6 +260,6 @@ Two more problems turned up on the same shots:
 
 Replayed again with `claude-cli` (Opus), every well-recorded shot gets a short,
 specific narrative and nothing is falsely flagged; the 7-sample shot is still
-refused. The fix needs the server redeployed (old skins then work) and the skin
-updated for group temperature.
+refused. Released in v0.4.1. Redeploying the server fixes AI reviews even for the v0.4.0
+skin; the temperature check and the better rules summary need the v0.4.1 skin.
 
