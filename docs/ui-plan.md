@@ -16,6 +16,10 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**To continue in any tool:** give the agent [ui-plan-briefs.md](ui-plan-briefs.md):
+its "Common instructions" plus the section for one workstream. Those are the full
+briefs, including the two part-done branches.
+
 Newest first. Read this, then the status table, then the open PRs. Each workstream
 works in its own branch and updates its own row of the status table in its own PR, so
 until those merge, this log is the one place that lists everything in flight.
