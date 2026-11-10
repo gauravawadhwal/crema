@@ -20,6 +20,26 @@ Newest first. Read this, then the status table, then the open PRs. Each workstre
 works in its own branch and updates its own row of the status table in its own PR, so
 until those merge, this log is the one place that lists everything in flight.
 
+**10 November 2026, night — all agents stopped by the user to save credits**
+
+Nothing is running. State to resume from:
+
+- Open, complete, unmerged: #54 (plan), #55 (WS 4a logic), #56 (WS 1), #57 (WS 10),
+  #58 (WS 2).
+- `ui/ws7-feedback-layer` (WS 7): one **WIP commit**, pushed, no PR. About 500 lines
+  across 7 files. Stopped part-way: not verified and may not run. Whoever continues
+  should read the diff against `ui/ws1-guard-rails`, compare it with the WS 7 scope,
+  finish, run the fast checks and open the PR.
+- `ui/ws9-other-screens` (WS 9): one **WIP commit**, pushed, no PR. About 500 lines
+  across 9 files; the agent was on its docs and CI edits when stopped, so the code may
+  be close to done, but nothing was verified. Same procedure.
+- WS 3 and WS 6: stopped before any change. Branches `ui/ws3-brew-at-rest` and
+  `ui/ws6-value-sheet` are pushed but identical to `ui/ws2-quick-fixes`. Start them
+  from the workstream sections here.
+- Not started: WS 4 layout, WS 5, WS 8, WS 11.
+- The user wants credits conserved: one or two agents at a time, cheaper models for
+  WS 7, 8, 9 and 11, and light verification.
+
 **10 November 2026, night**
 
 - PR #56 `ui/ws1-guard-rails` (WS 1): reviewed, CI passing. `check-targets.cjs`
