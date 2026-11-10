@@ -21,8 +21,8 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 | 1 | Guard rails: tokens, target check, stress fixture | S | none | Not started |
 | 2 | Quick fixes for measured defects | S | 1 | Not started |
 | 3 | Brew at rest | M | 2 | Not started |
-| 4 | Pour mode | L | 3 | Not started |
-| 5 | After the shot | M | 4 | Not started |
+| 4 | Pour mode | L | 3 | Logic (`E.stepProgress`) open in PR #55; skip-step command found (decision 4); layout not started |
+| 5 | After the shot | M | 4 | Logic (`E.stopReason`) open in PR #55; layout not started |
 | 6 | Value sheet and steppers | M | 3 | Not started |
 | 7 | Feedback layer | M | 2 | Not started |
 | 8 | Phone | M | 4 | Not started |
