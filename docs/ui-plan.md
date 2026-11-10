@@ -20,6 +20,32 @@ Newest first. Read this, then the status table, then the open PRs. Each workstre
 works in its own branch and updates its own row of the status table in its own PR, so
 until those merge, this log is the one place that lists everything in flight.
 
+**10 November 2026, night**
+
+- PR #56 `ui/ws1-guard-rails` (WS 1): reviewed, CI passing. `check-targets.cjs`
+  passes with 136 allowlisted failures; 60 are in Settings (controls at 34–36 px).
+  It also found the Shots detail metrics row squeezed to a 2 px line at every tablet
+  size on `main`, and the Settings "Experience" row overlapping itself on the phone.
+  Both were added to WS 9's brief.
+- PR #57 `ui/ws10-sleep-sound` (WS 10): open. Hold to wake, chime, date on the sleep
+  screen, with `scripts/e2e-sleep.cjs`. Diff not reviewed in detail.
+- PR #58 `ui/ws2-quick-fixes` (WS 2): open, stacked on #56. Looked at Brew at rest at
+  1340×800: header rows, hint in the chart header, "AI pick", fixed Stop all present.
+  Stop's rectangle is asserted in `e2e-controls.cjs` section 12. Allowlist is at 121.
+- Running, branched from `ui/ws2-quick-fixes`: WS 3 `ui/ws3-brew-at-rest` (control
+  column, step rail at rest, favourite cards) and WS 6 `ui/ws6-value-sheet` (tiles
+  and sheet in `#nextShot`, hold-to-repeat). Running, branched from
+  `ui/ws1-guard-rails`: WS 7 `ui/ws7-feedback-layer` and WS 9 `ui/ws9-other-screens`.
+  Skeleton loading rows moved from WS 7 to WS 9; toast position moved from WS 2 to WS 7.
+- Next: the layout half of WS 4, cut from `ui/ws3-brew-at-rest` with
+  `ui/ws4a-pour-logic` merged in; then WS 5 and WS 8; then WS 11.
+- Expect merge conflicts between these branches in `skin/app.js`, `skin/index.html`,
+  `demo/crema-demo.html` (always resolve by rebuilding it), `skin/engine.js` (rebuild
+  with `npm run build:engine`), `scripts/check-targets.allow.json` and the status
+  table here. Suggested merge order: #54, #56, #55, #58, #57, then WS 7, 9, 3, 6.
+- Verification is deliberately light (user, 10 November): fast checks plus the e2e
+  scripts that cover the change; agents do not wait for CI.
+
 **10 November 2026, late evening**
 
 - PR #54 `docs/ui-plan`: this plan. Open, CI passing. Every branch below is cut from
