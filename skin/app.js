@@ -280,8 +280,8 @@ function makeLiveApi(conn) {
   // How much of a bag is left. Decaid doesn't reduce a batch's weightRemaining when a
   // shot is pulled, so Crema counts it: the bag's weight, less the doses of espresso
   // shots recorded against it (from any skin that records the bag), plus a correction.
-  // Crema writes the result to weightRemaining so Decaid and other skins see it, and
-  // remembers what it wrote; if weightRemaining has changed since (set in Decaid or
+  // syncRemaining writes the result to weightRemaining so Decaid and other skins see it,
+  // and remembers what it wrote; if weightRemaining has changed since (set in Decaid or
   // another skin), that change becomes the correction instead of being overwritten.
   // Each bag's correction is its own key, so the tablet and a phone writing a recipe
   // and a bag at the same time can't overwrite each other's change.
@@ -290,8 +290,10 @@ function makeLiveApi(conn) {
     const shots = await shotSummaries({ batchId: batch.id }).then((all) => all.filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)), () => null);
     const used = E.gramsUsed(shots);
     const state = await kvGet(bagKey(batch.id), {}).catch(() => ({}));
-    const { adjust, remaining, corrected } = E.bagRemaining({ used, weight: batch.weight ?? null, weightRemaining: batch.weightRemaining, state });
-    if (corrected) await kvSet(bagKey(batch.id), { ...state, adjust, written: batch.weightRemaining }).catch(() => {});
+    // Reading only: a change made elsewhere is applied in memory, so every device gets
+    // the same figure. It is stored by syncRemaining (after a shot, or when you set
+    // what's left), not here, so devices polling the shelf never write.
+    const { adjust, remaining } = E.bagRemaining({ used, weight: batch.weight ?? null, weightRemaining: batch.weightRemaining, state });
     return { shots, used, adjust, remaining, state };
   };
   const installedProfiles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso");
@@ -330,6 +332,18 @@ function makeLiveApi(conn) {
       async set(p) { settings = { ...settings, ...p }; await kvSet("settings", settings); return { ...settings }; },
     },
 
+    // A cheap read for the 5 s poll: the open coffees, their open bags (which carry
+    // each bag's remaining weight, frozen and finished state) and the newest shot. It
+    // differs whenever the shelf changed on another device, except for Crema's own
+    // records (recipe, photo, reference shot), which the minute check picks up.
+    async shelfSignal() {
+      const beans = await j(D("/beans?includeArchived=false"));
+      const [batches, latest] = await Promise.all([
+        Promise.all(beans.map((b) => j(D(`/beans/${b.id}/batches?includeArchived=false`)))),
+        j(D("/shots?limit=1")).catch(() => null),
+      ]);
+      return JSON.stringify([beans, batches, latest?.items?.[0]?.id ?? null, latest?.total ?? null]);
+    },
     // One row per open bag. `id` is the coffee (shared data), `batch` and `key` the bag.
     async shelf() {
       const beans = await j(D("/beans?includeArchived=false"));
@@ -713,6 +727,7 @@ function makeLiveApi(conn) {
 /* ================= app state ================= */
 const S = {
   api: null,
+  newRows: new Map(), // shelf rows that appeared recently with no recipe yet (E.trackNewRows)
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
   streams: null, // subscribe()'s handle: { close, reopenMachine }
   recommending: null, // id of the coffee whose recipe is being worked out
@@ -1124,7 +1139,21 @@ async function selectBean(key, opts = {}) {
     S.recommending = b.id;
     renderNextShot();
     if (!$("#view-profiles").hidden) renderProfiles();
-    try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    try {
+      // Added on another device a moment ago: its recipe is probably being worked out
+      // there. Wait for it (up to ~30 s) rather than ask the AI a second time.
+      // A shelf read replaces the rows (only the current one is merged in place), so look at the fresh row, not `b`.
+      const fresh = () => S.shelf.find((x) => x.key === b.key);
+      for (let i = 0; i < 10 && fresh() && !fresh().recipe && E.waitingForRecipe(S.newRows, b.key, Date.now()); i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const previous = S.shelf.map((x) => x.key);
+        await refreshShelf().catch(() => {});
+        S.newRows = E.trackNewRows(S.newRows, previous, S.shelf, Date.now());
+      }
+      const row = fresh();
+      if (row?.recipe) sameCoffee(b.id, (x) => { x.recipe = row.recipe; x.recipeSource = row.recipeSource; });
+      else if (row) { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); }
+    } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
     finally { if (S.recommending === b.id) S.recommending = null; }
     // Profiles may have been drawn while waiting (Add sends you there first).
     if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
@@ -1471,7 +1500,7 @@ async function onShotEnd(finishedId) {
   const batch = shot ? shot.batch : context.batchId;
   const b = batch ? S.shelf.find((b) => b.batch === batch) : null;
   if (b && shot) {
-    S.api.syncRemaining(b.id, b.batch).then((r) => { if (r != null) b.remaining = r; }).catch(() => {});
+    S.api.syncRemaining(b.id, b.batch).then((r) => { if (r != null) b.remaining = r; }).catch(() => {}).finally(() => { void syncShelf(true); });
   }
 }
 // Decaid saves the shot a moment after the machine stops. Ratings and the reference
@@ -1730,20 +1759,33 @@ async function renderShelf() {
 let shelfRequest = 0, shelfSync = null;
 async function refreshShelf() {
   const request = ++shelfRequest;
+  // The signal is read first, so a change made while the shelf is read shows up as a
+  // difference at the next poll rather than being lost.
+  const signal = await S.api.shelfSignal().catch(() => null);
   const rows = await S.api.shelf();
   if (request !== shelfRequest) return;
-  S.shelf = rows;
+  S.shelf = rows; S.shelfSignal = signal;
   // Keep the selected object current without resetting edits to the next shot.
   const selected = rows.find((b) => b.key === S.current?.key);
   if (selected) { Object.assign(S.current, selected); rows[rows.indexOf(selected)] = S.current; }
 }
 // Decaid has no inventory stream. Refresh visible clients without overlapping reads,
 // resetting the recipe being edited, or turning a failed read into an empty shelf.
-function syncShelf() {
+// The 5 s poll reads only a cheap signal and reads the whole shelf when it changed;
+// `full` (focus, the minute check, after a shot) reads it regardless.
+function syncShelf(full = false) {
   if (S.api.demo || !S.shelfLoaded || shotRunning() || S.recommending || loadsPending) return Promise.resolve();
   if (shelfSync) return shelfSync;
   const before = JSON.stringify(S.shelf), selected = JSON.stringify(S.current);
-  shelfSync = refreshShelf().then(async () => {
+  // A coffee added on another device gets its recipe a while after it appears, in a
+  // record the signal doesn't cover: read in full until it has one (or ~2 minutes pass).
+  S.newRows = E.pruneNewRows(S.newRows, Date.now());
+  const waiting = S.newRows.size > 0;
+  shelfSync = (full || waiting ? Promise.resolve(true) : S.api.shelfSignal().then((s) => s !== S.shelfSignal)).then(async (changed) => {
+    if (!changed) return;
+    const previous = S.shelf.map((b) => b.key);
+    await refreshShelf();
+    S.newRows = E.trackNewRows(S.newRows, previous, S.shelf, Date.now());
     S.shelfError = null;
     if ((S.current && !S.shelf.some((b) => b.key === S.current.key)) || (!S.current && !S.noBag && S.shelf.length)) {
       await selectBean(S.shelf[0]?.key, { quiet: true });
@@ -2287,7 +2329,8 @@ function showInstalledProfile(lp) {
 const SHOTS_PER_PAGE = 20;
 // The coffee record of the bag a shot was pulled from, for the review's context. A shot
 // with no bag matches a shelf row with no bag, as it always has.
-const bagInfoForShot = (s) => S.shelf.find((b) => b.batch === (s.batch ?? null))?.info ?? null;
+// A shot with no bag has no coffee info (a bagless row would match any other bagless row).
+const bagInfoForShot = (s) => (s.batch ? S.shelf.find((b) => b.batch === s.batch)?.info ?? null : null);
 // A shot pulled from another skin may record a bag but no coffee name: name it from the shelf.
 const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch === s.batch)?.info.name.value || "No coffee recorded";
 async function renderShots(more = false) {
@@ -2824,7 +2867,7 @@ async function boot() {
   await reconcileWorkflow({ boot: true });
   const recheck = () => {
     if (document.visibilityState !== "visible") return;
-    void syncShelf();
+    void syncShelf(true);
     void reconcileWorkflow();
   };
   document.addEventListener("visibilitychange", recheck);

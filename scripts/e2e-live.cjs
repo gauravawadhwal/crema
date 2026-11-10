@@ -625,6 +625,61 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await tablet.click(`[data-brew="${bag2}"]`);
       await tablet.waitForFunction((key) => location.hash === "#brew" && S.current?.key === key, bag2);
       check(await tablet.evaluate((key) => S.current.key === key, bag2), "Brew this selects the second bag on the tablet");
+      // The 5 s poll is cheap: with nothing changed it reads the bean list, each coffee's
+      // bags and the newest shot, never a coffee's record or a bag's shots.
+      const idle = []; const countIdle = (r) => { if (r.url().startsWith(`http://localhost:${MOCK}/api/`) && /beans|bean-batches|shots|store/.test(r.url())) idle.push(`${r.method()} ${new URL(r.url()).pathname}${new URL(r.url()).search}`); };
+      await tablet.evaluate(() => S.api.shelfSignal && syncShelf(true)); await tablet.waitForTimeout(1200);
+      tablet.on("request", countIdle); await tablet.waitForTimeout(11000); tablet.off("request", countIdle);
+      const beanCount = await tablet.evaluate(() => new Set(S.shelf.map((b) => b.id)).size);
+      const heavy = idle.filter((u) => /store|beanBatchId/.test(u));
+      check(idle.length > 0 && idle.length <= 3 * (beanCount + 2) && !idle.some((u) => /\/store\//.test(u)) && !heavy.length, `an idle shelf poll reads only the bean and bag lists and the newest shot (${idle.length} requests in 11 s for ${beanCount} coffees)`, idle.join(", "));
+      // A change made on another device still arrives without a full read being forced.
+      await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag2}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: true }) });
+      await tablet.waitForFunction((key) => S.shelf.find((b) => b.key === key)?.frozen === true, bag2, { timeout: 12000 }).catch(() => {});
+      check(await tablet.evaluate((key) => S.shelf.find((b) => b.key === key)?.frozen === true, bag2), "a bag frozen on another device shows on an idle tablet within a poll");
+      await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag2}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: false }) });
+      await page.waitForFunction((key) => S.shelf.find((b) => b.key === key)?.frozen === false, bag2, { timeout: 12000 }).catch(() => {});
+      // The phone's way of adding a coffee: the bean and bag appear first, the recipe is
+      // written to Crema's record some seconds later (after the AI answers). The idle
+      // tablet must show the recipe within a poll or two, not a minute, and must not ask
+      // for a recipe of its own when the coffee is picked meanwhile.
+      const dec = (p, m, b) => fetch(`http://localhost:${MOCK}/api/v1${p}`, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());
+      const phoneBean = await dec("/beans", "POST", { roaster: "Phone Roasters", name: "Added from the phone" });
+      const phoneBag = await dec(`/beans/${phoneBean.id}/batches`, "POST", { weight: 250 });
+      await tablet.waitForFunction((k) => S.shelf.some((b) => b.key === k), phoneBag.id, { timeout: 12000 });
+      await tablet.evaluate(() => { window.__rec = 0; const r = S.api.recommend; S.api.recommend = (...a) => { window.__rec++; return r.apply(S.api, a); }; });
+      await tablet.waitForTimeout(3000);
+      check(await tablet.evaluate((k) => !S.shelf.find((b) => b.key === k).recipe, phoneBag.id), "the coffee added elsewhere has no recipe yet");
+      const recipe = await tablet.evaluate(() => JSON.parse(JSON.stringify(S.shelf.find((b) => b.recipe).recipe)));
+      await dec(`/store/crema/${encodeURIComponent("bean:" + phoneBean.id)}`, "POST", { recipe, recipeSource: "saved", batchId: phoneBag.id, finished: false, addedAt: new Date().toISOString() });
+      const t0 = Date.now();
+      await tablet.waitForFunction((k) => S.shelf.find((b) => b.key === k)?.recipe, phoneBag.id, { timeout: 12000 }).catch(() => {});
+      check(await tablet.evaluate((k) => !!S.shelf.find((b) => b.key === k)?.recipe, phoneBag.id), `a recipe written to Crema's record after the coffee appeared shows on the idle tablet (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+      check(await tablet.evaluate(() => window.__rec) === 0, "the tablet did not ask for a recipe of its own");
+      // Picked while the recipe is still pending elsewhere: it waits for it instead of asking the AI.
+      const pend = await dec("/beans", "POST", { roaster: "Phone Roasters", name: "Still being worked out" });
+      const pendBag = await dec(`/beans/${pend.id}/batches`, "POST", { weight: 250 });
+      await tablet.waitForFunction((k) => S.shelf.some((b) => b.key === k), pendBag.id, { timeout: 12000 });
+      const picking = tablet.evaluate((k) => selectBean(k, { quiet: true }), pendBag.id);
+      await tablet.waitForTimeout(1500);
+      await dec(`/store/crema/${encodeURIComponent("bean:" + pend.id)}`, "POST", { recipe, recipeSource: "saved", batchId: pendBag.id, finished: false, addedAt: new Date().toISOString() });
+      await picking;
+      check(await tablet.evaluate((k) => S.current.key === k && !!S.current.recipe, pendBag.id) && await tablet.evaluate(() => window.__rec) === 0, "picking a coffee whose recipe is pending elsewhere waits for it instead of asking for another");
+      // Switching to another coffee during the wait must not lead to a second recipe request.
+      const away = await dec("/beans", "POST", { roaster: "Phone Roasters", name: "Switched away" });
+      const awayBag = await dec(`/beans/${away.id}/batches`, "POST", { weight: 250 });
+      await tablet.waitForFunction((k) => S.shelf.some((b) => b.key === k), awayBag.id, { timeout: 12000 });
+      const waiting = tablet.evaluate((k) => selectBean(k, { quiet: true }), awayBag.id);
+      await tablet.waitForTimeout(1500);
+      await tablet.evaluate((k) => selectBean(k, { quiet: true }), bag2);
+      await dec(`/store/crema/${encodeURIComponent("bean:" + away.id)}`, "POST", { recipe: { ...recipe, doseG: 17.5 }, recipeSource: "saved", batchId: awayBag.id, finished: false, addedAt: new Date().toISOString() });
+      await waiting;
+      await tablet.evaluate((k) => selectBean(k, { quiet: true }), awayBag.id);
+      check(await tablet.evaluate((k) => S.current.key === k && S.current.recipe?.doseG === 17.5, awayBag.id) && await tablet.evaluate(() => window.__rec) === 0, "a coffee left while waiting for another device's recipe shows that recipe when picked again, with no recommend");
+      for (const b of [phoneBean, pend, away]) await dec(`/beans/${b.id}`, "PUT", { archived: true });
+      await tablet.evaluate((k) => selectBean(k, { quiet: true }), bag2);
+      await tablet.waitForFunction(() => S.newRows.size === 0 && !S.shelf.some((b) => /Phone Roasters/.test(b.info.roaster?.value ?? "")), null, { timeout: 15000 }).catch(() => {});
+      await page.waitForFunction(() => !S.shelf.some((b) => /Phone Roasters/.test(b.info.roaster?.value ?? "")), null, { timeout: 15000 }).catch(() => {});
       await tablet.close();
       await page.setViewportSize({ width: 1340, height: 800 });
       await page.goto(`http://localhost:${SKIN}/?full#shelf`);
@@ -646,6 +701,14 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await dev("shots/seed", { count: 1, batchId: bag2, dose: 18 });
       const adopted = await page.evaluate(async (k) => (await S.api.shelf()).find((x) => x.key === k).remaining, bag2);
       check(adopted === 400 - 18 || adopted === 400, `a remaining weight changed elsewhere is kept (${adopted})`);
+      // Reading the shelf never writes: the correction is stored by syncRemaining.
+      const posts = []; const watchKv = (r) => { if (r.method() === "POST" && /\/store\//.test(r.url())) posts.push(r.url()); };
+      page.on("request", watchKv); const readTwice = await page.evaluate(async (k) => [(await S.api.shelf()).find((x) => x.key === k).remaining, (await S.api.shelf()).find((x) => x.key === k).remaining], bag2); page.off("request", watchKv);
+      check(!posts.length && readTwice[0] === readTwice[1] && readTwice[0] === adopted, `reading the shelf writes nothing and gives the same remaining each time (${posts.length} writes, ${readTwice})`);
+      const stored = async () => (await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema/${encodeURIComponent("bag:" + bag2)}`)).json()) ?? {};
+      const beforeSync = (await stored()).written;
+      const synced = await page.evaluate(async (k) => { const b = S.shelf.find((x) => x.key === k); return S.api.syncRemaining(b.id, b.batch); }, bag2);
+      check(synced === adopted && (await stored()).written === adopted && beforeSync !== adopted, `syncRemaining stores the correction (remaining ${synced}, written ${(await stored()).written})`);
       // Set by hand.
       await page.evaluate(async () => { await refreshShelf(); }); await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#shelf`);
       await page.waitForSelector(`[data-left="${bag2}"]`, { timeout: 10000 }); await page.click(`[data-left="${bag2}"]`); await page.fill("#leftG", "300"); await page.click("#confirmLeft"); await page.waitForTimeout(500);
