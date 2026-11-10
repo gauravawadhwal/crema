@@ -5,6 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const assert = require('node:assert/strict');
+const checkFavourites = require('./favourites-checks.cjs');
 const root = path.resolve(__dirname, '..');
 const mockPort = 20500 + Math.floor(Math.random() * 1000);
 const mock = spawn('npx', ['tsx', 'dev/mock-decaid.ts'], { cwd: root, env: { ...process.env, PORT: String(mockPort) }, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -31,6 +32,18 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     const url = `${origin}/?full&decaid=http://localhost:${mockPort}`;
     browser = await chromium.launch(); page = await browser.newPage({ viewport: { width: 1340, height: 800 } });
     page.on('pageerror', e => errors.push(e.message));
+    if (process.argv.includes('--favourites-only')) {
+      await page.goto(url + '#profiles'); await page.waitForFunction(() => S.library?.some(p => !p.manual));
+      await page.evaluate(() => showProfile(S.library.find(p => !p.manual).id)); await page.click('#baglessProfile');
+      await checkFavourites(page, check);
+      await page.goto(origin + '/built?full&demo#brew'); await page.waitForFunction(() => S.api?.demo && S.next && S.shelfLoaded);
+      // The two backends share this test origin's localStorage, but installed IDs
+      // belong to their own libraries. Start the built demo with its own coffee.
+      await page.evaluate(() => selectBean(S.shelf[0].key, { quiet: true }));
+      await checkFavourites(page, check);
+      check(!errors.length, 'no live/built carousel page errors: ' + errors.join('; '));
+      return;
+    }
     const evaluate = fn => page.evaluate(fn);
     const wf = () => evaluate(() => fetch(S.api.info.decaidUrl + '/api/v1/workflow').then(r => r.json()));
     const loaded = async () => { await page.click('#loadBtn'); await page.waitForFunction(() => S.loaded); };
@@ -106,7 +119,7 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     await page.click('[data-fav="0"]'); await page.waitForFunction(() => S.noBag && S.loaded);
     check(await evaluate(() => S.next.profileId === 'duplicate-mode-test' && S.noBag), 'bagless favourites restore identity without inheriting the selected bag');
     const edit = await page.locator('#editFavs').boundingBox(), load = await page.locator('[data-fav="0"]').boundingBox();
-    check(edit.width >= 44 && edit.height >= 44 && edit.x >= load.x + load.width - 1, 'favourites edit target is at least 44 × 44 and separate from Load');
+    check(edit.width >= 48 && edit.height >= 48 && edit.x + edit.width <= load.x, 'favourites edit target is at least 48 × 48 and separate from Load');
     await page.click('#editFavs'); await page.click('[data-favedit="0"]'); await page.waitForSelector('#favSave'); await evaluate(() => closeSheet());
     // Both manual profiles, including zero targets and unchanged limits/steps.
     for (const kind of ['flow', 'pressure']) {
@@ -142,6 +155,9 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
       await page.screenshot({ path: `${artifacts}/manual-${size.join('x')}.png`, fullPage: true });
     }
     check(!errors.length, 'no page errors: ' + errors.join('; '));
+    await page.setViewportSize({ width: 1340, height: 800 });
+    await page.goto(url + '#brew'); await page.waitForFunction(() => S.next && S.shelfLoaded);
+    await checkFavourites(page, check);
     // Exercise the same new behavior through the committed built demo, whose
     // simulated controller motions illustrate the chart rather than real GHC input.
     await page.goto(origin + '/built?full&demo#brew');
@@ -172,6 +188,8 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     check(await evaluate(() => !!S.ghost && !!document.querySelector('#clearRef')), 'built demo: a reference shot shows faintly with Remove in the legend');
     await page.click('#clearRef'); await page.waitForFunction(() => !S.ghost);
     check(await evaluate(async () => (await S.api.shelf()).find(b => b.id === S.current.id).bestShotId === null), 'built demo: removing the reference shot is saved');
+    await checkFavourites(page, check);
+    check(!errors.length, 'no page errors after live/built carousel checks: ' + errors.join('; '));
   } catch (e) { console.error(e); if (page) await page.screenshot({ path: '/tmp/crema-brewing/failure.png', fullPage: true }).catch(() => {}); process.exitCode = 1; }
   finally { await browser?.close(); server.close(); try { process.kill(-mock.pid, 'SIGTERM'); } catch {} }
 })().catch(e => { console.error(e); process.exitCode = 1; try { process.kill(-mock.pid, 'SIGTERM'); } catch {} });

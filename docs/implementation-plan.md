@@ -868,6 +868,24 @@ Acceptance: add two bags, freeze one, brew from each, finish one, reload from an
 device and retain the other bag plus its history. Existing installations migrate
 without silently losing records. See phase 4 for shared schema work.
 
+## Favourites carousel implementation — 10 November 2026
+
+Implemented in this change, not released: a shorter Brew graph with a bottom
+carousel, consistent-width recipe cards, touch swipe and mouse drag, snapping,
+previous/next buttons, keyboard navigation and reduced-motion handling. Save
+current recipe adds beyond five; Edit manages recipes without loading them. Swipe
+does not trigger a load. Existing shot-time profile guards still hold a favourite
+until the pour ends. Compact layouts keep Stop visible and contain after-shot
+feedback scrolling.
+
+The KV array and its key are unchanged. Reads preserve entries beyond five and
+legacy empty slots; adding re-reads the array and fills an empty slot or appends.
+Rename/replace/clear modify only the chosen entry, with failure feedback. Reload
+older open phone tabs after upgrading so their old five-entry writer is retired.
+`scripts/favourites-checks.cjs`, run by `e2e-brewing.cjs` against live mode and the
+built demo, covers the carousel and storage behavior. The implementation branch
+starts at `c578625`, which includes merged PR #50; PR #52 remains separate.
+
 ## Phase 3 — reuse settings and preserve feature access (R12)
 
 ### Streamline Settings integration

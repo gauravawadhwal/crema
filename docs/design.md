@@ -51,16 +51,17 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 
 | Context | Rule | Layout |
 |---|---|---|
-| Tablet landscape (`min-width 900`, `max-height 860`, landscape) | Fixed-height, no page scroll on Brew | Rail · next shot · live chart (flexes) · controls. After a shot, the rating strip replaces the readouts |
-| Tighter tablet heights (`max-height 640`, `580`) | Progressive compaction | Hides the legend, after-shot metrics and favourites hint, and shrinks steppers |
+| Tablet landscape (`min-width 900`, `max-height 860`, landscape) | Fixed-height, no page scroll on Brew | Rail · next shot · shorter live chart · controls, with a favourites carousel across the bottom. After a shot, the rating strip replaces the readouts |
+| Tighter tablet heights (`max-height 640`, `580`) | Progressive compaction | Hides the legend and after-shot metrics, shrinks steppers and carousel cards; controls keep their full height so Stop remains visible. The feedback panel scrolls inside its own bounds |
 | Desktop / wide | `max-width 1180` breakpoint | Controls wrap under the chart |
-| Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, then the next shot |
+| Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, next shot and favourites carousel |
 | Desktop demo, top-level | `showDeviceFrame()` | The app in a 1340×800 (or 390×844) iframe inside a bezel, scaled to fit; `?full` opts out |
 
 **Target device:** a 1340×800 landscape Android tablet, the size the community Lumen skin also targets (for example an 8.7-inch Samsung Galaxy Tab A-series). Android may scale web pages, so the tablet layout is tested at 1340×800, 1340×752 (nav bar), 1206×720, 1005×600 and 1005×552 by `scripts/check-tablet-fit.cjs`.
 
 ## Components
 
+- **Favourites**: a bottom carousel of consistent-width recipe cards, with swipe/drag, snapping and previous/next arrows. No automatic advance or wraparound. Show a partial next card when more recipes are available. Cards show name, profile and dose/yield (plus temperature when space allows); the prepared recipe gets an accent border. Save current recipe is the last card. Edit switches the cards to management, separate from loading. There is no fixed slot count; older empty slots are retained in storage but omitted from the carousel. Keyboard arrows/Home/End navigate without loading; reduced-motion settings disable animated navigation. Swipe/drag must never become a recipe tap.
 - **Status chips** (top bar): machine state with a dot (green ready, amber heating, pulsing accent when busy, red problem), group and steam temperatures, water tank gauge, scale (tap to tare), maintenance due.
 - **Steppers**: − value + with a sub-label (ratio, units). Grind accepts text, with a configurable numeric start and step (10 and 0.25 by default).
 - **Machine controls**: each operation gets a big button plus preset chips. Stop is always present and turns red while something runs.

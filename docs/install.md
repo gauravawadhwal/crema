@@ -142,10 +142,18 @@ The demo's controller movements are simulated, not a physical-controller test.
 
 ### Editing favourites
 
-Tap the large **⋯** button beside the five favourites, then choose a slot to
-rename, replace or clear. The edit target is at least 44 × 44 px and is separate
-from the buttons that load favourites. A favourite saved in No bag mode restores
+The bottom of Brew has a favourites carousel. Swipe it, drag with a mouse, or use
+the arrows to see more recipes; the cards snap into place. Tap a recipe to load
+it. During a pour, it loads after the shot ends. The graph is shorter to leave
+room for the carousel, and Stop stays available.
+
+The last card is **Save current recipe**. You can keep adding recipes; there is no
+five-slot limit. Tap **Edit**, then a recipe, to rename, replace or clear it; tap
+**Done** to return to loading recipes. A favourite saved in No bag mode restores
 that mode rather than attaching whichever bag is currently selected.
+
+Existing favourites stay in Decaid without a data migration. After upgrading the
+skin, reload any open phone tabs so all devices use the current favourites UI.
 
 ### Connecting the tablet to the server
 

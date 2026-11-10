@@ -26,7 +26,7 @@ confirming against a real machine.
 | Steam / water / flush running screen with big timer and stop | Lumen | ✅ overlay with progress and remaining time |
 | Water tank level and low-water warning | Stock, Lumen | ✅ top-bar gauge; red under the threshold; refill banner when empty |
 | "Ready in N min" while heating | Decaid Time To Ready plugin | ✅ shown in the status chip |
-| Five favourite slots (tap to load, long-press to reassign) | Streamline | ✅ five slots; tap empty to save, ⋯ to rename, replace or clear |
+| Favourite recipes | Streamline | ✅ swipeable bottom carousel without a fixed slot count; tap to load, Save current recipe to add, Edit to rename, replace or clear |
 | Keyboard shortcuts (E/S/W/F/Space) | Streamline | ⬜ |
 | Help overlay | Streamline | ⬜ |
 | Cup warmer toggle | Streamline (Bengle only) | ⬜ |

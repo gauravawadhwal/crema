@@ -37,13 +37,14 @@ loading its recipe onto the machine remains a separate action.
 Records that several devices share (`settings`, `bean:<id>`) are never written from a
 copy read earlier. Decaid's key-value store has no revisions, so each writer re-reads
 the record right before writing and merges only the fields it changes
-(`server/control/record.ts`). Other keys are per-device or written whole.
+(`server/control/record.ts`). Favourites also re-read the full array before changing
+one entry or adding a new one; other keys are per-device or written whole.
 
 | What | Where |
 |---|---|
 | Beans, batches, profiles, workflow, shots, annotations | Decaid |
 | Crema's record per bean: `info` (BeanInfo), `recipe`, `recipeSource`, `photo`, `productImage`, `art`, `bestShotId`, `finished`, `batchId` | Decaid KV `crema/bean:<beanId>` |
-| `settings` (`aiEnabled`, `grindStart`, `grindStep`), `preferences`, `favourites[5]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
+| `settings` (`aiEnabled`, `grindStart`, `grindStep`), `preferences`, `favourites[]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
 | Theme, device frame, saved server and Decaid addresses, group-head mode, screen saver | `localStorage` on each device |
 | Cached roaster product photos | Crema server, `CREMA_IMAGES` |
 
@@ -54,6 +55,14 @@ intentional No bag selection from an empty/loading shelf; `baglessRecipe` rememb
 that device's standalone next shot. Refresh/retry never auto-select a bag over
 that choice. New favourites explicitly record whether they are bagless, their
 installed profile id and manual mode; older favourites retain their behavior.
+
+Favourites keep the existing KV array, including legacy null slots. Reads return
+every entry. `favourites.set(slot, recipe)` changes a particular entry;
+`set(null, recipe)` adds using the first empty slot or appends after a fresh read.
+The UI hides empty slots and adds a Save current recipe card after the saved
+recipes. It has no five-entry cap. This is a household read/merge/write, not an
+atomic cross-device transaction; old already-open clients need reloading after
+an upgrade so their five-slot writer cannot truncate newer records.
 
 The installed library includes espresso profiles and Decaid's two GHC manual
 profiles. Manual profiles remain excluded from recommendation candidates. Manual

@@ -616,8 +616,15 @@ function makeLiveApi(conn) {
 
     prefs: { get: () => kvGet("preferences", {}), set: async (p) => { const next = { ...(await kvGet("preferences", {})), ...p }; await kvSet("preferences", next); return next; } },
     favourites: {
-      get: async () => { const f = await kvGet("favourites", []); return Array.from({ length: 5 }, (_, i) => f[i] ?? null); },
-      set: async (slot, fav) => { const f = await api.favourites.get(); f[slot] = fav; await kvSet("favourites", f); return f; },
+      get: async () => { const f = await kvGet("favourites", []); return Array.isArray(f) ? f.map((x) => x ?? null) : []; },
+      set: async (slot, fav) => {
+        const f = await api.favourites.get();
+        // A null slot adds against a fresh read, so a stale phone doesn't overwrite
+        // a favourite another device just added. Keep legacy empty slots and indices.
+        const empty = f.findIndex((x) => x == null);
+        f[slot ?? (empty < 0 ? f.length : empty)] = fav;
+        await kvSet("favourites", f); return f;
+      },
     },
     presets: { get: () => kvGet("presets", E.DEFAULT_PRESETS), set: async (p) => { await kvSet("presets", p); return p; } },
     maintenance: {
@@ -741,7 +748,7 @@ const S = {
   shelf: [], shelfLoaded: false, shelfError: null, current: null, next: null, loaded: false, heldLoad: false,
   noBag: local.get("current", null) === NO_BAG, machineInfo: null, loadedRecipe: null,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
-  prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
+  prefs: {}, favourites: [], presets: null, maint: null,
   appSettings: null, // S.api.settings, once read
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
@@ -965,6 +972,7 @@ function coffeePicker() {
   $$("[data-choose-bag]").forEach((el) => el.onclick = () => { closeSheet(); selectBean(el.dataset.chooseBag); });
 }
 function renderNextShot() {
+  renderFavs();
   void refreshPlan();
   const el = $("#nextShot"), b = S.current, n = S.next;
   if (!b && !S.noBag && !S.shelfLoaded) { el.innerHTML = `<p class="muted">Loading your coffees…</p>`; return; }
@@ -1226,31 +1234,132 @@ async function refreshPlan() {
 }
 
 /* ================= favourites ================= */
+const FAV_UI = { editing: false, saving: false, loading: false, bound: false, selectedSlot: null };
 function favouriteRecipe() {
   const n = S.next;
   return { noBag: S.noBag, profileId: n.profileId ?? null, profileShape: n.profileShape ?? null, manual: n.manual ?? null, direct: !!n.direct, targetTimeS: n.targetTimeS ?? null };
 }
-function renderFavs() {
-  $("#favs").innerHTML = S.favourites.map((f, i) => f
-    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmtC(f.doseG)}→${fmtC(f.yieldG)}</span></button></div>`
-    : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("") + `<button class="fav-edit" id="editFavs" aria-label="Edit favourites">⋯</button>`;
-  $("#editFavs").onclick = () => {
-    openSheet(`<h2>Edit favourites</h2><div class="stack">${S.favourites.map((f, i) => `<button class="btn" data-favedit="${i}" ${f ? "" : "disabled"}>${i + 1} · ${esc(f?.name || "Empty slot")}</button>`).join("")}</div>`);
-    $$("[data-favedit]").forEach((b) => b.onclick = () => editFav(Number(b.dataset.favedit)));
+function favouriteSelected(f) {
+  const n = S.next;
+  return !!n && (f.noBag !== true || S.noBag) && (!f.beanId || f.beanId === S.current?.id)
+    && (f.profileId && n.profileId ? f.profileId === n.profileId : f.profileTitle === n.profileTitle)
+    && (!f.profileShape || !n.profileShape || f.profileShape === n.profileShape)
+    && f.doseG === n.doseG && f.yieldG === n.yieldG && f.tempC === n.tempC
+    && E.sameGrind(f.grinderSetting || savedGrind(S.current?.id), n.grind);
+}
+function favouriteScroll(left, smooth = true) {
+  const list = $("#favs");
+  list.scrollTo({ left, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "instant" });
+}
+function favouriteStops() {
+  const list = $("#favs"), max = Math.max(0, list.scrollWidth - list.clientWidth);
+  return [...new Set([0, ...[...list.children].map((b) => Math.min(max, b.offsetLeft)), max])].sort((a, b) => a - b);
+}
+function moveFavourites(dir) {
+  const left = $("#favs").scrollLeft, stops = favouriteStops();
+  favouriteScroll(dir > 0 ? stops.find((x) => x > left + 2) ?? stops.at(-1) : stops.findLast((x) => x < left - 2) ?? 0);
+}
+function updateFavouriteNav() {
+  const list = $("#favs"), max = list.scrollWidth - list.clientWidth;
+  $("#favPrev").disabled = list.scrollLeft <= 1;
+  $("#favNext").disabled = list.scrollLeft >= max - 1;
+}
+function bindFavouriteCarousel() {
+  if (FAV_UI.bound) return;
+  FAV_UI.bound = true;
+  const list = $("#favs");
+  $("#favPrev").onclick = () => moveFavourites(-1);
+  $("#favNext").onclick = () => moveFavourites(1);
+  list.addEventListener("scroll", updateFavouriteNav, { passive: true });
+  new ResizeObserver(updateFavouriteNav).observe(list);
+  list.addEventListener("keydown", (e) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const buttons = [...list.children], i = Math.max(0, buttons.indexOf(document.activeElement));
+    const next = e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : clamp(i + (e.key === "ArrowRight" ? 1 : -1), 0, buttons.length - 1);
+    buttons[next]?.focus({ preventScroll: true }); favouriteScroll(buttons[next]?.offsetLeft ?? 0);
+  });
+  list.addEventListener("focusin", (e) => {
+    const b = e.target.closest("button");
+    if (b && (b.offsetLeft < list.scrollLeft || b.offsetLeft + b.offsetWidth > list.scrollLeft + list.clientWidth)) favouriteScroll(b.offsetLeft);
+  });
+  // Touch uses native pan and CSS snapping. Mouse dragging gets the same card
+  // navigation; cancel the resulting click so a swipe never loads a recipe.
+  let drag = null, ignoreClickUntil = 0;
+  list.addEventListener("pointerdown", (e) => {
+    if (e.button === 0) drag = { id: e.pointerId, mouse: e.pointerType === "mouse", x: e.clientX, y: e.clientY, left: list.scrollLeft, moved: false };
+  });
+  list.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - drag.y)) drag.moved = true;
+    if (drag.mouse && drag.moved) {
+      list.setPointerCapture(e.pointerId); list.style.scrollSnapType = "none";
+      list.scrollLeft = drag.left - dx; e.preventDefault();
+    }
+  });
+  const finish = (e) => {
+    if (!drag) return;
+    if (drag.moved) ignoreClickUntil = performance.now() + 400;
+    if (drag.mouse && drag.moved) {
+      const stops = favouriteStops(), dx = e.clientX - drag.x;
+      const start = stops.reduce((a, b) => Math.abs(a - drag.left) < Math.abs(b - drag.left) ? a : b);
+      const target = Math.abs(dx) > 35
+        ? (dx < 0 ? stops.find((x) => x > start + 2) ?? stops.at(-1) : stops.findLast((x) => x < start - 2) ?? 0)
+        : stops.reduce((a, b) => Math.abs(a - list.scrollLeft) < Math.abs(b - list.scrollLeft) ? a : b);
+      list.style.removeProperty("scroll-snap-type"); favouriteScroll(target);
+      if (list.hasPointerCapture(drag.id)) list.releasePointerCapture(drag.id);
+    }
+    drag = null;
   };
-  $$("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
-  $$("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
+  list.addEventListener("pointerup", finish); list.addEventListener("pointercancel", finish);
+  list.addEventListener("click", (e) => {
+    if (performance.now() < ignoreClickUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+}
+function renderFavs(revealSlot) {
+  bindFavouriteCarousel();
+  const list = $("#favs"), left = list.scrollLeft, busy = FAV_UI.saving || FAV_UI.loading;
+  const chosen = FAV_UI.selectedSlot;
+  const selected = chosen != null && S.favourites[chosen] && favouriteSelected(S.favourites[chosen])
+    ? chosen : S.favourites.findIndex((f) => f && favouriteSelected(f));
+  patchHtml(list, S.favourites.map((f, i) => f ? `<button class="fav" id="fav-${i}" ${FAV_UI.editing ? `data-favedit="${i}"` : `data-fav="${i}" aria-pressed="${i === selected}"`} title="${esc(f.name)} · ${esc(f.profileTitle)}" aria-label="${FAV_UI.editing ? "Edit" : "Load"} favourite ${esc(f.name)}" ${busy ? "disabled" : ""}>
+    <strong>${esc(f.name)}</strong><span class="fav-profile">${esc(f.profileTitle)}</span>${FAV_UI.editing ? '<span class="fav-action">Rename, replace or clear</span>' : `<span class="num fav-recipe">${fmtC(f.doseG)} → ${f.yieldG > 0 ? `${fmtC(f.yieldG)} g` : "manual"}<span class="fav-temp"> · ${fmtC(f.tempC)}°</span></span>`}</button>` : "").join("")
+    + `<button class="fav empty" id="addFav" ${busy || !S.next ? "disabled" : ""}><span class="fav-plus" aria-hidden="true">+</span><strong>Save current recipe</strong><span class="fav-profile">${S.next ? esc(S.current?.info.name.value || S.next.profileTitle) : "Choose a recipe first"}</span></button>`);
+  favouriteScroll(left, false);
+  $("#editFavs").textContent = FAV_UI.editing ? "Done" : "Edit";
+  $("#editFavs").setAttribute("aria-pressed", String(FAV_UI.editing));
+  $("#editFavs").disabled = busy || (!FAV_UI.editing && !S.favourites.some(Boolean));
+  $("#editFavs").onclick = () => { FAV_UI.editing = !FAV_UI.editing; renderFavs(); };
+  $("#addFav").onclick = () => saveFavourite();
+  $$("[data-fav]", list).forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
+  $$("[data-favedit]", list).forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
+  if (revealSlot != null) favouriteScroll($(`#fav-${revealSlot}`)?.offsetLeft ?? left);
+  requestAnimationFrame(updateFavouriteNav);
+}
+async function writeFavourite(slot, fav, action) {
+  if (FAV_UI.saving) return null;
+  FAV_UI.saving = true; renderFavs();
+  try {
+    const saved = await attempt(action, () => S.api.favourites.set(slot, fav));
+    if (saved) S.favourites = saved;
+    return saved;
+  } finally { FAV_UI.saving = false; renderFavs(); }
+}
+async function saveFavourite(slot = null) {
+  if (!S.next || FAV_UI.saving) return;
+  const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 40);
+  const fav = { ...favouriteRecipe(), name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
+  const saved = await writeFavourite(slot, fav, "save the favourite");
+  if (saved) { FAV_UI.selectedSlot = saved.indexOf(fav); renderFavs(FAV_UI.selectedSlot); toast(`Saved "${name}" to favourites`); }
 }
 async function useFav(i) {
   const f = S.favourites[i];
-  if (!f) {
-    if (!S.next) return toast("Pick a coffee first");
-    const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 18);
-    const fav = { ...favouriteRecipe(), name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
-    const saved = await attempt("save the favourite", () => S.api.favourites.set(i, fav));
-    if (saved) { S.favourites = saved; renderFavs(); toast(`Saved "${name}" to slot ${i + 1}`); }
-    return;
-  }
+  if (!f) return saveFavourite(i);
+  if (FAV_UI.loading || FAV_UI.saving) return;
+  FAV_UI.selectedSlot = i;
+  FAV_UI.loading = true; renderFavs();
+  try { await attempt("load the favourite", async () => {
   if (f.noBag === true) await selectBean(NO_BAG, { quiet: true });
   if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
   if (f.beanId && !S.shelf.some((b) => b.id === f.beanId)) return toast("That favourite's coffee is no longer on the shelf");
@@ -1260,23 +1369,25 @@ async function useFav(i) {
   const loaded = await loadOntoMachine(true);
   if (loaded === "held") toast(`"${f.name}" loads when this shot ends`);
   else if (loaded) toast(`Loaded favourite "${f.name}"`);
+  }); } finally { FAV_UI.loading = false; renderFavs(); }
 }
 function editFav(i) {
   const f = S.favourites[i];
-  openSheet(`<h2>Favourite ${i + 1}</h2>
+  if (!f) return;
+  openSheet(`<h2>Edit favourite</h2>
     <div class="field"><label class="label" for="favName">Name</label><input type="text" id="favName" value="${esc(f.name)}" maxlength="40"></div>
     <p class="muted small">${esc(f.profileTitle)} · ${fmt1(f.doseG)} g → ${fmt1(f.yieldG)} g · ${fmt1(f.tempC)} °C${f.grinderSetting ? ` · grind ${esc(f.grinderSetting)}` : ""}</p>
     <div class="row"><button class="btn primary" id="favSave">Save name</button><button class="btn" id="favUpdate">Replace with current shot</button><button class="btn ghost" id="favClear">Clear slot</button></div>`);
   // The sheet stays open when the write fails, so the change can be tried again.
   const writeFav = async (what, fav) => {
-    const saved = await attempt(what, () => S.api.favourites.set(i, fav));
+    const saved = await writeFavourite(i, fav, what);
     if (saved) { S.favourites = saved; closeSheet(); renderFavs(); }
     return !!saved;
   };
   $("#favSave").onclick = () => writeFav("save the name", { ...f, name: $("#favName").value.trim() || f.name });
   $("#favUpdate").onclick = async () => {
     if (!S.next) return;
-    if (await writeFav("update the favourite", { ...f, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
+    if (await writeFav("update the favourite", { ...f, ...favouriteRecipe(), profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
   };
   $("#favClear").onclick = () => writeFav("clear the slot", null);
 }

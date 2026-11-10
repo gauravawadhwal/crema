@@ -68,6 +68,7 @@ node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the 
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
 node scripts/e2e-review.cjs          # saved shot reviews, taste, recorded context, fallback and phone reload
 node scripts/e2e-brewing.cjs         # bagless/manual modes, attribution, favourites, built demo (local simulator only)
+node scripts/e2e-brewing.cjs --favourites-only  # live/built carousel, writes, swipe/tap and held loads
 node scripts/docker-smoke.mjs        # builds the server image and checks it with the mock AI (needs Docker)
 ```
 
@@ -132,7 +133,12 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 
 Latest release: v0.4.1 (10 November 2026): shot review fixed for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in the review). v0.4.0 (10 November 2026): AI shot review (shot checks with no AI, an optional AI review, saved on the shot in Decaid), a shared grind start value and stepper, and buttons that stay put when panels redraw. v0.3.0 (9 November 2026) added bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier on 9 November, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; the user reports the tablet has since been upgraded in place through v0.4.1 and is in daily use.
 
-Merged on 10 November 2026, not released or tagged, and not run on the tablet: the code review (#41) and its fixes, namely server hardening (#42), silent failures with rollback and Speak hidden inside Decaid (#43), control decisions under unit tests in `server/control/` (#44), a cheaper shelf poll (#45), safer shared-record writes (#46), the rest-window table and taste/review controls shared (#48), and the plan trim (#47). Checked against the simulator and CI only. Tagging the next release is the user's call; it will be the first in-place upgrade to run this work on the tablet. An intermittent `e2e-live.cjs` failure ("inventory refresh preserves the tablet's unsaved recipe edits") is being investigated on a separate branch.
+Merged on 10 November 2026, not released or tagged, and not run on the tablet: the code review (#41) and its fixes, namely server hardening (#42), silent failures with rollback and Speak hidden inside Decaid (#43), control decisions under unit tests in `server/control/` (#44), a cheaper shelf poll (#45), safer shared-record writes (#46), the rest-window table and taste/review controls shared (#48), the plan trim (#47), and the startup-edit race fix (#50). The race was in the first asynchronous workflow read, not the shelf poll. Checked against the simulator and CI only. Tagging the next release is the user's call; it will be the first in-place upgrade to run this work on the tablet.
+
+This change implements the bottom favourites carousel and shorter graph, including
+adding beyond five recipes, legacy-record preservation and live/built interaction
+checks. No data migration or new storage key. The separate history-pane fix is PR
+#52; the carousel branch includes merged PR #50 and does not depend on #52.
 
 Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
 - the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site

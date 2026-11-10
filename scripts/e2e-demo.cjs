@@ -61,7 +61,7 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.waitForSelector("#opOverlay:not([hidden])", { timeout: 5000 }); await snap("4-steam");
     await p.click("#opStop"); await p.waitForTimeout(600);
   });
-  await step("favourite", async () => { await p.click('[data-fav="0"]'); await p.waitForTimeout(300); });
+  await step("favourite", async () => { await p.locator('#addFav').scrollIntoViewIfNeeded(); await p.click('#addFav'); await p.waitForSelector('[data-fav="0"]'); });
   for (const v of ["profiles", "shelf", "shots", "settings"]) {
     await step(v, async () => { await p.goto(url + "#" + v); await p.waitForTimeout(1300); await snap(`5-${v}`, true); });
   }
