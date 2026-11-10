@@ -70,6 +70,7 @@ node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the 
 node scripts/check-targets.cjs       # touch targets under 44 px, overlapping controls and clipped text on every view, also with the ?stress fixture; known failures are in check-targets.allow.json (--built too)
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
 node scripts/e2e-review.cjs          # saved shot reviews, taste, recorded context, fallback and phone reload
+node scripts/e2e-screens.cjs         # Shelf More sheet and filters, Shots coffee filter and Compare, Settings index
 node scripts/e2e-brewing.cjs         # bagless/manual modes, attribution, favourites, built demo (local simulator only)
 node scripts/e2e-brewing.cjs --favourites-only  # live/built carousel, writes, swipe/tap and held loads
 node scripts/docker-smoke.mjs        # builds the server image and checks it with the mock AI (needs Docker)

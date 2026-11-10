@@ -294,14 +294,20 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       }
       // Freeze / Thaw on the shelf.
       {
-        await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector("[data-freeze]", { timeout: 10000 });
-        const label = await page.textContent("[data-freeze]");
+        // The card's other actions sit behind its More button.
+        const more = async (act) => { await page.click("[data-more]"); await page.click(`[data-act="${act}"]`); };
+        await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector("[data-more]", { timeout: 10000 });
+        await page.click("[data-more]");
+        const label = await page.textContent('[data-act="freeze"]');
+        await page.click("#sheetClose");
         await resetToast();
         const undrop = await drop(/\/bean-batches\//);
-        await page.click("[data-freeze]");
-        check(await sayCant("") && await page.textContent("[data-freeze]") === label, "a failed Freeze says so and the bag stays as it was", await toastNow());
+        await more("freeze");
+        await page.click("[data-more]");
+        check(await sayCant("") && await page.textContent('[data-act="freeze"]') === label, "a failed Freeze says so and the bag stays as it was", await toastNow());
+        await page.click("#sheetClose");
         await resetToast();
-        await page.click("[data-finish]"); await page.click("#confirmFinish");
+        await more("finish"); await page.click("#confirmFinish");
         check(await sayCant("") && await S(() => S.shelf.length > 0), "a failed Mark finished says so and the bag stays on the shelf", await toastNow());
         await undrop();
         await S(() => closeSheet());
@@ -605,8 +611,8 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await tablet.evaluate(() => { step("dose:1"); });
       const editedDose = await tablet.evaluate(() => S.next.doseG);
       // Add a second bag from the shelf.
-      await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector(`[data-addbag="${bag1}"]`, { timeout: 10000 });
-      await page.click(`[data-addbag="${bag1}"]`); await page.fill("#bagRoast", "2026-11-01"); await page.fill("#bagWeight", "500"); await page.click("#confirmBag");
+      await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector(`[data-more="${bag1}"]`, { timeout: 10000 });
+      await page.click(`[data-more="${bag1}"]`); await page.click('[data-act="addbag"]'); await page.fill("#bagRoast", "2026-11-01"); await page.fill("#bagWeight", "500"); await page.click("#confirmBag");
       await page.waitForFunction((id) => S.shelf.filter((b) => b.id === id).length === 2, coffeeId, { timeout: 10000 }).catch(() => {});
       const two = await page.evaluate((id) => S.shelf.filter((b) => b.id === id).map((b) => ({ key: b.key, bag: `${b.bagNo}/${b.bags}`, roast: b.info.roastDate?.value, weight: b.weight, recipe: b.recipe?.profileTitle })), coffeeId);
       const bag2 = two.find((b) => b.key !== bag1)?.key;
@@ -685,7 +691,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await page.setViewportSize({ width: 1340, height: 800 });
       await page.goto(`http://localhost:${SKIN}/?full#shelf`);
       // Freeze one.
-      await page.click(`[data-freeze="${bag2}"]`); await page.waitForTimeout(400);
+      await page.click(`[data-more="${bag2}"]`); await page.click('[data-act="freeze"]'); await page.waitForTimeout(400);
       check((await batchOf(bag2)).frozen === true && (await batchOf(bag1)).frozen !== true, "freezing one bag leaves the other alone");
       // Brew from each: the workflow records the bag.
       await page.evaluate((k) => selectBean(k, { quiet: true }), bag2); await S(() => { S.loaded = false; return loadOntoMachine(true); });
@@ -712,7 +718,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       check(synced === adopted && (await stored()).written === adopted && beforeSync !== adopted, `syncRemaining stores the correction (remaining ${synced}, written ${(await stored()).written})`);
       // Set by hand.
       await page.evaluate(async () => { await refreshShelf(); }); await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#shelf`);
-      await page.waitForSelector(`[data-left="${bag2}"]`, { timeout: 10000 }); await page.click(`[data-left="${bag2}"]`); await page.fill("#leftG", "300"); await page.click("#confirmLeft"); await page.waitForTimeout(500);
+      await page.waitForSelector(`[data-more="${bag2}"]`, { timeout: 10000 }); await page.click(`[data-more="${bag2}"]`); await page.click('[data-act="left"]'); await page.fill("#leftG", "300"); await page.click("#confirmLeft"); await page.waitForTimeout(500);
       check((await batchOf(bag2)).weightRemaining === 300 && await page.evaluate(async (k) => (await S.api.shelf()).find((x) => x.key === k).remaining, bag2) === 300, "what's left can be set by hand, and Decaid gets it");
       // Buying another bag through Add keeps the recipe and the reference shot.
       const again = await page.evaluate(async () => { const info = JSON.parse(JSON.stringify(S.current.info)); info.roastDate = { value: "2026-11-05", source: "bag" }; info.weightGrams = 250; return S.api.saveBean(info, null, "photo"); });
@@ -770,7 +776,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await other.close();
       // Finish one bag: the others stay, with the recipe.
       await page.evaluate(async () => { await refreshShelf(); renderShelf(); });
-      await page.click(`[data-finish="${bag2}"]`); await page.click("#confirmFinish"); await page.waitForTimeout(800);
+      await page.click(`[data-more="${bag2}"]`); await page.click('[data-act="finish"]'); await page.click("#confirmFinish"); await page.waitForTimeout(800);
       const afterFinish = await page.evaluate((id) => S.shelf.filter((b) => b.id === id).map((b) => b.key), coffeeId);
       const bean = await (await fetch(`http://localhost:${MOCK}/api/v1/beans/${coffeeId}`)).json();
       check(afterFinish.length === 2 && !afterFinish.includes(bag2) && (await batchOf(bag2)).archived === true && !bean.archived, "finishing one bag leaves the coffee's other bags on the shelf");

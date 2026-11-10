@@ -26,7 +26,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 | 6 | Value sheet and steppers | M | 3 | Not started |
 | 7 | Feedback layer | M | 2 | Not started |
 | 8 | Phone | M | 4 | Not started |
-| 9 | Shelf, Profiles, Shots, Settings | M | 2 | Not started |
+| 9 | Shelf, Profiles, Shots, Settings | M | 2 | PR open (stacked on #56), not merged. Shelf: Brew this plus a More sheet, equal card heights, filter chips, skeletons. Profiles: step thumbnails, AI pick shown once. Shots: coffee filter, labelled Compare, metrics row fixed. Settings: section index (tablet), 44 px controls. All 95 `ws: 9` allowlist entries removed; `check-targets` passes. Not run on the tablet; result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | Not started |
 | 11 | Motion and finish | S | all | Not started |
 
