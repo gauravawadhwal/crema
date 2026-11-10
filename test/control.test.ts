@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, reconcileOutcome, recipeMatches, sameGrind,
-  shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps,
+  adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, pruneNewRows, reconcileOutcome, recipeMatches, sameGrind,
+  shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps, trackNewRows, waitingForRecipe,
   type MachineRecipe, type NextRecipe, type SocketTrack,
 } from "../server/control/index.js";
 
@@ -308,5 +308,29 @@ describe("bag weight", () => {
     expect(a).toEqual(b);
     // Once the correction is stored (adjust 40, written 200), a reader gets the same figure without needing to correct.
     expect(bagRemaining({ ...input, state: { adjust: a.adjust, written: 200 } })).toEqual({ adjust: 40, remaining: a.remaining, corrected: false });
+  });
+});
+
+describe("new shelf rows waiting for a recipe", () => {
+  const row = (key: string, recipe: unknown = null) => ({ key, recipe });
+  it("tracks a row that wasn't on the shelf and has no recipe", () => {
+    const t = trackNewRows(new Map(), ["a"], [row("a", {}), row("b")], 1000);
+    expect([...t]).toEqual([["b", 1000]]);
+    expect(waitingForRecipe(t, "b", 5000)).toBe(true);
+    expect(waitingForRecipe(t, "a", 5000)).toBe(false);
+  });
+  it("keeps the first-seen time and drops a row once it has a recipe, is gone, or is two minutes old", () => {
+    const t = new Map([["b", 1000]]);
+    expect([...trackNewRows(t, ["a", "b"], [row("a", {}), row("b")], 60_000)]).toEqual([["b", 1000]]);
+    expect(trackNewRows(t, ["a", "b"], [row("a", {}), row("b", { doseG: 18 })], 60_000).size).toBe(0);
+    expect(trackNewRows(t, ["a", "b"], [row("a", {})], 60_000).size).toBe(0);
+    expect(trackNewRows(t, ["a", "b"], [row("a", {}), row("b")], 121_001).size).toBe(0);
+    expect(waitingForRecipe(t, "b", 121_001)).toBe(false);
+    expect(pruneNewRows(t, 121_001).size).toBe(0);
+    expect(pruneNewRows(t, 60_000).size).toBe(1);
+  });
+  it("does not track rows that merely lost their recipe, or anything on the first read", () => {
+    expect(trackNewRows(new Map(), ["a", "b"], [row("a"), row("b")], 1000).size).toBe(0);
+    expect(trackNewRows(new Map(), null, [row("a"), row("b")], 1000).size).toBe(0);
   });
 });

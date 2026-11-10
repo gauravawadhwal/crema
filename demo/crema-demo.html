@@ -754,6 +754,7 @@ var CremaEngine = (() => {
     outlineProfile: () => outlineProfile,
     planAt: () => planAt,
     profileCurve: () => profileCurve,
+    pruneNewRows: () => pruneNewRows,
     rankProfiles: () => rankProfiles,
     recipeMatches: () => recipeMatches,
     reconcileOutcome: () => reconcileOutcome,
@@ -775,6 +776,8 @@ var CremaEngine = (() => {
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
     toPastShot: () => toPastShot,
+    trackNewRows: () => trackNewRows,
+    waitingForRecipe: () => waitingForRecipe,
     withTemperature: () => withTemperature
   });
 
@@ -2267,6 +2270,24 @@ var CremaEngine = (() => {
     const remaining = i.weight != null && i.used != null ? Math.max(0, Math.round(i.weight - i.used + adjust)) : i.used == null ? null : i.weightRemaining ?? null;
     return { adjust, remaining, corrected };
   }
+
+  // server/control/shelf.ts
+  var NEW_ROW_WINDOW_MS = 12e4;
+  function trackNewRows(tracked, previous, rows, now, windowMs = NEW_ROW_WINDOW_MS) {
+    const known = new Set(previous ?? rows.map((r) => r.key));
+    const next = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      if (r.recipe) continue;
+      const since = tracked.get(r.key) ?? (known.has(r.key) ? null : now);
+      if (since != null && now - since < windowMs) next.set(r.key, since);
+    }
+    return next;
+  }
+  var pruneNewRows = (tracked, now, windowMs = NEW_ROW_WINDOW_MS) => new Map([...tracked].filter(([, since]) => now - since < windowMs));
+  var waitingForRecipe = (tracked, key, now, windowMs = NEW_ROW_WINDOW_MS) => {
+    const since = tracked.get(key);
+    return since != null && now - since < windowMs;
+  };
   return __toCommonJS(engine_exports);
 })();
 </script>
@@ -3386,6 +3407,7 @@ function makeLiveApi(conn) {
 /* ================= app state ================= */
 const S = {
   api: null,
+  newRows: new Map(), // shelf rows that appeared recently with no recipe yet (E.trackNewRows)
   snap: null, scale: { connected: false, weight: null }, water: null, ready: null,
   streams: null, // subscribe()'s handle: { close, reopenMachine }
   recommending: null, // id of the coffee whose recipe is being worked out
@@ -3797,7 +3819,17 @@ async function selectBean(key, opts = {}) {
     S.recommending = b.id;
     renderNextShot();
     if (!$("#view-profiles").hidden) renderProfiles();
-    try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    try {
+      // Added on another device a moment ago: its recipe is probably being worked out
+      // there. Wait for it (up to ~30 s) rather than ask the AI a second time.
+      for (let i = 0; i < 10 && !b.recipe && E.waitingForRecipe(S.newRows, b.key, Date.now()); i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const previous = S.shelf.map((x) => x.key);
+        await refreshShelf().catch(() => {});
+        S.newRows = E.trackNewRows(S.newRows, previous, S.shelf, Date.now());
+      }
+      if (!b.recipe) { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); }
+    } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
     finally { if (S.recommending === b.id) S.recommending = null; }
     // Profiles may have been drawn while waiting (Add sends you there first).
     if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
@@ -4421,9 +4453,15 @@ function syncShelf(full = false) {
   if (S.api.demo || !S.shelfLoaded || shotRunning() || S.recommending || loadsPending) return Promise.resolve();
   if (shelfSync) return shelfSync;
   const before = JSON.stringify(S.shelf), selected = JSON.stringify(S.current);
-  shelfSync = (full ? Promise.resolve(true) : S.api.shelfSignal().then((s) => s !== S.shelfSignal)).then(async (changed) => {
+  // A coffee added on another device gets its recipe a while after it appears, in a
+  // record the signal doesn't cover: read in full until it has one (or ~2 minutes pass).
+  S.newRows = E.pruneNewRows(S.newRows, Date.now());
+  const waiting = S.newRows.size > 0;
+  shelfSync = (full || waiting ? Promise.resolve(true) : S.api.shelfSignal().then((s) => s !== S.shelfSignal)).then(async (changed) => {
     if (!changed) return;
+    const previous = S.shelf.map((b) => b.key);
     await refreshShelf();
+    S.newRows = E.trackNewRows(S.newRows, previous, S.shelf, Date.now());
     S.shelfError = null;
     if ((S.current && !S.shelf.some((b) => b.key === S.current.key)) || (!S.current && !S.noBag && S.shelf.length)) {
       await selectBean(S.shelf[0]?.key, { quiet: true });

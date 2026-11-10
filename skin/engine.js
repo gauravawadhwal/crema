@@ -43,6 +43,7 @@ var CremaEngine = (() => {
     outlineProfile: () => outlineProfile,
     planAt: () => planAt,
     profileCurve: () => profileCurve,
+    pruneNewRows: () => pruneNewRows,
     rankProfiles: () => rankProfiles,
     recipeMatches: () => recipeMatches,
     reconcileOutcome: () => reconcileOutcome,
@@ -64,6 +65,8 @@ var CremaEngine = (() => {
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
     toPastShot: () => toPastShot,
+    trackNewRows: () => trackNewRows,
+    waitingForRecipe: () => waitingForRecipe,
     withTemperature: () => withTemperature
   });
 
@@ -1556,5 +1559,23 @@ var CremaEngine = (() => {
     const remaining = i.weight != null && i.used != null ? Math.max(0, Math.round(i.weight - i.used + adjust)) : i.used == null ? null : i.weightRemaining ?? null;
     return { adjust, remaining, corrected };
   }
+
+  // server/control/shelf.ts
+  var NEW_ROW_WINDOW_MS = 12e4;
+  function trackNewRows(tracked, previous, rows, now, windowMs = NEW_ROW_WINDOW_MS) {
+    const known = new Set(previous ?? rows.map((r) => r.key));
+    const next = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      if (r.recipe) continue;
+      const since = tracked.get(r.key) ?? (known.has(r.key) ? null : now);
+      if (since != null && now - since < windowMs) next.set(r.key, since);
+    }
+    return next;
+  }
+  var pruneNewRows = (tracked, now, windowMs = NEW_ROW_WINDOW_MS) => new Map([...tracked].filter(([, since]) => now - since < windowMs));
+  var waitingForRecipe = (tracked, key, now, windowMs = NEW_ROW_WINDOW_MS) => {
+    const since = tracked.get(key);
+    return since != null && now - since < windowMs;
+  };
   return __toCommonJS(engine_exports);
 })();

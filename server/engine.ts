@@ -14,5 +14,5 @@ export { analyzeShot } from "./profiles/analysis.js";
 export { rulesReview } from "./recommend/review-local.js";
 export {
   adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, NOT_READY, reconcileOutcome, recipeMatches,
-  sameGrind, shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps,
+  pruneNewRows, sameGrind, shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps, trackNewRows, waitingForRecipe,
 } from "./control/index.js";

@@ -639,6 +639,36 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       check(await tablet.evaluate((key) => S.shelf.find((b) => b.key === key)?.frozen === true, bag2), "a bag frozen on another device shows on an idle tablet within a poll");
       await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag2}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: false }) });
       await page.waitForFunction((key) => S.shelf.find((b) => b.key === key)?.frozen === false, bag2, { timeout: 12000 }).catch(() => {});
+      // The phone's way of adding a coffee: the bean and bag appear first, the recipe is
+      // written to Crema's record some seconds later (after the AI answers). The idle
+      // tablet must show the recipe within a poll or two, not a minute, and must not ask
+      // for a recipe of its own when the coffee is picked meanwhile.
+      const dec = (p, m, b) => fetch(`http://localhost:${MOCK}/api/v1${p}`, { method: m, headers: { "content-type": "application/json" }, body: b ? JSON.stringify(b) : undefined }).then((r) => r.json());
+      const phoneBean = await dec("/beans", "POST", { roaster: "Phone Roasters", name: "Added from the phone" });
+      const phoneBag = await dec(`/beans/${phoneBean.id}/batches`, "POST", { weight: 250 });
+      await tablet.waitForFunction((k) => S.shelf.some((b) => b.key === k), phoneBag.id, { timeout: 12000 });
+      await tablet.evaluate(() => { window.__rec = 0; const r = S.api.recommend; S.api.recommend = (...a) => { window.__rec++; return r.apply(S.api, a); }; });
+      await tablet.waitForTimeout(3000);
+      check(await tablet.evaluate((k) => !S.shelf.find((b) => b.key === k).recipe, phoneBag.id), "the coffee added elsewhere has no recipe yet");
+      const recipe = await tablet.evaluate(() => JSON.parse(JSON.stringify(S.shelf.find((b) => b.recipe).recipe)));
+      await dec(`/store/crema/${encodeURIComponent("bean:" + phoneBean.id)}`, "POST", { recipe, recipeSource: "saved", batchId: phoneBag.id, finished: false, addedAt: new Date().toISOString() });
+      const t0 = Date.now();
+      await tablet.waitForFunction((k) => S.shelf.find((b) => b.key === k)?.recipe, phoneBag.id, { timeout: 12000 }).catch(() => {});
+      check(await tablet.evaluate((k) => !!S.shelf.find((b) => b.key === k)?.recipe, phoneBag.id), `a recipe written to Crema's record after the coffee appeared shows on the idle tablet (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+      check(await tablet.evaluate(() => window.__rec) === 0, "the tablet did not ask for a recipe of its own");
+      // Picked while the recipe is still pending elsewhere: it waits for it instead of asking the AI.
+      const pend = await dec("/beans", "POST", { roaster: "Phone Roasters", name: "Still being worked out" });
+      const pendBag = await dec(`/beans/${pend.id}/batches`, "POST", { weight: 250 });
+      await tablet.waitForFunction((k) => S.shelf.some((b) => b.key === k), pendBag.id, { timeout: 12000 });
+      const picking = tablet.evaluate((k) => selectBean(k, { quiet: true }), pendBag.id);
+      await tablet.waitForTimeout(1500);
+      await dec(`/store/crema/${encodeURIComponent("bean:" + pend.id)}`, "POST", { recipe, recipeSource: "saved", batchId: pendBag.id, finished: false, addedAt: new Date().toISOString() });
+      await picking;
+      check(await tablet.evaluate((k) => S.current.key === k && !!S.current.recipe, pendBag.id) && await tablet.evaluate(() => window.__rec) === 0, "picking a coffee whose recipe is pending elsewhere waits for it instead of asking for another");
+      for (const b of [phoneBean, pend]) await dec(`/beans/${b.id}`, "PUT", { archived: true });
+      await tablet.evaluate((k) => selectBean(k, { quiet: true }), bag2);
+      await tablet.waitForFunction(() => S.newRows.size === 0 && !S.shelf.some((b) => /Phone Roasters/.test(b.info.roaster?.value ?? "")), null, { timeout: 15000 }).catch(() => {});
+      await page.waitForFunction(() => !S.shelf.some((b) => /Phone Roasters/.test(b.info.roaster?.value ?? "")), null, { timeout: 15000 }).catch(() => {});
       await tablet.close();
       await page.setViewportSize({ width: 1340, height: 800 });
       await page.goto(`http://localhost:${SKIN}/?full#shelf`);
