@@ -26,11 +26,14 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-1. **UI feedback, 10 November:** fix independent scrolling of the shot list and
-   shot detail; preview the larger favourites proposal below before implementing it.
-2. **Flaky check, in progress** (separate branch): `e2e-live.cjs` sometimes fails
-   "inventory refresh preserves the tablet's unsaved recipe edits". Being investigated;
-   not yet explained.
+1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
+   in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
+   Preview the larger favourites proposal below before implementing it.
+2. **Startup edit race, fix ready for review:**
+   [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
+   `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
+   recipe edits". The initial workflow read can overwrite edits made while the read
+   is in flight; the shelf refresh is not the cause. The fix preserves those edits.
 3. **Package the completed fixes for installation when ready.** The latest release,
    v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
    installable GitHub release. A release runs CI and attaches a new skin ZIP for
@@ -95,14 +98,21 @@ This is a proposal, not implemented behavior.
 
 ### Shot history: independent panes (confirmed UI bug)
 
-- [ ] On tablet and desktop, constrain Shots to the available viewport and let the
+- [x] On tablet and desktop, constrain Shots to the available viewport and let the
   left shot list and right detail panel scroll independently. Keep the status bar
   and Shots heading visible. Reaching a pane's end must not scroll its neighbour
   or the outer page. Keep the phone's single-column page scrolling normally.
-- [ ] Preserve list position when selecting/comparing shots or loading older ones;
+- [x] Preserve list position when selecting/comparing shots or loading older ones;
   selecting a different shot starts its detail at the top. Check long histories
   and long saved reviews, empty/error states, keyboard access, tablet sizes and
   resizing to/from the phone layout. Record source and built-demo verification.
+
+Implemented in PR #52, pending review/merge and not released. Source and built-demo
+regressions pass at 1340×800, 1005×552, 1600×1000 and 800×1000, with phone resize,
+keyboard, paging, empty/error and scroll-boundary checks. Source/built demo
+click-through, all five Brew tablet-fit sizes, the saved-review simulator checks,
+typecheck, 293 unit/server tests and skin packaging also pass locally. Physical
+tablet behavior has not been checked.
 
 ## Backup/restore scope — clarified 10 November 2026
 
