@@ -26,24 +26,93 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-1. **The next release** (tagging is the user's call) **and its in-place tablet
-   upgrade.** It would be the first time the merged review work runs on the tablet.
+1. **UI feedback, 10 November:** fix independent scrolling of the shot list and
+   shot detail; preview the larger favourites proposal below before implementing it.
 2. **Flaky check, in progress** (separate branch): `e2e-live.cjs` sometimes fails
    "inventory refresh preserves the tablet's unsaved recipe edits". Being investigated;
    not yet explained.
-3. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
+3. **Package the completed fixes for installation when ready.** The latest release,
+   v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
+   installable GitHub release. A release runs CI and attaches a new skin ZIP for
+   Decaid to install. It is distribution work, not a separate feature or a reason
+   to pause implementation. Tagging remains the user's call.
+4. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
    is ready with desktop Decaid. Build and check it against desktop Decaid; the user
    confirms on the tablet in normal use.
-4. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
+5. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
    shared JSDoc type for the API object, which turns the live/demo contract into a type
    check. Splitting the file further is optional after PR #44.
-5. **Held until there is a reason:** shot-review threshold calibration (needs more real
+6. **Held until there is a reason:** shot-review threshold calibration (needs more real
    shots with taste recorded); grinder entities and a numeric grind advisor; Home
    Assistant sensors; order-email ingestion (see "Deferred product work").
-6. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
+7. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
    request for a tablet session.
 
 Housekeeping (F6) is the user's call.
+
+## UI feedback — 10 November 2026
+
+### Favourites: larger, readable targets (proposal)
+
+The user still finds the favourites too small to press comfortably. The five slots
+plus the 44 px edit button share a 300 px Brew column, leaving some slots less than
+40 px wide. Increasing height alone does not fix the cramped names or touch targets.
+
+Reference patterns reviewed on 10 November:
+
+- [Streamline](https://github.com/decentespresso/streamline-js#7-the-main-screen)
+  puts five quick-access favourites across a broad top bar. It uses tap to load and
+  long-press to reassign. Crema's narrow column cannot accommodate the same row.
+- [Home Assistant tiles](https://contributors.home-assistant.io/design/dashboards/tile-card/)
+  give a named item a readable primary label and secondary state, with a distinct
+  route to more detail. Use the hierarchy, without copying its split icon action.
+- [Android touch guidance](https://support.google.com/accessibility/android/answer/7101858)
+  recommends at least 48 dp targets and 8 dp separation. For Crema, use at least
+  48 CSS px in both dimensions as a layout floor, then check physical size on the
+  scaled tablet; CSS px and Android dp are not assumed equivalent.
+
+Recommended first preview: replace the squeezed strip with one full-width
+**Favourites** button, at least 48 px high, opening the existing sheet. Show the
+five saved slots as two columns of large tiles (one column on narrow phones),
+at least 64 px high with 8 px gaps. Each tile shows the name prominently and the
+saved profile plus dose/yield below; allow names to wrap. Tap the whole tile to
+load through the existing guarded path and close the sheet after success. Empty
+slots say **Save current recipe**. Use a labelled **Edit** action to enter edit
+mode, where tapping a tile opens rename/replace/clear; no long-press requirement
+or tiny adjacent menu. Failed saves/loads remain visible and keep the sheet open.
+
+Tradeoff: opening the picker adds one tap to loading a favourite, in exchange for
+readable names and comfortable targets without adding three rows to the already
+tight Brew panel. Preview at 1340×800 and 1005×552, plus phone size, before committing
+to the interaction. If direct one-tap access is essential, compare a full-width
+top strip as a separate layout option; do not squeeze five tiles into the left
+column again. Keep five slots, saved values and bagless semantics unchanged.
+
+Acceptance: all targets meet the size floor at every supported viewport; names
+and saved recipe details are legible; load and edit are distinct; no Brew overflow
+or moved machine controls; live/demo behavior and guarded loading remain intact.
+This is a proposal, not implemented behavior.
+
+### Shot history: independent panes (confirmed UI bug)
+
+- [ ] On tablet and desktop, constrain Shots to the available viewport and let the
+  left shot list and right detail panel scroll independently. Keep the status bar
+  and Shots heading visible. Reaching a pane's end must not scroll its neighbour
+  or the outer page. Keep the phone's single-column page scrolling normally.
+- [ ] Preserve list position when selecting/comparing shots or loading older ones;
+  selecting a different shot starts its detail at the top. Check long histories
+  and long saved reviews, empty/error states, keyboard access, tablet sizes and
+  resizing to/from the phone layout. Record source and built-demo verification.
+
+## Backup/restore scope — clarified 10 November 2026
+
+The user does not want a separate backup/restore project unless Crema departs from
+normal skin practice. Continue using Decaid-owned beans, profiles, shots and its
+skin KV store. Backup/restore testing is not a release blocker or a prerequisite
+for ordinary UI work. Revisit only if a proposed storage change or migration
+creates a concrete compatibility concern; first check Decaid's standard mechanism
+rather than building a Crema backup system. Older unticked backup tasks below are
+deferred under this decision, not requirements for the current work.
 
 ## Still unverified on hardware
 
@@ -57,8 +126,8 @@ for a tablet session:
 - Stop pressed at the same moment as a load or a start, on the real machine.
 - Manual flow and pressure with the physical group-head controller.
 - Whether steam, hot water and flush preset values reach the machine.
-- Decaid backup and restore including Crema's key-value records. This is the one worth
-  doing deliberately, on disposable data, because a failure would lose records.
+- Decaid backup and restore including Crema's key-value records. Deferred under the
+  backup/restore scope above; not a requested tablet check or a release blocker.
 
 ## Code review and findings — 10 November 2026
 
