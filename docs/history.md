@@ -36,6 +36,36 @@ all review recommendations, including reuse of Streamline Settings. The supporti
 [review record](review-2026-11-06.md) distinguishes reproductions, source findings
 and untested assumptions. Read it before changing behaviour.
 
+## Code review opening and conclusions, as first written (10 November 2026)
+
+A review of `main` at PR #40, made by reading `server/` and all of `skin/app.js` rather
+than this plan. Checked: 207 unit tests and the typecheck pass locally, and CI is green
+on `main`. The Playwright checks were not run locally for this review. **Every finding
+below comes from reading the code; none has been reproduced.** Reproduce each one before
+fixing it, as this plan asks for all fixes.
+
+### What the review concluded
+
+- **The server is small and well bounded.** No file is over about 630 lines, inputs are
+  validated with Zod, and every AI call has a rules fallback. Shot review keeps the
+  model's answer inside what the code measured (`validateReview`).
+- **`skin/app.js` is large but not messy.** It is about 204 KB in one file: 118
+  top-level functions and one global state object (`S`) with about 30 fields. The
+  machine-control code (start generations in `startOp`, held loads in `loadOntoMachine`,
+  `reconcileWorkflow`, the socket slots in `subscribe`) is careful and well commented.
+  Its size is a navigation cost more than a correctness risk.
+- **The real gap is unit tests for the app's hardest logic.** The unit tests (11 files,
+  about 1,400 lines) cover `server/` only. The control and reconcile logic and the bag
+  arithmetic (`bagUse`) are reachable only through Playwright, because they are tied to
+  the DOM and to `S`. `skin/app.js` is also outside `tsc`.
+- **So phase 4 should be cut by what needs testing, not by file size.** `makeLiveApi`
+  is already the cleanest part of the file; extracting it first would move code without
+  making the risky logic testable.
+- **Evidence still trails the software.** v0.4.0's shot review produced no usable
+  review on the first 12 real shots, and that was found only by replaying them
+  (v0.4.1). The user's daily use is now the hardware evidence for the main brewing
+  loop; the edge cases under "Still unverified on hardware" below have not been seen.
+
 ## Revised order of work, as written in the code review (10 November 2026)
 
 Each item is its own PR. All of it can be verified with the repository simulator and
