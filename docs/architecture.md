@@ -89,7 +89,8 @@ Decisions that used to sit inline in `skin/app.js` are pure functions here: they
 state and return what to do, and the app does the reading, writing, toasts and redraws.
 They reach the browser through `server/engine.ts` and `skin/engine.js` (as `E.<name>`),
 so they are tested by vitest without a DOM: `test/control.test.ts` for the control
-modules and `test/record.test.ts` for the record merges.
+modules, `test/record.test.ts` for the record merges and `test/steps.test.ts` for step
+progress and the stop reason.
 
 | Module | Decides |
 |---|---|
@@ -99,6 +100,8 @@ modules and `test/record.test.ts` for the record merges.
 | `bag.ts` | How much of a bag is left: grams used from recorded shots, and Crema's correction when `weightRemaining` was changed elsewhere (`gramsUsed`, `bagRemaining`) |
 | `shelf.ts` | Which shelf rows are new and still waiting for their recipe, so the poll reads in full (`trackNewRows`, `pruneNewRows`, `waitingForRecipe`) |
 | `record.ts` | The patch for a shared-record write, merged into a fresh read (`mergeRecord`, `recommendPatch`, `saveBeanPatch`) |
+| `steps.ts` | Where a running shot is in its profile, from the loaded steps and the live points with their `profileFrame`: each step's state, time and limit, the exit the current step is closest to, the fraction of the target yield, and a time to go once weight flow is steady (`stepProgress`, `stepTimes`, `steadyWeightFlow`). Not yet called by the app |
+| `stop.ts` | Why a finished shot stopped: Decaid's recorded `stopReason` when the shot has one, otherwise inferred from the final weight, a Stop sent from Crema and whether the last step ran out, with "unknown" preferred to a guess (`stopReason`). Not yet called by the app |
 
 The rest-window table is in `server/recommend/rules.ts` (`restOf`) and reaches the
 shelf through the same bundle.
