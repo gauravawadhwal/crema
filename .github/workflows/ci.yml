@@ -87,15 +87,41 @@ jobs:
       - name: Stop and start races, built single-file demo
         if: matrix.group == 'controls'
         run: node scripts/e2e-controls.cjs --built
+      - name: Captured pour context and guarded Skip
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-pour-context.cjs && node scripts/e2e-pour-context.cjs --built
+      - name: Recipe value sheet and hold controls
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-values.cjs --shots ui-shots/values
+      - name: Keep value-sheet screenshots for review
+        if: always() && matrix.group == 'controls'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws6-value-sheet-screenshots
+          path: ui-shots/values/
+          retention-days: 7
+      - name: Sleep screen and chime, source app
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-sleep.cjs
+      - name: Sleep screen and chime, built single-file demo
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-sleep.cjs --built
       - name: Home screen fits the tablet
         if: matrix.group == 'brewing'
         run: node scripts/check-tablet-fit.cjs ui-shots/fit
+      # Fails on anything outside scripts/check-targets.allow.json, and on stale entries in it.
+      - name: Touch targets, overlaps and clipped text, source and built demo
+        if: matrix.group == 'brewing'
+        run: node scripts/check-targets.cjs --shots ui-shots/targets && node scripts/check-targets.cjs --built
       - name: Bagless and manual brewing
         if: matrix.group == 'brewing'
         run: node scripts/e2e-brewing.cjs
       - name: Saved shot review and fallback
         if: matrix.group == 'brewing'
         run: node scripts/e2e-review.cjs
+      - name: Shelf, Shots and Settings screens
+        if: matrix.group == 'brewing'
+        run: node scripts/e2e-screens.cjs
       - name: Keep screenshots when a check fails
         if: failure()
         uses: actions/upload-artifact@v4

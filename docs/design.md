@@ -56,6 +56,9 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 | Desktop / wide | `max-width 1180` breakpoint | Controls wrap under the chart |
 | Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, next shot and favourites carousel |
 | Shots (`min-width 761`) | Fixed-height workspace | Status and heading stay visible; the shot list and detail panel scroll independently. Selecting a shot preserves the list position and starts its detail at the top; phone keeps stacked page scrolling |
+| Shelf | Cards of equal height | Each card has one primary action, "Brew this" (or "Brewing"), and a square More button that opens a sheet with Freeze or Thaw, Finished, Another bag, Set what's left and the roaster's page. Origin and recipe lines clamp to two lines and the tasting notes to one row. Chips above the grid filter by All, In its window, Resting and Running low (this device only) |
+| Shots, list | Filter and compare | Chips above the list narrow the loaded shots to one coffee (they scroll sideways; "Show more" still pages the whole history). Each row has a labelled Compare control at full touch size |
+| Settings (tablet and desktop) | Section index | A sticky strip of the card titles scrolls the chosen card into view; the phone keeps the single column without it |
 | Desktop demo, top-level | `showDeviceFrame()` | The app in a 1340×800 (or 390×844) iframe inside a bezel, scaled to fit; `?full` opts out |
 
 **Target device:** a 1340×800 landscape Android tablet, the size the community Lumen skin also targets (for example an 8.7-inch Samsung Galaxy Tab A-series). Android may scale web pages, so the tablet layout is tested at 1340×800, 1340×752 (nav bar), 1206×720, 1005×600 and 1005×552 by `scripts/check-tablet-fit.cjs`.
@@ -64,10 +67,12 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 
 - **Favourites**: a bottom carousel of consistent-width recipe cards, with swipe/drag, snapping and previous/next arrows. No automatic advance or wraparound. Show a partial next card when more recipes are available. Cards show name, profile and dose/yield (plus temperature when space allows); the prepared recipe gets an accent border. Save current recipe is the last card. Edit switches the cards to management, separate from loading. There is no fixed slot count; older empty slots are retained in storage but omitted from the carousel. Keyboard arrows/Home/End navigate without loading; reduced-motion settings disable animated navigation. Swipe/drag must never become a recipe tap.
 - **Status chips** (top bar): machine state with a dot (green ready, amber heating, pulsing accent when busy, red problem), group and steam temperatures, water tank gauge, scale (tap to tare), maintenance due.
-- **Steppers**: − value + with a sub-label (ratio, units). Grind accepts text, with a configurable numeric start and step (10 and 0.25 by default).
+- **Recipe values**: Dose, Yield and Temp are equal tiles opening a tabbed value sheet. The sheet keeps a draft across tabs, with a snapping draggable ruler, keyboard arrows/Home/End, recent values from shot history, and Set at the bottom right. Cancel, Escape, the scrim and a downward handle swipe discard the draft. Manual and bagless yield can be Off; the sheet retains the scale-stop caution. Set edits the next recipe only; Load or Espresso sends it to the machine. Long profile names are limited to two lines.
+- **Steppers**: Grind stays inline and accepts text, with a configurable numeric start and step (10 and 0.25 by default). Grind, value-sheet and Settings buttons repeat after a 400 ms hold and accelerate. A tap steps once. Settings holds save the final value through the existing merge handlers after release.
 - **Machine controls**: each operation gets a big button plus preset chips. Stop is always present and turns red while something runs.
-- **Charts** (`drawChart`): pressure and flow share 0–12; weight on the right axis; temperature in a 70–100 °C band. Targets are dashed and the reference shot is faint. Before a shot, the dashed lines are the loaded profile's plan (`E.profileCurve`): timed from the last shot with that profile when there is one, otherwise each step at its time limit, which the hint says. The reference shot is optional and removable from the legend. Draw on canvas at device pixel ratio and read colours from tokens at draw time.
+- **Charts** (`drawChart`): pressure and flow share 0–12; weight on the right axis; temperature in a 70–100 °C band. Targets are dashed and the reference shot is faint. Before a shot, the dashed lines are the loaded profile's plan (`E.profileCurve`): timed from the last shot with that profile when there is one, otherwise each step at its time limit, which the hint says. The hint is a muted line in the chart panel's header, never drawn over the plot. Brew's legend leaves out Pressure, Flow, Weight and Temp (the readouts above name them) and keeps what dashed and faint lines mean. The reference shot is optional and removable from the legend. Recipe labels read "AI pick" or "Rules pick"; the provider id is shown only in Settings. Draw on canvas at device pixel ratio and read colours from tokens at draw time.
 - **Feedback**: taste and body are five-option tap scales (sour → bitter, thin → heavy), not sliders, followed by a five-star rating in half steps that you tap or drag across (stored as Decaid's 0–10, one point per half star). Taste and body start unset; both must be selected to supply numeric taste feedback. Review shot uses recorded curves with optional taste and saves the result. The accent-ruled review box shows observations, their evidence and at most one next-shot change, or asks for more evidence.
+- **Sleep screen**: black, with the clock, the date in words and the wake instruction. By default a tap wakes; the per-device "Hold to wake" setting needs a press held for about one second, with a ring that fills while held (a static brighter state under reduced motion), and releasing early sends nothing. Enter or Space on the focused screen always wakes. The optional per-device "Chime" is a quiet two-note Web Audio sound for a shot ending and the machine reaching temperature; it plays only for a change the open page watched happen, and fails silently when the browser blocks audio. Both are off by default and saved in `localStorage`, not in Decaid.
 - **Pills**: rest status (resting / in its window / past its best), timing (in window / fast / slow), provenance tags.
 
 ## Copy
@@ -76,3 +81,34 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 - Errors say what went wrong and what to do ("Can't reach the machine. Check that Decaid is running…").
 - Numbers carry units, and ratios are written `1:2.2`.
 - Avoid jargon the user didn't choose. Profile names are shown exactly as on the machine.
+
+### Brew at rest (WS 3)
+
+Steam, Hot water and Flush use split buttons: the main area starts the selected
+preset and the disclosure opens its selection sheet. Selecting a preset never
+starts an operation; editing stays in Settings. The scale tile shows weight and
+battery with a separate Tare button. Status and chart weight readings are passive.
+Stop is pinned to the bottom of the tablet control column and stays in the same
+rectangle before, during and after a shot. The machine-start-only setting labels
+Espresso “Start at group head”.
+
+At rest, a proportional step rail sits above the plan chart, and series labels are
+drawn directly beside the dashed plan lines when they fit. The live readings and
+clock stay hidden until an operation or recorded trace exists. The rail hides at
+the two shortest tablet heights. Favourite cards retain their carousel and edit
+behaviour, adding coffee artwork (a neutral initial tile when absent) and a small
+pressure sparkline from the installed profile.
+
+## Pour mode
+
+A running shot takes over Brew with its captured profile and recipe, a step rail,
+large time and weight readings, yield progress and a live chart with the remaining
+plan. Unknown recipe values or step frames remain unknown. Next-shot edits never
+supply the active shot's labels or targets. Skip appears only for a known non-final
+step of a non-manual profile and is disabled without a link or while a request waits.
+
+Tablet pour Stop is 300×96 and contains its entire resting hit area. All tablet
+sizes use the compact layout's bottom-right anchor, with Favourites spanning the
+two left columns while at rest. Socket loss keeps the pour layout and Stop visible.
+Secondary readouts and explanatory copy drop at compact sizes so time, weight and
+Stop remain visible without scrolling. The dedicated phone arrangement is WS 8.

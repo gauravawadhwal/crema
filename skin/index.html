@@ -44,6 +44,25 @@
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r: 14px;
+  /* Type scale, spacing steps and control heights (UI plan, WS 1). Defined here for
+     the later workstreams to adopt; nothing uses them yet. Sizes are in rem like the
+     rest of the sheet (1rem = 16px): 11, 12.5, 14, 16, 20 px, and 84 px for the hero
+     numbers. --hit is the smallest touch target; --hit-tight applies only at the two
+     shortest tablet heights (max-height 640). scripts/check-targets.cjs enforces both. */
+  --t-xs: .6875rem;
+  --t-s: .78125rem;
+  --t-m: .875rem;
+  --t-l: 1rem;
+  --t-xl: 1.25rem;
+  --t-hero: 5.25rem;
+  --s-4: 4px;
+  --s-8: 8px;
+  --s-12: 12px;
+  --s-16: 16px;
+  --s-24: 24px;
+  --hit: 44px;
+  --hit-tight: 40px;
+  --hit-now: var(--hit); /* the target size that applies at this screen height */
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -145,9 +164,9 @@ h2 { font-size: 1.15rem; }
 h3 { font-size: .98rem; }
 p { margin: 0; }
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
+.label { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
 .muted { color: var(--muted); }
-.small { font-size: .84rem; }
+.small { font-size: var(--t-m); }
 .error { color: var(--bad); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
@@ -214,15 +233,17 @@ button.chip { cursor: pointer; }
 
 /* ---------- brew home ---------- */
 .brew-grid { display: grid; gap: 14px; grid-template-columns: minmax(270px, 340px) minmax(0, 1fr) minmax(190px, 220px); align-items: start; }
-.coffee-line { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.coffee-line { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px 12px; align-items: center; }
+.coffee-meta { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .bag { width: 56px; height: 68px; border-radius: 9px 9px 12px 12px; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; position: relative; border: 1px solid var(--line); flex: none; }
 .bag img { width: 100%; height: 100%; object-fit: cover; }
 .bag .initial { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; color: #1b130e; }
 .bag.lg { width: 96px; height: 116px; }
 .bag.xl { width: 76px; height: 92px; }
-.cycler { display: flex; gap: 4px; }
-.coffee-name { font-family: var(--font-display); font-weight: 600; font-size: 1.12rem; line-height: 1.2; }
-.pill { font-size: .68rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.cycler { display: flex; gap: 4px; flex: none; margin-left: auto; }
+.cycler .btn { width: var(--hit); height: var(--hit); min-height: var(--hit); padding: 0; }
+.coffee-name { font-family: var(--font-display); font-weight: 600; font-size: var(--t-xl); line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pill { font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .pill.peak, .pill.good { color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); }
 .pill.resting, .pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
 .pill.fading, .pill.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
@@ -235,77 +256,82 @@ button.chip { cursor: pointer; }
 .stepper button { border: 0; background: var(--surface-2); height: 44px; font-size: 1.2rem; cursor: pointer; }
 .stepper button:active { background: var(--line); }
 .stepper .val { text-align: center; font-family: var(--font-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; line-height: 1.1; padding: 2px 4px; }
-.stepper .val small { display: block; font-size: .7rem; color: var(--muted); }
+.stepper .val small { display: block; font-size: var(--t-xs); color: var(--muted); }
 .stepper input { width: 100%; border: 0; background: transparent; text-align: center; font-family: var(--font-mono); font-size: 1.1rem; padding: 0; min-height: 40px; }
 .profile-btn { display: flex; gap: 8px; align-items: center; justify-content: space-between; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; text-align: left; min-height: 48px; }
-.profile-btn .t { font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
-.why { margin: 0; padding-left: 18px; color: var(--muted); font-size: .84rem; display: grid; gap: 3px; }
-details summary { cursor: pointer; color: var(--muted); font-size: .84rem; }
+.profile-btn .t { font-family: var(--font-display); font-weight: 600; font-size: var(--t-l); }
+.why { margin: 0; padding-left: 18px; color: var(--muted); font-size: var(--t-m); display: grid; gap: 3px; }
+details summary { cursor: pointer; color: var(--muted); font-size: var(--t-m); }
 details[open] summary { margin-bottom: 8px; }
 
 .stop-choice { border: 0; background: transparent; color: var(--fg); cursor: pointer; }
 .coffee-choice { display: grid; gap: 3px; min-height: 44px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
-.coffee-choice .pill { justify-self: start; }
+.coffee-choice .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coffee-meta .pill { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .coffee-line.bagless { grid-template-columns: minmax(0, 1fr); }
+.coffee-line.bagless .coffee-meta { grid-column: 1; }
 .favs-panel { grid-column: 1 / -1; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; min-width: 0; min-height: 0; padding-top: 14px; border-top: 1px solid var(--line); }
 .fav-tools { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; min-height: 0; }
 .fav-tools h2 { font-size: 1rem; line-height: 1.2; }
 .fav-nav { display: flex; gap: 4px; }
 .fav-nav button, .fav-edit { min-height: 48px; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
 .fav-nav button { width: 48px; height: 48px; padding: 0; font-size: 1.6rem; line-height: 1; }
-.fav-edit { width: 100%; font-size: .84rem; color: var(--muted); }
+.fav-edit { width: 100%; font-size: var(--t-m); color: var(--muted); }
 .fav-nav button:disabled { opacity: .28; cursor: default; }
 .favs { display: grid; grid-auto-flow: column; grid-auto-columns: 236px; gap: 10px; min-height: 0; min-width: 0; position: relative; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
 .favs::-webkit-scrollbar { display: none; }
 .fav { min-width: 0; min-height: 108px; padding: 14px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: left; scroll-snap-align: start; scroll-snap-stop: always; user-select: none; }
 .fav:hover, .fav-edit:hover, .fav-nav button:hover:not(:disabled) { border-color: var(--muted); }
 .fav[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
-.fav strong { font-family: var(--font-display); font-size: 1rem; line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.fav-profile { display: block; color: var(--muted); font-size: .78rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fav-recipe { margin-top: auto; font-size: .78rem; line-height: 1.3; white-space: nowrap; }
+.fav strong { font-family: var(--font-display); font-size: var(--t-l); line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fav-profile { display: block; color: var(--muted); font-size: var(--t-s); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-recipe { margin-top: auto; font-size: var(--t-s); line-height: 1.3; white-space: nowrap; }
 .fav-temp { color: var(--muted); }
 .fav.empty { justify-content: center; border-style: dashed; background: transparent; }
 .fav.empty strong { font-size: .91rem; font-weight: 500; }
 .fav-plus { font-size: 1.35rem; line-height: 1; color: var(--accent); }
-.fav-action { color: var(--accent); font-size: .75rem; margin-top: auto; }
+.fav-action { color: var(--accent); font-size: var(--t-s); margin-top: auto; }
 .fav:disabled, .fav-edit:disabled { opacity: .5; cursor: default; }
 .favs:focus-visible, .favs .fav:focus-visible { outline-offset: -3px; }
 
-.readouts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.readouts { display: grid; grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 8px; }
 .readout { display: grid; gap: 0; min-width: 0; }
 .readout .v { font-family: var(--font-mono); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
-.readout .v small { font-size: .7rem; color: var(--muted); margin-left: 2px; }
+.readout .v small { font-size: var(--t-xs); color: var(--muted); margin-left: 2px; }
 .readout .k { display: flex; align-items: center; gap: 6px; }
 button.readout { border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
 .swatch { width: 10px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
 .chart-box { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; }
 .chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .9rem; text-align: center; padding: 20px; pointer-events: none; }
-/* With the profile drawn, the hint sits above it, where pressure rarely reaches. */
-.chart-empty.over-plan { place-items: start center; padding: 14px 48px; font-size: .84rem; }
+/* The hint lives in the panel header, never over the plot. Hidden mid-shot, but it keeps its space. */
+.chart-hint { color: var(--muted); font-size: var(--t-s); line-height: 1.3; min-height: 2.6em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.chart-hint[hidden] { display: -webkit-box; visibility: hidden; }
 .linkish { border: 0; background: none; padding: 0 2px; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; min-height: 24px; }
 .plan-box { display: grid; gap: 8px; }
 .plan-chart { width: 100%; height: 190px; display: block; }
 .plan-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--fg); }
 .plan-steps b { font-weight: 600; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .76rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-s); color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.phase { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; }
+.phase { font-family: var(--font-display); font-weight: 600; font-size: var(--t-l); }
 .clock { font-family: var(--font-mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
 
 .controls { display: grid; gap: 10px; min-width: 0; }
 .ctl { display: grid; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
-.ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: .98rem; text-align: left; }
-.ctl-btn .sub { white-space: nowrap; margin-left: auto; font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-weight: 400; }
+.ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: var(--t-l); text-align: left; }
+.ctl-btn .sub { white-space: nowrap; margin-left: auto; font-family: var(--font-mono); font-size: var(--t-s); color: var(--muted); font-weight: 400; }
+/* Espresso: name above, "dose→yield · loads first" below, so its height never depends on the hint. */
+.ctl-btn.two-line { flex-wrap: wrap; row-gap: 0; align-content: center; }
+.ctl-btn.two-line .sub { flex: 0 0 100%; margin-left: 0; white-space: nowrap; max-width: none; text-align: left; font-size: var(--t-xs); overflow: hidden; text-overflow: ellipsis; }
 .ctl-btn.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .ctl-btn.go .sub { color: var(--accent-ink); opacity: .75; }
 .ctl-btn:disabled { opacity: .45; cursor: not-allowed; }
 .presets { display: flex; flex-wrap: wrap; gap: 4px; }
-.preset { padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: .76rem; min-height: 30px; }
+.preset { padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: var(--t-s); min-height: 30px; }
 .preset[aria-pressed="true"] { background: var(--surface-2); border-color: var(--accent); color: var(--fg); }
-.stop-btn { width: 100%; min-height: 64px; border-radius: var(--r); border: 0; background: var(--surface-2); color: var(--muted); font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .06em; cursor: pointer; }
+.stop-btn { width: 100%; min-height: 64px; border-radius: var(--r); border: 0; background: var(--surface-2); color: var(--muted); font-family: var(--font-display); font-weight: 700; font-size: var(--t-xl); letter-spacing: .06em; cursor: pointer; }
 .stop-btn.active { background: var(--stop); color: #fff; }
-.ghc-note { font-size: .78rem; color: var(--muted); }
+.ghc-note { font-size: var(--t-s); color: var(--muted); }
 .stop-wrap, .ghc-note { min-width: 0; }
 
 .taste { display: grid; gap: 12px; }
@@ -335,6 +361,15 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .op-bar { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .op-bar > div { height: 100%; background: var(--accent); transition: width .2s linear; }
 .saver { position: fixed; inset: 0; z-index: 60; background: #000; color: #8d8178; display: grid; place-items: center; cursor: pointer; }
+.saver .stack { gap: 10px; }
+.saver .ring { width: 56px; height: 56px; opacity: 0; transform: rotate(-90deg); }
+.saver .ring circle { fill: none; stroke-width: 3; }
+.saver .ring .bg { stroke: #2a2420; }
+.saver .ring .fg { stroke: #cfc3b8; stroke-dasharray: 106.8; stroke-dashoffset: 106.8; }
+.saver.holding .ring { opacity: 1; }
+.saver.holding .ring .fg { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+.saver.holding #saverHint { color: #cfc3b8; }
+.saver { touch-action: none; user-select: none; -webkit-user-select: none; }
 .saver .t { font-family: var(--font-mono); font-size: clamp(3rem, 14vw, 9rem); font-variant-numeric: tabular-nums; color: #cfc3b8; }
 .sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); display: grid; place-items: end center; padding: 16px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 @media (min-width: 761px) { .sheet-back { place-items: center; } }
@@ -342,7 +377,26 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 
 /* ---------- shelf ---------- */
 .shelf { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
-.bean-card { display: grid; gap: 12px; align-content: start; }
+.bean-card { display: flex; flex-direction: column; gap: 12px; }
+.bean-card > * { min-width: 0; }
+.bean-text { align-content: start; grid-template-columns: minmax(0, 1fr); }
+.bean-text > * { min-width: 0; }
+.bean-card .tags { flex-wrap: nowrap; overflow: hidden; }
+.bean-card .tag { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clamp2, .clip1 { overflow-wrap: anywhere; }
+.clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.clip1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bean-card h2 { line-height: 1.2; }
+.bean-card .pill.plain { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.card-actions { display: flex; gap: var(--s-8); margin-top: auto; }
+.card-actions .btn { min-height: var(--hit-now); }
+.more-btn { flex: none; width: var(--hit-now); padding: 0; }
+.more-list .btn { width: 100%; justify-content: flex-start; min-height: var(--hit-now); }
+.skeleton-card { display: grid; gap: var(--s-12); align-content: start; min-height: 260px; }
+.sk { border-radius: 10px; background: var(--surface-2); animation: sk-pulse 1.6s ease-in-out infinite; }
+.sk-head { height: 116px; } .sk-line { height: 14px; } .sk-line.short { width: 60%; } .sk-btn { height: var(--hit); margin-top: auto; }
+.skeleton-row { height: 62px; margin-bottom: var(--s-8); }
+@keyframes sk-pulse { 50% { opacity: .55; } }
 .bean-card.current { border-color: var(--accent); }
 .coffee-head { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 14px; align-items: center; }
 .rest { display: grid; gap: 6px; }
@@ -408,8 +462,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .cand ul { margin: 0; padding-left: 18px; font-size: .84rem; display: grid; gap: 2px; }
 .caution { color: var(--warn); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.fchip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: .8rem; min-height: 32px; }
-.fchip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.fchip { padding: 5px var(--s-16); border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: var(--t-m); min-height: var(--hit-now); }
+.fchip[aria-pressed="true"], .fchip[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .cat-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
 .cat-card { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; align-content: start; }
 .cat-card:hover { border-color: var(--muted); }
@@ -420,32 +474,42 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 /* ---------- shots ---------- */
 .shots-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: start; }
 .shot-list { display: grid; gap: 8px; }
-.shot-row { display: grid; grid-template-columns: 22px 110px minmax(0,1fr); gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; width: 100%; }
+.shot-row { display: grid; grid-template-columns: 110px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; width: 100%; }
 .shot-row.sel { border-color: var(--accent); }
 .shot-row.cmp { border-color: var(--flow); }
 .shot-row canvas { width: 110px; height: 40px; }
 .shot-row .open { border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; min-width: 0; display: grid; gap: 2px; }
 .shot-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .8rem; color: var(--muted); }
-.shot-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--flow); }
+.shot-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--flow); margin: 0; }
+.cmp-label { display: flex; align-items: center; gap: var(--s-8); min-height: var(--hit-now); min-width: var(--hit-now); padding-inline: var(--s-12); border-radius: 10px; cursor: pointer; font-size: var(--t-m); color: var(--muted); }
+.cmp-label:has(input:checked) { color: var(--fg); }
+.cmp-label:has(input:disabled) { opacity: .45; cursor: default; }
+.shot-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.shot-filters .fchip { flex: none; max-width: 240px; }
+.shot-filters .clip1 { display: block; }
+#shotDetail { grid-auto-rows: max-content; }
+#shotDetail .stars:not(.static) { padding-block: 7px; }
+#shotDetail .stars:not(.static) .stars-fill { inset: 7px auto 7px 0; }
+#shotDetail .seg.tap button { min-height: var(--hit-now); }
 
 /* ---------- settings ---------- */
 .settings { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); align-items: start; }
-.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 46px; border-top: 1px solid var(--line); padding-top: 8px; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 56px; border-top: 1px solid var(--line); padding-top: 8px; }
 .set-row.first { border-top: 0; padding-top: 0; }
 .set-row .hint { display: block; font-size: .78rem; color: var(--muted); }
-.mini { display: grid; grid-template-columns: 34px 66px 34px; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.mini button { border: 0; background: var(--surface-2); height: 36px; cursor: pointer; }
-.mini input { width: 100%; border: 0; background: var(--bg); text-align: center; height: 36px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.switch { position: relative; width: 48px; height: 28px; flex: none; }
+.mini { display: grid; grid-template-columns: var(--hit-now) 72px var(--hit-now); align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.mini button { border: 0; background: var(--surface-2); height: var(--hit-now); cursor: pointer; }
+.mini input { width: 100%; border: 0; background: var(--bg); text-align: center; height: var(--hit-now); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.switch { position: relative; width: 48px; height: var(--hit-now); flex: none; }
 .switch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; z-index: 1; }
-.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
+.switch span { position: absolute; inset: calc(50% - 14px) 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
 .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s; }
 .switch input:checked + span { background: var(--accent); border-color: var(--accent); }
 .switch input:checked + span::after { transform: translateX(20px); background: var(--accent-ink); }
 .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sched { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-.days { display: flex; gap: 3px; flex-wrap: wrap; }
-.days button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: transparent; font-size: .72rem; cursor: pointer; }
+.days { display: flex; gap: 0; flex-wrap: wrap; }
+.days button { width: var(--hit-now); height: var(--hit-now); border-radius: 8px; border: 1px solid var(--line); background: transparent; font-size: .72rem; cursor: pointer; }
 .days button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* ---------- device frame (demo on a desktop) ---------- */
@@ -485,13 +549,14 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .favs { grid-auto-columns: 220px; }
   .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .controls .stop-wrap, .controls .ctl:first-child { grid-column: 1 / -1; }
-  .ctl-btn { font-size: .92rem; min-height: 48px; padding: 6px 10px; }
+  .ctl-btn { font-size: var(--t-m); min-height: 48px; padding: 6px 10px; }
   .ctl-btn .sub { white-space: nowrap; }
   .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .readouts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .facts { grid-template-columns: minmax(0, 1fr) auto; }
   .facts .k { grid-column: 1 / -1; padding-bottom: 0; }
-  .shot-row { grid-template-columns: 22px 80px minmax(0,1fr); }
+  .shot-row { grid-template-columns: 80px minmax(0,1fr); }
+  .cmp-label { grid-column: 1 / -1; justify-self: start; }
   .shot-row canvas { width: 80px; }
   h1 { font-size: 1.4rem; }
   .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
@@ -532,32 +597,33 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .seg.tap button { min-height: 34px; }
   .readout .v { font-size: 1.2rem; }
   .clock { font-size: 1.3rem; }
-  .coffee-line { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; }
+  .coffee-line { grid-template-columns: 48px minmax(0, 1fr); gap: 4px 10px; }
   .coffee-line .bag { width: 48px; height: 58px; }
-  .coffee-name { font-size: 1rem; }
+  .coffee-name { font-size: var(--t-l); }
   .coffee-choice { gap: 1px; }
   .field-row { min-height: 40px; padding-top: 6px; grid-template-columns: 58px minmax(0, 1fr); }
   .stepper { grid-template-columns: 40px minmax(0, 1fr) 40px; }
   .stepper button { height: 38px; }
   .stepper .val { font-size: 1rem; }
-  .stepper .val small { font-size: .64rem; }
+  .stepper .val small { font-size: var(--t-xs); }
   .profile-btn { min-height: 42px; padding: 6px 10px; }
-  .profile-btn .t { font-size: .92rem; }
+  .profile-btn .t { font-size: var(--t-m); }
   #nextShot .btn { min-height: 40px; }
+  #nextShot { gap: 8px; }
   .controls { gap: 8px; grid-template-columns: 1fr; }
   .ctl { padding: 8px; gap: 5px; }
-  .ctl-btn { min-height: 44px; font-size: .92rem; padding: 6px 10px; }
-  .preset { min-height: 28px; padding: 3px 8px; font-size: .72rem; }
+  .ctl-btn { min-height: 44px; font-size: var(--t-m); padding: 6px 10px; }
+  .preset { min-height: 28px; padding: 3px 8px; font-size: var(--t-xs); }
   .stop-btn { min-height: 52px; }
-  .ghc-note { font-size: .72rem; }
-  .ctl-btn .sub { font-size: .74rem; }
+  .ghc-note { font-size: var(--t-xs); }
+  .ctl-btn .sub { font-size: var(--t-xs); }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) and (max-width: 1250px) {
   .demo-banner { display: none; }
   #view-brew { grid-template-columns: 320px minmax(0, 1fr) minmax(160px, 176px); }
-  .readouts { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .readouts { grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 4px; }
   .readout .v { font-size: 1.02rem; }
-  .readout .label { font-size: .62rem; }
+  .readout .label { font-size: var(--t-xs); }
   .ctl .presets .preset { padding: 3px 6px; }
   .ctl-btn .sub { white-space: normal; max-width: 56%; line-height: 1.15; text-align: right; overflow-wrap: anywhere; }
   .ghc-note { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
@@ -565,7 +631,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
   .legend { display: none; }
   #view-brew .live-col > .panel:first-child { gap: 6px; }
-  .field-row { min-height: 36px; padding-top: 4px; }
+  .field-row { min-height: 36px; padding-top: 1px; }
   .stepper button { height: 34px; }
   .ctl-btn { min-height: 38px; }
   .ctl { padding: 6px; }
@@ -578,23 +644,25 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .fav-tools h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .favs { grid-auto-columns: 206px; gap: 8px; }
   .fav { min-height: 96px; padding: 10px; gap: 4px; }
-  .fav strong { font-size: .9rem; }
-  .fav-profile, .fav-recipe { font-size: .73rem; }
+  .fav strong { font-size: var(--t-m); }
+  .fav-profile, .fav-recipe { font-size: var(--t-xs); }
   .fav-temp { display: none; }
   #view-brew .live-col.has-after > .panel:first-child { flex: 0 0 46%; overflow: hidden; }
   #view-brew .live-col.has-after .chart-box { min-height: 0; }
   #view-brew .live-col.has-after #afterShot { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; }
   #afterShot .metrics { display: none; }
   .pick-src, .fav-hint { display: none; }
-  #nextShot { gap: 8px; }
+  #nextShot { gap: 4px; }
   .coffee-line .bag { width: 40px; height: 48px; }
-  .coffee-line { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .coffee-line { grid-template-columns: 40px minmax(0, 1fr); row-gap: 2px; }
+  .coffee-name { font-size: var(--t-m); }
+  .cycler .btn { width: var(--hit-tight); height: var(--hit-tight); min-height: var(--hit-tight); }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 580px) {
   main { padding-block: 8px; }
   #view-brew, #view-brew > .stack, body.on-brew .wrap { gap: 8px; }
   .panel { padding: 10px; }
-  .field-row { min-height: 34px; padding-top: 3px; gap: 8px; }
+  .field-row { min-height: 34px; padding-top: 1px; gap: 8px; }
   .stepper button { height: 32px; }
 }
 /* History is a master/detail workspace whenever the two panes sit side by side.
@@ -609,7 +677,189 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .shots-grid { min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #shotList, #shotDetail { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; align-content: start; }
 }
+/* ---------- Shelf, Profiles, Shots and Settings (UI plan, WS 9) ---------- */
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) { :root { --hit-now: var(--hit-tight); } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#view-shelf .btn.small, #view-profiles .btn.small, #view-shots .btn.small, #view-settings .btn.small { min-height: var(--hit-now); }
+.prof-thumb { display: block; width: 100%; height: 36px; }
+.cand h3, .cat-card h3 { min-width: 0; }
+.cand.shown-above { grid-column: 1 / -1; padding: var(--s-8) var(--s-16); border-style: dashed; background: transparent; align-content: center; }
+.cand.shown-above h3 { font-size: var(--t-m); }
+#view-settings .seg button { min-height: var(--hit-now); min-width: var(--hit-now); }
+#view-settings input[type="range"] { height: var(--hit-now); }
+.set-index { position: sticky; top: 0; z-index: 5; display: flex; gap: var(--s-8); overflow-x: auto; scrollbar-width: thin; padding-block: var(--s-8); background: var(--bg); }
+.set-index .fchip { flex: none; }
+#settings > .panel { scroll-margin-top: calc(var(--hit-now) + var(--s-24)); }
+@media (max-width: 760px) {
+  .set-index { display: none; }
+  #view-settings .set-row:has(.seg) { grid-template-columns: minmax(0, 1fr); }
+  #view-settings .sched { padding-inline: 4px; }
+  #shotDetail .scale-row { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  #shotDetail .seg.tap button { font-size: var(--t-xs); padding-inline: 2px; overflow-wrap: anywhere; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* WS 3: fixed operation column and shared plan rail. */
+#controls { gap: var(--s-8); }
+#controls .ctl { padding: 0; border: 0; background: transparent; }
+#controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); padding: var(--s-8); }
+#controls .espresso-ctl .ctl-btn { min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+#controls .split-ctl { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--hit) + var(--s-4)); gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+#controls .split-ctl .ctl-btn { border: 0; border-radius: 0; background: transparent; }
+#controls .ctl-btn .sub { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: var(--t-xs); }
+.preset-open { min-width: calc(var(--hit) + var(--s-4)); min-height: var(--hit); border: 0; border-left: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-size: var(--t-s); }
+.preset-open:disabled { opacity: .45; cursor: default; }
+.preset-choice { justify-content: space-between; min-height: var(--hit); }
+.preset-choice[aria-pressed="true"] { border-color: var(--accent); }
+.scale-reading { min-width: 0; min-height: calc(var(--hit-tight) + var(--s-24)); display: flex; flex-direction: column; justify-content: center; padding: var(--s-8); overflow: hidden; }
+.scale-reading > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#controls .stop-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
+.steps-rail { display: flex; gap: var(--s-4); min-width: 0; }
+.steps-rail .step { flex-basis: 0; min-width: 0; padding: var(--s-8); border-top: var(--s-4) solid var(--line); background: var(--surface-2); }
+.steps-rail strong, .steps-rail span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-xs); }
+.steps-rail span { color: var(--muted); }
+.steps-rail .now { border-color: var(--accent); }
+.steps-rail .done { border-color: var(--pressure); }
+.steps-rail progress { width: 100%; accent-color: var(--accent); }
+#nextShot summary { min-height: var(--hit); display: flex; align-items: center; }
+.fav { position: relative; padding-left: calc(var(--hit-tight) + var(--s-24)); }
+.fav-art { position: absolute; left: var(--s-12); top: var(--s-12); width: var(--hit-tight); height: var(--hit-tight); border-radius: var(--s-4); background: var(--surface-2); display: grid; place-items: center; color: var(--muted); font-size: var(--t-xl); overflow: hidden; }
+.fav-art img { width: 100%; height: 100%; object-fit: cover; }
+.fav-spark { position: absolute; width: calc(var(--hit) + var(--s-4)); height: var(--t-xl); right: var(--s-8); bottom: var(--s-8); pointer-events: none; }
+.fav-spark polyline { fill: none; stroke: var(--pressure); stroke-width: 2; }
+.fav:not(.empty) .fav-recipe { margin-left: calc(0px - var(--hit-tight) - var(--s-12)); padding-right: calc(var(--hit) + var(--s-4)); }
+.fav.empty { padding-left: var(--s-12); }
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
+  #view-brew > .controls-col { grid-column: 3; grid-row: 1 / 3; overflow: hidden; display: flex; flex-direction: column; }
+  #view-brew .favs-panel { grid-column: 1 / 3; }
+  #controls { display: flex; flex-direction: column; flex: 1; height: 100%; }
+  #controls .stop-wrap { margin-top: auto; }
+  #controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+  #controls > * { flex-shrink: 0; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
+  #nextShot { gap: var(--s-4); }
+  #controls .espresso-ctl .ctl-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
+  #controls .ctl-btn, .scale-reading { min-height: calc(var(--hit) + var(--s-8)); }
+  #controls .stop-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
+  #planSteps { display: none; }
+  #controls .ctl-btn, .scale-reading { min-height: var(--hit-tight); }
+  #controls .espresso-ctl .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+  .fav { padding-left: calc(var(--hit-tight) + var(--s-24)); }
+  .fav-art { top: var(--s-8); left: var(--s-8); }
+}
+/* WS 4: Pour mode — full Brew takeover while a shot is running.
+   All tablet sizes share the compact layout's bottom-right Stop anchor, so
+   the 300×96 pour button retains the entire resting hit area. */
+body.pouring .rail .tab:not([data-view="brew"]) { opacity: .4; }
+.pour-top { grid-column: 1 / -1; gap: var(--s-8); padding: var(--s-12); }
+.pour-head { flex-wrap: nowrap; min-width: 0; gap: var(--s-12); }
+.pour-title { display: flex; align-items: baseline; gap: var(--s-8); min-width: 0; overflow: hidden; }
+.pour-title strong { font-family: var(--font-display); font-size: var(--t-l); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+.pour-title span { font-size: var(--t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 2; }
+#pourStepCount { font-size: var(--t-s); white-space: nowrap; flex: none; }
+.pour-left { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s-12); min-height: 0; overflow: hidden; }
+.pour-hero { display: grid; gap: var(--s-8); min-width: 0; }
+.pour-stat { display: grid; gap: 0; min-width: 0; }
+.hero-val { font-family: var(--font-mono); font-size: var(--t-hero); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.02em; }
+.hero-val small { font-size: var(--t-xl); color: var(--muted); font-weight: 400; margin-left: var(--s-4); }
+.pour-yield { display: grid; gap: var(--s-4); }
+.yield-bar { height: 10px; border-radius: var(--s-4); background: var(--surface-2); overflow: hidden; border: 1px solid var(--line); }
+.yield-bar > div { height: 100%; background: var(--weight); width: 0%; }
+.pour-sub { --cols: 3; margin-top: auto; border-top: 1px solid var(--line); padding-top: var(--s-8); }
+.pour-sub .readout .v { font-size: var(--t-xl); }
+.pour-note { font-size: var(--t-m); max-width: 56ch; margin-right: auto; }
+.skip-btn { min-width: 150px; min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); border-radius: var(--r); border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font-family: var(--font-display); font-weight: 600; font-size: var(--t-l); cursor: pointer; padding: 0 var(--s-16); }
+.skip-btn:disabled { opacity: .45; cursor: default; }
+body.pouring #view-brew .favs-panel > * { visibility: hidden; pointer-events: none; }
+body.pouring #view-brew .next-col,
+body.pouring #view-brew .live-head,
+body.pouring #view-brew #chartEmpty,
+body.pouring #view-brew #planSteps,
+body.pouring #view-brew #readouts,
+body.pouring #view-brew #legend { display: none; }
+body.pouring #controls { position: relative; z-index: 5; }
+@media (min-width: 761px) {
+  body.pouring #view-brew { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(190px, 220px); }
+  body.pouring #view-brew .pour-left { grid-column: 1; }
+  body.pouring #view-brew .live-col { grid-column: 2 / -1; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
+  body.pouring #view-brew { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: auto minmax(0, 1fr) calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+  body.pouring #view-brew .pour-top { grid-row: 1; }
+  body.pouring #view-brew .pour-left { grid-column: 1; grid-row: 2; height: 100%; }
+  body.pouring #view-brew .live-col { grid-column: 2 / 4; grid-row: 2; }
+  body.pouring #view-brew .favs-panel { grid-row: 3; }
+  body.pouring #view-brew > .controls-col { grid-column: 1 / -1; grid-row: 3; height: auto; overflow: visible; align-self: stretch; display: flex; }
+  body.pouring #controls { flex: 1; flex-direction: row; align-items: flex-end; justify-content: flex-end; gap: var(--s-12); padding-top: 0; }
+  body.pouring #controls .stop-wrap { display: flex; gap: var(--s-12); align-items: flex-end; margin-top: 0; height: 100%; }
+  body.pouring #controls .stop-btn { width: 300px; height: 100%; min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
+  .hero-val { font-size: 4rem; }
+  body.pouring #controls .stop-btn, .skip-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
+  body.pouring #view-brew { grid-template-rows: auto minmax(0, 1fr) calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+  .pour-top { padding: var(--s-8) var(--s-12); gap: var(--s-4); }
+  .pour-top .steps-rail .step { padding: var(--s-4) var(--s-8); }
+  .hero-val { font-size: 3.25rem; }
+  .pour-sub, .pour-note { display: none; }
+  body.pouring #controls { padding-top: 0; }
+  body.pouring #controls .stop-btn, .skip-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+}
+@media (max-width: 760px) {
+  body.pouring #view-brew .favs-panel { display: none; }
+  body.pouring #view-brew .pour-top { order: 1; }
+  body.pouring #view-brew .pour-left { order: 2; }
+  body.pouring #view-brew .live-col { order: 3; }
+  body.pouring #view-brew .controls-col { order: 4; }
+  body.pouring #controls { display: flex; flex-wrap: wrap; gap: var(--s-8); }
+  body.pouring #controls .stop-wrap { display: flex; gap: var(--s-8); width: 100%; }
+  body.pouring #controls .stop-btn { flex: 1; width: auto; }
+}
+
+/* Recipe values (WS 6). These overrides also apply at compact tablet heights. */
+#nextShot .profile-btn .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; }
+#nextShot .profile-btn .t.long { font-size: var(--t-s); }
+.recipe-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.recipe-tile { min-width: 0; min-height: calc(var(--hit) + var(--s-24) + var(--s-12)); padding: var(--s-8) var(--s-4); display: grid; gap: var(--s-4); justify-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); cursor: pointer; }
+.recipe-tile .num { font-size: var(--t-xl); white-space: nowrap; }
+.recipe-tile small { margin-left: var(--s-4); font-size: var(--t-xs); }
+.recipe-tile > .muted { font-size: var(--t-xs); white-space: nowrap; }
+#nextShot .stepper { grid-template-columns: calc(var(--hit) + var(--s-8)) minmax(0, 1fr) calc(var(--hit) + var(--s-8)); }
+#nextShot .stepper button, #grindInput { min-height: calc(var(--hit) + var(--s-8)); font-size: var(--t-l); touch-action: none; }
+#settings .mini { grid-template-columns: var(--hit) calc(var(--hit) + var(--s-24)) var(--hit); }
+#settings .mini button { height: var(--hit); touch-action: none; }
+.recipe-sheet { width: min(calc(var(--hit) * 12), 100%); }
+.value-sheet { display: grid; gap: var(--s-12); }
+.value-handle { min-height: var(--hit); width: 100%; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; touch-action: none; }
+.value-handle span { width: var(--hit); height: var(--s-4); background: var(--muted); border-radius: var(--r); }
+.value-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-8); }
+.value-tabs button { min-height: var(--hit); border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); font-size: var(--t-m); cursor: pointer; }
+.value-tabs [aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.value-number { text-align: center; font: calc(var(--t-hero) - var(--t-xl)) var(--font-mono); font-variant-numeric: tabular-nums; }
+.value-number small { font-size: var(--t-xl); margin-left: var(--s-8); }
+.value-caption { text-align: center; font-size: var(--t-s); min-height: var(--s-24); }
+.value-ruler { position: relative; height: calc(var(--hit) + var(--s-8)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); touch-action: none; cursor: ew-resize; }
+.ruler-ticks { position: absolute; inset: var(--s-12) 0; background: repeating-linear-gradient(to right, var(--muted) 0 1px, transparent 1px var(--s-12)); background-position-x: var(--ruler-offset, 0px); }
+.ruler-marker { position: absolute; left: 50%; top: var(--s-4); bottom: var(--s-4); border-left: var(--s-4) solid var(--accent); }
+.value-limits { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--muted); margin-top: var(--s-4); }
+.value-stop, .value-recent { margin-top: var(--s-12); }
+.value-stop { display: flex; flex-wrap: wrap; gap: var(--s-8); }
+.value-stop [aria-pressed="true"] { border-color: var(--accent); }
+.value-stop p { margin: 0; }
+.value-recent > div { display: flex; flex-wrap: wrap; gap: var(--s-8); margin-top: var(--s-4); }
+.value-footer, .value-footer > div { display: flex; gap: var(--s-8); }
+.value-footer { justify-content: space-between; position: sticky; bottom: 0; background: var(--surface); padding-top: var(--s-8); }
+.value-footer .btn { min-height: calc(var(--hit) + var(--s-8)); padding: var(--s-8) var(--s-12); }
+#valueMinus, #valuePlus { width: calc(var(--hit) + var(--s-12)); touch-action: none; }
+@media (min-width: 900px) and (max-height: 640px) and (orientation: landscape) {
+  .recipe-tile { min-height: calc(var(--hit) + var(--s-24)); }
+  #nextShot .stepper { grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); }
+  #nextShot .stepper button, #grindInput { min-height: var(--hit); }
+}
 </style>
 </head>
 <body>
@@ -638,17 +888,37 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 
       <!-- BREW (home) -->
       <section id="view-brew" class="brew-grid" hidden>
+        <div class="pour-top panel stack" id="pourTop" hidden>
+          <div class="row between pour-head">
+            <div class="pour-title"><strong id="pourProfile"></strong><span class="muted" id="pourRecipe"></span></div>
+            <span class="num muted" id="pourStepCount"></span>
+          </div>
+          <div class="steps-rail" id="pourSteps"></div>
+        </div>
         <div class="stack next-col">
           <div class="panel stack" id="nextShot"></div>
         </div>
+        <div class="panel pour-left" id="pourLeft" hidden>
+          <div class="pour-hero">
+            <div class="pour-stat"><span class="label">Time</span><div class="hero-val"><span id="pourTime">0.0</span><small>s</small></div></div>
+            <div class="pour-stat"><span class="label">Weight</span><div class="hero-val"><span id="pourWeight">0.0</span><small>g</small></div></div>
+            <div class="pour-yield" id="pourYield" hidden>
+              <div class="yield-bar"><div id="pourYieldBar"></div></div>
+              <div class="row between small muted"><span class="num" id="pourYieldText"></span><span class="num" id="pourEta"></span></div>
+            </div>
+          </div>
+          <div class="readouts pour-sub" id="pourSub"></div>
+        </div>
         <div class="stack live-col">
           <div class="panel stack">
-            <div class="row between">
+            <div class="row between live-head">
               <div class="row" style="gap:10px"><span class="phase" id="phase">Ready</span><span class="muted small" id="phaseSub"></span></div>
               <span class="clock" id="shotClock">0.0</span>
             </div>
+            <div class="chart-hint" id="chartEmpty"></div>
+            <div class="steps-rail" id="planSteps"></div>
             <div class="readouts" id="readouts"></div>
-            <div class="chart-box"><canvas id="liveChart" aria-label="Pressure, flow, weight and temperature over time"></canvas><div class="chart-empty" id="chartEmpty"></div></div>
+            <div class="chart-box"><canvas id="liveChart" aria-label="Pressure, flow, weight and temperature over time"></canvas></div>
             <div class="legend" id="legend"></div>
           </div>
           <div class="panel stack" id="afterShot" hidden></div>
@@ -665,6 +935,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <!-- SHELF -->
       <section id="view-shelf" class="stack" hidden>
         <div class="row between"><h1>Coffee shelf</h1><a class="btn primary" href="#add">Add coffee</a></div>
+        <div class="chips shelf-filters" id="shelfFilters" role="radiogroup" aria-label="Filter coffees" hidden></div>
         <div class="shelf" id="shelf"></div>
       </section>
 
@@ -741,7 +1012,10 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 
       <!-- SHOTS -->
       <section id="view-shots" class="stack" hidden>
-        <div class="row between"><h1>Shots</h1><span class="muted small">Tick a second shot to compare</span></div>
+        <div class="stack" style="gap:var(--s-8)">
+          <div class="row between"><h1>Shots</h1><span class="muted small">Choose Compare on a second shot to overlay it</span></div>
+          <div class="chips shot-filters" id="shotFilters" role="radiogroup" aria-label="Filter by coffee" hidden></div>
+        </div>
         <div class="shots-grid">
           <div class="shot-list" id="shotList" role="region" aria-label="Shot list" tabindex="0"></div>
           <div class="panel stack" id="shotDetail" role="region" aria-label="Shot details" tabindex="0"><p class="muted">Pick a shot to see its curves.</p></div>
@@ -751,6 +1025,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <!-- SETTINGS -->
       <section id="view-settings" class="stack" hidden>
         <h1>Settings</h1>
+        <nav class="set-index" id="settingsIndex" aria-label="Settings sections"></nav>
         <div class="settings" id="settings"></div>
       </section>
     </div>
@@ -758,7 +1033,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 </div>
 
 <div class="overlay" id="opOverlay" hidden><div class="panel op-card" id="opCard"></div></div>
-<div class="saver" id="saver" hidden role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div>Asleep · tap to wake</div></div></div>
+<div class="saver" id="saver" hidden tabindex="0" role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div id="saverDate"></div><div id="saverHint">Asleep · tap to wake</div><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg" cx="20" cy="20" r="17"/></svg></div></div>
 <div class="sheet-back" id="sheetBack" hidden><div class="panel sheet stack" id="sheet" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
 

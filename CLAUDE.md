@@ -15,6 +15,8 @@ unverified.
 
 Read next, as needed:
 - `docs/implementation-plan.md`: the handoff and current plan. Start with "Where things stand" at its top; the progress table and ticked items say what is implemented, and "Next" lists what to pick up. Dated status updates and superseded lists are in `docs/history.md`.
+- `docs/ui-plan.md`: the UI plan in progress: eleven workstreams, layout specifications, the user's decisions and a status table to update with each PR.
+- `docs/ui-plan-briefs.md`: ready-to-use agent briefs for each remaining UI workstream.
 - `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
@@ -65,9 +67,12 @@ node scripts/e2e-demo.cjs            # click through the demo at tablet and phon
 node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
 node scripts/e2e-shot-history.cjs    # independent history panes, paging, keyboard and phone resize (--built too)
 node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
+node scripts/e2e-sleep.cjs           # sleep screen: date, tap vs hold to wake, chime on a shot ending (--built too)
 node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
+node scripts/check-targets.cjs       # touch targets under 44 px, overlapping controls and clipped text on every view, also with the ?stress fixture; known failures are in check-targets.allow.json (--built too)
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
 node scripts/e2e-review.cjs          # saved shot reviews, taste, recorded context, fallback and phone reload
+node scripts/e2e-screens.cjs         # Shelf More sheet and filters, Shots coffee filter and Compare, Settings index
 node scripts/e2e-brewing.cjs         # bagless/manual modes, attribution, favourites, built demo (local simulator only)
 node scripts/e2e-brewing.cjs --favourites-only  # live/built carousel, writes, swipe/tap and held loads
 node scripts/docker-smoke.mjs        # builds the server image and checks it with the mock AI (needs Docker)

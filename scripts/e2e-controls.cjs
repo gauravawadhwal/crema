@@ -77,7 +77,8 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
   };
   const hold = (name) => p.evaluate((n) => { window.__release = window.__hold(n); }, name);
   const release = () => p.evaluate(() => window.__release());
-  const tap = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel); // a tap, even on a disabled-looking button
+  const tap = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
+  const editDose = async () => { await tap('[data-value="dose"]'); await tap('#valuePlus'); await tap('#valueSet'); };
   // A real tap: press, hold about as long as a finger does, release.
   const press = async (sel, ms = 150) => {
     const box = await (await p.$(sel)).boundingBox();
@@ -154,9 +155,9 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
       await p.evaluate(() => { window.__applies = []; });
       const dose0 = await p.evaluate(() => S.next.doseG);
-      await tap('[data-step="dose:1"]');
+      await editDose();
       await tap("#loadBtn");
-      await tap('[data-step="dose:1"]');
+      await editDose();
       await tap("#loadBtn");
       const during = await p.evaluate(() => ({ applies: window.__applies.slice(), label: document.querySelector("#loadBtn").textContent, toast: document.querySelector("#toast").textContent }));
       check(during.applies.length === 0, "no recipe is written to the machine during a shot", JSON.stringify(during.applies));
@@ -174,7 +175,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     if (!hasRecipe) console.log("skip a start waits for a load already on its way (no coffee on the shelf, so no recipe)");
     else {
       await reset();
-      await tap('[data-step="dose:1"]'); // the recipe now needs loading
+      await editDose(); // the recipe now needs loading
       await p.evaluate(() => { window.__applies = []; });
       await hold("apply");
       await tap("#loadBtn");
@@ -223,13 +224,89 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       window.__tares = 0; const t = S.api.machine.tare; S.api.machine.tare = (...a) => { window.__tares++; return t(...a); };
       window.__redraw = setInterval(() => { S.scale = { ...S.scale, connected: true, weight: (S.scale.weight || 0) + 0.1 }; renderStatus(); renderReadouts(); }, 50);
     });
-    for (const sel of ["#scaleChip", "#weightReadout"]) {
+    for (const sel of ["#tareBtn"]) {
       await p.evaluate(() => (window.__tares = 0));
       for (let i = 0; i < 3; i++) { await press(sel); await p.waitForTimeout(150); }
       const n = await p.evaluate(() => window.__tares);
       check(n === 3, `held taps on ${sel} each tare the scale`, `${n} of 3`);
     }
     await p.evaluate(() => clearInterval(window.__redraw));
+
+    // 12. Stop stays in place at rest and after a shot, and during pour mode its expanded
+    // rectangle covers the corner where Stop sits at rest, at each DE1 tablet size.
+    if (!hasRecipe) console.log("skip Stop keeps its rectangle (no coffee on the shelf, so no recipe)");
+    else for (const [w, h] of [[1340, 800], [1340, 752], [1206, 720], [1005, 600], [1005, 552]]) {
+      await p.setViewportSize({ width: w, height: h });
+      await reset();
+      const box = () => p.evaluate(() => { const r = document.querySelector("#stopBtn").getBoundingClientRect(); return { x: Math.round(r.x * 10) / 10, y: Math.round(r.y * 10) / 10, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, r: Math.round(r.right * 10) / 10, b: Math.round(r.bottom * 10) / 10 }; });
+      const fmt = (b) => `${b.x},${b.y},${b.w},${b.h}`;
+      await editDose(); // recipe not on the machine: the Espresso hint applies
+      await p.waitForTimeout(100);
+      const notLoaded = await box();
+      await tap("#loadBtn");
+      await p.waitForFunction(() => S.loaded, null, { timeout: 5000 }).catch(() => {});
+      await p.waitForTimeout(100);
+      const atRest = await box();
+      await tap('[data-run="espresso"]');
+      await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 }).catch(() => {});
+      await p.waitForTimeout(300);
+      const during = await box();
+      await tap("#stopBtn");
+      await reset();
+      const after = await box();
+      const restSame = fmt(notLoaded) === fmt(atRest) && fmt(atRest) === fmt(after);
+      const coversRight = during.x <= atRest.x + 1 && during.y <= atRest.y + 1 && during.r >= atRest.r - 1 && during.b >= atRest.b - 1 && during.b <= h;
+      check(restSame && coversRight, `Stop keeps its rest rectangle and pour Stop covers the corner at ${w}x${h}`, `${fmt(notLoaded)} | ${fmt(atRest)} | ${fmt(during)} | ${fmt(after)}`);
+    }
+    await p.setViewportSize({ width: 1340, height: 800 });
+
+    // 13. Pour mode: hero numbers, step rail, Skip step, mid-shot socket loss, and 1005x552 fit.
+    if (hasRecipe) {
+      await reset();
+      await tap('[data-run="espresso"]');
+      await p.waitForFunction(() => S.snap?.state?.state === "espresso" && S.live.length > 0, null, { timeout: 10000 });
+      await p.waitForTimeout(300);
+      const pour = await p.evaluate(() => {
+        const stop = document.querySelector("#stopBtn").getBoundingClientRect();
+        const time = document.querySelector("#pourTime")?.parentElement ? getComputedStyle(document.querySelector("#pourTime").parentElement).fontSize : "";
+        const weight = document.querySelector("#pourWeight")?.parentElement ? getComputedStyle(document.querySelector("#pourWeight").parentElement).fontSize : "";
+        const steps = [...document.querySelectorAll("#pourSteps .step strong")].map((el) => el.textContent);
+        const nowIdx = [...document.querySelectorAll("#pourSteps .step")].findIndex((el) => el.classList.contains("now"));
+        return { pouring: document.body.classList.contains("pouring"), status: document.querySelector("#status").textContent, time, weight, steps, nowIdx, stopW: Math.round(stop.width), stopH: Math.round(stop.height), skip: !!document.querySelector("#skipBtn") };
+      });
+      check(pour.pouring && /Pouring/.test(pour.status) && pour.time === "84px" && pour.weight === "84px", "pour mode shows 84 px hero numbers and Pouring status", JSON.stringify(pour));
+      check(pour.steps.length > 0 && pour.nowIdx >= 0 && pour.stopW === 300 && pour.stopH === 96, "pour mode shows the step name and a 300x96 Stop button", JSON.stringify(pour));
+      if (pour.skip) {
+        const beforeIdx = pour.nowIdx;
+        await tap("#skipBtn");
+        await p.waitForFunction((i) => [...document.querySelectorAll("#pourSteps .step")].findIndex((el) => el.classList.contains("now")) > i, beforeIdx, { timeout: 3000 }).catch(() => {});
+        const afterIdx = await p.evaluate(() => [...document.querySelectorAll("#pourSteps .step")].findIndex((el) => el.classList.contains("now")));
+        check(afterIdx > beforeIdx, `Skip step advances from step ${beforeIdx + 1} to ${afterIdx + 1}`);
+      }
+      // Drop the machine socket mid-shot: pour layout holds, says "No link, still pouring", Stop stays enabled, no workflow write mid-shot.
+      const appliesBefore = await p.evaluate(() => window.__applies.length);
+      await p.evaluate(() => { onStreamLost("machine"); });
+      const dropped = await p.evaluate(() => ({ pouring: document.body.classList.contains("pouring"), status: document.querySelector("#status").textContent, note: document.querySelector(".pour-note")?.textContent, stopDisabled: document.querySelector("#stopBtn").disabled }));
+      check(dropped.pouring && /No link, still pouring/.test(dropped.status) && !dropped.stopDisabled, "when the socket drops mid-shot, pour layout holds and Stop stays available", JSON.stringify(dropped));
+      await p.evaluate(() => loadOntoMachine(true));
+      check((await p.evaluate(() => window.__applies.length)) === appliesBefore, "no workflow write happens while the shot is running across a socket drop");
+      await tap("#stopBtn");
+      await reset();
+
+      // At 1005x552, time, weight and Stop are visible without scrolling.
+      await p.setViewportSize({ width: 1005, height: 552 });
+      await tap('[data-run="espresso"]');
+      await p.waitForFunction(() => S.snap?.state?.state === "espresso" && S.live.length > 0, null, { timeout: 10000 });
+      await p.waitForTimeout(200);
+      const compact = await p.evaluate(() => {
+        const inView = (sel) => { const r = document.querySelector(sel)?.getBoundingClientRect(); return !!r && r.width > 0 && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; };
+        return { scrolls: document.documentElement.scrollHeight > innerHeight, time: inView("#pourTime"), weight: inView("#pourWeight"), stop: inView("#stopBtn") };
+      });
+      check(!compact.scrolls && compact.time && compact.weight && compact.stop, "at 1005x552, time, weight and Stop are visible without scrolling", JSON.stringify(compact));
+      await tap("#stopBtn");
+      await reset();
+      await p.setViewportSize({ width: 1340, height: 800 });
+    }
   } catch (e) {
     check(false, e.message.split("\n")[0]);
   }

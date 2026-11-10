@@ -36,6 +36,12 @@ Run what applies, in this order. Each command exits non-zero on failure.
    ```
    It exits nonzero and lists each problem if the page scrolls in either direction, a column clips, or the page throws. Look at a screenshot or two as well.
 
+   For a CSS, layout or copy-length change on any view, also check touch targets, overlaps and clipped text. It runs every view at the tablet sizes and at 390×844, with the demo's coffees and with the `?stress` fixture (long names, an unbroken word, no roaster).
+   ```bash
+   node scripts/check-targets.cjs --shots /tmp/crema-targets && node scripts/check-targets.cjs --built
+   ```
+   Known failures are listed in `scripts/check-targets.allow.json`, each with the UI-plan workstream that fixes it. The check fails on a failure that isn't listed and on an entry that no longer fails, so delete entries as you fix them and don't add new ones. `--all` prints the listed failures with their sizes.
+
 5. **Built demo**: needed whenever the demo or its build changes.
    ```bash
    npx tsx scripts/build-demo-data.ts && node scripts/build-demo.mjs && node scripts/e2e-demo.cjs --built

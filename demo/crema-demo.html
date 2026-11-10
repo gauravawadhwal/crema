@@ -33,6 +33,25 @@
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r: 14px;
+  /* Type scale, spacing steps and control heights (UI plan, WS 1). Defined here for
+     the later workstreams to adopt; nothing uses them yet. Sizes are in rem like the
+     rest of the sheet (1rem = 16px): 11, 12.5, 14, 16, 20 px, and 84 px for the hero
+     numbers. --hit is the smallest touch target; --hit-tight applies only at the two
+     shortest tablet heights (max-height 640). scripts/check-targets.cjs enforces both. */
+  --t-xs: .6875rem;
+  --t-s: .78125rem;
+  --t-m: .875rem;
+  --t-l: 1rem;
+  --t-xl: 1.25rem;
+  --t-hero: 5.25rem;
+  --s-4: 4px;
+  --s-8: 8px;
+  --s-12: 12px;
+  --s-16: 16px;
+  --s-24: 24px;
+  --hit: 44px;
+  --hit-tight: 40px;
+  --hit-now: var(--hit); /* the target size that applies at this screen height */
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -134,9 +153,9 @@ h2 { font-size: 1.15rem; }
 h3 { font-size: .98rem; }
 p { margin: 0; }
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
+.label { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 500; }
 .muted { color: var(--muted); }
-.small { font-size: .84rem; }
+.small { font-size: var(--t-m); }
 .error { color: var(--bad); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
@@ -203,15 +222,17 @@ button.chip { cursor: pointer; }
 
 /* ---------- brew home ---------- */
 .brew-grid { display: grid; gap: 14px; grid-template-columns: minmax(270px, 340px) minmax(0, 1fr) minmax(190px, 220px); align-items: start; }
-.coffee-line { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.coffee-line { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px 12px; align-items: center; }
+.coffee-meta { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 .bag { width: 56px; height: 68px; border-radius: 9px 9px 12px 12px; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; position: relative; border: 1px solid var(--line); flex: none; }
 .bag img { width: 100%; height: 100%; object-fit: cover; }
 .bag .initial { font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; color: #1b130e; }
 .bag.lg { width: 96px; height: 116px; }
 .bag.xl { width: 76px; height: 92px; }
-.cycler { display: flex; gap: 4px; }
-.coffee-name { font-family: var(--font-display); font-weight: 600; font-size: 1.12rem; line-height: 1.2; }
-.pill { font-size: .68rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.cycler { display: flex; gap: 4px; flex: none; margin-left: auto; }
+.cycler .btn { width: var(--hit); height: var(--hit); min-height: var(--hit); padding: 0; }
+.coffee-name { font-family: var(--font-display); font-weight: 600; font-size: var(--t-xl); line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pill { font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
 .pill.peak, .pill.good { color: var(--good); background: color-mix(in srgb, var(--good) 16%, transparent); }
 .pill.resting, .pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
 .pill.fading, .pill.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
@@ -224,77 +245,82 @@ button.chip { cursor: pointer; }
 .stepper button { border: 0; background: var(--surface-2); height: 44px; font-size: 1.2rem; cursor: pointer; }
 .stepper button:active { background: var(--line); }
 .stepper .val { text-align: center; font-family: var(--font-mono); font-size: 1.15rem; font-variant-numeric: tabular-nums; line-height: 1.1; padding: 2px 4px; }
-.stepper .val small { display: block; font-size: .7rem; color: var(--muted); }
+.stepper .val small { display: block; font-size: var(--t-xs); color: var(--muted); }
 .stepper input { width: 100%; border: 0; background: transparent; text-align: center; font-family: var(--font-mono); font-size: 1.1rem; padding: 0; min-height: 40px; }
 .profile-btn { display: flex; gap: 8px; align-items: center; justify-content: space-between; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; text-align: left; min-height: 48px; }
-.profile-btn .t { font-family: var(--font-display); font-weight: 600; font-size: 1rem; }
-.why { margin: 0; padding-left: 18px; color: var(--muted); font-size: .84rem; display: grid; gap: 3px; }
-details summary { cursor: pointer; color: var(--muted); font-size: .84rem; }
+.profile-btn .t { font-family: var(--font-display); font-weight: 600; font-size: var(--t-l); }
+.why { margin: 0; padding-left: 18px; color: var(--muted); font-size: var(--t-m); display: grid; gap: 3px; }
+details summary { cursor: pointer; color: var(--muted); font-size: var(--t-m); }
 details[open] summary { margin-bottom: 8px; }
 
 .stop-choice { border: 0; background: transparent; color: var(--fg); cursor: pointer; }
 .coffee-choice { display: grid; gap: 3px; min-height: 44px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
-.coffee-choice .pill { justify-self: start; }
+.coffee-choice .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.coffee-meta .pill { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .coffee-line.bagless { grid-template-columns: minmax(0, 1fr); }
+.coffee-line.bagless .coffee-meta { grid-column: 1; }
 .favs-panel { grid-column: 1 / -1; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; min-width: 0; min-height: 0; padding-top: 14px; border-top: 1px solid var(--line); }
 .fav-tools { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; min-height: 0; }
 .fav-tools h2 { font-size: 1rem; line-height: 1.2; }
 .fav-nav { display: flex; gap: 4px; }
 .fav-nav button, .fav-edit { min-height: 48px; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
 .fav-nav button { width: 48px; height: 48px; padding: 0; font-size: 1.6rem; line-height: 1; }
-.fav-edit { width: 100%; font-size: .84rem; color: var(--muted); }
+.fav-edit { width: 100%; font-size: var(--t-m); color: var(--muted); }
 .fav-nav button:disabled { opacity: .28; cursor: default; }
 .favs { display: grid; grid-auto-flow: column; grid-auto-columns: 236px; gap: 10px; min-height: 0; min-width: 0; position: relative; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
 .favs::-webkit-scrollbar { display: none; }
 .fav { min-width: 0; min-height: 108px; padding: 14px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: left; scroll-snap-align: start; scroll-snap-stop: always; user-select: none; }
 .fav:hover, .fav-edit:hover, .fav-nav button:hover:not(:disabled) { border-color: var(--muted); }
 .fav[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
-.fav strong { font-family: var(--font-display); font-size: 1rem; line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.fav-profile { display: block; color: var(--muted); font-size: .78rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fav-recipe { margin-top: auto; font-size: .78rem; line-height: 1.3; white-space: nowrap; }
+.fav strong { font-family: var(--font-display); font-size: var(--t-l); line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fav-profile { display: block; color: var(--muted); font-size: var(--t-s); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-recipe { margin-top: auto; font-size: var(--t-s); line-height: 1.3; white-space: nowrap; }
 .fav-temp { color: var(--muted); }
 .fav.empty { justify-content: center; border-style: dashed; background: transparent; }
 .fav.empty strong { font-size: .91rem; font-weight: 500; }
 .fav-plus { font-size: 1.35rem; line-height: 1; color: var(--accent); }
-.fav-action { color: var(--accent); font-size: .75rem; margin-top: auto; }
+.fav-action { color: var(--accent); font-size: var(--t-s); margin-top: auto; }
 .fav:disabled, .fav-edit:disabled { opacity: .5; cursor: default; }
 .favs:focus-visible, .favs .fav:focus-visible { outline-offset: -3px; }
 
-.readouts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.readouts { display: grid; grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 8px; }
 .readout { display: grid; gap: 0; min-width: 0; }
 .readout .v { font-family: var(--font-mono); font-size: 1.45rem; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
-.readout .v small { font-size: .7rem; color: var(--muted); margin-left: 2px; }
+.readout .v small { font-size: var(--t-xs); color: var(--muted); margin-left: 2px; }
 .readout .k { display: flex; align-items: center; gap: 6px; }
 button.readout { border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; }
 .swatch { width: 10px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
 .chart-box { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; }
 .chart-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .9rem; text-align: center; padding: 20px; pointer-events: none; }
-/* With the profile drawn, the hint sits above it, where pressure rarely reaches. */
-.chart-empty.over-plan { place-items: start center; padding: 14px 48px; font-size: .84rem; }
+/* The hint lives in the panel header, never over the plot. Hidden mid-shot, but it keeps its space. */
+.chart-hint { color: var(--muted); font-size: var(--t-s); line-height: 1.3; min-height: 2.6em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.chart-hint[hidden] { display: -webkit-box; visibility: hidden; }
 .linkish { border: 0; background: none; padding: 0 2px; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; min-height: 24px; }
 .plan-box { display: grid; gap: 8px; }
 .plan-chart { width: 100%; height: 190px; display: block; }
 .plan-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--fg); }
 .plan-steps b { font-weight: 600; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .76rem; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-s); color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.phase { font-family: var(--font-display); font-weight: 600; font-size: 1.05rem; }
+.phase { font-family: var(--font-display); font-weight: 600; font-size: var(--t-l); }
 .clock { font-family: var(--font-mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
 
 .controls { display: grid; gap: 10px; min-width: 0; }
 .ctl { display: grid; gap: 6px; min-width: 0; padding: 10px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); }
-.ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: .98rem; text-align: left; }
-.ctl-btn .sub { white-space: nowrap; margin-left: auto; font-family: var(--font-mono); font-size: .8rem; color: var(--muted); font-weight: 400; }
+.ctl-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 54px; padding: 8px 12px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-weight: 600; font-size: var(--t-l); text-align: left; }
+.ctl-btn .sub { white-space: nowrap; margin-left: auto; font-family: var(--font-mono); font-size: var(--t-s); color: var(--muted); font-weight: 400; }
+/* Espresso: name above, "dose→yield · loads first" below, so its height never depends on the hint. */
+.ctl-btn.two-line { flex-wrap: wrap; row-gap: 0; align-content: center; }
+.ctl-btn.two-line .sub { flex: 0 0 100%; margin-left: 0; white-space: nowrap; max-width: none; text-align: left; font-size: var(--t-xs); overflow: hidden; text-overflow: ellipsis; }
 .ctl-btn.go { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .ctl-btn.go .sub { color: var(--accent-ink); opacity: .75; }
 .ctl-btn:disabled { opacity: .45; cursor: not-allowed; }
 .presets { display: flex; flex-wrap: wrap; gap: 4px; }
-.preset { padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: .76rem; min-height: 30px; }
+.preset { padding: 4px 9px; border-radius: 8px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: var(--t-s); min-height: 30px; }
 .preset[aria-pressed="true"] { background: var(--surface-2); border-color: var(--accent); color: var(--fg); }
-.stop-btn { width: 100%; min-height: 64px; border-radius: var(--r); border: 0; background: var(--surface-2); color: var(--muted); font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .06em; cursor: pointer; }
+.stop-btn { width: 100%; min-height: 64px; border-radius: var(--r); border: 0; background: var(--surface-2); color: var(--muted); font-family: var(--font-display); font-weight: 700; font-size: var(--t-xl); letter-spacing: .06em; cursor: pointer; }
 .stop-btn.active { background: var(--stop); color: #fff; }
-.ghc-note { font-size: .78rem; color: var(--muted); }
+.ghc-note { font-size: var(--t-s); color: var(--muted); }
 .stop-wrap, .ghc-note { min-width: 0; }
 
 .taste { display: grid; gap: 12px; }
@@ -324,6 +350,15 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .op-bar { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .op-bar > div { height: 100%; background: var(--accent); transition: width .2s linear; }
 .saver { position: fixed; inset: 0; z-index: 60; background: #000; color: #8d8178; display: grid; place-items: center; cursor: pointer; }
+.saver .stack { gap: 10px; }
+.saver .ring { width: 56px; height: 56px; opacity: 0; transform: rotate(-90deg); }
+.saver .ring circle { fill: none; stroke-width: 3; }
+.saver .ring .bg { stroke: #2a2420; }
+.saver .ring .fg { stroke: #cfc3b8; stroke-dasharray: 106.8; stroke-dashoffset: 106.8; }
+.saver.holding .ring { opacity: 1; }
+.saver.holding .ring .fg { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+.saver.holding #saverHint { color: #cfc3b8; }
+.saver { touch-action: none; user-select: none; -webkit-user-select: none; }
 .saver .t { font-family: var(--font-mono); font-size: clamp(3rem, 14vw, 9rem); font-variant-numeric: tabular-nums; color: #cfc3b8; }
 .sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); display: grid; place-items: end center; padding: 16px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 @media (min-width: 761px) { .sheet-back { place-items: center; } }
@@ -331,7 +366,26 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 
 /* ---------- shelf ---------- */
 .shelf { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
-.bean-card { display: grid; gap: 12px; align-content: start; }
+.bean-card { display: flex; flex-direction: column; gap: 12px; }
+.bean-card > * { min-width: 0; }
+.bean-text { align-content: start; grid-template-columns: minmax(0, 1fr); }
+.bean-text > * { min-width: 0; }
+.bean-card .tags { flex-wrap: nowrap; overflow: hidden; }
+.bean-card .tag { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clamp2, .clip1 { overflow-wrap: anywhere; }
+.clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.clip1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bean-card h2 { line-height: 1.2; }
+.bean-card .pill.plain { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: top; }
+.card-actions { display: flex; gap: var(--s-8); margin-top: auto; }
+.card-actions .btn { min-height: var(--hit-now); }
+.more-btn { flex: none; width: var(--hit-now); padding: 0; }
+.more-list .btn { width: 100%; justify-content: flex-start; min-height: var(--hit-now); }
+.skeleton-card { display: grid; gap: var(--s-12); align-content: start; min-height: 260px; }
+.sk { border-radius: 10px; background: var(--surface-2); animation: sk-pulse 1.6s ease-in-out infinite; }
+.sk-head { height: 116px; } .sk-line { height: 14px; } .sk-line.short { width: 60%; } .sk-btn { height: var(--hit); margin-top: auto; }
+.skeleton-row { height: 62px; margin-bottom: var(--s-8); }
+@keyframes sk-pulse { 50% { opacity: .55; } }
 .bean-card.current { border-color: var(--accent); }
 .coffee-head { display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 14px; align-items: center; }
 .rest { display: grid; gap: 6px; }
@@ -397,8 +451,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .cand ul { margin: 0; padding-left: 18px; font-size: .84rem; display: grid; gap: 2px; }
 .caution { color: var(--warn); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.fchip { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: .8rem; min-height: 32px; }
-.fchip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.fchip { padding: 5px var(--s-16); border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: var(--t-m); min-height: var(--hit-now); }
+.fchip[aria-pressed="true"], .fchip[aria-checked="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .cat-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
 .cat-card { display: grid; gap: 6px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; align-content: start; }
 .cat-card:hover { border-color: var(--muted); }
@@ -409,32 +463,42 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 /* ---------- shots ---------- */
 .shots-grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: start; }
 .shot-list { display: grid; gap: 8px; }
-.shot-row { display: grid; grid-template-columns: 22px 110px minmax(0,1fr); gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; width: 100%; }
+.shot-row { display: grid; grid-template-columns: 110px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; width: 100%; }
 .shot-row.sel { border-color: var(--accent); }
 .shot-row.cmp { border-color: var(--flow); }
 .shot-row canvas { width: 110px; height: 40px; }
 .shot-row .open { border: 0; background: transparent; padding: 0; text-align: left; cursor: pointer; min-width: 0; display: grid; gap: 2px; }
 .shot-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .8rem; color: var(--muted); }
-.shot-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--flow); }
+.shot-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--flow); margin: 0; }
+.cmp-label { display: flex; align-items: center; gap: var(--s-8); min-height: var(--hit-now); min-width: var(--hit-now); padding-inline: var(--s-12); border-radius: 10px; cursor: pointer; font-size: var(--t-m); color: var(--muted); }
+.cmp-label:has(input:checked) { color: var(--fg); }
+.cmp-label:has(input:disabled) { opacity: .45; cursor: default; }
+.shot-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.shot-filters .fchip { flex: none; max-width: 240px; }
+.shot-filters .clip1 { display: block; }
+#shotDetail { grid-auto-rows: max-content; }
+#shotDetail .stars:not(.static) { padding-block: 7px; }
+#shotDetail .stars:not(.static) .stars-fill { inset: 7px auto 7px 0; }
+#shotDetail .seg.tap button { min-height: var(--hit-now); }
 
 /* ---------- settings ---------- */
 .settings { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); align-items: start; }
-.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 46px; border-top: 1px solid var(--line); padding-top: 8px; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 56px; border-top: 1px solid var(--line); padding-top: 8px; }
 .set-row.first { border-top: 0; padding-top: 0; }
 .set-row .hint { display: block; font-size: .78rem; color: var(--muted); }
-.mini { display: grid; grid-template-columns: 34px 66px 34px; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.mini button { border: 0; background: var(--surface-2); height: 36px; cursor: pointer; }
-.mini input { width: 100%; border: 0; background: var(--bg); text-align: center; height: 36px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.switch { position: relative; width: 48px; height: 28px; flex: none; }
+.mini { display: grid; grid-template-columns: var(--hit-now) 72px var(--hit-now); align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.mini button { border: 0; background: var(--surface-2); height: var(--hit-now); cursor: pointer; }
+.mini input { width: 100%; border: 0; background: var(--bg); text-align: center; height: var(--hit-now); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.switch { position: relative; width: 48px; height: var(--hit-now); flex: none; }
 .switch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; z-index: 1; }
-.switch span { position: absolute; inset: 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
+.switch span { position: absolute; inset: calc(50% - 14px) 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); pointer-events: none; }
 .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform .15s; }
 .switch input:checked + span { background: var(--accent); border-color: var(--accent); }
 .switch input:checked + span::after { transform: translateX(20px); background: var(--accent-ink); }
 .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sched { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-.days { display: flex; gap: 3px; flex-wrap: wrap; }
-.days button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: transparent; font-size: .72rem; cursor: pointer; }
+.days { display: flex; gap: 0; flex-wrap: wrap; }
+.days button { width: var(--hit-now); height: var(--hit-now); border-radius: 8px; border: 1px solid var(--line); background: transparent; font-size: .72rem; cursor: pointer; }
 .days button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* ---------- device frame (demo on a desktop) ---------- */
@@ -474,13 +538,14 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .favs { grid-auto-columns: 220px; }
   .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .controls .stop-wrap, .controls .ctl:first-child { grid-column: 1 / -1; }
-  .ctl-btn { font-size: .92rem; min-height: 48px; padding: 6px 10px; }
+  .ctl-btn { font-size: var(--t-m); min-height: 48px; padding: 6px 10px; }
   .ctl-btn .sub { white-space: nowrap; }
   .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .readouts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .facts { grid-template-columns: minmax(0, 1fr) auto; }
   .facts .k { grid-column: 1 / -1; padding-bottom: 0; }
-  .shot-row { grid-template-columns: 22px 80px minmax(0,1fr); }
+  .shot-row { grid-template-columns: 80px minmax(0,1fr); }
+  .cmp-label { grid-column: 1 / -1; justify-self: start; }
   .shot-row canvas { width: 80px; }
   h1 { font-size: 1.4rem; }
   .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
@@ -521,32 +586,33 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .seg.tap button { min-height: 34px; }
   .readout .v { font-size: 1.2rem; }
   .clock { font-size: 1.3rem; }
-  .coffee-line { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; }
+  .coffee-line { grid-template-columns: 48px minmax(0, 1fr); gap: 4px 10px; }
   .coffee-line .bag { width: 48px; height: 58px; }
-  .coffee-name { font-size: 1rem; }
+  .coffee-name { font-size: var(--t-l); }
   .coffee-choice { gap: 1px; }
   .field-row { min-height: 40px; padding-top: 6px; grid-template-columns: 58px minmax(0, 1fr); }
   .stepper { grid-template-columns: 40px minmax(0, 1fr) 40px; }
   .stepper button { height: 38px; }
   .stepper .val { font-size: 1rem; }
-  .stepper .val small { font-size: .64rem; }
+  .stepper .val small { font-size: var(--t-xs); }
   .profile-btn { min-height: 42px; padding: 6px 10px; }
-  .profile-btn .t { font-size: .92rem; }
+  .profile-btn .t { font-size: var(--t-m); }
   #nextShot .btn { min-height: 40px; }
+  #nextShot { gap: 8px; }
   .controls { gap: 8px; grid-template-columns: 1fr; }
   .ctl { padding: 8px; gap: 5px; }
-  .ctl-btn { min-height: 44px; font-size: .92rem; padding: 6px 10px; }
-  .preset { min-height: 28px; padding: 3px 8px; font-size: .72rem; }
+  .ctl-btn { min-height: 44px; font-size: var(--t-m); padding: 6px 10px; }
+  .preset { min-height: 28px; padding: 3px 8px; font-size: var(--t-xs); }
   .stop-btn { min-height: 52px; }
-  .ghc-note { font-size: .72rem; }
-  .ctl-btn .sub { font-size: .74rem; }
+  .ghc-note { font-size: var(--t-xs); }
+  .ctl-btn .sub { font-size: var(--t-xs); }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) and (max-width: 1250px) {
   .demo-banner { display: none; }
   #view-brew { grid-template-columns: 320px minmax(0, 1fr) minmax(160px, 176px); }
-  .readouts { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .readouts { grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); gap: 4px; }
   .readout .v { font-size: 1.02rem; }
-  .readout .label { font-size: .62rem; }
+  .readout .label { font-size: var(--t-xs); }
   .ctl .presets .preset { padding: 3px 6px; }
   .ctl-btn .sub { white-space: normal; max-width: 56%; line-height: 1.15; text-align: right; overflow-wrap: anywhere; }
   .ghc-note { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
@@ -554,7 +620,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
   .legend { display: none; }
   #view-brew .live-col > .panel:first-child { gap: 6px; }
-  .field-row { min-height: 36px; padding-top: 4px; }
+  .field-row { min-height: 36px; padding-top: 1px; }
   .stepper button { height: 34px; }
   .ctl-btn { min-height: 38px; }
   .ctl { padding: 6px; }
@@ -567,23 +633,25 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .fav-tools h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .favs { grid-auto-columns: 206px; gap: 8px; }
   .fav { min-height: 96px; padding: 10px; gap: 4px; }
-  .fav strong { font-size: .9rem; }
-  .fav-profile, .fav-recipe { font-size: .73rem; }
+  .fav strong { font-size: var(--t-m); }
+  .fav-profile, .fav-recipe { font-size: var(--t-xs); }
   .fav-temp { display: none; }
   #view-brew .live-col.has-after > .panel:first-child { flex: 0 0 46%; overflow: hidden; }
   #view-brew .live-col.has-after .chart-box { min-height: 0; }
   #view-brew .live-col.has-after #afterShot { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; }
   #afterShot .metrics { display: none; }
   .pick-src, .fav-hint { display: none; }
-  #nextShot { gap: 8px; }
+  #nextShot { gap: 4px; }
   .coffee-line .bag { width: 40px; height: 48px; }
-  .coffee-line { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .coffee-line { grid-template-columns: 40px minmax(0, 1fr); row-gap: 2px; }
+  .coffee-name { font-size: var(--t-m); }
+  .cycler .btn { width: var(--hit-tight); height: var(--hit-tight); min-height: var(--hit-tight); }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 580px) {
   main { padding-block: 8px; }
   #view-brew, #view-brew > .stack, body.on-brew .wrap { gap: 8px; }
   .panel { padding: 10px; }
-  .field-row { min-height: 34px; padding-top: 3px; gap: 8px; }
+  .field-row { min-height: 34px; padding-top: 1px; gap: 8px; }
   .stepper button { height: 32px; }
 }
 /* History is a master/detail workspace whenever the two panes sit side by side.
@@ -598,7 +666,189 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .shots-grid { min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
   #shotList, #shotDetail { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; align-content: start; }
 }
+/* ---------- Shelf, Profiles, Shots and Settings (UI plan, WS 9) ---------- */
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) { :root { --hit-now: var(--hit-tight); } }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#view-shelf .btn.small, #view-profiles .btn.small, #view-shots .btn.small, #view-settings .btn.small { min-height: var(--hit-now); }
+.prof-thumb { display: block; width: 100%; height: 36px; }
+.cand h3, .cat-card h3 { min-width: 0; }
+.cand.shown-above { grid-column: 1 / -1; padding: var(--s-8) var(--s-16); border-style: dashed; background: transparent; align-content: center; }
+.cand.shown-above h3 { font-size: var(--t-m); }
+#view-settings .seg button { min-height: var(--hit-now); min-width: var(--hit-now); }
+#view-settings input[type="range"] { height: var(--hit-now); }
+.set-index { position: sticky; top: 0; z-index: 5; display: flex; gap: var(--s-8); overflow-x: auto; scrollbar-width: thin; padding-block: var(--s-8); background: var(--bg); }
+.set-index .fchip { flex: none; }
+#settings > .panel { scroll-margin-top: calc(var(--hit-now) + var(--s-24)); }
+@media (max-width: 760px) {
+  .set-index { display: none; }
+  #view-settings .set-row:has(.seg) { grid-template-columns: minmax(0, 1fr); }
+  #view-settings .sched { padding-inline: 4px; }
+  #shotDetail .scale-row { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  #shotDetail .seg.tap button { font-size: var(--t-xs); padding-inline: 2px; overflow-wrap: anywhere; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+/* WS 3: fixed operation column and shared plan rail. */
+#controls { gap: var(--s-8); }
+#controls .ctl { padding: 0; border: 0; background: transparent; }
+#controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); padding: var(--s-8); }
+#controls .espresso-ctl .ctl-btn { min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+#controls .split-ctl { display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--hit) + var(--s-4)); gap: 0; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+#controls .split-ctl .ctl-btn { border: 0; border-radius: 0; background: transparent; }
+#controls .ctl-btn .sub { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: var(--t-xs); }
+.preset-open { min-width: calc(var(--hit) + var(--s-4)); min-height: var(--hit); border: 0; border-left: 1px solid var(--line); background: var(--surface-2); cursor: pointer; font-size: var(--t-s); }
+.preset-open:disabled { opacity: .45; cursor: default; }
+.preset-choice { justify-content: space-between; min-height: var(--hit); }
+.preset-choice[aria-pressed="true"] { border-color: var(--accent); }
+.scale-reading { min-width: 0; min-height: calc(var(--hit-tight) + var(--s-24)); display: flex; flex-direction: column; justify-content: center; padding: var(--s-8); overflow: hidden; }
+.scale-reading > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#controls .stop-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
+.steps-rail { display: flex; gap: var(--s-4); min-width: 0; }
+.steps-rail .step { flex-basis: 0; min-width: 0; padding: var(--s-8); border-top: var(--s-4) solid var(--line); background: var(--surface-2); }
+.steps-rail strong, .steps-rail span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-xs); }
+.steps-rail span { color: var(--muted); }
+.steps-rail .now { border-color: var(--accent); }
+.steps-rail .done { border-color: var(--pressure); }
+.steps-rail progress { width: 100%; accent-color: var(--accent); }
+#nextShot summary { min-height: var(--hit); display: flex; align-items: center; }
+.fav { position: relative; padding-left: calc(var(--hit-tight) + var(--s-24)); }
+.fav-art { position: absolute; left: var(--s-12); top: var(--s-12); width: var(--hit-tight); height: var(--hit-tight); border-radius: var(--s-4); background: var(--surface-2); display: grid; place-items: center; color: var(--muted); font-size: var(--t-xl); overflow: hidden; }
+.fav-art img { width: 100%; height: 100%; object-fit: cover; }
+.fav-spark { position: absolute; width: calc(var(--hit) + var(--s-4)); height: var(--t-xl); right: var(--s-8); bottom: var(--s-8); pointer-events: none; }
+.fav-spark polyline { fill: none; stroke: var(--pressure); stroke-width: 2; }
+.fav:not(.empty) .fav-recipe { margin-left: calc(0px - var(--hit-tight) - var(--s-12)); padding-right: calc(var(--hit) + var(--s-4)); }
+.fav.empty { padding-left: var(--s-12); }
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
+  #view-brew > .controls-col { grid-column: 3; grid-row: 1 / 3; overflow: hidden; display: flex; flex-direction: column; }
+  #view-brew .favs-panel { grid-column: 1 / 3; }
+  #controls { display: flex; flex-direction: column; flex: 1; height: 100%; }
+  #controls .stop-wrap { margin-top: auto; }
+  #controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+  #controls > * { flex-shrink: 0; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
+  #nextShot { gap: var(--s-4); }
+  #controls .espresso-ctl .ctl-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
+  #controls .ctl-btn, .scale-reading { min-height: calc(var(--hit) + var(--s-8)); }
+  #controls .stop-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
+  #planSteps { display: none; }
+  #controls .ctl-btn, .scale-reading { min-height: var(--hit-tight); }
+  #controls .espresso-ctl .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+  .fav { padding-left: calc(var(--hit-tight) + var(--s-24)); }
+  .fav-art { top: var(--s-8); left: var(--s-8); }
+}
+/* WS 4: Pour mode — full Brew takeover while a shot is running.
+   All tablet sizes share the compact layout's bottom-right Stop anchor, so
+   the 300×96 pour button retains the entire resting hit area. */
+body.pouring .rail .tab:not([data-view="brew"]) { opacity: .4; }
+.pour-top { grid-column: 1 / -1; gap: var(--s-8); padding: var(--s-12); }
+.pour-head { flex-wrap: nowrap; min-width: 0; gap: var(--s-12); }
+.pour-title { display: flex; align-items: baseline; gap: var(--s-8); min-width: 0; overflow: hidden; }
+.pour-title strong { font-family: var(--font-display); font-size: var(--t-l); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+.pour-title span { font-size: var(--t-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 2; }
+#pourStepCount { font-size: var(--t-s); white-space: nowrap; flex: none; }
+.pour-left { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s-12); min-height: 0; overflow: hidden; }
+.pour-hero { display: grid; gap: var(--s-8); min-width: 0; }
+.pour-stat { display: grid; gap: 0; min-width: 0; }
+.hero-val { font-family: var(--font-mono); font-size: var(--t-hero); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; letter-spacing: -.02em; }
+.hero-val small { font-size: var(--t-xl); color: var(--muted); font-weight: 400; margin-left: var(--s-4); }
+.pour-yield { display: grid; gap: var(--s-4); }
+.yield-bar { height: 10px; border-radius: var(--s-4); background: var(--surface-2); overflow: hidden; border: 1px solid var(--line); }
+.yield-bar > div { height: 100%; background: var(--weight); width: 0%; }
+.pour-sub { --cols: 3; margin-top: auto; border-top: 1px solid var(--line); padding-top: var(--s-8); }
+.pour-sub .readout .v { font-size: var(--t-xl); }
+.pour-note { font-size: var(--t-m); max-width: 56ch; margin-right: auto; }
+.skip-btn { min-width: 150px; min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); border-radius: var(--r); border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); font-family: var(--font-display); font-weight: 600; font-size: var(--t-l); cursor: pointer; padding: 0 var(--s-16); }
+.skip-btn:disabled { opacity: .45; cursor: default; }
+body.pouring #view-brew .favs-panel > * { visibility: hidden; pointer-events: none; }
+body.pouring #view-brew .next-col,
+body.pouring #view-brew .live-head,
+body.pouring #view-brew #chartEmpty,
+body.pouring #view-brew #planSteps,
+body.pouring #view-brew #readouts,
+body.pouring #view-brew #legend { display: none; }
+body.pouring #controls { position: relative; z-index: 5; }
+@media (min-width: 761px) {
+  body.pouring #view-brew { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(190px, 220px); }
+  body.pouring #view-brew .pour-left { grid-column: 1; }
+  body.pouring #view-brew .live-col { grid-column: 2 / -1; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
+  body.pouring #view-brew { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: auto minmax(0, 1fr) calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+  body.pouring #view-brew .pour-top { grid-row: 1; }
+  body.pouring #view-brew .pour-left { grid-column: 1; grid-row: 2; height: 100%; }
+  body.pouring #view-brew .live-col { grid-column: 2 / 4; grid-row: 2; }
+  body.pouring #view-brew .favs-panel { grid-row: 3; }
+  body.pouring #view-brew > .controls-col { grid-column: 1 / -1; grid-row: 3; height: auto; overflow: visible; align-self: stretch; display: flex; }
+  body.pouring #controls { flex: 1; flex-direction: row; align-items: flex-end; justify-content: flex-end; gap: var(--s-12); padding-top: 0; }
+  body.pouring #controls .stop-wrap { display: flex; gap: var(--s-12); align-items: flex-end; margin-top: 0; height: 100%; }
+  body.pouring #controls .stop-btn { width: 300px; height: 100%; min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
+  .hero-val { font-size: 4rem; }
+  body.pouring #controls .stop-btn, .skip-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
+  body.pouring #view-brew { grid-template-rows: auto minmax(0, 1fr) calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
+  .pour-top { padding: var(--s-8) var(--s-12); gap: var(--s-4); }
+  .pour-top .steps-rail .step { padding: var(--s-4) var(--s-8); }
+  .hero-val { font-size: 3.25rem; }
+  .pour-sub, .pour-note { display: none; }
+  body.pouring #controls { padding-top: 0; }
+  body.pouring #controls .stop-btn, .skip-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
+}
+@media (max-width: 760px) {
+  body.pouring #view-brew .favs-panel { display: none; }
+  body.pouring #view-brew .pour-top { order: 1; }
+  body.pouring #view-brew .pour-left { order: 2; }
+  body.pouring #view-brew .live-col { order: 3; }
+  body.pouring #view-brew .controls-col { order: 4; }
+  body.pouring #controls { display: flex; flex-wrap: wrap; gap: var(--s-8); }
+  body.pouring #controls .stop-wrap { display: flex; gap: var(--s-8); width: 100%; }
+  body.pouring #controls .stop-btn { flex: 1; width: auto; }
+}
+
+/* Recipe values (WS 6). These overrides also apply at compact tablet heights. */
+#nextShot .profile-btn .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; }
+#nextShot .profile-btn .t.long { font-size: var(--t-s); }
+.recipe-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.recipe-tile { min-width: 0; min-height: calc(var(--hit) + var(--s-24) + var(--s-12)); padding: var(--s-8) var(--s-4); display: grid; gap: var(--s-4); justify-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); cursor: pointer; }
+.recipe-tile .num { font-size: var(--t-xl); white-space: nowrap; }
+.recipe-tile small { margin-left: var(--s-4); font-size: var(--t-xs); }
+.recipe-tile > .muted { font-size: var(--t-xs); white-space: nowrap; }
+#nextShot .stepper { grid-template-columns: calc(var(--hit) + var(--s-8)) minmax(0, 1fr) calc(var(--hit) + var(--s-8)); }
+#nextShot .stepper button, #grindInput { min-height: calc(var(--hit) + var(--s-8)); font-size: var(--t-l); touch-action: none; }
+#settings .mini { grid-template-columns: var(--hit) calc(var(--hit) + var(--s-24)) var(--hit); }
+#settings .mini button { height: var(--hit); touch-action: none; }
+.recipe-sheet { width: min(calc(var(--hit) * 12), 100%); }
+.value-sheet { display: grid; gap: var(--s-12); }
+.value-handle { min-height: var(--hit); width: 100%; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; touch-action: none; }
+.value-handle span { width: var(--hit); height: var(--s-4); background: var(--muted); border-radius: var(--r); }
+.value-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-8); }
+.value-tabs button { min-height: var(--hit); border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); font-size: var(--t-m); cursor: pointer; }
+.value-tabs [aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.value-number { text-align: center; font: calc(var(--t-hero) - var(--t-xl)) var(--font-mono); font-variant-numeric: tabular-nums; }
+.value-number small { font-size: var(--t-xl); margin-left: var(--s-8); }
+.value-caption { text-align: center; font-size: var(--t-s); min-height: var(--s-24); }
+.value-ruler { position: relative; height: calc(var(--hit) + var(--s-8)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); touch-action: none; cursor: ew-resize; }
+.ruler-ticks { position: absolute; inset: var(--s-12) 0; background: repeating-linear-gradient(to right, var(--muted) 0 1px, transparent 1px var(--s-12)); background-position-x: var(--ruler-offset, 0px); }
+.ruler-marker { position: absolute; left: 50%; top: var(--s-4); bottom: var(--s-4); border-left: var(--s-4) solid var(--accent); }
+.value-limits { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--muted); margin-top: var(--s-4); }
+.value-stop, .value-recent { margin-top: var(--s-12); }
+.value-stop { display: flex; flex-wrap: wrap; gap: var(--s-8); }
+.value-stop [aria-pressed="true"] { border-color: var(--accent); }
+.value-stop p { margin: 0; }
+.value-recent > div { display: flex; flex-wrap: wrap; gap: var(--s-8); margin-top: var(--s-4); }
+.value-footer, .value-footer > div { display: flex; gap: var(--s-8); }
+.value-footer { justify-content: space-between; position: sticky; bottom: 0; background: var(--surface); padding-top: var(--s-8); }
+.value-footer .btn { min-height: calc(var(--hit) + var(--s-8)); padding: var(--s-8) var(--s-12); }
+#valueMinus, #valuePlus { width: calc(var(--hit) + var(--s-12)); touch-action: none; }
+@media (min-width: 900px) and (max-height: 640px) and (orientation: landscape) {
+  .recipe-tile { min-height: calc(var(--hit) + var(--s-24)); }
+  #nextShot .stepper { grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); }
+  #nextShot .stepper button, #grindInput { min-height: var(--hit); }
+}
 </style>
 <div class="app">
   <nav class="rail" aria-label="Sections">
@@ -625,17 +875,37 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 
       <!-- BREW (home) -->
       <section id="view-brew" class="brew-grid" hidden>
+        <div class="pour-top panel stack" id="pourTop" hidden>
+          <div class="row between pour-head">
+            <div class="pour-title"><strong id="pourProfile"></strong><span class="muted" id="pourRecipe"></span></div>
+            <span class="num muted" id="pourStepCount"></span>
+          </div>
+          <div class="steps-rail" id="pourSteps"></div>
+        </div>
         <div class="stack next-col">
           <div class="panel stack" id="nextShot"></div>
         </div>
+        <div class="panel pour-left" id="pourLeft" hidden>
+          <div class="pour-hero">
+            <div class="pour-stat"><span class="label">Time</span><div class="hero-val"><span id="pourTime">0.0</span><small>s</small></div></div>
+            <div class="pour-stat"><span class="label">Weight</span><div class="hero-val"><span id="pourWeight">0.0</span><small>g</small></div></div>
+            <div class="pour-yield" id="pourYield" hidden>
+              <div class="yield-bar"><div id="pourYieldBar"></div></div>
+              <div class="row between small muted"><span class="num" id="pourYieldText"></span><span class="num" id="pourEta"></span></div>
+            </div>
+          </div>
+          <div class="readouts pour-sub" id="pourSub"></div>
+        </div>
         <div class="stack live-col">
           <div class="panel stack">
-            <div class="row between">
+            <div class="row between live-head">
               <div class="row" style="gap:10px"><span class="phase" id="phase">Ready</span><span class="muted small" id="phaseSub"></span></div>
               <span class="clock" id="shotClock">0.0</span>
             </div>
+            <div class="chart-hint" id="chartEmpty"></div>
+            <div class="steps-rail" id="planSteps"></div>
             <div class="readouts" id="readouts"></div>
-            <div class="chart-box"><canvas id="liveChart" aria-label="Pressure, flow, weight and temperature over time"></canvas><div class="chart-empty" id="chartEmpty"></div></div>
+            <div class="chart-box"><canvas id="liveChart" aria-label="Pressure, flow, weight and temperature over time"></canvas></div>
             <div class="legend" id="legend"></div>
           </div>
           <div class="panel stack" id="afterShot" hidden></div>
@@ -652,6 +922,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <!-- SHELF -->
       <section id="view-shelf" class="stack" hidden>
         <div class="row between"><h1>Coffee shelf</h1><a class="btn primary" href="#add">Add coffee</a></div>
+        <div class="chips shelf-filters" id="shelfFilters" role="radiogroup" aria-label="Filter coffees" hidden></div>
         <div class="shelf" id="shelf"></div>
       </section>
 
@@ -728,7 +999,10 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 
       <!-- SHOTS -->
       <section id="view-shots" class="stack" hidden>
-        <div class="row between"><h1>Shots</h1><span class="muted small">Tick a second shot to compare</span></div>
+        <div class="stack" style="gap:var(--s-8)">
+          <div class="row between"><h1>Shots</h1><span class="muted small">Choose Compare on a second shot to overlay it</span></div>
+          <div class="chips shot-filters" id="shotFilters" role="radiogroup" aria-label="Filter by coffee" hidden></div>
+        </div>
         <div class="shots-grid">
           <div class="shot-list" id="shotList" role="region" aria-label="Shot list" tabindex="0"></div>
           <div class="panel stack" id="shotDetail" role="region" aria-label="Shot details" tabindex="0"><p class="muted">Pick a shot to see its curves.</p></div>
@@ -738,6 +1012,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <!-- SETTINGS -->
       <section id="view-settings" class="stack" hidden>
         <h1>Settings</h1>
+        <nav class="set-index" id="settingsIndex" aria-label="Settings sections"></nav>
         <div class="settings" id="settings"></div>
       </section>
     </div>
@@ -745,7 +1020,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 </div>
 
 <div class="overlay" id="opOverlay" hidden><div class="panel op-card" id="opCard"></div></div>
-<div class="saver" id="saver" hidden role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div>Asleep · tap to wake</div></div></div>
+<div class="saver" id="saver" hidden tabindex="0" role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div id="saverDate"></div><div id="saverHint">Asleep · tap to wake</div><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg" cx="20" cy="20" r="17"/></svg></div></div>
 <div class="sheet-back" id="sheetBack" hidden><div class="panel sheet stack" id="sheet" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -820,7 +1095,11 @@ var CremaEngine = (() => {
     startGate: () => startGate,
     startSettled: () => startSettled,
     startSteps: () => startSteps,
+    steadyWeightFlow: () => steadyWeightFlow,
     stepDurations: () => stepDurations,
+    stepProgress: () => stepProgress,
+    stepTimes: () => stepTimes,
+    stopReason: () => stopReason,
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
     toPastShot: () => toPastShot,
@@ -1834,6 +2113,16 @@ var CremaEngine = (() => {
       get done() {
         return done;
       },
+      /** Like Decaid's skipStep: move on to the next step now. Does nothing on the last step. */
+      skip() {
+        if (done || manual || frame >= steps.length - 1) return;
+        const s = steps[frame];
+        const pump = s.pump === "flow" ? "flow" : "pressure";
+        const goal = (pump === "flow" ? out.tf : out.tp) ?? num(pump === "flow" ? s.flow : s.pressure) ?? 0;
+        from = pump === "flow" ? { p: null, f: goal } : { p: goal, f: null };
+        frame += 1;
+        frameStart = t;
+      },
       tick(dt = 0.1) {
         if (!done) {
           const s = steps[frame];
@@ -2366,6 +2655,159 @@ var CremaEngine = (() => {
     patch.art = add.art || f.art || (add.productImage ? "product" : "photo");
     return patch;
   }
+
+  // server/control/steps.ts
+  var ETA_MIN_WEIGHT_G = 2;
+  var ETA_MIN_FLOW_GS = 0.3;
+  var ETA_WINDOW_S = 2;
+  var ETA_MAX_S = 120;
+  var num2 = (v) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  var clamp01 = (n) => Math.min(1, Math.max(0, n));
+  var round1 = (n) => Math.round(n * 10) / 10;
+  function stepTimes(points, count) {
+    const start = new Array(count).fill(null);
+    let index = null;
+    let lastT = null;
+    for (const pt of points) {
+      if (!Number.isFinite(pt.t)) continue;
+      lastT = pt.t;
+      const fr = pt.frame;
+      if (fr == null || !Number.isInteger(fr) || fr < 0 || fr >= count) continue;
+      if (index != null && fr <= index) continue;
+      for (let i = (index ?? -1) + 1; i <= fr; i++) start[i] = pt.t;
+      index = fr;
+    }
+    return { index, start, lastT };
+  }
+  function steadyWeightFlow(points, weightFlow) {
+    const pts = points.filter((p) => Number.isFinite(p.t) && typeof p.w === "number" && Number.isFinite(p.w));
+    const last = pts.at(-1);
+    if (!last || last.w < ETA_MIN_WEIGHT_G) return null;
+    const win = pts.filter((p) => p.t >= last.t - ETA_WINDOW_S && p.t <= last.t);
+    const first = win[0];
+    const span = last.t - first.t;
+    if (win.length < 3 || span < ETA_WINDOW_S * 0.75) return null;
+    const midT = first.t + span / 2;
+    const mid = win.reduce((a2, b2) => Math.abs(b2.t - midT) < Math.abs(a2.t - midT) ? b2 : a2);
+    if (mid.t <= first.t || mid.t >= last.t) return null;
+    const a = (mid.w - first.w) / (mid.t - first.t);
+    const b = (last.w - mid.w) / (last.t - mid.t);
+    if (a < ETA_MIN_FLOW_GS || b < ETA_MIN_FLOW_GS) return null;
+    if (Math.abs(a - b) > 0.35 * Math.max(a, b)) return null;
+    const rate = (last.w - first.w) / span;
+    if (weightFlow != null && Number.isFinite(weightFlow)) {
+      if (weightFlow < ETA_MIN_FLOW_GS || Math.abs(weightFlow - rate) > 0.5 * Math.max(weightFlow, rate)) return null;
+    }
+    return rate;
+  }
+  function crossing(from, now, goal, over2) {
+    if (over2 ? now >= goal : now <= goal) return 1;
+    const whole = over2 ? goal - from : from - goal;
+    if (whole <= 0) return 0;
+    return clamp01((over2 ? now - from : from - now) / whole);
+  }
+  function stepProgress(i) {
+    const raw = i.steps ?? [];
+    const points = i.points ?? [];
+    const count = raw.length;
+    const plan = profileCurve({ steps: raw })?.steps ?? [];
+    const { index, start, lastT } = stepTimes(points, count);
+    const last = points.at(-1);
+    const hasScale = i.hasScale ?? points.some((p) => typeof p.w === "number" && Number.isFinite(p.w));
+    const weight = hasScale && last && typeof last.w === "number" && Number.isFinite(last.w) ? last.w : null;
+    const target = i.targetYieldG != null && Number.isFinite(i.targetYieldG) && i.targetYieldG > 0 ? i.targetYieldG : null;
+    const steps = plan.map((s, n) => {
+      const state = index == null || n > index ? "ahead" : n < index ? "done" : "now";
+      const began = start[n];
+      const ended = state === "done" ? start[n + 1] : lastT;
+      const elapsedS = state === "ahead" || began == null || ended == null ? state === "ahead" ? null : 0 : round1(Math.max(0, ended - began));
+      return {
+        index: n,
+        name: s.name,
+        state,
+        elapsedS,
+        limitS: s.limitS > 0 ? s.limitS : null,
+        target: i.manual ? null : { kind: s.pump, value: s.target, smooth: s.smooth },
+        tempC: s.tempC,
+        tracking: null
+      };
+    });
+    if (index != null && !i.manual) {
+      const s = raw[index], now = steps[index], began = start[index];
+      const inStep = points.filter((p) => Number.isFinite(p.t) && p.t >= began);
+      const exits = [];
+      const e = s.exit, ev = num2(e?.value);
+      if (e && ev != null && (e.type === "pressure" || e.type === "flow")) {
+        const read = (p) => e.type === "pressure" ? p?.p : p?.f;
+        const from = read(inStep[0]), cur = read(last);
+        if (typeof from === "number" && typeof cur === "number" && Number.isFinite(from) && Number.isFinite(cur)) {
+          const over2 = e.condition !== "under";
+          const kind = e.type === "pressure" ? over2 ? "pressureOver" : "pressureUnder" : over2 ? "flowOver" : "flowUnder";
+          exits.push({ kind, progress: crossing(from, cur, ev, over2), value: cur, goal: ev });
+        }
+      }
+      const sw = num2(s.weight);
+      if (sw != null && sw > 0 && weight != null) exits.push({ kind: "weight", progress: clamp01(weight / sw), value: weight, goal: sw });
+      if (target != null && weight != null) exits.push({ kind: "yield", progress: clamp01(weight / target), value: weight, goal: target });
+      const sv = num2(s.volume);
+      if (sv != null && sv > 0) {
+        let ml = 0;
+        for (let k = 1; k < inStep.length; k++) ml += Math.max(0, inStep[k].f ?? 0) * Math.max(0, inStep[k].t - inStep[k - 1].t);
+        exits.push({ kind: "volume", progress: clamp01(ml / sv), value: round1(ml), goal: sv });
+      }
+      if (now.limitS != null) exits.push({ kind: "time", progress: clamp01(now.elapsedS / now.limitS), value: now.elapsedS, goal: now.limitS });
+      now.tracking = exits.reduce((best, x) => !best || x.progress > best.progress ? x : best, null);
+    }
+    let etaS = null;
+    if (target != null && weight != null) {
+      if (weight >= target) etaS = 0;
+      else {
+        const rate = steadyWeightFlow(hasScale ? points : [], i.weightFlow);
+        if (rate != null) etaS = round1(Math.min(ETA_MAX_S, Math.max(0, (target - weight) / rate)));
+      }
+    }
+    return { steps, index, count, yieldFraction: target != null && weight != null ? clamp01(weight / target) : null, etaS };
+  }
+
+  // server/control/stop.ts
+  var RECORDED = {
+    targetWeight: "weight",
+    targetVolume: "volume",
+    apiStop: "user",
+    appStop: "user",
+    machineEnded: "machine",
+    error: "error"
+  };
+  var NEAR_TARGET_UNDER_G = 3;
+  var NEAR_TARGET_OVER_G = 3;
+  var LIMIT_SLACK_S = 0.5;
+  function lastStepRanOut(steps, points) {
+    if (!steps?.length || !points?.length) return false;
+    const { index, start, lastT } = stepTimes(points, steps.length);
+    if (index !== steps.length - 1 || lastT == null) return false;
+    const limit = Number(steps[index].seconds);
+    return Number.isFinite(limit) && limit > 0 && lastT - start[index] >= limit - LIMIT_SLACK_S;
+  }
+  function stopReason(i) {
+    const w = i.finalWeightG, target = i.targetYieldG;
+    const comparable = w != null && Number.isFinite(w) && target != null && Number.isFinite(target) && target > 0;
+    const nearTarget = comparable ? w >= target - NEAR_TARGET_UNDER_G && w <= target + NEAR_TARGET_OVER_G : null;
+    const ranOut = lastStepRanOut(i.steps, i.points);
+    const known = i.recorded ? RECORDED[i.recorded] : void 0;
+    if (known) {
+      return { reason: known === "machine" && ranOut && !nearTarget ? "profile" : known, source: "recorded", nearTarget };
+    }
+    const inferred = (reason) => ({ reason, source: "inferred", nearTarget });
+    if (i.stoppedByCrema) return inferred("user");
+    if (nearTarget && ranOut) return inferred("unknown");
+    if (nearTarget && i.stopAtWeight !== false) return inferred("weight");
+    if (ranOut) return inferred("profile");
+    return inferred("unknown");
+  }
   return __toCommonJS(engine_exports);
 })();
 </script>
@@ -2497,9 +2939,38 @@ function makeDemoApi() {
   });
   for (const [id, entry] of Object.entries(savedReviews)) if (entry?.shot && !shots.some((shot) => shot.id === id)) shots.push(clone(entry.shot));
   let shotCounter = 0;
+
+  // ---------- stress fixture (?stress) ----------
+  // Awkward text for layout work and scripts/check-targets.cjs: a coffee with a long
+  // name on a recipe whose profile has a long name, a coffee whose name is one unbroken
+  // word, a coffee with no roaster, and a favourite carrying the long names. They go
+  // first on the shelf, so Brew opens on the long one. Without ?stress nothing here runs.
+  if (/[?&]stress\b/.test(location.search)) {
+    const longProfile = "Extended blooming with an adaptive pressure decline for very light roasts, revision 3.2";
+    demoProfiles.push({ ...CE.outlineProfile(longProfile, "blooming", 93, 45, "Stress fixture"), notes: "A made-up profile with a long name, for testing layouts." });
+    const base = all[0];
+    const stressBean = (n, name, roaster, byDrink = null) => {
+      const info = { ...clone(base.info), roaster: { value: roaster, source: "bag" }, name: { value: name, source: "bag" }, productUrl: null, sources: [], summary: "A made-up coffee for testing layouts with awkward text." };
+      const art = packshot({ roaster, name, origin: info.country.value, ...base.pack });
+      info.imageUrl = art;
+      const b = { ...clone(base), id: `stress-${n}`, batch: `stress-batch-${n}`, info, used: 40 * n, shelf: true, byDrink, productImage: art, art: "product", frozen: false, finished: false, bestShotId: null };
+      const r = recipeFor(b);
+      return Object.assign(b, { recipe: r.recipe, recipeSource: r.source });
+    };
+    const pick = clone(base.byDrink.both);
+    const longRecipe = { ...pick.recipe, profileTitle: longProfile, yieldG: 45, tempC: 93, rationale: ["A made-up recipe whose profile has a long name."], alternatives: [] };
+    const longPick = { recipe: longRecipe, source: "rules", ranking: [{ ...pick.ranking[0], title: longProfile, recipe: { ...pick.ranking[0].recipe, yieldG: 45, tempC: 93, basis: "A made-up profile with a long name" } }, ...pick.ranking.slice(0, 3)] };
+    const stressBeans = [
+      stressBean(1, "Hacienda Monte Largo Extended Fermentation Natural Pink Bourbon Microlot Forty-Two", "Long Name Coffee Roasters and Importers", { both: longPick }),
+      stressBean(2, "Hochlandkaffeespezialmischungsnummerdreiundzwanzigausgabe", "Unbroken Word Roasters"),
+      stressBean(3, "No Roaster Blend", ""),
+    ];
+    all.unshift(...stressBeans);
+    favourites.push({ name: stressBeans[0].info.name.value.slice(0, 40), profileTitle: longProfile, doseG: longRecipe.doseG, yieldG: longRecipe.yieldG, tempC: longRecipe.tempC, beanId: stressBeans[0].id, grinderSetting: null });
+  }
   const nextShotId = () => { while (shots.some((shot) => shot.id === `demo-shot-${shotCounter}`) || savedReviews[`demo-shot-${shotCounter}`]) shotCounter++; return `demo-shot-${shotCounter++}`; };
 
-  function stop(next = "idle", stopReason = "user") {
+  function stop(next = "idle", stopReason = "apiStop") {
     clearInterval(sim.timer); sim.timer = null;
     const was = sim.state;
     if (was === "espresso" && sim.samples.length > 20) {
@@ -2523,6 +2994,7 @@ function makeDemoApi() {
     const target = Number(workflow.context.targetYield ?? 0);
     // The puck follows the loaded profile's steps.
     const puck = state === "espresso" ? CE.shotSim(workflow.profile, { resistance: 0.92 + Math.random() * 0.16 }) : null;
+    sim.puck = puck;
     const limit = state === "steam" ? (wf.steamSettings.duration || 600) : state === "hotWater" ? wf.hotWaterData.volume / wf.hotWaterData.flow : state === "flush" ? wf.rinseData.duration : 120;
     let t = 0;
     if (state === "espresso") sim.scaleOffset = sim.scale;
@@ -2539,9 +3011,9 @@ function makeDemoApi() {
         sim.live = { p, f, tp: x.tp ?? 0, tf: x.tf ?? 0, t, frame: x.frame };
         const w = sim.scale - sim.scaleOffset;
         sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf, frame: x.frame });
-        if (target > 0 && w >= target - 1.2) { sim.substate = "pouringDone"; return stop("idle", "weight"); }
-        if (puck.done && !manualKind(workflow.profile)) { sim.substate = "pouringDone"; return stop("idle", "profile"); }
-        if (t > 120) { sim.substate = "pouringDone"; return stop("idle", "time"); }
+        if (target > 0 && w >= target - 1.2) { sim.substate = "pouringDone"; return stop("idle", "targetWeight"); }
+        if (puck.done && !manualKind(workflow.profile)) { sim.substate = "pouringDone"; return stop("idle", "machineEnded"); }
+        if (t > 120) { sim.substate = "pouringDone"; return stop("idle", "machineEnded"); }
       } else if (state === "steam") {
         p = 1.9 + Math.random() * 0.2; f = settings.steamFlow; sim.steamTemp = Math.max(135, sim.steamTemp - 0.08); sim.substate = "pouring";
         sim.live = { p, f, tp: 0, tf: 0, t };
@@ -2722,13 +3194,15 @@ function makeDemoApi() {
       async setState(s) {
         if (s === "idle") { if (sim.state === "sleeping") { sim.state = "heating"; snapshot(); } else stop("idle"); }
         else if (s === "sleeping") stop("sleeping");
+        else if (s === "skipStep") { if (sim.state === "espresso") sim.puck?.skip(); } // one step on, as Decaid's simulator does
         else run(s);
       },
+      skipStep() { return this.setState("skipStep"); },
       async tare() { sim.scaleOffset = sim.scale; },
       async recipe() {
         if (!workflow.applied) return null; // the demo's starting workflow is a placeholder, not a load
         const c = workflow.context;
-        return { profileTitle: workflow.profile.title, profileShape: brewProfileShape(workflow.profile), manual: manualKind(workflow.profile), coffeeName: c.coffeeName ?? null, coffeeRoaster: c.coffeeRoaster ?? null, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null };
+        return { profileTitle: workflow.profile.title, profileShape: brewProfileShape(workflow.profile), manual: manualKind(workflow.profile), coffeeName: c.coffeeName ?? null, coffeeRoaster: c.coffeeRoaster ?? null, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null, profile: clone(workflow.profile) };
       },
       workflowSettings: {
         get: async () => clone(wf),
@@ -3404,6 +3878,9 @@ function makeLiveApi(conn) {
       canStart: true,
       info: () => j(D("/machine/info")),
       setState: (s) => j(D(`/machine/state/${s}`), { method: "PUT" }),
+      // Decaid 0.9.1 passes skipStep to the DE1 (move on to the next profile step).
+      // Read at source only; not yet run against a real machine (UI plan, decision 4).
+      skipStep: () => j(D("/machine/state/skipStep"), { method: "PUT" }),
       tare: () => j(D("/scale/tare"), { method: "PUT" }),
       workflowSettings: { get: async () => pickSettings(await j(D("/workflow"))), set: (p) => put(D("/workflow"), pickSettings(p)) },
       // What the machine holds now, in the next-shot panel's terms. Decaid has no
@@ -3420,6 +3897,7 @@ function makeLiveApi(conn) {
           tempC: n(w.profile?.steps?.[0]?.temperature),
           grind: String(c.grinderSetting ?? w.grinderData?.setting ?? ""),
           batchId: c.beanBatchId ?? null,
+          profile: w.profile ?? null, // its steps name what pour mode shows
         };
       },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
@@ -3509,13 +3987,13 @@ const S = {
   prefs: {}, favourites: [], presets: null, maint: null,
   appSettings: null, // S.api.settings, once read
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
-  catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
+  catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true), holdWake: local.get("holdWake", false), chime: local.get("chime", false),
   shots: [], selShot: null, cmpShot: null, reviewPending: new Set(), afterViewToken: 0,
 };
 
 /* ================= chart ================= */
 function drawChart(canvas, pts, o = {}) {
-  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true } = o;
+  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true, ahead = null, shade = null, endLabels = false, thumb = false } = o;
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   if (!rect.width) return;
@@ -3556,12 +4034,16 @@ function drawChart(canvas, pts, o = {}) {
   };
   // The profile's plan (E.profileCurve), dashed: pressure and flow targets, each only
   // for the steps that drive it, the temperature, and faint lines where steps change.
-  if (plan && !compact) {
+  // Pour mode passes `ahead` (now, in s): the plan is drawn only after it, behind a
+  // "now" line, and `shade` ([start, end] in s) marks the step being poured.
+  if (plan && (!compact || thumb)) {
     ctx.save(); ctx.beginPath(); ctx.rect(pad.l, 0, iw, H); ctx.clip();
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
-    for (const st of plan.steps.slice(1)) if (st.end > st.start && st.start > 0) { ctx.beginPath(); ctx.moveTo(x(st.start), pad.t); ctx.lineTo(x(st.start), pad.t + ih); ctx.stroke(); }
+    if (!thumb) for (const st of plan.steps.slice(1)) if (st.end > st.start && st.start > 0) { ctx.beginPath(); ctx.moveTo(x(st.start), pad.t); ctx.lineTo(x(st.start), pad.t + ih); ctx.stroke(); }
+    if (shade && shade[1] > shade[0]) { ctx.globalAlpha = .1; ctx.fillStyle = css("--accent"); ctx.fillRect(x(shade[0]), pad.t, x(shade[1]) - x(shade[0]), ih); ctx.globalAlpha = 1; }
+    if (ahead != null) { ctx.beginPath(); ctx.rect(x(ahead), 0, W, H); ctx.clip(); }
     const planLine = (key, color, y, width, alpha) => {
-      ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash([5, 4]); ctx.lineJoin = "round"; ctx.beginPath();
+      ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(thumb ? [] : [5, 4]); ctx.lineJoin = "round"; ctx.beginPath();
       let down = false;
       for (const d of plan.points) {
         if (d[key] == null) { down = false; continue; }
@@ -3569,10 +4051,25 @@ function drawChart(canvas, pts, o = {}) {
       }
       ctx.stroke(); ctx.restore();
     };
-    planLine("temp", css("--temp"), yT, 1.2, .55);
-    planLine("tp", css("--pressure"), yB, 1.8, .85);
-    planLine("tf", css("--flow"), yB, 1.8, .85);
+    if (!thumb) planLine("temp", css("--temp"), yT, 1.2, .55);
+    planLine("tp", css("--pressure"), yB, thumb ? 1.5 : 1.8, .85);
+    planLine("tf", css("--flow"), yB, thumb ? 1.5 : 1.8, .85);
     ctx.restore();
+    if (ahead != null) { ctx.save(); ctx.strokeStyle = css("--muted"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x(ahead), pad.t); ctx.lineTo(x(ahead), pad.t + ih); ctx.stroke(); ctx.restore(); }
+    if (!pts.length) {
+      const used = [];
+      ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
+      for (const [key, color, y, title, unit] of [["tp", "--pressure", yB, "pressure ", " bar"], ["tf", "--flow", yB, "flow ", " ml/s"], ["temp", "--temp", yT, "", " °C"]]) {
+        const point = plan.points.find((p) => p[key] != null && p.t > 0 && p.t <= maxT);
+        if (!point) continue;
+        const label = `${title}${fmtC(point[key])}${unit}`, width = ctx.measureText(label).width;
+        if (width > iw) continue;
+        const yy = clamp(y(point[key]) - 6, pad.t + 12, H - pad.b - 4), xx = Math.min(x(point.t) + 6, W - pad.r - width);
+        if (used.some((r) => Math.abs(r.y - yy) < 16 && xx < r.x + r.w && xx + width > r.x)) continue;
+        ctx.fillStyle = css("--surface"); ctx.fillRect(xx - 2, yy - 11, width + 4, 14);
+        ctx.fillStyle = css(color); ctx.fillText(label, xx, yy); used.push({ x: xx, y: yy, w: width });
+      }
+    }
   }
   if (ghost?.length) {
     line(ghost, "p", css("--pressure"), yB, 1.5, { alpha: .25 });
@@ -3599,11 +4096,31 @@ function drawChart(canvas, pts, o = {}) {
       if (e?.[k] == null) continue;
       ctx.fillStyle = css(c); ctx.beginPath(); ctx.arc(x(e.t), y(e[k]), 3.5, 0, Math.PI * 2); ctx.fill();
     }
+    // Pour mode: each line's value at its end, in place of a legend.
+    if (endLabels) {
+      const items = [["p", "--pressure", yB, " bar"], ["f", "--flow", yB, " ml/s"], ["w", "--weight", yW, " g"], ["temp", "--temp", yT, " °C"]]
+        .filter(([k]) => e[k] != null && Number.isFinite(Number(e[k])))
+        .map(([k, c, y, u]) => ({ text: `${fmt1(e[k])}${u}`, c, y: y(e[k]) + 4 }))
+        .sort((a, b) => a.y - b.y);
+      for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 14) items[i].y = items[i - 1].y + 14;
+      ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
+      for (const it of items) {
+        const width = ctx.measureText(it.text).width;
+        let xx = x(e.t) + 8;
+        if (xx + width > W - pad.r) xx = x(e.t) - 8 - width;
+        const yy = clamp(it.y, pad.t + 10, H - pad.b);
+        ctx.fillStyle = css("--surface"); ctx.fillRect(xx - 2, yy - 11, width + 4, 14);
+        ctx.fillStyle = css(it.c); ctx.fillText(it.text, xx, yy);
+      }
+    }
   }
 }
-function legendHtml(withGhost, withPlan = false, removable = false) {
+// Who chose a recipe, in words for the person at the machine; the provider id belongs in Settings.
+function pickLabel(src) { return src === "rules" ? "Rules pick" : src === "saved" ? "Saved pick" : "AI pick"; }
+// brief: Brew's own legend leaves out the line names, which the readouts above already carry.
+function legendHtml(withGhost, withPlan = false, removable = false, brief = false) {
   const item = (c, t, dash) => `<span><span class="swatch" style="background:var(${c})${dash ? ";opacity:.6" : ""}"></span>${t}</span>`;
-  return [item("--pressure", "Pressure (bar)"), item("--flow", "Flow (ml/s)"), item("--weight", "Weight (g, right)"), item("--temp", "Temp (70–100 °C)"),
+  return [...(brief ? [] : [item("--pressure", "Pressure (bar)"), item("--flow", "Flow (ml/s)"), item("--weight", "Weight (g, right)"), item("--temp", "Temp (70–100 °C)")]),
     `<span class="muted">${withPlan ? "Dashed: the profile" : "Dashed: targets"}</span>`,
     withGhost ? `<span class="muted">Faint: reference shot${removable ? ' <button type="button" class="linkish" id="clearRef">Remove</button>' : ""}</span>` : ""].join("");
 }
@@ -3668,18 +4185,21 @@ function onDevices(payload) {
 function renderStatus() {
   const s = unlinked() ? null : S.snap, st = s?.state?.state || "unknown";
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
+  const pouring = shotRunning();
+  const linkLost = pouring && (!s || S.shotAcross);
   const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
   const low = S.water && S.water.currentLevel <= S.water.refillLevel;
   const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
+  const stateTxt = linkLost ? "No link, still pouring" : pouring ? "Pouring" : s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline";
   patchHtml($("#status"), `
-    <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
+    <span class="chip"><span class="dot ${linkLost ? "warn" : !s ? "bad" : busy || pouring ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(stateTxt)}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
     <span class="chip"><span class="muted">Group</span><span class="num">${fmt1(s?.groupTemperature ?? s?.mixTemperature)}°</span></span>
     <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
     ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
-    <button class="chip" type="button" id="scaleChip" title="Tap to tare">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</button>
+    <span class="chip" id="scaleChip">${S.scale.connected ? `<span class="muted">Scale</span><span class="num">${fmt1(S.scale.weight)} g</span>${S.scale.batteryLevel != null ? `<span class="muted small">${S.scale.batteryLevel}%</span>` : ""}` : '<span class="muted">No scale</span>'}</span>
     ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
     ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`);
-  $("#scaleChip").onclick = tare;
+
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
 }
@@ -3746,15 +4266,13 @@ function renderNextShot() {
   const r = b?.recipe, i = b?.info, rest = b ? restOf(i) : null;
   const ratio = n?.yieldG > 0 && n?.doseG > 0 ? (n.yieldG / n.doseG).toFixed(1) : null;
   el.innerHTML = `
-    <div class="coffee-line ${b ? "" : "bagless"}">${b ? bagArt(b) : ""}<button class="coffee-choice" id="coffeeChoice"><span class="label">${b ? esc(i.roaster.value) : "Coffee"}</span><span class="coffee-name">${b ? esc(i.name.value) : "No bag"} ›</span>
-      ${b ? `<span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</span>` : `<span class="muted small">${S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag"}</span>`}</button>
-      ${b && S.shelf.length > 1 ? `<div class="cycler"><button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button></div>` : ""}
+    <div class="coffee-line ${b ? "" : "bagless"}">${b ? bagArt(b) : ""}<button class="coffee-choice" id="coffeeChoice"><span class="label">${b ? esc(i.roaster.value) : "Coffee"}</span><span class="coffee-name">${b ? esc(i.name.value) : "No bag"} ›</span></button>
+      <div class="coffee-meta">${b ? `<span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</span>` : `<span class="muted small">${S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag"}</span>`}
+      ${b && S.shelf.length > 1 ? `<div class="cycler"><button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button></div>` : ""}</div>
     </div>
     ${n ? `
-    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? `Chosen by ${b.recipeSource}` : "Selected from installed profiles")}</span></span><span>›</span></button></div>
-    <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
-    <div class="field-row"><span class="label">Yield</span>${n.manual || S.noBag ? `<div class="stepper"><button type="button" data-step="yield:-1" aria-label="Less">−</button><button type="button" class="val stop-choice" id="stopMode">${n.yieldG > 0 ? fmt1(n.yieldG) : "Off"}<small>${n.yieldG > 0 ? "Tap for manual stop" : "Tap to set weight"}</small></button><button type="button" data-step="yield:1" aria-label="More">+</button></div>` : stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
-    <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
+    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t ${n.profileTitle.length > 45 ? "long" : ""}">${esc(n.profileTitle)}</span><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? pickLabel(b.recipeSource) : "Selected from installed profiles")}</span></span><span>›</span></button></div>
+    <div class="recipe-tiles">${Object.entries(RECIPE_FIELDS).map(([key, f]) => `<button type="button" class="recipe-tile" data-value="${key}"><span class="label">${f.label}</span><span class="num">${key === "yield" && n.yieldG === 0 ? "Off" : fmtC(n[f.field])}<small>${key === "yield" && n.yieldG === 0 ? "" : f.unit}</small></span><span class="muted">${key === "dose" ? `${fmtC(S.prefs.basketDoseG ?? n.doseG)} g basket` : key === "yield" ? ratio ? `1:${ratio}` : "Manual stop" : "all steps"}</span></button>`).join("")}</div>
     <div class="field-row"><span class="label">Grind</span><div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
     <div class="row"><button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine"}</button><button class="btn ghost" id="resetRecipe">Reset</button></div>
     ${r && !n.direct && !n.manual ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px"><ul class="why">${(r.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${r.dialIn ? `<div class="advice small">${esc(r.dialIn)}</div>` : ""}<div class="muted small">Target ${r.targetTimeS?.join("–") ?? "–"} s · ${esc(r.grindHint || "")}</div></div></details>` : ""}
@@ -3766,34 +4284,145 @@ function renderNextShot() {
   }
   if (!n) return;
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
-  $$("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
+  $$("[data-value]", el).forEach((btn) => (btn.onclick = () => openValueSheet(btn.dataset.value)));
+  $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, () => { renderNextShot(); renderControls(); }));
   $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
   $("#resetRecipe").onclick = () => n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot());
-  const stopMode = $("#stopMode");
-  if (stopMode) stopMode.onclick = () => {
-    if (n.yieldG > 0) { n.lastYieldG = n.yieldG; n.yieldG = 0; S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls(); }
-    else {
-      openSheet(`<h2>Stop at weight</h2><p class="muted">Requires a connected scale. Profile time limits still apply. Manual-profile scale stopping still needs a supervised check on your machine.</p><div class="field"><label for="weightTarget">Grams out</label><input type="number" min="1" id="weightTarget" value="${n.lastYieldG ?? ""}"></div><button class="btn primary" id="saveWeight">Set target</button>`);
-      $("#saveWeight").onclick = () => { const v = Number($("#weightTarget").value); if (!Number.isFinite(v) || v <= 0 || v > 1000) return toast("Enter a weight between 1 and 1000 g"); n.yieldG = v; S.loaded = false; saveBrewChoice(); closeSheet(); renderNextShot(); renderControls(); };
-    }
-  };
 }
-function stepper(key, valHtml) {
-  return `<div class="stepper"><button type="button" data-step="${key}:-1" aria-label="Less">−</button><div class="val">${valHtml}</div><button type="button" data-step="${key}:1" aria-label="More">+</button></div>`;
+// One source for recipe editing bounds. Yield may be zero for direct/manual profiles.
+const RECIPE_FIELDS = {
+  dose: { field: "doseG", label: "Dose", unit: "g", step: 0.5, min: 5, max: 30 },
+  yield: { field: "yieldG", label: "Yield", unit: "g", step: 1, min: 10, max: 1000 },
+  temp: { field: "tempC", label: "Temp", unit: "°C", step: 0.5, min: 60, max: 100 },
+};
+function recipeField(key, recipe = S.next) {
+  const f = RECIPE_FIELDS[key];
+  return { ...f, min: key === "yield" && (recipe.direct || recipe.manual || S.noBag) ? 0 : f.min };
 }
-function step(spec) {
-  const [key, dir] = spec.split(":"); const d = Number(dir), n = S.next;
-  if (key === "dose") n.doseG = clamp(round(n.doseG + d * 0.5, 0.5), 5, 30);
-  if (key === "yield") n.yieldG = clamp(round(n.yieldG + d, 0.5), n.direct || n.manual ? 0 : 10, 1000);
-  if (key === "temp") n.tempC = clamp(round(n.tempC + d * 0.5, 0.5), 60, 100);
+function recipeValue(key, value, recipe = S.next) {
+  const f = recipeField(key, recipe);
+  return clamp(round(value, f.step), f.min, f.max);
+}
+function recipeEdited() { S.loaded = false; saveBrewChoice(); }
+function step(spec, render = true) {
+  const [key, dir] = spec.split(":"), d = Number(dir), n = S.next;
+  if (RECIPE_FIELDS[key]) n[RECIPE_FIELDS[key].field] = recipeValue(key, n[RECIPE_FIELDS[key].field] + d * RECIPE_FIELDS[key].step);
   if (key === "grind") {
-    // Empty or not a number (a note like "2.3 turns"): start from the start value.
     const g = grindSettings(), v = parseFloat(n.grind);
     n.grind = String(Number.isFinite(v) ? +(v + d * g.step).toFixed(3) : g.start);
     local.set(`grind:${n.beanId ?? "bagless"}`, n.grind);
   }
-  S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls();
+  recipeEdited();
+  if (render) { renderNextShot(); renderControls(); }
+}
+// Shared pointer/keyboard stepper: the pointer's click is consumed, keyboard clicks
+// still take one step. Keep the pressed element mounted until the gesture ends.
+let stopRepeat = null;
+function bindRepeat(button, change, commit = () => {}) {
+  let timer, active = false, started = 0, pointerClick = false;
+  const finish = () => {
+    if (!active) return;
+    active = false; clearTimeout(timer);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    window.removeEventListener("blur", finish);
+    if (stopRepeat === finish) stopRepeat = null;
+    commit();
+  };
+  const repeat = () => {
+    if (!active || !button.isConnected || button.disabled) return finish();
+    change();
+    timer = setTimeout(repeat, Date.now() - started > 1400 ? 65 : 130);
+  };
+  button.onpointerdown = (e) => {
+    if (e.button !== 0 || button.disabled) return;
+    stopRepeat?.();
+    active = true; pointerClick = true; started = Date.now(); stopRepeat = finish;
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", finish);
+    change(); timer = setTimeout(repeat, 400);
+  };
+  button.onpointerleave = finish;
+  button.onclick = (e) => {
+    if (pointerClick && e.detail !== 0) { pointerClick = false; return; }
+    pointerClick = false;
+    if (!button.disabled) { change(); commit(); }
+  };
+}
+function openValueSheet(key) {
+  const recipe = S.next, coffee = S.current, draft = { ...recipe };
+  let tab = key, recent = [];
+  const canStopManually = !!(recipe.manual || S.noBag);
+  openSheet(`<div class="value-sheet"><button type="button" class="value-handle" aria-label="Close value sheet"><span></span></button>
+    <div class="value-tabs" role="tablist" aria-label="Recipe value">${Object.entries(RECIPE_FIELDS).map(([k, f]) => `<button type="button" role="tab" id="value-tab-${k}" aria-controls="valuePanel" data-value-tab="${k}">${f.label}</button>`).join("")}</div>
+    <div id="valuePanel" role="tabpanel"><div class="value-number"><span id="valueNumber"></span><small id="valueUnit"></small></div><div class="muted value-caption" id="valueCaption"></div>
+    <div id="valueRuler" class="value-ruler" role="slider" tabindex="0" aria-orientation="horizontal"><div class="ruler-ticks" aria-hidden="true"></div><span class="ruler-marker" aria-hidden="true"></span></div>
+    <div class="value-limits num"><span id="valueMin"></span><span>Drag to adjust</span><span id="valueMax"></span></div>
+    <div class="value-stop" id="valueStop" hidden><button class="btn" type="button" id="stopManual">Stop manually</button><button class="btn" type="button" id="stopWeight">Stop at weight</button><p class="muted small">Requires a connected scale. Profile time limits still apply. Manual-profile scale stopping still needs a supervised check on your machine.</p></div>
+    <div class="value-recent" id="valueRecent"></div></div>
+    <div class="value-footer"><div><button class="btn" id="valueMinus" aria-label="Less">−</button><button class="btn" id="valuePlus" aria-label="More">+</button></div><div><button class="btn ghost" id="valueCancel">Cancel</button><button class="btn primary" id="valueSet">Set</button></div></div></div>`);
+  $("#sheetClose").parentElement.remove();
+  const sheet = $("#sheet"), ruler = $("#valueRuler"), handle = $(".value-handle", sheet);
+  sheet.classList.add("recipe-sheet");
+  sheet.setAttribute("aria-label", "Edit recipe values");
+  const current = () => !$("#sheetBack").hidden && sheet.contains(ruler);
+  const paintRecent = () => {
+    const f = recipeField(tab, recipe);
+    const values = [...new Set(recent.filter((s) => coffee ? s.beanId === coffee.id || (s.batch && S.shelf.some((b) => b.id === coffee.id && b.batch === s.batch)) : !s.beanId && !s.batch)
+      .map((s) => tab === "temp" ? s.profile?.steps?.[0]?.temperature : s[f.field])
+      .filter((v) => v != null && Number.isFinite(Number(v)) && Number(v) >= f.min && Number(v) <= f.max)
+      .map((v) => recipeValue(tab, Number(v), recipe)))].slice(0, 4);
+    $("#valueRecent").innerHTML = values.length ? `<span class="label">Recent</span><div>${values.map((v) => `<button type="button" class="btn" data-recent="${v}">${fmtC(v)} ${f.unit}</button>`).join("")}</div>` : "";
+    $$("[data-recent]", sheet).forEach((b) => b.onclick = () => setValue(Number(b.dataset.recent)));
+  };
+  const paint = () => {
+    const f = recipeField(tab, recipe), v = draft[f.field];
+    $$("[data-value-tab]", sheet).forEach((b) => { const selected = b.dataset.valueTab === tab; b.setAttribute("aria-selected", String(selected)); b.tabIndex = selected ? 0 : -1; });
+    $("#valuePanel").setAttribute("aria-labelledby", `value-tab-${tab}`);
+    $("#valueNumber").textContent = tab === "yield" && v === 0 ? "Off" : fmtC(v);
+    $("#valueUnit").textContent = tab === "yield" && v === 0 ? "" : f.unit;
+    $("#valueCaption").textContent = tab === "yield" ? v > 0 ? `1:${(v / draft.doseG).toFixed(1)} · grams out` : "Stop manually" : tab === "temp" ? "Shifts all profile steps together" : `${fmtC(S.prefs.basketDoseG ?? draft.doseG)} g basket`;
+    for (const [k, value] of Object.entries({ "aria-label": f.label, "aria-valuemin": f.min, "aria-valuemax": f.max, "aria-valuenow": v, "aria-valuetext": `${v} ${f.unit}` })) ruler.setAttribute(k, value);
+    ruler.style.setProperty("--ruler-offset", `${-(v / f.step % 10) * 12}px`);
+    $("#valueMin").textContent = `${f.min} ${f.unit}`; $("#valueMax").textContent = `${f.max} ${f.unit}`;
+    $("#valueStop").hidden = !(tab === "yield" && canStopManually);
+    $("#stopManual").setAttribute("aria-pressed", String(draft.yieldG === 0)); $("#stopWeight").setAttribute("aria-pressed", String(draft.yieldG > 0));
+    paintRecent();
+  };
+  const setValue = (value) => { const f = recipeField(tab, recipe); draft[f.field] = recipeValue(tab, value, recipe); paint(); };
+  const chooseTab = (next) => { stopRepeat?.(); tab = next; paint(); };
+  $$("[data-value-tab]", sheet).forEach((b) => {
+    b.onclick = () => chooseTab(b.dataset.valueTab);
+    b.onkeydown = (e) => { const keys = Object.keys(RECIPE_FIELDS), i = keys.indexOf(tab); if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) { e.preventDefault(); chooseTab(keys[e.key === "Home" ? 0 : e.key === "End" ? 2 : (i + (e.key === "ArrowRight" ? 1 : 2)) % 3]); $(`#value-tab-${tab}`).focus(); } };
+  });
+  let drag = null;
+  ruler.onpointerdown = (e) => { if (e.button !== 0) return; const f = recipeField(tab, recipe); drag = { id: e.pointerId, x: e.clientX, value: draft[f.field] }; ruler.setPointerCapture(e.pointerId); ruler.focus(); };
+  ruler.onpointermove = (e) => { if (drag?.id === e.pointerId) setValue(drag.value + (e.clientX - drag.x) / 12 * recipeField(tab, recipe).step); };
+  ruler.onpointerup = ruler.onpointercancel = ruler.onlostpointercapture = () => { drag = null; };
+  ruler.onkeydown = (e) => {
+    const f = recipeField(tab, recipe), d = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+    if (d || e.key === "Home" || e.key === "End") { e.preventDefault(); setValue(e.key === "Home" ? f.min : e.key === "End" ? f.max : draft[f.field] + d * f.step); }
+  };
+  bindRepeat($("#valueMinus"), () => { const f = recipeField(tab, recipe); setValue(draft[f.field] - f.step); });
+  bindRepeat($("#valuePlus"), () => { const f = recipeField(tab, recipe); setValue(draft[f.field] + f.step); });
+  $("#stopManual").onclick = () => { if (draft.yieldG > 0) draft.lastYieldG = draft.yieldG; setValue(0); };
+  $("#stopWeight").onclick = () => setValue(draft.yieldG || draft.lastYieldG || draft.doseG * 2);
+  $("#valueCancel").onclick = closeSheet;
+  $("#valueSet").onclick = () => {
+    if (S.next !== recipe || S.current !== coffee) { closeSheet(); toast("Recipe changed. Open the value again"); return; }
+    for (const f of Object.values(RECIPE_FIELDS)) recipe[f.field] = draft[f.field];
+    if (draft.lastYieldG != null) recipe.lastYieldG = draft.lastYieldG;
+    recipeEdited(); closeSheet(); renderNextShot(); renderControls();
+  };
+  let handleY = null;
+  handle.onclick = closeSheet;
+  handle.onpointerdown = (e) => { handleY = e.clientY; handle.setPointerCapture(e.pointerId); };
+  handle.onpointerup = (e) => { if (handleY != null && e.clientY - handleY > 48) closeSheet(); handleY = null; };
+  handle.onpointercancel = () => { handleY = null; };
+  paint(); $(`#value-tab-${tab}`).focus();
+  S.api.shots(40).then((shots) => { if (current()) { recent = shots; paintRecent(); } }).catch(() => {});
 }
 // Writing the workflow sends its profile to the machine at once, and Decaid doesn't
 // wait for a shot to finish: the DE1 runs its steps by index from that table, so a
@@ -3833,7 +4462,7 @@ async function loadNow(silent, queued) {
   const recipe = { ...(b?.recipe || {}), ...n, targetTimeS: n.manual ? null : n.targetTimeS ?? null };
   try {
     const workflow = await S.api.apply(b?.id ?? null, recipe, n.grind || undefined, b?.batch ?? null);
-    S.loadedRecipe = { ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null };
+    S.loadedRecipe = JSON.parse(JSON.stringify({ ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null, coffeeName: workflow?.context?.coffeeName ?? null, coffeeRoaster: workflow?.context?.coffeeRoaster ?? null, profile: workflow?.profile ?? null }));
     wfWrites++;
     S.loaded = S.next === n && S.current === b && JSON.stringify(n) === draft;
     if (S.loaded) { n.profileShape = S.loadedRecipe.profileShape; saveBrewChoice(); }
@@ -3982,7 +4611,7 @@ function planBody(lp, tempC) {
 }
 let planFor = null;
 async function refreshPlan() {
-  if (!S.library && !S.libraryLoading) S.libraryLoading = S.api.library().then((l) => (S.library = l), () => null).finally(() => (S.libraryLoading = null));
+  if (!S.library && !S.libraryLoading) S.libraryLoading = S.api.library().then((l) => { S.library = l; renderFavs(); return l; }, () => null).finally(() => (S.libraryLoading = null));
   if (!S.library) await S.libraryLoading;
   const lp = nextProfile(), tempC = S.next?.tempC;
   const key = lp ? `${lp.id}|${tempC}` : null;
@@ -4075,6 +4704,17 @@ function bindFavouriteCarousel() {
     if (performance.now() < ignoreClickUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
 }
+function favouriteArt(f) {
+  const bean = f.beanId && S.shelf.find((b) => b.id === f.beanId), src = bean && artSrc(bean);
+  return `<span class="fav-art" aria-hidden="true">${src ? `<img src="${esc(src)}" alt="">` : esc(bean?.info?.name?.value?.[0] || "·")}</span>`;
+}
+function favouriteSpark(f) {
+  const lp = S.library?.find((p) => f.profileId ? p.id === f.profileId : p.title === f.profileTitle);
+  const plan = lp && E.profileCurve(lp.profile);
+  const points = plan?.points.filter((p) => p.tp != null);
+  if (!points?.length || !plan.total) return "";
+  return `<svg class="fav-spark" viewBox="0 0 80 24" aria-hidden="true"><polyline points="${points.map((p) => `${p.t / plan.total * 80},${23 - clamp(p.tp, 0, 12) / 12 * 22}`).join(" ")}"/></svg>`;
+}
 function renderFavs(revealSlot) {
   bindFavouriteCarousel();
   const list = $("#favs"), left = list.scrollLeft, busy = FAV_UI.saving || FAV_UI.loading;
@@ -4082,7 +4722,7 @@ function renderFavs(revealSlot) {
   const selected = chosen != null && S.favourites[chosen] && favouriteSelected(S.favourites[chosen])
     ? chosen : S.favourites.findIndex((f) => f && favouriteSelected(f));
   patchHtml(list, S.favourites.map((f, i) => f ? `<button class="fav" id="fav-${i}" ${FAV_UI.editing ? `data-favedit="${i}"` : `data-fav="${i}" aria-pressed="${i === selected}"`} title="${esc(f.name)} · ${esc(f.profileTitle)}" aria-label="${FAV_UI.editing ? "Edit" : "Load"} favourite ${esc(f.name)}" ${busy ? "disabled" : ""}>
-    <strong>${esc(f.name)}</strong><span class="fav-profile">${esc(f.profileTitle)}</span>${FAV_UI.editing ? '<span class="fav-action">Rename, replace or clear</span>' : `<span class="num fav-recipe">${fmtC(f.doseG)} → ${f.yieldG > 0 ? `${fmtC(f.yieldG)} g` : "manual"}<span class="fav-temp"> · ${fmtC(f.tempC)}°</span></span>`}</button>` : "").join("")
+    ${favouriteArt(f)}<strong>${esc(f.name)}</strong><span class="fav-profile">${esc(f.profileTitle)}</span>${FAV_UI.editing ? '<span class="fav-action">Rename, replace or clear</span>' : `<span class="num fav-recipe">${fmtC(f.doseG)} → ${f.yieldG > 0 ? `${fmtC(f.yieldG)} g` : "manual"}<span class="fav-temp"> · ${fmtC(f.tempC)}°</span></span>`}${favouriteSpark(f)}</button>` : "").join("")
     + `<button class="fav empty" id="addFav" ${busy || !S.next ? "disabled" : ""}><span class="fav-plus" aria-hidden="true">+</span><strong>Save current recipe</strong><span class="fav-profile">${S.next ? esc(S.current?.info.name.value || S.next.profileTitle) : "Choose a recipe first"}</span></button>`);
   favouriteScroll(left, false);
   $("#editFavs").textContent = FAV_UI.editing ? "Done" : "Edit";
@@ -4151,9 +4791,46 @@ function editFav(i) {
 }
 
 /* ================= machine controls (brew home, right) ================= */
+function activeProfile() {
+  return S.shotContext?.profile ?? null;
+}
+let skippingStep = false;
+async function skipStep() {
+  const ctx = S.shotContext || {}, steps = activeProfile()?.steps || [];
+  const prog = E.stepProgress({ steps, points: S.live, manual: !!ctx.manual });
+  if (!shotRunning() || skippingStep || unlinked() || !S.snap || S.shotAcross || ctx.manual || prog.index == null || prog.index >= steps.length - 1) return;
+  skippingStep = true; renderControls();
+  try { await S.api.machine.skipStep(); }
+  catch (e) { toast(`Couldn't skip the step: ${e.message}`); }
+  finally { skippingStep = false; renderControls(); }
+}
 function renderControls() {
   syncExitButton();
+  const pouring = shotRunning() && location.hash !== "#shelf" && location.hash !== "#add" && location.hash !== "#profiles" && location.hash !== "#shots" && location.hash !== "#settings";
+  document.body.classList.toggle("pouring", pouring);
+  $("#pourTop").hidden = !pouring;
+  $("#pourLeft").hidden = !pouring;
   const p = S.presets, st = S.snap?.state?.state;
+  if (pouring) {
+    const ctx = S.shotContext || {};
+    const target = ctx.yieldG;
+    const prof = activeProfile();
+    const steps = prof?.steps || [];
+    const prog = E.stepProgress({ steps, points: S.live, targetYieldG: target, hasScale: S.scale.connected, manual: !!ctx.manual });
+    const canSkip = !ctx.manual && prog.index != null && prog.index < steps.length - 1;
+    const linkDown = unlinked() || !S.snap || S.shotAcross;
+    const note = linkDown
+      ? "No link, still pouring. Stop stays available."
+      : target > 0 && S.scale.connected
+        ? `At ${fmt1(target)} g on the scale. Changes you make now load when this shot ends.`
+        : "Stops when the profile finishes or when you tap Stop. Changes you make now load when this shot ends.";
+    patchHtml($("#controls"), `
+      <div class="pour-note muted">${esc(note)}</div>
+      <div class="stop-wrap">${canSkip ? `<button class="skip-btn" id="skipBtn" ${linkDown || skippingStep ? "disabled" : ""}>Skip step</button>` : ""}<button class="stop-btn active" id="stopBtn">STOP</button></div>`);
+    const skip = $("#skipBtn"); if (skip) skip.onclick = skipStep;
+    $("#stopBtn").onclick = stopMachine;
+    return;
+  }
   if (!p) {
     // Presets come from Decaid's key-value store; until they arrive, Stop is still here.
     $("#controls").innerHTML = `<div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${["espresso", "steam", "hotWater", "flush"].includes(st) ? "active" : ""}" id="stopBtn" ${S.snap ? "" : "disabled"}>STOP</button></div>`;
@@ -4164,24 +4841,29 @@ function renderControls() {
   const disabled = S.ghc || !S.snap || unlinked() || NOT_READY.includes(st);
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
-  const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
-  $("#controls").innerHTML = `
-    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}` : "Choose a profile"}</span></button>
-      ${S.loaded || !S.next ? "" : '<span class="ghc-note">Starting loads the recipe first</span>'}</div>
-    <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
-    <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
-    <div class="ctl"><button class="ctl-btn" data-run="flush" ${disabled || busy ? "disabled" : ""}>Flush<span class="sub">${flush.seconds} s</span></button>${chips("flush", p.flush)}</div>
-    <div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap || isStarting() ? "" : "disabled"}>STOP</button>
-      ${S.ghc ? '<span class="ghc-note">Your machine starts from the group head controller. Crema sets the recipe and presets; press the group head to start.</span>' : ""}</div>`;
+  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${esc(preset.label)} · ${detail}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
+  patchHtml($("#controls"), `
+    <div class="ctl espresso-ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.ghc ? "Start at group head" : S.next ? `${fmtC(S.next.doseG)} → ${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
+    ${split("Steam", "steam", "steam", steam, steam.seconds ? `${steam.seconds} s` : "until stopped")}
+    ${split("Hot water", "hotWater", "water", water, `${water.ml} ml`)}
+    ${split("Flush", "flush", "flush", flush, `${flush.seconds} s`)}
+    <div class="ctl split-ctl scale-tile"><div class="scale-reading"><span class="num">${S.scale.connected ? `${fmt1(S.scale.weight)} g` : "No scale"}</span><span class="muted small">${S.scale.connected ? `Scale${S.scale.batteryLevel != null ? ` · ${S.scale.batteryLevel}%` : ""}` : "Connect a scale to tare"}</span></div><button class="preset-open" id="tareBtn" ${S.scale.connected ? "" : "disabled"}>Tare</button></div>
+    <div class="stop-wrap"><button class="stop-btn ${busy ? "active" : ""}" id="stopBtn" ${S.snap || isStarting() ? "" : "disabled"}>STOP</button></div>`);
+  $("#controls").title = S.ghc ? "Use the group head controller to start. Crema sets the recipe and presets." : "";
   $$("[data-run]").forEach((b) => (b.onclick = () => startOp(b.dataset.run)));
-  $$("[data-preset]").forEach((b) => (b.onclick = async () => {
-    const [kind, idx] = b.dataset.preset.split(":");
-    S.presets.selected[kind] = Number(idx);
-    renderControls();
-    await S.api.presets.set(S.presets).catch(() => {});
-    await pushPresetSettings(kind).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
-  }));
+  $$("[data-presets]").forEach((b) => (b.onclick = () => openPresetSheet(b.dataset.presets)));
+  $("#tareBtn").onclick = tare;
   $("#stopBtn").onclick = stopMachine;
+}
+function openPresetSheet(kind) {
+  const title = { steam: "Steam", water: "Hot water", flush: "Flush" }[kind];
+  openSheet(`<h2>${title} preset</h2><div class="stack">${S.presets[kind].map((p, i) => `<button class="btn preset-choice" data-preset="${kind}:${i}" aria-pressed="${S.presets.selected[kind] === i}"><span>${esc(p.label)}</span><span class="num">${kind === "water" ? `${p.ml} ml` : p.seconds ? `${p.seconds} s` : "Until stopped"}</span></button>`).join("")}</div>`);
+  $$("[data-preset]").forEach((b) => (b.onclick = async () => {
+    const [k, idx] = b.dataset.preset.split(":");
+    S.presets.selected[k] = Number(idx); closeSheet(); renderControls();
+    await S.api.presets.set(S.presets).catch(() => {});
+    await pushPresetSettings(k).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
+  }));
 }
 // Ranges for the workflow's steam, hot water and flush fields. Decaid accepts any
 // number (even a negative volume) and wants integers for temperatures, durations
@@ -4274,27 +4956,130 @@ function stopMachine() {
 
 /* ================= live panel + running overlay ================= */
 const PHASE = { preinfusion: "Preinfusion", pouring: "Pouring", pouringDone: "Done", preparingForShot: "Preparing" };
+function renderScaleTile() {
+  const el = $(".scale-reading");
+  if (el) { el.firstElementChild.textContent = S.scale.connected ? `${fmt1(S.scale.weight)} g` : "No scale"; el.lastElementChild.textContent = S.scale.connected ? `Scale${S.scale.batteryLevel != null ? ` · ${S.scale.batteryLevel}%` : ""}` : "Connect a scale to tare"; }
+  const tareButton = $("#tareBtn"); if (tareButton) tareButton.disabled = !S.scale.connected;
+}
+// Shared with pour mode: descriptors are { name, detail, weight, state?, progress? }.
+function stepsRailHtml(steps) {
+  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .08;
+  return steps.map((step) => `<div class="step ${step.state === "now" ? "now" : step.state === "done" ? "done" : ""}" style="flex-grow:${Math.max(minimum, Number(step.weight) || 1)}"><strong>${esc(step.name)}</strong><span>${esc(step.detail)}</span>${step.progress != null ? `<progress max="1" value="${clamp(step.progress, 0, 1)}"></progress>` : ""}</div>`).join("");
+}
+function stepDetailText(step) {
+  const tgt = step.target ? `${step.target.smooth ? "ramping to " : "holding "}${fmt1(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : "";
+  if (step.state === "done") return `${fmt1(step.elapsedS ?? 0)} s`;
+  if (step.state === "now") {
+    const tr = step.tracking;
+    const trTxt = !tr ? (step.limitS != null ? `${fmt1(step.elapsedS ?? 0)} of ${fmtC(step.limitS)} s` : `${fmt1(step.elapsedS ?? 0)} s`)
+      : tr.kind === "time" ? `${fmt1(tr.value)} of ${fmtC(tr.goal)} s`
+      : tr.kind === "weight" || tr.kind === "yield" ? `${fmt1(tr.value)} of ${fmt1(tr.goal)} g`
+      : tr.kind === "volume" ? `${fmt1(tr.value)} of ${fmtC(tr.goal)} ml`
+      : `${fmt1(tr.value)} → ${fmt1(tr.goal)} ${tr.kind.startsWith("pressure") ? "bar" : "ml/s"}`;
+    return [trTxt, tgt].filter(Boolean).join(" · ");
+  }
+  return [step.limitS != null ? `${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
+}
+function renderPour() {
+  const ctx = S.shotContext || {};
+  const target = ctx.yieldG;
+  const prof = activeProfile();
+  const steps = prof?.steps || [];
+  const prog = E.stepProgress({ steps, points: S.live, targetYieldG: target, weightFlow: S.scale.weightFlow ?? null, hasScale: S.scale.connected, manual: !!ctx.manual });
+  const coffee = ctx.coffeeName, dose = ctx.doseG, temp = ctx.tempC, grind = ctx.grind;
+  $("#pourProfile").textContent = ctx.profileTitle || prof?.title || "Espresso";
+  $("#pourRecipe").textContent = [coffee, dose != null ? `${fmtC(dose)} → ${target == null ? "–" : target > 0 ? `${fmtC(target)} g` : "manual"}` : null, temp != null ? `${fmtC(temp)} °C` : null, grind ? `grind ${grind}` : null].filter(Boolean).join(" · ");
+  $("#pourStepCount").textContent = prog.count ? `Step ${prog.index == null ? "–" : prog.index + 1} of ${prog.count}` : "";
+  const rail = $("#pourSteps");
+  rail.hidden = !prog.steps.length;
+  patchHtml(rail, prog.steps.length ? stepsRailHtml(prog.steps.map((s) => ({
+    name: s.name,
+    detail: stepDetailText(s),
+    weight: s.state === "now" ? Math.max(s.limitS || 8, 12) : s.state === "done" ? Math.max(s.elapsedS || 2, 3) : Math.max(s.limitS || 4, 4),
+    state: s.state,
+    progress: s.state === "now" ? (s.tracking?.progress ?? 0) : null,
+  }))) : "");
+  const last = S.live.at(-1);
+  const t = last ? last.t : S.snap?.elapsed ?? 0;
+  const w = S.scale.connected ? (S.scale.weight ?? last?.w ?? 0) : null;
+  $("#pourTime").textContent = Number(t || 0).toFixed(1);
+  $("#pourWeight").textContent = w == null ? "–" : fmt1(w);
+  const yBox = $("#pourYield");
+  yBox.hidden = prog.yieldFraction == null;
+  if (prog.yieldFraction != null) {
+    const pct = Math.round(prog.yieldFraction * 100);
+    $("#pourYieldBar").style.width = `${clamp(pct, 0, 100)}%`;
+    $("#pourYieldText").textContent = `${pct}% of ${fmt1(target)} g`;
+    $("#pourEta").textContent = prog.etaS != null && prog.etaS > 0 ? `about ${Math.round(prog.etaS)} s to go` : "";
+  }
+  const s = (!unlinked() && S.snap) || last || {};
+  const sub = [["Pressure", s.pressure ?? s.p, "bar", "--pressure"], ["Flow", s.flow ?? s.f, "ml/s", "--flow"], ["Temp", s.mixTemperature ?? s.temp, "°C", "--temp"]];
+  patchHtml($("#pourSub"), sub.map(([k, v, u, c]) => `<div class="readout"><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></div>`).join(""));
+  const skip = $("#skipBtn");
+  const canSkip = !ctx.manual && prog.index != null && prog.index < steps.length - 1;
+  if (!!skip !== canSkip) renderControls();
+  else if (skip) skip.disabled = unlinked() || !S.snap || S.shotAcross || skippingStep;
+  const noteEl = $(".pour-note", $("#controls"));
+  if (noteEl) {
+    const linkDown = unlinked() || !S.snap || S.shotAcross;
+    noteEl.textContent = linkDown
+      ? "No link, still pouring. Stop stays available."
+      : target > 0 && S.scale.connected
+        ? `At ${fmt1(target)} g on the scale. Changes you make now load when this shot ends.`
+        : "Stops when the profile finishes or when you tap Stop. Changes you make now load when this shot ends.";
+  }
+  return prog;
+}
 function renderReadouts() {
   const s = (!unlinked() && S.snap) || {};
   const w = S.scale.connected ? S.scale.weight : null;
-  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"], ["Steam", s.steamTemperature, "°C", "--muted"]];
-  patchHtml($("#readouts"), items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join(""));
-  const wr = $("#weightReadout"); if (wr) wr.onclick = tare;
+  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight"], ["Temp", s.mixTemperature, "°C", "--temp"]];
+  if (s.state?.state === "steam") items.push(["Steam", s.steamTemperature, "°C", "--muted"]);
+  $("#readouts").style.setProperty("--cols", items.length);
+  patchHtml($("#readouts"), items.map(([k, v, u, c]) => `<div class="readout" ${k === "Weight" ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></div>`).join(""));
+  $("#readouts").hidden = !shotRunning() && !["steam", "hotWater", "flush"].includes(s.state?.state) && !S.live.length;
+  $("#shotClock").hidden = $("#readouts").hidden;
+  renderScaleTile();
+  if (shotRunning() && !$("#view-brew").hidden) renderPour();
 }
 function renderLive() {
-  const target = S.next?.yieldG ?? 36;
+  const target = shotRunning() ? S.shotContext?.yieldG ?? 0 : S.next?.yieldG ?? 36;
   const pts = S.live;
+  const pouring = shotRunning();
+  if (pouring) {
+    const prog = renderPour();
+    const prof = activeProfile();
+    const rawSteps = prof?.steps || [];
+    const { start, lastT } = E.stepTimes(pts, rawSteps.length);
+    const nowT = lastT ?? (pts.at(-1)?.t ?? 0);
+    const curIdx = prog.index;
+    const curStart = start[curIdx] ?? nowT;
+    const durs = rawSteps.map((st, idx) => {
+      const lim = Math.max(0, Number(st.seconds) || 0);
+      if (idx < curIdx) return Math.max(0, (start[idx + 1] ?? curStart) - (start[idx] ?? 0));
+      if (idx === curIdx) return Math.max(lim, nowT - curStart + 2);
+      return lim;
+    });
+    const livePlan = rawSteps.length && curIdx != null ? E.profileCurve(prof, durs) : null;
+    const curPlanStep = curIdx != null ? livePlan?.steps[curIdx] : null;
+    const shade = curPlanStep ? [curStart, Math.max(nowT, curPlanStep.end)] : null;
+    const maxT = Math.max(40, Math.ceil(nowT / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, livePlan ? Math.ceil(planWindow(livePlan) / 10) * 10 : 0);
+    drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan: livePlan, targets: false, ahead: nowT, shade, endLabels: true });
+    return;
+  }
   // Before a shot the chart shows what the loaded profile asks for (S.plan); once one
   // starts, the machine's own targets take over.
   const plan = pts.length ? null : S.plan;
+  const rail = $("#planSteps");
+  rail.hidden = !plan;
+  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: `${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
   const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
   drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;
   const about = [plan ? `Dashed: what ${S.next.profileTitle} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
   $("#chartEmpty").hidden = pts.length > 0;
-  $("#chartEmpty").classList.toggle("over-plan", !!plan);
   $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
-  patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId));
+  patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId, true));
   const clear = $("#clearRef");
   if (clear) clear.onclick = () => setReference(S.current, null);
   $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
@@ -4331,7 +5116,7 @@ function onSnapshot(s) {
   const d = E.snapshotDecision({ prevState, state: st, shotAcross: S.shotAcross, heldLoad: S.heldLoad, startingKind: S.starting?.kind });
   S.shotAcross = false;
   if (d.clearStarting) S.starting = null; // the machine has picked up the start
-  if (d.changed) { renderControls(); renderAlerts(); updateSaver(); if (d.shotStart) onShotStart(); opOverlay(); }
+  if (d.changed) { renderControls(); renderAlerts(); updateSaver(); chimeFor(prevState, st, d.endedAway); if (d.shotStart) onShotStart(); opOverlay(); }
   if (st === "espresso") {
     // Decaid's snapshot has no timer; the simulators send one. Ignore a stale
     // value carried over from the previous operation on the first frame.
@@ -4352,9 +5137,11 @@ function onSnapshot(s) {
 }
 function onShotStart() {
   S.live = []; S.opStart = Date.now();
-  const context = { ...S.loadedRecipe };
+  // A shot owns its recipe and profile. Subsequent edits and loads belong to the
+  // next shot; unavailable machine data must never be filled from that draft.
+  const context = JSON.parse(JSON.stringify(S.loadedRecipe || {}));
   S.shotContext = context;
-  S.api.machine.recipe().then((r) => { if (r) Object.assign(context, r); }, () => {});
+  S.api.machine.recipe().then((r) => { if (r && S.shotContext === context) { Object.assign(context, JSON.parse(JSON.stringify(r))); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
   // Which shot was newest before this one, so the end can tell when Decaid has saved it.
   S.shotBefore = undefined;
   S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});
@@ -4584,9 +5371,56 @@ function updateSaver() {
 }
 function tickSaver() {
   if ($("#saver").hidden) return;
-  $("#saverTime").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const now = new Date();
+  $("#saverTime").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  $("#saverDate").textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+  $("#saverHint").textContent = S.holdWake ? "Asleep · hold to wake" : "Asleep · tap to wake";
   setTimeout(tickSaver, 10000);
 }
+function wakeFromSaver() { $("#saver").hidden = true; cancelSaverHold(); S.api.machine.setState("idle").catch(() => {}); }
+// Hold to wake: a ring fills for 1 s under the finger; letting go early sends nothing.
+let saverHoldTimer = null;
+function cancelSaverHold() { clearTimeout(saverHoldTimer); saverHoldTimer = null; $("#saver").classList.remove("holding"); }
+function wireSaver() {
+  const sv = $("#saver");
+  sv.onclick = () => { if (!S.holdWake) wakeFromSaver(); };
+  sv.addEventListener("pointerdown", (e) => {
+    if (!S.holdWake || saverHoldTimer) return;
+    try { sv.setPointerCapture(e.pointerId); } catch {}
+    sv.classList.add("holding");
+    saverHoldTimer = setTimeout(() => { saverHoldTimer = null; wakeFromSaver(); }, 1000);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((t) => sv.addEventListener(t, cancelSaverHold));
+  sv.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wakeFromSaver(); } });
+}
+// A quiet two-note chime (Web Audio, no files). Browsers start audio only after a gesture, so the
+// first touch anywhere makes the context; if audio is blocked or missing, nothing happens.
+let chimeCtx = null;
+function chimeUnlock() {
+  try { if (!chimeCtx && AudioCtx) chimeCtx = new AudioCtx(); chimeCtx?.state === "suspended" && chimeCtx.resume().catch(() => {}); } catch {}
+}
+function playChime() {
+  try {
+    chimeUnlock();
+    if (!chimeCtx) return;
+    const t0 = chimeCtx.currentTime + 0.02;
+    [[659.25, 0], [880, 0.16]].forEach(([hz, at]) => {
+      const o = chimeCtx.createOscillator(), g = chimeCtx.createGain();
+      o.type = "sine"; o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t0 + at);
+      g.gain.exponentialRampToValueAtTime(0.08, t0 + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.45);
+      o.connect(g); g.connect(chimeCtx.destination);
+      o.start(t0 + at); o.stop(t0 + at + 0.5);
+    });
+  } catch {}
+}
+// Only for a change this page watched happen: a shot ending, or the machine finishing warming up.
+function chimeFor(prev, st, endedAway) {
+  if (!S.chime || !prev || endedAway) return;
+  if ((prev === "espresso" && st !== "espresso") || (prev === "heating" && st === "idle")) playChime();
+}
+document.addEventListener("pointerdown", () => { if (S.chime) chimeUnlock(); }, { capture: true });
 async function sleepWake() {
   const asleep = S.snap?.state?.state === "sleeping";
   cancelStart();
@@ -4594,79 +5428,113 @@ async function sleepWake() {
 }
 
 /* ================= sheet ================= */
-function openSheet(html) { $("#sheet").innerHTML = html + `<div class="row"><button class="btn ghost small" id="sheetClose">Close</button></div>`; $("#sheetBack").hidden = false; $("#sheetClose").onclick = closeSheet; }
-function closeSheet() { $("#sheetBack").hidden = true; }
+function openSheet(html) { stopRepeat?.(); $("#sheet").classList.remove("recipe-sheet"); $("#sheet").removeAttribute("aria-label"); $("#sheet").innerHTML = html + `<div class="row"><button class="btn ghost small" id="sheetClose">Close</button></div>`; $("#sheetBack").hidden = false; $("#sheetClose").onclick = closeSheet; }
+function closeSheet() { stopRepeat?.(); $("#sheetBack").hidden = true; }
 
 /* ================= shelf ================= */
+// Shelf filters use the facts the cards already show: the rest status behind the
+// "In its window" and "Resting" pills, and the "Running low" warning (4 shots or fewer).
+const SHELF_FILTERS = [["all", "All", ""], ["peak", "In its window", "No coffees in their window right now"], ["resting", "Resting", "No coffees resting right now"], ["low", "Running low", "No coffees running low"]];
+let shelfFilter = "all";
+const shelfShotsLeft = (b) => (b.remaining != null ? Math.floor(b.remaining / (b.recipe?.doseG ?? 18)) : null);
+const shelfMatches = (b, f) => f === "all" || (f === "low" ? shelfShotsLeft(b) != null && shelfShotsLeft(b) <= 4 : restOf(b.info).status === f);
+function skeletonCards(n = 3) { return Array.from({ length: n }, () => `<div class="panel skeleton-card" aria-hidden="true"><div class="sk sk-head"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div><div class="sk sk-btn"></div></div>`).join(""); }
 async function renderShelf() {
-  const el = $("#shelf");
-  if (!S.shelf.length) { el.innerHTML = `<div class="panel stack"><h2>Your shelf is empty</h2><p class="muted">Photograph a bag, search for a coffee or paste a roaster's link.</p><div><a class="btn primary" href="#add">Add coffee</a></div></div>`; return; }
-  el.innerHTML = S.shelf.map((b) => {
+  const el = $("#shelf"), filters = $("#shelfFilters");
+  if (!S.shelfLoaded) { filters.hidden = true; el.setAttribute("aria-busy", "true"); el.innerHTML = skeletonCards(); return; }
+  el.removeAttribute("aria-busy");
+  if (S.shelfError && !S.shelf.length) {
+    filters.hidden = true;
+    el.innerHTML = `<div class="panel stack"><h2>Couldn't load your coffees</h2><p class="muted">Decaid didn't answer (${esc(S.shelfError)}).</p><div><button class="btn" id="retryShelfView">Try again</button></div></div>`;
+    $("#retryShelfView").onclick = async () => { await retryShelf(); renderShelf(); };
+    return;
+  }
+  if (!S.shelf.length) { filters.hidden = true; el.innerHTML = `<div class="panel stack"><h2>Your shelf is empty</h2><p class="muted">Photograph a bag, search for a coffee or paste a roaster's link.</p><div><a class="btn primary" href="#add">Add coffee</a></div></div>`; return; }
+  filters.hidden = false;
+  filters.innerHTML = SHELF_FILTERS.map(([id, label]) => `<button type="button" class="fchip" role="radio" data-sf="${id}" aria-checked="${shelfFilter === id}" tabindex="${shelfFilter === id ? 0 : -1}">${label}</button>`).join("");
+  $$("[data-sf]", filters).forEach((btn, i, all) => {
+    btn.onclick = () => { shelfFilter = btn.dataset.sf; renderShelf(); $(`[data-sf="${shelfFilter}"]`, filters)?.focus(); };
+    btn.onkeydown = (e) => {
+      const to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1 }[e.key];
+      if (to == null) return;
+      e.preventDefault(); all[(to + all.length) % all.length].click();
+    };
+  });
+  const shown = S.shelf.filter((b) => shelfMatches(b, shelfFilter));
+  if (!shown.length) { el.innerHTML = `<div class="panel"><p class="muted">${SHELF_FILTERS.find((f) => f[0] === shelfFilter)[2]}.</p></div>`; return; }
+  const moreIcon = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`;
+  el.innerHTML = shown.map((b) => {
     const i = b.info, rest = restOf(i);
     const left = b.remaining != null && b.weight ? clamp((b.remaining / b.weight) * 100, 0, 100) : null;
-    const shotsLeft = b.remaining != null ? Math.floor(b.remaining / (b.recipe?.doseG ?? 18)) : null;
+    const shotsLeft = shelfShotsLeft(b);
     const bagNote = b.bags > 1 ? `<span class="pill plain">Bag ${b.bagNo} of ${b.bags}${i.roastDate?.value ? ` · roasted ${esc(i.roastDate.value)}` : ""}</span>` : "";
     return `<article class="panel bean-card ${S.current?.key === b.key ? "current" : ""}">
-      <div class="coffee-head">${bagArt(b, "lg")}<div style="min-width:0" class="stack" style="gap:2px"><div><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2>
-        <div class="muted small">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div>${bagNote ? `<div>${bagNote}</div>` : ""}</div>
+      <div class="coffee-head">${bagArt(b, "lg")}<div class="stack bean-text"><div><div class="label clip1">${esc(i.roaster.value)}</div><h2 class="clamp2">${esc(i.name.value)}</h2>
+        <div class="muted small clamp2">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div>${bagNote ? `<div>${bagNote}</div>` : ""}</div>
         ${i.tastingNotes?.value?.length ? `<div class="tags">${i.tastingNotes.value.slice(0, 3).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div></div>
       ${restBar(rest)}
       ${b.remaining == null && b.batch && b.shots == null ? `<div class="muted small">Couldn't count what's left: Decaid's shots didn't load.</div>` : ""}
       ${left != null ? `<div class="stack" style="gap:6px"><div class="row between"><span class="label">Left</span><span class="num muted small">${b.remaining} / ${b.weight} g · about ${shotsLeft} shots</span></div><div class="grams"><div style="width:${left}%"></div></div>
         ${shotsLeft != null && shotsLeft <= 4 ? '<span class="pill warn" style="justify-self:start">Running low. Time to reorder</span>' : ""}</div>` : ""}
-      <div class="muted small">${esc(b.recipe ? `${b.recipe.profileTitle} · ${fmt1(b.recipe.doseG)}→${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C` : "No recipe yet")}</div>
-      <div class="row">
-        <button class="btn small ${S.current?.key === b.key ? "" : "primary"}" data-brew="${esc(b.key)}">${S.current?.key === b.key ? "Brewing" : "Brew this"}</button>
-        <button class="btn small ghost" data-freeze="${esc(b.key)}">${b.frozen ? "Thaw" : "Freeze"}</button>
-        <button class="btn small ghost" data-finish="${esc(b.key)}">Finished</button>
-        <button class="btn small ghost" data-addbag="${esc(b.key)}">Another bag</button>
-        ${b.batch && b.weight ? `<button class="btn small ghost" data-left="${esc(b.key)}">Set what's left</button>` : ""}
-        ${i.productUrl ? `<a class="btn small ghost" href="${esc(i.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}
+      <div class="muted small clamp2">${esc(b.recipe ? `${b.recipe.profileTitle} · ${fmt1(b.recipe.doseG)}→${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C` : "No recipe yet")}</div>
+      <div class="card-actions">
+        <button class="btn grow ${S.current?.key === b.key ? "" : "primary"}" data-brew="${esc(b.key)}">${S.current?.key === b.key ? "Brewing" : "Brew this"}</button>
+        <button class="btn more-btn" data-more="${esc(b.key)}" aria-haspopup="dialog" aria-label="More actions for ${esc(i.name.value)}">${moreIcon}</button>
       </div></article>`;
   }).join("");
   $$("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
   const bag = (key) => S.shelf.find((x) => x.key === key);
-  $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
-    const b = bag(btn.dataset.freeze);
-    if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
-    b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
-  }));
-  $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
-    const b = bag(btn.dataset.finish);
-    const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
-    openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
-    $("#confirmFinish").onclick = async () => {
-      if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
-      closeSheet(); await refreshShelf();
-      if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
-      renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
-    };
-  }));
-  $$("[data-addbag]").forEach((btn) => (btn.onclick = () => {
-    const b = bag(btn.dataset.addbag);
-    openSheet(`<h2>Another bag of ${esc(b.info.name.value)}</h2><p class="muted">It gets its own roast date, frozen state and weight, and shares this coffee's recipe and reference shot.</p>
-      <div class="field"><label class="label" for="bagRoast">Roast date</label><input type="date" id="bagRoast" max="${new Date().toISOString().slice(0, 10)}"></div>
-      <div class="field"><label class="label" for="bagWeight">Weight</label><input id="bagWeight" inputmode="decimal" value="${esc(String(b.weight || 250))}" aria-label="Grams"></div>
-      <div class="row"><button class="btn primary" id="confirmBag">Add bag</button></div>`);
-    $("#confirmBag").onclick = async () => {
-      const w = parseFloat($("#bagWeight").value);
-      try {
-        const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
-        closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
-        if (!S.current) await selectBean(added.key, { quiet: true });
-      } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
-    };
-  }));
-  $$("[data-left]").forEach((btn) => (btn.onclick = () => {
-    const b = bag(btn.dataset.left);
-    openSheet(`<h2>How much is left?</h2><p class="muted">Crema counts it from your shots. Correct it here if you've weighed the bag, spilled some or brewed it another way.</p>
-      <div class="field"><label class="label" for="leftG">Grams left</label><input id="leftG" inputmode="decimal" value="${esc(String(b.remaining ?? b.weight))}" aria-label="Grams left"></div>
-      <div class="row"><button class="btn primary" id="confirmLeft">Save</button></div>`);
-    $("#confirmLeft").onclick = async () => {
-      const g = parseFloat($("#leftG").value);
-      if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
-      try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
-    };
+  // The actions behind More. Each does what its button on the card used to do.
+  const actions = {
+    freeze: async (b) => {
+      closeSheet();
+      if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
+      b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
+    },
+    finish: (b) => {
+      const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
+      openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
+      $("#confirmFinish").onclick = async () => {
+        if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
+        closeSheet(); await refreshShelf();
+        if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
+        renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
+      };
+    },
+    addbag: (b) => {
+      openSheet(`<h2>Another bag of ${esc(b.info.name.value)}</h2><p class="muted">It gets its own roast date, frozen state and weight, and shares this coffee's recipe and reference shot.</p>
+        <div class="field"><label class="label" for="bagRoast">Roast date</label><input type="date" id="bagRoast" max="${new Date().toISOString().slice(0, 10)}"></div>
+        <div class="field"><label class="label" for="bagWeight">Weight</label><input id="bagWeight" inputmode="decimal" value="${esc(String(b.weight || 250))}" aria-label="Grams"></div>
+        <div class="row"><button class="btn primary" id="confirmBag">Add bag</button></div>`);
+      $("#confirmBag").onclick = async () => {
+        const w = parseFloat($("#bagWeight").value);
+        try {
+          const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
+          closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
+          if (!S.current) await selectBean(added.key, { quiet: true });
+        } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
+      };
+    },
+    left: (b) => {
+      openSheet(`<h2>How much is left?</h2><p class="muted">Crema counts it from your shots. Correct it here if you've weighed the bag, spilled some or brewed it another way.</p>
+        <div class="field"><label class="label" for="leftG">Grams left</label><input id="leftG" inputmode="decimal" value="${esc(String(b.remaining ?? b.weight))}" aria-label="Grams left"></div>
+        <div class="row"><button class="btn primary" id="confirmLeft">Save</button></div>`);
+      $("#confirmLeft").onclick = async () => {
+        const g = parseFloat($("#leftG").value);
+        if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
+        try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
+      };
+    },
+  };
+  $$("[data-more]").forEach((btn) => (btn.onclick = () => {
+    const b = bag(btn.dataset.more);
+    openSheet(`<h2 class="clamp2">${esc(b.info.name.value)}</h2><div class="stack more-list">
+      <button class="btn ghost" data-act="freeze">${b.frozen ? "Thaw" : "Freeze"}</button>
+      <button class="btn ghost" data-act="finish">Finished</button>
+      <button class="btn ghost" data-act="addbag">Another bag</button>
+      ${b.batch && b.weight ? `<button class="btn ghost" data-act="left">Set what's left</button>` : ""}
+      ${b.info.productUrl ? `<a class="btn ghost" href="${esc(b.info.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}</div>`);
+    $$("[data-act]", $("#sheet")).forEach((row) => (row.onclick = () => actions[row.dataset.act](b)));
   }));
 }
 let shelfRequest = 0, shelfSync = null;
@@ -5072,7 +5940,7 @@ async function renderProfiles() {
   $("#profilesSub").textContent = b ? `Matched against what ${b.info.roaster.value} says about it: ${[b.info.roastLevel?.value, b.info.processKind, (b.info.tastingNotes?.value || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ")}` : "Choose an installed profile, with or without a bag.";
   const rec = $("#recommended");
   if (b) {
-    rec.innerHTML = `<p class="muted">Ranking profiles…</p>`;
+    rec.innerHTML = `<p class="muted">Ranking profiles…</p><div class="cands" aria-hidden="true">${skeletonCards(3)}</div>`;
     const waiting = !b.recipe && S.recommending === b.id
       ? `<div class="panel stack"><span class="label">Recommended</span><p class="muted">${S.api.ai.on ? "Asking the AI to choose among these…" : "Working out a recipe…"}</p></div>` : "";
     try {
@@ -5080,14 +5948,15 @@ async function renderProfiles() {
       if (S.current !== b) return;
       const top = cands[0]?.score || 1;
       const chosen = b.recipe?.profileTitle;
-      rec.innerHTML = `${waiting}${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "")}</span></div>
+      rec.innerHTML = `${waiting}${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? pickLabel(b.recipeSource) : "")}</span></div>
           <div class="row between"><h2>${esc(chosen)}</h2><span class="num">${fmt1(b.recipe.doseG)} g → ${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C · ${b.recipe.targetTimeS?.join("–")} s</span></div>
           <ul class="why">${(b.recipe.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
           ${b.recipe.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(b.recipe.dialIn)}</div>` : ""}
           <div class="row"><button class="btn primary" data-use="${esc(chosen)}" data-rec="1">Use this</button><button class="btn" id="askAgain">Ask the AI again</button></div></div>` : ""}
         <div class="row between"><span class="label">Ranked by the rules</span><span class="muted small">The AI chooses among the top candidates</span></div>
-        <div class="cands">${cands.slice(0, 6).map((c, i) => `<div class="cand ${c.title === chosen ? "top" : ""}">
-          <div class="row between"><h3>${esc(c.title)}</h3>${c.title === chosen ? '<span class="pill accent">AI pick</span>' : `<span class="muted small num">#${i + 1}</span>`}</div>
+        <div class="cands">${cands.slice(0, 6).map((c, i) => c.title === chosen ? `<div class="cand shown-above"><div class="row between"><h3 class="clamp2">${esc(c.title)}</h3><span class="muted small"><span class="num">#${i + 1}</span> · Shown above</span></div></div>` : `<div class="cand">
+          <div class="row between"><h3 class="clamp2">${esc(c.title)}</h3><span class="muted small num">#${i + 1}</span></div>
+          <canvas class="prof-thumb" data-thumb-title="${esc(c.title)}" aria-hidden="true"></canvas>
           <div class="scorebar" aria-label="Match score ${c.score}"><div style="width:${clamp((c.score / top) * 100, 5, 100)}%"></div></div>
           <ul>${c.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}${c.cautions.map((r) => `<li class="caution">${esc(r)}</li>`).join("")}</ul>
           <div class="row between"><span class="num small">${fmt1(c.recipe.doseG)}→${fmt1(c.recipe.yieldG)} g · ${fmt1(c.recipe.tempC)} °C</span>${c.installed === false ? '<span class="pill plain">Not on this machine</span>' : `<button class="btn small" data-use="${esc(c.title)}">Use</button>`}</div></div>`).join("")}</div>`;
@@ -5109,6 +5978,18 @@ async function renderProfiles() {
   if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
   [S.library, S.machineInfo] = await Promise.all([S.api.library().catch(() => null), S.api.machine.info().catch(() => null)]);
   renderCatalog();
+  drawThumbs($("#recommended"));
+}
+// A profile's step outline (pressure and flow), from the same plan the profile sheet draws.
+// Cards without usable steps lose the canvas, so no empty box is left.
+const profileThumb = (lp) => (lp?.profile?.steps?.length ? `<canvas class="prof-thumb" data-thumb="${esc(lp.id)}" aria-hidden="true"></canvas>` : "");
+function drawThumbs(root) {
+  requestAnimationFrame(() => $$("[data-thumb], [data-thumb-title]", root).forEach((c) => {
+    const lp = c.dataset.thumb ? S.library?.find((x) => x.id === c.dataset.thumb) : S.library?.find((x) => x.title === c.dataset.thumbTitle);
+    const plan = lp?.profile?.steps?.length ? E.profileCurve(lp.profile) : null;
+    if (!plan) { c.remove(); return; }
+    drawChart(c, [], { compact: true, thumb: true, plan, maxT: Math.max(20, Math.ceil(planWindow(plan, 60) / 10) * 10) });
+  }));
 }
 function renderCatalog() {
   const f = catFilter;
@@ -5144,17 +6025,18 @@ function renderCatalog() {
     const dup = (t) => lib.filter((x) => x.title === t).length > 1;
     const missing = (S.catalog || []).filter((p) => p.installed === false && matches(p));
     $("#catCount").textContent = `${shown.length} of ${lib.length} on this machine`;
-    $("#catalog").innerHTML = shown.map((p) => p.guide ? guideCard(p.guide, p.id, dup(p.title) ? p.author : "") : `<button class="cat-card" data-p="${esc(p.id)}">
-        <div class="row between"><h3>${esc(p.title)}</h3><span class="pill plain">Not in Crema's guide</span></div>
+    $("#catalog").innerHTML = shown.map((p) => p.guide ? guideCard(p.guide, p.id, dup(p.title) ? p.author : "", p) : `<button class="cat-card" data-p="${esc(p.id)}">
+        <div class="row between"><h3 class="clamp2">${esc(p.title)}</h3><span class="pill plain">Not in Crema's guide</span></div>${profileThumb(p)}
         <div class="muted small">${esc(p.author || "Unknown author")}${p.steps ? ` · ${p.steps} steps` : ""}${dup(p.title) ? ` · ${esc(p.id.slice(-6))}` : ""}</div>
         <div class="small">${esc((p.notes || "").slice(0, 140))}</div></button>`).join("")
       + (missing.length ? `<details class="cat-missing"><summary class="muted small">${missing.length} more in Crema's guide that aren't on this machine</summary><div class="small muted">Install them in Decaid to use them: ${missing.map((p) => esc(p.title)).join(", ")}.</div></details>` : "");
   }
   $$("[data-p]").forEach((b) => (b.onclick = () => showProfile(b.dataset.p)));
+  drawThumbs($("#catalog"));
 }
-function guideCard(p, key, note = "") {
+function guideCard(p, key, note = "", lp = null) {
   return `<button class="cat-card" data-p="${esc(key)}">
-      <div class="row between"><h3>${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>
+      <div class="row between"><h3 class="clamp2">${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>${profileThumb(lp)}
       <div class="roastbar" aria-label="Roasts: ${p.roasts.join(", ")}">${ROASTS.map((r) => `<span class="${p.roasts.includes(r) ? "on" : ""}"></span>`).join("")}</div>
       <div class="muted small">${esc(p.author)} · ${esc(p.style)} · ${p.difficulty}${p.milk === "great" ? " · milk" : ""}${note ? ` · ${esc(note)}` : ""}</div>
       <div class="small">${esc(p.character)}</div></button>`;
@@ -5250,31 +6132,62 @@ const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch ===
 async function renderShots(more = false) {
   const list = $("#shotList");
   const scrollTop = list.scrollTop;
-  if (!more) list.innerHTML = `<p class="muted">Loading…</p>`;
+  if (!more) { list.setAttribute("aria-busy", "true"); list.innerHTML = `<p class="visually-hidden">Loading…</p>${[1, 2, 3, 4, 5].map(() => '<div class="sk skeleton-row" aria-hidden="true"></div>').join("")}`; }
   try {
     const page = await S.api.shotPage(more ? S.shots.length : 0, SHOTS_PER_PAGE);
     S.shots = more ? [...S.shots, ...page.items.filter((x) => !S.shots.some((s) => s.id === x.id))] : page.items;
     S.shotsTotal = page.total;
   } catch (e) {
     // A failed load isn't an empty history.
+    list.removeAttribute("aria-busy"); $("#shotFilters").hidden = true;
     list.innerHTML = `<p class="muted">Couldn't load your shots (${esc(e.message)}).</p><button class="btn" id="retryShots">Try again</button>`;
     $("#retryShots").onclick = () => renderShots(); $("#shotDetail").innerHTML = ""; return;
   }
+  list.removeAttribute("aria-busy");
   renderShotList(scrollTop);
+}
+// The coffee the list is narrowed to (a name from shotCoffee), or null for all. It applies to
+// the shots loaded so far; "Show more" still pages through the whole history.
+let shotCoffeeFilter = null;
+function renderShotFilters(names) {
+  const box = $("#shotFilters");
+  box.hidden = names.length < 2;
+  if (box.hidden) return;
+  box.innerHTML = [null, ...names].map((n) => `<button type="button" class="fchip" role="radio" data-sc="${n == null ? "" : esc(n)}" aria-checked="${shotCoffeeFilter === n}" tabindex="${shotCoffeeFilter === n ? 0 : -1}" ${n == null ? "" : `title="${esc(n)}"`}><span class="clip1">${n == null ? "All" : esc(n)}</span></button>`).join("");
+  $$("[data-sc]", box).forEach((btn, i, all) => {
+    btn.onclick = () => { shotCoffeeFilter = btn.dataset.sc || null; renderShotList(0); $(`#shotFilters [aria-checked="true"]`)?.focus({ preventScroll: true }); };
+    btn.onkeydown = (e) => {
+      const to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1 }[e.key];
+      if (to == null) return;
+      e.preventDefault(); all[(to + all.length) % all.length].click();
+    };
+  });
 }
 function renderShotList(scrollTop = $("#shotList").scrollTop) {
   const list = $("#shotList");
-  if (!S.shots.length) { list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
-  if (!S.shots.some((s) => s.id === S.selShot)) S.selShot = S.shots[0].id;
-  list.innerHTML = S.shots.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
-      <input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}>
+  if (!S.shots.length) { $("#shotFilters").hidden = true; list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
+  const names = [...new Set(S.shots.map(shotCoffee))];
+  if (shotCoffeeFilter != null && !names.includes(shotCoffeeFilter)) shotCoffeeFilter = null;
+  renderShotFilters(names);
+  const visible = shotCoffeeFilter == null ? S.shots : S.shots.filter((x) => shotCoffee(x) === shotCoffeeFilter);
+  if (!visible.some((x) => x.id === S.selShot)) S.selShot = visible[0]?.id ?? null;
+  if (S.cmpShot === S.selShot) S.cmpShot = null;
+  const olderBtn = S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "";
+  if (!visible.length) {
+    list.innerHTML = `<p class="muted">No loaded shots of ${esc(shotCoffeeFilter)}.${olderBtn ? " Older shots may have some." : ""}</p>${olderBtn}`;
+    const mb = $("#moreShots"); if (mb) mb.onclick = () => { mb.disabled = true; mb.textContent = "Loading…"; renderShots(true); };
+    $("#shotDetail").innerHTML = ""; return;
+  }
+  list.innerHTML = visible.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
       <canvas data-spark="${i}" aria-hidden="true"></canvas>
-      <button class="open" data-open="${esc(s.id)}"><strong>${esc(shotCoffee(s))}</strong>
-        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("")
-    + (S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "");
+      <button class="open" data-open="${esc(s.id)}"><strong class="clip1">${esc(shotCoffee(s))}</strong>
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button>
+      <label class="cmp-label"><input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}><span>Compare</span></label></div>`).join("") + olderBtn;
   list.scrollTop = scrollTop;
   const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
-  requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
+  // Capture these canvases: another filter/render may replace them before this frame.
+  const sparks = [...list.querySelectorAll("[data-spark]")];
+  requestAnimationFrame(() => visible.forEach((s, i) => { if (sparks[i]?.isConnected) drawChart(sparks[i], s.points, { compact: true, maxT: 50, maxW: 60 }); }));
   $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShotList(); list.querySelector(`[data-open="${CSS.escape(S.selShot)}"]`)?.focus({ preventScroll: true }); }));
   $$("[data-cmp]").forEach((b) => (b.onchange = () => { const id = b.dataset.cmp; S.cmpShot = b.checked ? id : null; renderShotList(); list.querySelector(`[data-cmp="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }); }));
   renderShotDetail();
@@ -5379,6 +6292,7 @@ async function renderSettings() {
   <div class="panel stack"><h2>Sleep and wake</h2>
     ${pres ? `<div class="set-row first"><span>Sleep when idle</span>${sw("sPresence", pres.userPresenceEnabled)}</div>
     <div class="set-row"><span>After<span class="hint">0–240 minutes without use. 0 turns off the idle sleep timer</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
+    <div class="set-row ${pres ? "" : "first"}"><span>Hold to wake<span class="hint">Stops a wipe of the screen from waking the machine. Saved on this device</span></span>${sw("sHoldWake", S.holdWake)}</div>
     <span class="label">Wake schedules</span>
     <div class="stack" style="gap:6px" id="scheds">${scheds.map((s) => `<div class="sched"><span class="num">${esc(s.time)}</span><div class="days">${DAYS.map((d, i) => `<button type="button" data-day="${esc(s.id)}:${i + 1}" aria-pressed="${!s.daysOfWeek.length || s.daysOfWeek.includes(i + 1)}">${d}</button>`).join("")}</div>${sw(`en-${s.id}`, s.enabled)}<button class="btn small ghost" data-del="${esc(s.id)}">Remove</button></div>`).join("") || '<p class="muted small">None yet.</p>'}</div>
     <div class="row"><div class="field" style="flex:1"><label class="label" for="newWake">Add a wake time</label><input type="time" id="newWake" value="06:45"></div><button class="btn" id="addWake" style="align-self:end">Add</button></div>
@@ -5390,6 +6304,7 @@ async function renderSettings() {
         <span class="pv" style="background:${k.bg}">${k.pv.map((c) => `<i style="background:${c}"></i>`).join("")}</span><b>${k.name}</b><span>${k.note}</span></button>`).join("")}</div></div>
     <div class="set-row" ${currentSkin() === "crema" ? "" : "hidden"} id="modeRow"><span>Light or dark<span class="hint">For the Crema theme</span></span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
     <div class="set-row"><span>Clock when asleep<span class="hint">A dark screen saver while the machine sleeps; tap to wake</span></span>${sw("sSaver", S.saver)}</div>
+    <div class="set-row"><span>Chime<span class="hint">A short sound when a shot ends and when the machine is ready. Saved on this device</span></span>${sw("sChime", S.chime)}</div>
     ${disp?.platformSupported?.brightness ? `<div class="set-row"><span>Tablet brightness</span><input type="range" id="sBright" min="5" max="100" value="${disp.brightness}" aria-label="Brightness" style="accent-color:var(--accent)"></div>` : ""}
   </div>
 
@@ -5415,6 +6330,11 @@ async function renderSettings() {
     <div class="set-row first"><span>Leave Crema<span class="hint">Closes Crema and shows Decaid's dashboard, for scale pairing, plugins and skins. Not while the machine is running</span></span><button class="btn small" id="exitDash" ${exitBlocked() ? "disabled" : ""}>Open Decaid</button></div>
   </div>` : ""}`;
 
+  // The section index (tablet and desktop): one button per card, scrolling it into view.
+  const cards = $$("#settings > .panel");
+  cards.forEach((c, n) => (c.id = `setcard${n}`));
+  $("#settingsIndex").innerHTML = cards.map((c, n) => `<button type="button" class="fchip" data-goto="setcard${n}">${esc(c.querySelector("h2")?.textContent || "Settings")}</button>`).join("");
+  $$("#settingsIndex [data-goto]").forEach((b) => (b.onclick = () => $(`#${b.dataset.goto}`).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })));
   // ---- wire up ----
   // A new preference changes what's recommended. The coffee on screen is worked out again now;
   // the others have their saved recipe cleared and get a new one when picked.
@@ -5432,7 +6352,8 @@ async function renderSettings() {
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
-  const num = (id) => settingNumber($(`#${id}`)?.value, SETTING_LIMITS[id]);
+  const settingInputs = Object.fromEntries($$(".mini input", el).map((input) => [input.id, input]));
+  const num = (id) => settingNumber(settingInputs[id]?.value, SETTING_LIMITS[id]);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
     gStart: async () => { S.appSettings = await S.api.settings.set({ grindStart: num("gStart") }); },
@@ -5467,8 +6388,15 @@ async function renderSettings() {
       } catch (e) { input.value = saved; toast(`Couldn't save: ${e.message}`); }
       finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
     };
-    input.onchange = run;
-    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { if (saving || input.disabled) return; const d = Number(b.dataset.mini.split(":")[1]); const dp = (x) => (String(Math.abs(x)).split(".")[1] ?? "").length, places = Math.min(3, Math.max(dp(d), dp(Number(input.value)))); input.value = String(+(Number(input.value) + d).toFixed(places)); run(); }));
+    let saveTimer;
+    const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(run, 180); };
+    input.onchange = () => { clearTimeout(saveTimer); run(); };
+    $$(`[data-mini^="${id}:"]`).forEach((b) => bindRepeat(b, () => {
+      clearTimeout(saveTimer);
+      if (saving || input.disabled) return;
+      const d = Number(b.dataset.mini.split(":")[1]);
+      input.value = String(settingNumber(+(Number(input.value) + d).toFixed(3), SETTING_LIMITS[id]));
+    }, scheduleSave));
   }
   $$("#gStep button").forEach((b) => (b.onclick = async () => {
     const v = Number(b.dataset.v);
@@ -5485,6 +6413,8 @@ async function renderSettings() {
   const flip = (el) => () => { el.checked = !el.checked; };
   const usb = $("#sUsb"); if (usb) usb.onchange = async (e) => { if (await attempt("save USB charging", () => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }), flip(e.target))) toast("Saved"); };
   const pr = $("#sPresence"); if (pr) pr.onchange = async (e) => { if (await attempt("save sleep when idle", () => m.presence.set({ userPresenceEnabled: e.target.checked }), flip(e.target))) toast("Saved"); };
+  $("#sHoldWake").onchange = (e) => { S.holdWake = e.target.checked; local.set("holdWake", S.holdWake); if (!$("#saver").hidden) tickSaver(); };
+  $("#sChime").onchange = (e) => { S.chime = e.target.checked; local.set("chime", S.chime); if (S.chime) playChime(); };
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   $$("#sVoice button").forEach((b) => (b.onclick = () => {
     local.set("voice", b.dataset.v);
@@ -5573,7 +6503,7 @@ function showDeviceFrame() {
     <p class="muted small dev-note">A simulated DE1 and scale with real ONA and Haven coffees. Try Espresso, Steam, the shelf, profiles and themes.</p>
   </div>`;
   const frame = $("#devFrame"), dev = $("#dev"), stage = $("#devStage");
-  frame.src = `${location.pathname}?embed&demo${location.hash}`;
+  frame.src = `${location.pathname}?embed&demo${/[?&]stress\b/.test(location.search) ? "&stress" : ""}${location.hash}`;
   let mode = local.get("device", "tablet");
   const fit = () => {
     const d = DEVICES[mode];
@@ -5689,6 +6619,7 @@ function route(scroll = true) {
   VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
   document.body.classList.toggle("on-brew", v === "brew");
   document.body.classList.toggle("on-shots", v === "shots");
+  document.body.classList.toggle("pouring", v === "brew" && shotRunning());
   $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
   if (v === "shelf") renderShelf();
@@ -5696,7 +6627,9 @@ function route(scroll = true) {
   if (v === "profiles") renderProfiles();
   if (v === "shots") renderShots();
   if (v === "settings") renderSettings();
-  if (scroll) window.scrollTo(0, 0);
+  // Opening a view at its own address (#settings, #shelf) makes the browser scroll that
+  // element into view, past the heading; start every view at its top.
+  if (scroll) { window.scrollTo(0, 0); const m = $("main"); if (m) m.scrollTop = 0; }
 }
 
 async function boot() {
@@ -5744,7 +6677,7 @@ async function boot() {
   $("#speakBtn").onclick = () => (listening ? stopListening(true) : startListening());
   $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
-  $("#saver").onclick = () => { $("#saver").hidden = true; S.api.machine.setState("idle").catch(() => {}); };
+  wireSaver();
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 

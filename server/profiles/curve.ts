@@ -211,6 +211,15 @@ export function shotSim(profile: ProfileLike, { resistance = 1 }: { resistance?:
   const FILL = 18; // ml to fill the headspace and wet the puck before pressure can build
   return {
     get done() { return done; },
+    /** Like Decaid's skipStep: move on to the next step now. Does nothing on the last step. */
+    skip() {
+      if (done || manual || frame >= steps.length - 1) return;
+      const s = steps[frame];
+      const pump = s.pump === "flow" ? "flow" : "pressure";
+      const goal = (pump === "flow" ? out.tf : out.tp) ?? num(pump === "flow" ? s.flow : s.pressure) ?? 0;
+      from = pump === "flow" ? { p: null, f: goal } : { p: goal, f: null };
+      frame += 1; frameStart = t;
+    },
     tick(dt = 0.1): ShotSample {
       if (!done) {
         const s = steps[frame];
