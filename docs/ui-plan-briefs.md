@@ -305,6 +305,28 @@ Run also: `e2e-controls.cjs`, `e2e-demo.cjs`, `e2e-live.cjs`, and a new check: s
 shot; assert the hero numbers, the step name and Stop's size; drop the socket mid-shot
 and assert the layout holds; assert no workflow write happens mid-shot.
 
+## WS 4.5 — Pour chart axis and Brew polish (next)
+
+Base: `main`. Branch: a new one, for example `ui/ws4.5-pour-chart`. The scope, the
+decision on the axis and the "Done when" line are in ui-plan.md under "WS 4.5". Small
+and well specified; a mid-range model is fine, but it touches the pour screen, so run
+`e2e-controls.cjs`.
+
+Where to look in `skin/app.js`: `renderLive` (the `pouring` branch builds `durs`, the
+live plan and `maxT`), `renderPour` and `stepDetailText` (the pour rail), the rest
+branch of `renderLive` (the rest rail), `stepsRailHtml` (minimum segment width),
+`drawChart` (the plan labels, in the `!pts.length` block), and the `split` helper in
+`renderControls` (the preset sub-label). The control-column rules are in
+`skin/index.html` under the `max-height: 860px` landscape block.
+
+`ui/ws4.5-pour-polish` has a stopped attempt as one WIP commit. Read its diff for the
+small fixes, which may be usable as they are, but rewrite the axis: it fed `etaS`
+into a grow-only axis and still reached 80 s. Verify everything yourself.
+
+Run also: `e2e-controls.cjs`, `e2e-demo.cjs`. Look at pour mode at about 5 s, 15 s and
+the end of a demo shot (the demo runs about three times faster than real time), at
+1340×800 and 1005×552.
+
 ## WS 5 — After the shot (not started)
 
 Base: the WS 4 branch. Branch `ui/ws5-after-shot`. Strong model.
@@ -332,6 +354,8 @@ the machine workflow did not.
 
 Base: the WS 4 branch (or WS 5). Branch `ui/ws8-phone`. Cheaper model is fine.
 
+0. **Regression to fix first:** since pour mode merged, Stop is below the fold on the
+   phone while pouring (y≈996 on a 1184 px page at 390×844). Item 2 is the fix.
 1. One status line (state, group temperature, water) that expands on tap; the demo
    banner becomes a "Demo" chip.
 2. A bar fixed above the tabs: Espresso at rest, Stop while anything runs. Stop is
