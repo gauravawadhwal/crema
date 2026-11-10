@@ -87,6 +87,16 @@ jobs:
       - name: Stop and start races, built single-file demo
         if: matrix.group == 'controls'
         run: node scripts/e2e-controls.cjs --built
+      - name: Recipe value sheet and hold controls
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-values.cjs --shots ui-shots/values
+      - name: Keep value-sheet screenshots for review
+        if: always() && matrix.group == 'controls'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws6-value-sheet-screenshots
+          path: ui-shots/values/
+          retention-days: 7
       - name: Home screen fits the tablet
         if: matrix.group == 'brewing'
         run: node scripts/check-tablet-fit.cjs ui-shots/fit

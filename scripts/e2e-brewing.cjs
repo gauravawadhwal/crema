@@ -127,9 +127,9 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
       await loaded(); current = await wf();
       check(current.profile.beverage_type === 'manual' && current.profile.steps.every(s => Number(s[kind]) === 0) && current.context.targetYield === 0 && current.context.targetWaterVolume === 0, `manual ${kind} preserves zero targets and disables inherited stops`);
       check(kind !== 'flow' || current.profile.steps.every(s => Number(s.limiter.value) === 9), 'manual flow keeps Decaid pressure limit');
-      await page.click('[data-step="temp:1"]'); await loaded(); current = await wf();
+      await page.click('[data-value="temp"]'); await page.click('#valuePlus'); await page.click('#valueSet'); await loaded(); current = await wf();
       check(current.profile.steps.every(s => Number(s.temperature) === 88.5), 'temperature changes shift every manual step');
-      await page.click('#stopMode'); await page.fill('#weightTarget', '40'); await page.click('#saveWeight'); await loaded();
+      await page.click('[data-value="yield"]'); await page.click('#stopWeight'); await page.locator('#valueRuler').press('Home'); await page.evaluate(() => { const ruler = document.querySelector('#valueRuler'); for (let i = 0; i < 40; i++) ruler.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); }); await page.click('#valueSet'); await loaded();
       check((await wf()).context.targetYield === 40, `manual ${kind} writes an explicit weight target without modifying the controller steps`);
     }
     await page.evaluate(key => selectBean(key, { quiet: true }), bag.batch);

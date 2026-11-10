@@ -77,7 +77,8 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
   };
   const hold = (name) => p.evaluate((n) => { window.__release = window.__hold(n); }, name);
   const release = () => p.evaluate(() => window.__release());
-  const tap = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel); // a tap, even on a disabled-looking button
+  const tap = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
+  const editDose = async () => { await tap('[data-value="dose"]'); await tap('#valuePlus'); await tap('#valueSet'); };
   // A real tap: press, hold about as long as a finger does, release.
   const press = async (sel, ms = 150) => {
     const box = await (await p.$(sel)).boundingBox();
@@ -154,9 +155,9 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
       await p.evaluate(() => { window.__applies = []; });
       const dose0 = await p.evaluate(() => S.next.doseG);
-      await tap('[data-step="dose:1"]');
+      await editDose();
       await tap("#loadBtn");
-      await tap('[data-step="dose:1"]');
+      await editDose();
       await tap("#loadBtn");
       const during = await p.evaluate(() => ({ applies: window.__applies.slice(), label: document.querySelector("#loadBtn").textContent, toast: document.querySelector("#toast").textContent }));
       check(during.applies.length === 0, "no recipe is written to the machine during a shot", JSON.stringify(during.applies));
@@ -174,7 +175,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     if (!hasRecipe) console.log("skip a start waits for a load already on its way (no coffee on the shelf, so no recipe)");
     else {
       await reset();
-      await tap('[data-step="dose:1"]'); // the recipe now needs loading
+      await editDose(); // the recipe now needs loading
       await p.evaluate(() => { window.__applies = []; });
       await hold("apply");
       await tap("#loadBtn");
@@ -238,7 +239,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await p.setViewportSize({ width: w, height: h });
       await reset();
       const rect = () => p.evaluate(() => { const r = document.querySelector("#stopBtn").getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10).join(","); });
-      await tap('[data-step="dose:1"]'); // recipe not on the machine: the Espresso hint applies
+      await editDose(); // recipe not on the machine: the Espresso hint applies
       await p.waitForTimeout(100);
       const notLoaded = await rect();
       await tap("#loadBtn");

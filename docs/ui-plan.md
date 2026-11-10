@@ -14,6 +14,27 @@ agents. Checked against the demo and simulator only, not the tablet.
 Mono's repository has no licence file. Use it for ideas only: copy no code, icons or
 artwork from it. The same applies to Streamline (GPL-3.0).
 
+## Handoff log
+
+**10 November 2026 — WS 6 completed on `ui/ws6-value-sheet`**
+
+- Dose, Yield and Temp tiles open one draft sheet with tabs, a snapping pointer/keyboard
+  ruler, recent shot values and manual/weight stop choices. Set applies all edited
+  tabs locally; Cancel, scrim, Escape and handle swipe discard them. Temperature
+  continues through the existing `withTemperature` load path.
+- Shared hold-to-repeat handles grind, Settings and sheet buttons. Settings saves are
+  coalesced after the hold, through the existing handlers. All five WS 6 allowlist
+  entries are removed (116 unrelated entries remain on this WS 2-based branch).
+- Passed: syntax, focused `e2e-values.cjs` (including one Settings write per hold and
+  no machine write on Set), tablet fit at all five sizes, and touch-target check.
+  Inspected temporary screenshots at 1340×800, 1005×552 and 390×844, including stress
+  names and compact manual-yield sheet. The focused test and screenshots run in CI.
+- Per the user's latest instruction, broad unit/typecheck/live/brewing/control suites
+  and built-demo variants are left to CI; no CI wait, tablet or NAS testing.
+- Updated control, brewing and live scripts for the tile/sheet route. Rebuilt the
+  demo. WS 3 is a separate sibling branch; combine after it and rebuild the demo
+  when resolving generated-file conflicts. WS 9 remains owned by the other agent.
+
 ## Status
 
 | WS | Work | Size | Depends on | Status / evidence |
@@ -23,7 +44,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 | 3 | Brew at rest | M | 2 | Not started |
 | 4 | Pour mode | L | 3 | Not started |
 | 5 | After the shot | M | 4 | Not started |
-| 6 | Value sheet and steppers | M | 3 | Not started |
+| 6 | Value sheet and steppers | M | 3 | Implemented on `ui/ws6-value-sheet`; focused values, tablet fit and targets pass; 5 allowlist entries removed (116 remain). Broader suites left to CI. Not merged or hardware-tested. |
 | 7 | Feedback layer | M | 2 | Not started |
 | 8 | Phone | M | 4 | Not started |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Not started |
