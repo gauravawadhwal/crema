@@ -275,7 +275,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         return { pouring: document.body.classList.contains("pouring"), status: document.querySelector("#status").textContent, time, weight, steps, nowIdx, stopW: Math.round(stop.width), stopH: Math.round(stop.height), skip: !!document.querySelector("#skipBtn") };
       });
       check(pour.pouring && /Pouring/.test(pour.status) && pour.time === "84px" && pour.weight === "84px", "pour mode shows 84 px hero numbers and Pouring status", JSON.stringify(pour));
-      check(pour.steps.length > 0 && pour.nowIdx >= 0 && pour.stopW === 300 && pour.stopH >= 96, "pour mode shows the step name and a Stop button at least 300x96", JSON.stringify(pour));
+      check(pour.steps.length > 0 && pour.nowIdx >= 0 && pour.stopW === 300 && pour.stopH === 96, "pour mode shows the step name and a 300x96 Stop button", JSON.stringify(pour));
       if (pour.skip) {
         const beforeIdx = pour.nowIdx;
         await tap("#skipBtn");

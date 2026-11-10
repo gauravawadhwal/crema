@@ -22,8 +22,9 @@ artwork from it. The same applies to Streamline (GPL-3.0).
   Merge commits retain each workstream's history. WS 9's old remote WIP is preserved;
   its completed local commit is published as `codex/ws9-other-screens`.
 - Review fixed WS 4's Stop position: the enlarged button now contains the entire
-  resting hit area at all five tablet sizes. The nominal 300×96 minimum expands
-  vertically on taller tablets because the resting Stop sits above Favourites.
+  resting hit area at all five tablet sizes. All tablets now use the existing
+  compact layout's bottom-right anchor; Favourites spans the two left columns.
+  Pour Stop remains 300×96 without an oversized empty footer.
 - Shot recipe/profile snapshots are copied and remain independent of next-shot edits.
   Missing metadata and frames stay unknown; Skip requires a known non-final step,
   a live link, a non-manual profile and no pending Skip request. Socket loss keeps Stop.
@@ -35,7 +36,8 @@ artwork from it. The same applies to Streamline (GPL-3.0).
   pour overlays and profile thumbnails; Settings retains WS 6 hold/save behavior.
 - Focused checks passed: control races and Stop coverage, captured pour context
   (source and built), WS 9 screens/filter transitions, WS 6 values, and typecheck.
-  Broad CI runs on the consolidated branch; see PR #61 for the final check results.
+  The final Stop geometry check passed at all five tablet sizes without scrolling
+  or page errors. See PR #61 for the consolidation's CI results.
 - Remaining: WS 5 after-shot layout, WS 8 phone and WS 11 finish. WS 7 has a stopped
   WIP branch and is not included. No physical tablet/DE1 or NAS validation or release.
 

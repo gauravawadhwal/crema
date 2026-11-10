@@ -729,7 +729,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .fav:not(.empty) .fav-recipe { margin-left: calc(0px - var(--hit-tight) - var(--s-12)); padding-right: calc(var(--hit) + var(--s-4)); }
 .fav.empty { padding-left: var(--s-12); }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
-  #view-brew .controls-col { overflow: hidden; display: flex; flex-direction: column; }
+  #view-brew > .controls-col { grid-column: 3; grid-row: 1 / 3; overflow: hidden; display: flex; flex-direction: column; }
+  #view-brew .favs-panel { grid-column: 1 / 3; }
   #controls { display: flex; flex-direction: column; flex: 1; height: 100%; }
   #controls .stop-wrap { margin-top: auto; }
   #controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
@@ -749,8 +750,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .fav-art { top: var(--s-8); left: var(--s-8); }
 }
 /* WS 4: Pour mode — full Brew takeover while a shot is running.
-   The tablet Stop expands through the empty favourites row, retaining its
-   entire resting hit area. Compact layouts already put resting Stop at bottom. */
+   All tablet sizes share the compact layout's bottom-right Stop anchor, so
+   the 300×96 pour button retains the entire resting hit area. */
 body.pouring .rail .tab:not([data-view="brew"]) { opacity: .4; }
 .pour-top { grid-column: 1 / -1; gap: var(--s-8); padding: var(--s-12); }
 .pour-head { flex-wrap: nowrap; min-width: 0; gap: var(--s-12); }
@@ -785,7 +786,7 @@ body.pouring #controls { position: relative; z-index: 5; }
   body.pouring #view-brew .live-col { grid-column: 2 / -1; }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
-  body.pouring #view-brew { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: auto minmax(0, 1fr) calc(142px + 14px + var(--hit) + var(--s-24) + var(--s-8)); }
+  body.pouring #view-brew { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: auto minmax(0, 1fr) calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
   body.pouring #view-brew .pour-top { grid-row: 1; }
   body.pouring #view-brew .pour-left { grid-column: 1; grid-row: 2; height: 100%; }
   body.pouring #view-brew .live-col { grid-column: 2 / 4; grid-row: 2; }
@@ -796,7 +797,6 @@ body.pouring #controls { position: relative; z-index: 5; }
   body.pouring #controls .stop-btn { width: 300px; height: 100%; min-height: calc(var(--hit) + var(--hit-tight) + var(--s-12)); }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
-  body.pouring #view-brew { grid-template-rows: auto minmax(0, 1fr) calc(142px + 14px + var(--hit-tight) + var(--s-24)); }
   .hero-val { font-size: 4rem; }
   body.pouring #controls .stop-btn, .skip-btn { min-height: calc(var(--hit) + var(--s-24) + var(--s-8)); }
 }

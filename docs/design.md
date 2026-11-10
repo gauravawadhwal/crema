@@ -107,8 +107,8 @@ plan. Unknown recipe values or step frames remain unknown. Next-shot edits never
 supply the active shot's labels or targets. Skip appears only for a known non-final
 step of a non-manual profile and is disabled without a link or while a request waits.
 
-Tablet Stop is at least 300×96 and contains its entire resting hit area. On taller
-tablets it expands down through the unused Favourites row; compact tablets already
-anchor resting Stop at the bottom. Socket loss keeps the pour layout and Stop visible.
+Tablet pour Stop is 300×96 and contains its entire resting hit area. All tablet
+sizes use the compact layout's bottom-right anchor, with Favourites spanning the
+two left columns while at rest. Socket loss keeps the pour layout and Stop visible.
 Secondary readouts and explanatory copy drop at compact sizes so time, weight and
 Stop remain visible without scrolling. The dedicated phone arrangement is WS 8.
