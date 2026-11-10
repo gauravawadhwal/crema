@@ -150,7 +150,7 @@ Done in software and tested against the simulator and desktop Decaid 0.9.1 with 
 
 Not done (details in `docs/implementation-plan.md`):
 - broader real-tablet acceptance, including upgrade/restore and physical controls (plan phase 7; one baseline brew is already verified)
-- Streamline Settings from Crema, the profile-editing hand-off and an evidence-based `docs/parity.md` (plan phase 3)
+- Streamline Settings from Crema and the profile-editing hand-off (plan phase 3). The source ownership audit is complete in `docs/parity.md`; plugin compatibility and runtime routes remain pending
 - splitting `skin/app.js` and `tsc --checkJs` for the skin (plan phase 4, after #44; optional)
 - AI shot review real-shot calibration and tablet acceptance: the first software version is implemented (`docs/shot-review-plan.md`)
 - grinder entities and a numeric grind advisor; Home Assistant sensors; order-email ingestion

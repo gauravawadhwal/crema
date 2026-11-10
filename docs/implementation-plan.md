@@ -52,9 +52,13 @@ Decaid.
    installable GitHub release. A release runs CI and attaches a new skin ZIP for
    Decaid to install. It is distribution work, not a separate feature or a reason
    to pause implementation. Tagging remains the user's call.
-4. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
-   is ready with desktop Decaid. Build and check it against desktop Decaid; the user
-   confirms on the tablet in normal use.
+4. **Streamline Settings entry and feature access** (phase 3). The source audit is
+   complete in [parity.md](parity.md): all 42 Streamline settings sub-pages and the
+   daily features, with owners and proposed routes. The integration remains on hold
+   until the user is ready with desktop Decaid. Resolve the published plugin's
+   version gap and machine-settings restore conflict before adding its link; see
+   phase 3's audit findings and proposed order. The user confirms on the tablet in
+   normal use; no supervised tablet session is requested.
 5. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
    shared JSDoc type for the API object, which turns the live/demo contract into a type
    check. Splitting the file further is optional after PR #44.
@@ -367,7 +371,7 @@ separate supervised step; implement and test locally first.
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
 | 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Done in software: ratings, shot history (#22), installed profiles (#23), bags per batch. Unverified on the tablet |
-| 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
+| 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Source ownership audit complete (10 November, `docs/parity.md`); dashboard exit implemented. Plugin integration, restore-conflict reproduction and profile-management round trip pending; no new runtime validation in the audit |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | In progress. Re-scoped on 10 November 2026: control, load-hold, reconcile, start-gate and bag-weight decisions moved to `server/control/` with vitest (PR #44, merged 10 November 2026; simulator and CI, not on the tablet), with the shelf, record-merge and rest-table logic added by #45, #46 and #48. File splitting and `tsc --checkJs` later (see "Next") |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
 | 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. The complete saved-shot regression is covered by `e2e-brewing.cjs`. Left: backup/restore docs; repository in the manifest |
@@ -436,9 +440,10 @@ building on them.
 6. **Profile editing and other specialist features (phase 3, ownership audit).** The
    docs now route profile editing, Visualizer import and hiding built-in profiles to
    the Streamline skin (switch skins, then switch back). Firmware, calibration,
-   cleaning cycles and eco steam go to Streamline Settings, and scale pairing to
-   Decaid. Treat these as the working assumption for the `docs/parity.md` rewrite,
-   not as verified routes.
+   cleaning cycles go to specialist Settings, and scale pairing to Decaid. The
+   10 November source audit in `docs/parity.md` supersedes the earlier assumption
+   that opening Settings also gives Crema eco steam: that needs Streamline's runtime.
+   All new handoff routes remain runtime-unverified.
 7. **Playwright is installed globally, not declared (phase 0, R11).** The UI scripts
    only work where `playwright` is installed globally. A fresh checkout can't run them.
    *Fixed: Playwright is a dev dependency and CI's `ui` job runs the UI checks.*
@@ -982,6 +987,76 @@ without silently losing records. See phase 4 for shared schema work.
 
 ## Phase 3 — reuse settings and preserve feature access (R12)
 
+### Source audit and proposed order — 10 November 2026
+
+[parity.md](parity.md) now covers all 11 sections / 42 static sub-pages in
+Streamline v0.2.24 and the features outside Settings. Crema was inspected at
+`5d07139` on the carousel branch, so local capabilities include unreleased work.
+This completes the source inventory, not plugin integration or runtime acceptance.
+No app/tablet was opened, settings written or procedures started for this audit.
+
+The main findings change the earlier “add a Settings link” assumption:
+
+- The latest published standalone Settings plugin is v0.1.4. Its tagged source
+  records Streamline v0.2.9; plugin `main` records v0.2.12, while the skin is at
+  v0.2.24. Grinder and sounds pages are absent from the released plugin. Its
+  committed generated manifest also differs from the release tag; verify the
+  actual installed/release artifact rather than inferring it from the branch.
+- Released plugin code can silently restore previously saved DE1/advanced values
+  when its legacy settings UI loads (`checkMachineSettingsDrift`). This could undo
+  a later fan or USB edit in Crema. This is a source finding; reproduce on disposable
+  simulator/desktop data before choosing the integration. The lightweight landing
+  page alone does not exercise this path. Prefer an upstream resolution or a
+  supported configuration; do not add a private settings fork by inference.
+- Skin preferences do not supply Crema runtimes. Language, °F, shortcuts, zoom,
+  screensaver options, wake-profile loading, Home Assistant and eco steam do not
+  become Crema features when their plugin toggle is saved. The settings plugin
+  also contains no profile editor.
+- Preserve the distinctions already in the working setup: recommendation scale
+  preference versus `blockOnNoScale`, USB versus charging policy, reminder versus
+  maintenance cycle, and Crema's capped Manual steam versus unlimited duration.
+  Visualizer's present “Available” indicator only establishes a matching plugin ID.
+
+Proposed implementation order, for discussion; this audit does not authorize
+building every feature below:
+
+1. **Validate the specialist-settings dependency, then add access.** Select a
+   released artifact and check its actual version/routes in desktop Decaid. Seed
+   a prior saved fan/USB record, change the value through the Crema path, then open
+   a legacy plugin category and check for unsolicited writes. Resolve that conflict
+   before making the plugin a routine Crema route. Keep current daily controls
+   initially, read effective values after Save or Cancel, and do not hydrate
+   Crema from Streamline preferences. Check installed-but-disabled/missing/update
+   states, cross-origin full-page return, no-server/AI-off and the phone proxy route.
+2. **Make profile management reachable.** Verify a switch-to-Streamline-and-return
+   path for create/edit/JSON import/Visualizer import/hide/restore on disposable
+   profiles. Record account prerequisites and refresh the library on return;
+   retain selected bag and unsaved recipe choices without loading a profile as a
+   side effect. No new profile editor is proposed.
+3. **Make plugin access/status honest.** Prefer Decaid's generic plugin settings
+   and pages over rebuilding each plugin's UI. Distinguish installed, enabled/loaded,
+   configured and verified upload success where Decaid exposes them; never label
+   installation alone “ready to upload.” Keep Visualizer and Decent Shot Uploader
+   separate. A small Crema plugin/help entry is a candidate, not yet selected work.
+4. **Discuss only the useful daily omissions.** Skip-step is a concrete control
+   Streamline exposes and Crema lacks. If requested, use Decaid's `skipStep`, show it
+   only during an applicable espresso step, retain Stop, reject stale/double actions
+   and cover disconnect/start/stop races in live/demo/mock checks. Shortcuts and
+   shot-summary copy are smaller optional conveniences. Auto/eco-steam, °F,
+   richer screensavers and grinder control need their own user priority and runtime
+   design. Bengle-only controls, chat, translations and Home Assistant remain deferred.
+
+Acceptance must exercise pre-existing settings and return-after-Cancel, not only a
+fresh plugin install. Check that opening/returning does not restore stale machine
+values, apply a profile or wipe Crema edits; selected steam/water/flush presets
+must still have explicit ownership. Keep runtime and hardware rows pending until
+their checks are actually recorded. Desktop work remains subject to the hold in
+“Next”; the source audit did not require desktop/tablet access.
+
+Documentation verification: `git diff --check`, local Markdown link/reference
+checks and the 42-row settings coverage check passed. No application tests were
+run for these documentation-only changes.
+
 ### Streamline Settings integration
 
 The proposed dependency is
@@ -1020,14 +1095,19 @@ be isolated rather than worked around with a new private settings fork.
 
 ### Feature ownership and profile-editor decision
 
-- [ ] Revise `docs/parity.md` into an evidence-backed matrix: feature, actual owner,
-  route from Crema, minimum capability/version, supported device and verification.
-  Separate “implemented locally”, “accessible elsewhere”, “unverified” and “missing”.
-- [ ] Cover every existing parity row, including profile editing/import/hide/restore,
+- [x] Revise `docs/parity.md` into a source-backed ownership matrix with baseline
+  versions, actual Crema exposure, proposed handoff routes and explicit verification
+  limits. *Done 10 November 2026; source audit only, no new runtime checks.*
+- [x] Cover every existing parity row, including profile editing/import/hide/restore,
   Profile Generator, grinder entities, scale reconnect/required/power behaviour,
   Visualizer, shot deletion, cleaning/descaling, calibration, firmware, language,
   units, steam modes, help and keyboard controls. Distinguish reminders from an
   actual machine maintenance workflow.
+  *Done in the source matrix, including all 42 static Streamline settings sub-pages.*
+- [ ] Verify the proposed routes against the selected artifact/Decaid version,
+  record supported tablet/browser surfaces and establish minimum capabilities
+  where needed. “Exposed upstream” is not “accessible from Crema”; the source
+  audit's versions are not minimum-version guarantees.
 - [ ] Investigate a maintained profile-editor entry point independently. A settings
   plugin is not evidence of an editor. If no supported reusable route exists,
   document a tested switch-to-Streamline-and-return flow as the initial solution.
