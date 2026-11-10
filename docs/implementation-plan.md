@@ -12,7 +12,17 @@ is the first in-place upgrade.
 One real brew has since been reported successful and its saved workflow/measurements
 inspected read-only (see the live-verification note below). Broader tablet acceptance
 is pending. Software checks use `dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
-simulated machine. Next:
+simulated machine.
+
+**Update, later on 10 November 2026.** The user reports the tablet has been upgraded in
+place through each release to v0.4.1 and is in daily use without problems, so a
+supervised tablet session is no longer the next step, and agents should not ask for
+tablet access unless the user offers it. A code review of the server and `skin/app.js`
+the same day found problems this plan did not list. **The current order of work is in
+[Code review and revised order](#code-review-and-revised-order--10-november-2026)
+below; where it disagrees with "Suggested next sessions", it wins.**
+
+Before that update, the order was:
 the tablet session (phase 7, next-session item 3), then phase 3 (Streamline Settings and
 the profile-editing hand-off), which needs the tablet first. Without the tablet, the
 open software work is phase 4 (splitting `skin/app.js`), "why the shot stopped" and the other Streamline improvements, the voice
@@ -24,6 +34,186 @@ This is the execution plan requested by the user after the project review. It co
 all review recommendations, including reuse of Streamline Settings. The supporting
 [review record](review-2026-11-06.md) distinguishes reproductions, source findings
 and untested assumptions. Read it before changing behaviour.
+
+## Code review and revised order — 10 November 2026
+
+A review of `main` at PR #40, made by reading `server/` and all of `skin/app.js` rather
+than this plan. Checked: 207 unit tests and the typecheck pass locally, and CI is green
+on `main`. The Playwright checks were not run locally for this review. **Every finding
+below comes from reading the code; none has been reproduced.** Reproduce each one before
+fixing it, as this plan asks for all fixes.
+
+### What the review concluded
+
+- **The server is small and well bounded.** No file is over about 630 lines, inputs are
+  validated with Zod, and every AI call has a rules fallback. Shot review keeps the
+  model's answer inside what the code measured (`validateReview`).
+- **`skin/app.js` is large but not messy.** It is about 204 KB in one file: 118
+  top-level functions and one global state object (`S`) with about 30 fields. The
+  machine-control code (start generations in `startOp`, held loads in `loadOntoMachine`,
+  `reconcileWorkflow`, the socket slots in `subscribe`) is careful and well commented.
+  Its size is a navigation cost more than a correctness risk.
+- **The real gap is unit tests for the app's hardest logic.** The unit tests (11 files,
+  about 1,400 lines) cover `server/` only. The control and reconcile logic and the bag
+  arithmetic (`bagUse`) are reachable only through Playwright, because they are tied to
+  the DOM and to `S`. `skin/app.js` is also outside `tsc`.
+- **So phase 4 should be cut by what needs testing, not by file size.** `makeLiveApi`
+  is already the cleanest part of the file; extracting it first would move code without
+  making the risky logic testable.
+- **Evidence still trails the software.** v0.4.0's shot review produced no usable
+  review on the first 12 real shots, and that was found only by replaying them
+  (v0.4.1). The user's daily use is now the hardware evidence for the main brewing
+  loop; the edge cases under "Still unverified on hardware" below have not been seen.
+
+### Findings
+
+**F1. Likely bugs (small, user-visible)**
+
+- [ ] **"Notes saved" shows even when the save failed.** The `#shotNotes` handler in
+  `renderShotDetail` swallows the error from `api.annotate` and then toasts success.
+  Fix: toast success only when the write resolves, and say so when it fails.
+- [ ] **"Recommendations updated" is only true for the current coffee.** `savePrefs` in
+  `renderSettings` sets `recipe = null` on every shelf row in memory and re-selects the
+  current coffee. The next `refreshShelf` reads the other coffees' old recipes back from
+  Decaid's key-value store, so they are never recomputed. Fix: either clear the stored
+  recipes for the other coffees (so each is recomputed when next selected), or mark
+  them stale in the record; then make the toast say what happened.
+- [ ] **Many buttons fail silently.** These handlers await a request with no error
+  handling: Freeze/Thaw and "Mark finished" (`renderShelf`), wake-schedule day toggles,
+  enable switches, Add and Remove, USB charging, sleep-when-idle, "Done today" for
+  backflush and descale (`renderSettings`), and saving, renaming, replacing and
+  clearing favourites (`useFav`, `editFav`). There is no `unhandledrejection` handler,
+  so a failed request shows nothing. Fix: a global handler that toasts "Couldn't do
+  that: …", plus explicit handling where the UI must roll back (switches that stay
+  flipped after a failed write).
+- [ ] **A shot whose machine socket drops mid-pour never shows the after-shot panel.**
+  `subscribe` marks a snapshot `finished` only when the previous state was `espresso`,
+  and the socket's `onLost` resets that previous state. `onSnapshot` has the same
+  dependency for sending a held load. After a reconnect the shot ends unnoticed: no
+  panel, no bag weight update, and "Loads after this shot" stays until the next load.
+  Fix: remember that a shot was running across a reconnect, and treat the first
+  non-espresso snapshot after it as the end.
+
+**F2. Shelf polling**
+
+- [ ] **The shelf is fully re-read every 5 seconds on every visible device.**
+  `syncShelf` (the 5 s interval in `boot`) calls `api.shelf()`, which makes one request
+  for the beans, then per coffee one for Crema's record (which carries the bag photo as
+  a data URL) and one for its batches, then per bag every shot summary for that bag and
+  the bag's correction record. `syncShelf` also serialises the whole shelf twice per
+  cycle to detect changes. The tablet serves all of this while also running the
+  machine. Fix: poll a cheap change signal (the bean list and batch lists), and do the
+  full read only when it differs, on focus, and after a shot.
+- [ ] **A read path writes.** `bagUse` writes a weight correction to the key-value
+  store when it sees `weightRemaining` changed elsewhere, and it runs inside the 5 s
+  poll on every device, so two devices can write the same correction at once. Fix: do
+  the correction in `syncRemaining` (after a shot, or when the user sets what's left),
+  not in `shelf()`.
+
+**F3. Shared records can lose updates across devices**
+
+- [ ] **Settings merge into a per-device cached copy.** `api.settings.set` spreads the
+  patch over the copy this device read earlier, then writes the whole object. A phone
+  changing the grind step can undo the tablet's AI switch. Fix: re-read before writing,
+  as `prefs.set` and `maintenance.set` already do.
+- [ ] **Coffee records are read-modify-write with no guard.** `patchRecord` and
+  `saveBean` read `bean:<id>`, merge and write it back; `recommend` rewrites `info` and
+  `recipe` together. Two devices acting on the same coffee within a request's time can
+  drop one change (a pinned reference shot, for example). Decaid's store has no
+  revision, so this cannot be made exact. Fix sized to a household: re-read immediately
+  before each write and merge only the fields being changed; consider splitting fields
+  that change independently into their own keys, as bags already do (`bag:<batchId>`).
+  Any key change needs a migration (phase 4, "define migration versions").
+
+**F4. Structure and duplication**
+
+- [ ] **The rest-window table is copied into `app.js`** (`REST` and `restOf`, marked
+  "mirror"). The source is `server/recommend/rules.ts`. Export it through
+  `server/engine.ts` and delete the copy, per this repo's own convention.
+- [ ] **The live API reaches into the UI.** `api.review` reads `S.shelf` for the coffee,
+  and `api.machine.waterThreshold` uses `settingNumber` and `SETTING_LIMITS` from the
+  settings view. Pass these in as arguments so the API layer has no dependency on UI
+  state; this is a precondition for typing or extracting it.
+- [ ] **The taste scales and the Review button are written twice**, in `showAfterShot`
+  and `renderShotDetail`, with slightly different behaviour (one saves taste on tap,
+  the other only with a review). Make one shared piece.
+- [ ] **Doc drift:** `CLAUDE.md` says `withTemperature` is in `server/app.ts`; it is in
+  `server/recommend/local.ts`.
+
+**F5. Server hardening, sized to a home LAN**
+
+- [ ] **No upload limit on `/api/identify`.** Photos are read into memory with no size
+  or count limit. Add a body limit (the app sends at most four photos).
+- [ ] **Any web page can call the server.** `/api/*` allows every origin and the server
+  listens on all interfaces with no authentication, so a page open in a browser on the
+  LAN could spend AI calls. The `/decaid/*` proxy adds no exposure Decaid doesn't
+  already have on the LAN. Fix: restrict CORS to configured origins (an environment
+  variable, defaulting to the Decaid skin origin and same origin). Authentication is
+  not proposed.
+- [ ] **`ProviderChain.lastUsed` is shared between requests.** Two simultaneous
+  requests can report each other's provider as the source. Return the provider with the
+  result instead.
+- [ ] **Minor:** 500 responses return the raw error message; `dialInWithSource` falls
+  back to rules without logging why (`recommend` and `reviewShot` do log).
+
+**F6. This plan and the repository**
+
+- [ ] **This plan is hard to use as a handoff.** It is over 1,100 lines with several
+  dated status sections above the progress table, and "Suggested next sessions" holds
+  two overlapping orderings, the first of which describes bagless work that has
+  shipped. Collapse the top into one current status and one ordered list, and move the
+  dated narratives to a history file.
+- [ ] **Housekeeping.** Two leftover worktrees under `.claude/worktrees/` and about ten
+  merged local branches remain; `.claude/launch.json` and `.claude/worktrees/` are
+  untracked and not ignored. Removing worktrees and branches is the user's call.
+
+### Revised order of work
+
+Each item is its own PR. All of it can be verified with the repository simulator and
+desktop Decaid; none needs the tablet.
+
+1. **Fix the F1 bugs**, with the global failure toast. Add a regression for each to the
+   existing Playwright scripts (`e2e-live.cjs` for failed writes and the mid-shot
+   reconnect, `e2e-review.cjs` for notes).
+2. **Put the control logic and bag arithmetic under unit tests** (phase 4, re-scoped).
+   Move the decisions out of the DOM code into functions that take state and return
+   what to do: the start/stop sequencing in `startOp`, `loadNow`'s hold-or-send choice,
+   `reconcileWorkflow`'s same/differs/adopt outcome with `recipeMatches`, and `bagUse`'s
+   remaining-weight sum. Put them in `server/` so they reach the app through
+   `skin/engine.js` and are tested by vitest. Keep the single-file skin and the built
+   demo working; no framework and no new build step. Do the F4 "API reaches into the
+   UI" item here.
+3. **Make the shelf poll cheap and move the write out of the read path** (F2), then
+   **settings and record writes** (F3). F3's key changes come last because they need a
+   migration.
+4. **Hide Speak inside Decaid** (next-session item 10). Small, already confirmed.
+5. **Trim this plan** (F6) and fix the doc drift (F4).
+6. **Server hardening** (F5).
+7. **Streamline Settings entry and the parity audit** (phase 3). Build and check it
+   against desktop Decaid; the user confirms on the tablet in normal use.
+8. **Then, if still wanted:** put `skin/app.js` and `skin/demo.js` under
+   `tsc --checkJs` with a shared JSDoc type for the API object, which turns the
+   live/demo contract into a type check. Splitting the file further is optional after
+   item 2.
+
+Hold until there are more real shots with taste recorded: shot-review threshold
+calibration. Hold as before: grinder entities and a numeric grind advisor, Home
+Assistant sensors, order-email ingestion (see "Deferred product work").
+
+### Still unverified on hardware
+
+The user's daily use covers installing and upgrading in place, espresso with stop at
+weight, the tablet layout and touch, and adding coffees from a phone. These were
+reported by the user on 10 November 2026, not audited by an agent. The cases below have
+not been reported either way. They are listed so they stay visible, not as a request
+for a tablet session:
+
+- Wi-Fi loss or a machine power-cycle mid-session, and tablet sleep and resume.
+- Stop pressed at the same moment as a load or a start, on the real machine.
+- Manual flow and pressure with the physical group-head controller.
+- Whether steam, hot water and flush preset values reach the machine.
+- Decaid backup and restore including Crema's key-value records. This is the one worth
+  doing deliberately, on disposable data, because a failure would lose records.
 
 ## Shot review follow-through — 10 November 2026
 
@@ -144,12 +334,16 @@ separate supervised step; implement and test locally first.
 | 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Done in software: ratings, shot history (#22), installed profiles (#23), bags per batch. Unverified on the tablet |
 | 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
-| 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started |
+| 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | Not started. Re-scoped on 10 November 2026: unit-testable control logic first, file splitting later (see "Code review and revised order") |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
 | 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. The complete saved-shot regression is covered by `e2e-brewing.cjs`. Left: backup/restore docs; repository in the manifest |
-| 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Started: one real brew and saved workflow/telemetry checked; broader acceptance pending |
+| 7 | Real Decaid/tablet acceptance and documentation | Local checks passing | Started: one real brew and saved workflow/telemetry checked. User-reported on 10 November 2026: upgraded in place to v0.4.1 and in daily use without problems. Edge cases not yet seen are listed under "Still unverified on hardware" |
 
 ### Suggested next sessions
+
+**Superseded on 10 November 2026** by "Revised order of work" under
+[Code review and revised order](#code-review-and-revised-order--10-november-2026).
+The lists below are kept as the record of what was agreed and done before it.
 
 **Recommended immediate order after the bagless/manual review (9 November 2026).**
 This recommendation updates the priority of the older numbered list below; it
@@ -972,6 +1166,14 @@ mark the whole matrix complete based on one working link.
 
 ## Phase 4 — maintainable boundaries (R9)
 
+**Re-scoped on 10 November 2026** (see "Code review and revised order", item 2 of the
+revised order). Start with the logic that has no unit tests: move the start/stop,
+load-hold, workflow-reconcile and bag-weight decisions into functions in `server/`
+that take state and return what to do, shipped to the app through `skin/engine.js` and
+tested by vitest. The Decaid adapter (`makeLiveApi`) is already the cleanest part of
+`skin/app.js`, so extracting it comes after that, with shared types. The tasks below
+still stand; this sets their order.
+
 - [ ] Gradually separate the Decaid adapter, connection/control state, persisted
   schemas and UI views. Avoid changing unrelated visuals during extraction.
 - [ ] Enforce the live/demo contract using shared types (TypeScript or checked
@@ -1081,6 +1283,15 @@ tests pass; install/update/backup instructions state what was actually verified.
 First test actual Decaid on desktop, then a supervised session on the user's DE1
 tablet. Discover existing connections through direct tools/configuration first.
 Do not claim these checks passed using the repository simulator.
+
+**User report, 10 November 2026:** the tablet has been upgraded in place through each
+release to v0.4.1 and is used daily without problems. That covers install and upgrade
+without losing records, espresso with stop at weight, tablet fit and touch, and
+tablet-plus-phone use, as reported by the user rather than audited. The boxes below
+stay unticked because this plan ticks only on recorded evidence; treat those four as
+working. A supervised session is not planned, and agents should not ask for tablet
+access unless the user offers it. What nobody has seen yet is listed under "Still
+unverified on hardware".
 
 - [ ] Install the packaged skin, restart Decaid, switch skins, return and upgrade
   the skin without losing Crema records or local connection preferences.
