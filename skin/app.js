@@ -1230,7 +1230,7 @@ async function loadNow(silent, queued) {
   const recipe = { ...(b?.recipe || {}), ...n, targetTimeS: n.manual ? null : n.targetTimeS ?? null };
   try {
     const workflow = await S.api.apply(b?.id ?? null, recipe, n.grind || undefined, b?.batch ?? null);
-    S.loadedRecipe = { ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null, profile: workflow?.profile ?? null };
+    S.loadedRecipe = JSON.parse(JSON.stringify({ ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null, coffeeName: workflow?.context?.coffeeName ?? null, coffeeRoaster: workflow?.context?.coffeeRoaster ?? null, profile: workflow?.profile ?? null }));
     wfWrites++;
     S.loaded = S.next === n && S.current === b && JSON.stringify(n) === draft;
     if (S.loaded) { n.profileShape = S.loadedRecipe.profileShape; saveBrewChoice(); }
@@ -1560,11 +1560,17 @@ function editFav(i) {
 
 /* ================= machine controls (brew home, right) ================= */
 function activeProfile() {
-  return S.shotContext?.profile || S.loadedRecipe?.profile || (nextProfile() && planBody(nextProfile(), S.next?.tempC)) || null;
+  return S.shotContext?.profile ?? null;
 }
-function skipStep() {
-  if (!shotRunning()) return;
-  return S.api.machine.skipStep().catch((e) => toast(`Couldn't skip the step: ${e.message}`));
+let skippingStep = false;
+async function skipStep() {
+  const ctx = S.shotContext || {}, steps = activeProfile()?.steps || [];
+  const prog = E.stepProgress({ steps, points: S.live, manual: !!ctx.manual });
+  if (!shotRunning() || skippingStep || unlinked() || !S.snap || S.shotAcross || ctx.manual || prog.index == null || prog.index >= steps.length - 1) return;
+  skippingStep = true; renderControls();
+  try { await S.api.machine.skipStep(); }
+  catch (e) { toast(`Couldn't skip the step: ${e.message}`); }
+  finally { skippingStep = false; renderControls(); }
 }
 function renderControls() {
   syncExitButton();
@@ -1574,12 +1580,12 @@ function renderControls() {
   $("#pourLeft").hidden = !pouring;
   const p = S.presets, st = S.snap?.state?.state;
   if (pouring) {
-    const ctx = S.shotContext || S.loadedRecipe || S.next || {};
-    const target = ctx.yieldG ?? S.next?.yieldG ?? 0;
+    const ctx = S.shotContext || {};
+    const target = ctx.yieldG;
     const prof = activeProfile();
     const steps = prof?.steps || [];
     const prog = E.stepProgress({ steps, points: S.live, targetYieldG: target, hasScale: S.scale.connected, manual: !!ctx.manual });
-    const canSkip = !ctx.manual && steps.length > 1 && (prog.index == null || prog.index < steps.length - 1);
+    const canSkip = !ctx.manual && prog.index != null && prog.index < steps.length - 1;
     const linkDown = unlinked() || !S.snap || S.shotAcross;
     const note = linkDown
       ? "No link, still pouring. Stop stays available."
@@ -1588,7 +1594,7 @@ function renderControls() {
         : "Stops when the profile finishes or when you tap Stop. Changes you make now load when this shot ends.";
     patchHtml($("#controls"), `
       <div class="pour-note muted">${esc(note)}</div>
-      <div class="stop-wrap">${canSkip ? `<button class="skip-btn" id="skipBtn" ${linkDown ? "disabled" : ""}>Skip step</button>` : ""}<button class="stop-btn active" id="stopBtn">STOP</button></div>`);
+      <div class="stop-wrap">${canSkip ? `<button class="skip-btn" id="skipBtn" ${linkDown || skippingStep ? "disabled" : ""}>Skip step</button>` : ""}<button class="stop-btn active" id="stopBtn">STOP</button></div>`);
     const skip = $("#skipBtn"); if (skip) skip.onclick = skipStep;
     $("#stopBtn").onclick = stopMachine;
     return;
@@ -1743,18 +1749,15 @@ function stepDetailText(step) {
   return [step.limitS != null ? `${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
 }
 function renderPour() {
-  const ctx = S.shotContext || S.loadedRecipe || S.next || {};
-  const target = ctx.yieldG ?? S.next?.yieldG ?? 0;
+  const ctx = S.shotContext || {};
+  const target = ctx.yieldG;
   const prof = activeProfile();
   const steps = prof?.steps || [];
   const prog = E.stepProgress({ steps, points: S.live, targetYieldG: target, weightFlow: S.scale.weightFlow ?? null, hasScale: S.scale.connected, manual: !!ctx.manual });
-  const coffee = ctx.coffeeName || (!S.noBag && S.current?.info.name.value) || null;
-  const dose = ctx.doseG ?? S.next?.doseG;
-  const temp = ctx.tempC ?? S.next?.tempC;
-  const grind = ctx.grind || S.next?.grind;
-  $("#pourProfile").textContent = ctx.profileTitle || prof?.title || S.next?.profileTitle || "Espresso";
-  $("#pourRecipe").textContent = [coffee, dose != null ? `${fmtC(dose)} → ${target > 0 ? `${fmtC(target)} g` : "manual"}` : null, temp != null ? `${fmtC(temp)} °C` : null, grind ? `grind ${grind}` : null].filter(Boolean).join(" · ");
-  $("#pourStepCount").textContent = prog.count ? `Step ${(prog.index ?? 0) + 1} of ${prog.count}` : "";
+  const coffee = ctx.coffeeName, dose = ctx.doseG, temp = ctx.tempC, grind = ctx.grind;
+  $("#pourProfile").textContent = ctx.profileTitle || prof?.title || "Espresso";
+  $("#pourRecipe").textContent = [coffee, dose != null ? `${fmtC(dose)} → ${target == null ? "–" : target > 0 ? `${fmtC(target)} g` : "manual"}` : null, temp != null ? `${fmtC(temp)} °C` : null, grind ? `grind ${grind}` : null].filter(Boolean).join(" · ");
+  $("#pourStepCount").textContent = prog.count ? `Step ${prog.index == null ? "–" : prog.index + 1} of ${prog.count}` : "";
   const rail = $("#pourSteps");
   rail.hidden = !prog.steps.length;
   patchHtml(rail, prog.steps.length ? stepsRailHtml(prog.steps.map((s) => ({
@@ -1781,9 +1784,9 @@ function renderPour() {
   const sub = [["Pressure", s.pressure ?? s.p, "bar", "--pressure"], ["Flow", s.flow ?? s.f, "ml/s", "--flow"], ["Temp", s.mixTemperature ?? s.temp, "°C", "--temp"]];
   patchHtml($("#pourSub"), sub.map(([k, v, u, c]) => `<div class="readout"><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></div>`).join(""));
   const skip = $("#skipBtn");
-  const canSkip = !ctx.manual && steps.length > 1 && (prog.index == null || prog.index < steps.length - 1);
+  const canSkip = !ctx.manual && prog.index != null && prog.index < steps.length - 1;
   if (!!skip !== canSkip) renderControls();
-  else if (skip) skip.disabled = unlinked() || !S.snap || S.shotAcross;
+  else if (skip) skip.disabled = unlinked() || !S.snap || S.shotAcross || skippingStep;
   const noteEl = $(".pour-note", $("#controls"));
   if (noteEl) {
     const linkDown = unlinked() || !S.snap || S.shotAcross;
@@ -1808,7 +1811,7 @@ function renderReadouts() {
   if (shotRunning() && !$("#view-brew").hidden) renderPour();
 }
 function renderLive() {
-  const target = (shotRunning() ? S.shotContext?.yieldG : null) ?? S.next?.yieldG ?? 36;
+  const target = shotRunning() ? S.shotContext?.yieldG ?? 0 : S.next?.yieldG ?? 36;
   const pts = S.live;
   const pouring = shotRunning();
   if (pouring) {
@@ -1817,7 +1820,7 @@ function renderLive() {
     const rawSteps = prof?.steps || [];
     const { start, lastT } = E.stepTimes(pts, rawSteps.length);
     const nowT = lastT ?? (pts.at(-1)?.t ?? 0);
-    const curIdx = prog.index ?? 0;
+    const curIdx = prog.index;
     const curStart = start[curIdx] ?? nowT;
     const durs = rawSteps.map((st, idx) => {
       const lim = Math.max(0, Number(st.seconds) || 0);
@@ -1825,8 +1828,8 @@ function renderLive() {
       if (idx === curIdx) return Math.max(lim, nowT - curStart + 2);
       return lim;
     });
-    const livePlan = rawSteps.length ? E.profileCurve(prof, durs) : S.plan;
-    const curPlanStep = livePlan?.steps[curIdx];
+    const livePlan = rawSteps.length && curIdx != null ? E.profileCurve(prof, durs) : null;
+    const curPlanStep = curIdx != null ? livePlan?.steps[curIdx] : null;
     const shade = curPlanStep ? [curStart, Math.max(nowT, curPlanStep.end)] : null;
     const maxT = Math.max(40, Math.ceil(nowT / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, livePlan ? Math.ceil(planWindow(livePlan) / 10) * 10 : 0);
     drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan: livePlan, targets: false, ahead: nowT, shade, endLabels: true });
@@ -1902,9 +1905,11 @@ function onSnapshot(s) {
 }
 function onShotStart() {
   S.live = []; S.opStart = Date.now();
-  const context = { ...S.loadedRecipe };
+  // A shot owns its recipe and profile. Subsequent edits and loads belong to the
+  // next shot; unavailable machine data must never be filled from that draft.
+  const context = JSON.parse(JSON.stringify(S.loadedRecipe || {}));
   S.shotContext = context;
-  S.api.machine.recipe().then((r) => { if (r) { Object.assign(context, r); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
+  S.api.machine.recipe().then((r) => { if (r && S.shotContext === context) { Object.assign(context, JSON.parse(JSON.stringify(r))); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
   // Which shot was newest before this one, so the end can tell when Decaid has saved it.
   S.shotBefore = undefined;
   S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});

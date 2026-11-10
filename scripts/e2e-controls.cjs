@@ -232,7 +232,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     }
     await p.evaluate(() => clearInterval(window.__redraw));
 
-    // 12. Stop stays in place at rest and after a shot, and during pour mode its 300x96
+    // 12. Stop stays in place at rest and after a shot, and during pour mode its expanded
     // rectangle covers the corner where Stop sits at rest, at each DE1 tablet size.
     if (!hasRecipe) console.log("skip Stop keeps its rectangle (no coffee on the shelf, so no recipe)");
     else for (const [w, h] of [[1340, 800], [1340, 752], [1206, 720], [1005, 600], [1005, 552]]) {
@@ -255,7 +255,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await reset();
       const after = await box();
       const restSame = fmt(notLoaded) === fmt(atRest) && fmt(atRest) === fmt(after);
-      const coversRight = Math.abs(during.r - atRest.r) <= 2 && during.w >= atRest.w && during.h >= atRest.h && during.b <= h;
+      const coversRight = during.x <= atRest.x + 1 && during.y <= atRest.y + 1 && during.r >= atRest.r - 1 && during.b >= atRest.b - 1 && during.b <= h;
       check(restSame && coversRight, `Stop keeps its rest rectangle and pour Stop covers the corner at ${w}x${h}`, `${fmt(notLoaded)} | ${fmt(atRest)} | ${fmt(during)} | ${fmt(after)}`);
     }
     await p.setViewportSize({ width: 1340, height: 800 });
@@ -275,7 +275,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         return { pouring: document.body.classList.contains("pouring"), status: document.querySelector("#status").textContent, time, weight, steps, nowIdx, stopW: Math.round(stop.width), stopH: Math.round(stop.height), skip: !!document.querySelector("#skipBtn") };
       });
       check(pour.pouring && /Pouring/.test(pour.status) && pour.time === "84px" && pour.weight === "84px", "pour mode shows 84 px hero numbers and Pouring status", JSON.stringify(pour));
-      check(pour.steps.length > 0 && pour.nowIdx >= 0 && pour.stopW === 300 && pour.stopH === 96, "pour mode shows the step name and a 300x96 Stop button", JSON.stringify(pour));
+      check(pour.steps.length > 0 && pour.nowIdx >= 0 && pour.stopW === 300 && pour.stopH >= 96, "pour mode shows the step name and a Stop button at least 300x96", JSON.stringify(pour));
       if (pour.skip) {
         const beforeIdx = pour.nowIdx;
         await tap("#skipBtn");

@@ -83,7 +83,9 @@ module.exports = async function checkFavourites(page, check) {
   check(await page.getAttribute('[data-fav="6"]', 'aria-pressed') === 'true', 'a favourite beyond the fifth slot loads its exact recipe and highlights');
   await page.click('[data-run="espresso"]'); await page.waitForFunction(() => S.snap?.state?.state === 'espresso');
   const machineBefore = await page.evaluate(() => S.api.machine.recipe());
-  await page.locator('[data-fav="0"]').scrollIntoViewIfNeeded(); await page.click('[data-fav="0"]');
+  check(!await page.locator('[data-fav="0"]').isVisible(), 'pour mode hides favourite controls');
+  // A queued request can still arrive from an already-open sheet or another client.
+  await page.evaluate(() => useFav(0));
   await page.waitForFunction(() => S.heldLoad && !FAV_UI.loading);
   const machineDuring = await page.evaluate(() => S.api.machine.recipe());
   check(machineDuring.doseG === machineBefore.doseG && await page.evaluate(() => S.next.doseG === 18), 'mid-shot favourite selection holds the load instead of changing the running workflow');
