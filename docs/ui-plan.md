@@ -14,6 +14,41 @@ agents. Checked against the demo and simulator only, not the tablet.
 Mono's repository has no licence file. Use it for ideas only: copy no code, icons or
 artwork from it. The same applies to Streamline (GPL-3.0).
 
+## Handoff log
+
+Newest first. Read this, then the status table, then the open PRs. Each workstream
+works in its own branch and updates its own row of the status table in its own PR, so
+until those merge, this log is the one place that lists everything in flight.
+
+**10 November 2026, late evening**
+
+- PR #54 `docs/ui-plan`: this plan. Open, CI passing. Every branch below is cut from
+  it, with its PR against `main`.
+- PR #55 `ui/ws4a-pour-logic`: step progress, yield, time-to-go and stop reason as
+  tested pure functions (`E.stepProgress`, `E.steadyWeightFlow`, `E.stepTimes`,
+  `E.stopReason`). Open, CI passing. Nothing in the app calls them yet. It also
+  records two findings: Decaid 0.9.1 has skip-step (`PUT
+  /api/v1/machine/state/skipStep`, read at source, never sent), so the button is to
+  be built under decision 4; and Decaid's shot record carries `stopReason`.
+- PR #56 `ui/ws1-guard-rails`: tokens, `scripts/check-targets.cjs` with its
+  allowlist, the `?stress` demo fixture. Open; being reviewed.
+- Branch `ui/ws10-sleep-sound`: hold to wake, chime, date on the sleep screen. One
+  commit; the agent had not opened a PR or reported when this was written.
+- Not started: WS 2, 3, 5, 6, 7, 8, 9, 11 and the layout half of WS 4. Next to start:
+  WS 2 and WS 9, each branched from `ui/ws1-guard-rails`.
+- Lesson for every later PR: CI's `verify` job fails when `demo/crema-demo.html` is
+  stale. After any change under `skin/` (including a rebuilt `skin/engine.js`), run
+  `node scripts/build-demo.mjs` and commit the result.
+- Model choice: the user asked for cheaper agents where the work is well specified
+  (WS 2, 7, 8, 9, 10, 11) and the strongest model for WS 3 to 6.
+- Out of scope, confirmed by the user: manual flow and pressure control stay as they
+  are. No on-screen dial.
+
+To continue from another tool: check out the branch named for the workstream (or cut
+a new one from the latest merged or open predecessor), read that workstream's section
+and "Rules for every workstream", do the work, run the checks, open a PR against
+`main`, and add an entry at the top of this log.
+
 ## Status
 
 | WS | Work | Size | Depends on | Status / evidence |
