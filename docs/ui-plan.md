@@ -16,6 +16,24 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**10 November 2026 — WS 4, `ui/ws4-pour-mode`**
+
+- Full Brew takeover while `shotRunning()` is true: dimmed non-Brew rail tabs, "Pouring"
+  status (and "No link, still pouring" across a mid-shot socket drop), top band with
+  profile/recipe summary, `Step X of Y`, and live step rail (`E.stepProgress`) showing
+  actual elapsed times, current step tracking progress and remaining plan.
+- Left pour card with 84 px mono time and weight hero numbers, 10 px yield progress bar
+  with percentage and steady-flow ETA, and bottom pressure/flow/temperature readouts.
+- Wide live chart card with step boundaries, shaded current step, dashed plan ahead of
+  the "now" line, and direct end-of-line value labels.
+- Bottom bar with stop-condition copy, `Skip step` (150×96, wired in `makeLiveApi`,
+  `makeDemoApi`, `shotSim.skip()` and `dev/mock-decaid.ts` via `PUT /machine/state/skipStep`),
+  and a 300×96 red `STOP` covering the at-rest Stop corner. At 1005×552, secondary
+  readouts and note drop so time, weight and Stop fit without scrolling.
+- Focused verification: `build:engine`, `build-demo`, syntax checks and `e2e-controls.cjs`
+  (including the new pour-mode, skip-step, mid-shot socket drop and 1005×552 assertions)
+  passed. Full suite left to CI per user instruction.
+
 **10 November 2026 — WS 3, `ui/ws3-brew-at-rest`**
 
 - Split operation buttons open preset sheets; selecting writes the same workflow
@@ -39,7 +57,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 | 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #56 open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
 | 2 | Quick fixes for measured defects | S | 1 | PR #58 open, not merged. 15 allowlist entries removed (121 left); npm test, typecheck, check-targets, check-tablet-fit, e2e-controls (with the new Stop assertion at five sizes) and e2e-demo pass; --built, live, brewing, review and shot-history scripts not run. |
 | 3 | Brew at rest | M | 2 | Implemented on `ui/ws3-brew-at-rest`; focused checks pass, PR pending |
-| 4 | Pour mode | L | 3 | WS 4a logic integrated; layout in progress |
+| 4 | Pour mode | L | 3 | Implemented on `ui/ws4-pour-mode`; `e2e-controls.cjs` (with pour-mode, skip-step, socket-drop and 1005×552 checks) passes |
 | 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
 | 6 | Value sheet and steppers | M | 3 | Not started |
 | 7 | Feedback layer | M | 2 | Not started |

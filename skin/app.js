@@ -646,6 +646,9 @@ function makeLiveApi(conn) {
       canStart: true,
       info: () => j(D("/machine/info")),
       setState: (s) => j(D(`/machine/state/${s}`), { method: "PUT" }),
+      // Decaid 0.9.1 passes skipStep to the DE1 (move on to the next profile step).
+      // Read at source only; not yet run against a real machine (UI plan, decision 4).
+      skipStep: () => j(D("/machine/state/skipStep"), { method: "PUT" }),
       tare: () => j(D("/scale/tare"), { method: "PUT" }),
       workflowSettings: { get: async () => pickSettings(await j(D("/workflow"))), set: (p) => put(D("/workflow"), pickSettings(p)) },
       // What the machine holds now, in the next-shot panel's terms. Decaid has no
@@ -662,6 +665,7 @@ function makeLiveApi(conn) {
           tempC: n(w.profile?.steps?.[0]?.temperature),
           grind: String(c.grinderSetting ?? w.grinderData?.setting ?? ""),
           batchId: c.beanBatchId ?? null,
+          profile: w.profile ?? null, // its steps name what pour mode shows
         };
       },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
@@ -757,7 +761,7 @@ const S = {
 
 /* ================= chart ================= */
 function drawChart(canvas, pts, o = {}) {
-  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true } = o;
+  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true, ahead = null, shade = null, endLabels = false } = o;
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   if (!rect.width) return;
@@ -798,10 +802,14 @@ function drawChart(canvas, pts, o = {}) {
   };
   // The profile's plan (E.profileCurve), dashed: pressure and flow targets, each only
   // for the steps that drive it, the temperature, and faint lines where steps change.
+  // Pour mode passes `ahead` (now, in s): the plan is drawn only after it, behind a
+  // "now" line, and `shade` ([start, end] in s) marks the step being poured.
   if (plan && !compact) {
     ctx.save(); ctx.beginPath(); ctx.rect(pad.l, 0, iw, H); ctx.clip();
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
     for (const st of plan.steps.slice(1)) if (st.end > st.start && st.start > 0) { ctx.beginPath(); ctx.moveTo(x(st.start), pad.t); ctx.lineTo(x(st.start), pad.t + ih); ctx.stroke(); }
+    if (shade && shade[1] > shade[0]) { ctx.globalAlpha = .1; ctx.fillStyle = css("--accent"); ctx.fillRect(x(shade[0]), pad.t, x(shade[1]) - x(shade[0]), ih); ctx.globalAlpha = 1; }
+    if (ahead != null) { ctx.beginPath(); ctx.rect(x(ahead), 0, W, H); ctx.clip(); }
     const planLine = (key, color, y, width, alpha) => {
       ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash([5, 4]); ctx.lineJoin = "round"; ctx.beginPath();
       let down = false;
@@ -815,6 +823,7 @@ function drawChart(canvas, pts, o = {}) {
     planLine("tp", css("--pressure"), yB, 1.8, .85);
     planLine("tf", css("--flow"), yB, 1.8, .85);
     ctx.restore();
+    if (ahead != null) { ctx.save(); ctx.strokeStyle = css("--muted"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x(ahead), pad.t); ctx.lineTo(x(ahead), pad.t + ih); ctx.stroke(); ctx.restore(); }
     if (!pts.length) {
       const used = [];
       ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
@@ -854,6 +863,23 @@ function drawChart(canvas, pts, o = {}) {
     for (const [k, c, y] of [["p", "--pressure", yB], ["f", "--flow", yB], ["w", "--weight", yW]]) {
       if (e?.[k] == null) continue;
       ctx.fillStyle = css(c); ctx.beginPath(); ctx.arc(x(e.t), y(e[k]), 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // Pour mode: each line's value at its end, in place of a legend.
+    if (endLabels) {
+      const items = [["p", "--pressure", yB, " bar"], ["f", "--flow", yB, " ml/s"], ["w", "--weight", yW, " g"], ["temp", "--temp", yT, " °C"]]
+        .filter(([k]) => e[k] != null && Number.isFinite(Number(e[k])))
+        .map(([k, c, y, u]) => ({ text: `${fmt1(e[k])}${u}`, c, y: y(e[k]) + 4 }))
+        .sort((a, b) => a.y - b.y);
+      for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 14) items[i].y = items[i - 1].y + 14;
+      ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
+      for (const it of items) {
+        const width = ctx.measureText(it.text).width;
+        let xx = x(e.t) + 8;
+        if (xx + width > W - pad.r) xx = x(e.t) - 8 - width;
+        const yy = clamp(it.y, pad.t + 10, H - pad.b);
+        ctx.fillStyle = css("--surface"); ctx.fillRect(xx - 2, yy - 11, width + 4, 14);
+        ctx.fillStyle = css(it.c); ctx.fillText(it.text, xx, yy);
+      }
     }
   }
 }
@@ -927,11 +953,14 @@ function onDevices(payload) {
 function renderStatus() {
   const s = unlinked() ? null : S.snap, st = s?.state?.state || "unknown";
   const busy = ["espresso", "steam", "hotWater", "flush"].includes(st);
+  const pouring = shotRunning();
+  const linkLost = pouring && (!s || S.shotAcross);
   const tank = S.water ? clamp(((S.water.currentLevel - S.water.refillLevel) / Math.max(1, 58 - S.water.refillLevel)) * 100, 0, 100) : null;
   const low = S.water && S.water.currentLevel <= S.water.refillLevel;
   const readyTxt = st === "heating" && S.ready?.remainingTimeMs ? ` · ready in ${Math.max(1, Math.round(S.ready.remainingTimeMs / 60000))} min` : "";
+  const stateTxt = linkLost ? "No link, still pouring" : pouring ? "Pouring" : s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline";
   patchHtml($("#status"), `
-    <span class="chip"><span class="dot ${!s ? "bad" : busy ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(s ? (STATE_LABEL[st] || st) : unlinked() ? "Machine disconnected" : "Machine offline")}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
+    <span class="chip"><span class="dot ${linkLost ? "warn" : !s ? "bad" : busy || pouring ? "live" : st === "sleeping" ? "" : st === "heating" ? "warn" : st === "needsWater" || st === "error" ? "bad" : "ok"}"></span>${esc(stateTxt)}${esc(readyTxt)}${S.api?.demo ? ' <span class="muted">· simulated</span>' : ""}</span>
     <span class="chip"><span class="muted">Group</span><span class="num">${fmt1(s?.groupTemperature ?? s?.mixTemperature)}°</span></span>
     <span class="chip"><span class="muted">Steam</span><span class="num">${s?.steamTemperature != null ? Math.round(s.steamTemperature) : "–"}°</span></span>
     ${S.water ? `<span class="chip ${low ? "bad" : ""}" title="Water tank"><span class="muted">Water</span><span class="tank ${low ? "low" : ""}"><div style="width:${tank}%"></div></span></span>` : ""}
@@ -1092,7 +1121,7 @@ async function loadNow(silent, queued) {
   const recipe = { ...(b?.recipe || {}), ...n, targetTimeS: n.manual ? null : n.targetTimeS ?? null };
   try {
     const workflow = await S.api.apply(b?.id ?? null, recipe, n.grind || undefined, b?.batch ?? null);
-    S.loadedRecipe = { ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null };
+    S.loadedRecipe = { ...recipe, profileShape: workflow?.profile ? brewProfileShape(workflow.profile) : recipe.profileShape, batchId: b?.batch ?? null, profile: workflow?.profile ?? null };
     wfWrites++;
     S.loaded = S.next === n && S.current === b && JSON.stringify(n) === draft;
     if (S.loaded) { n.profileShape = S.loadedRecipe.profileShape; saveBrewChoice(); }
@@ -1421,9 +1450,40 @@ function editFav(i) {
 }
 
 /* ================= machine controls (brew home, right) ================= */
+function activeProfile() {
+  return S.shotContext?.profile || S.loadedRecipe?.profile || (nextProfile() && planBody(nextProfile(), S.next?.tempC)) || null;
+}
+function skipStep() {
+  if (!shotRunning()) return;
+  return S.api.machine.skipStep().catch((e) => toast(`Couldn't skip the step: ${e.message}`));
+}
 function renderControls() {
   syncExitButton();
+  const pouring = shotRunning() && location.hash !== "#shelf" && location.hash !== "#add" && location.hash !== "#profiles" && location.hash !== "#shots" && location.hash !== "#settings";
+  document.body.classList.toggle("pouring", pouring);
+  $("#pourTop").hidden = !pouring;
+  $("#pourLeft").hidden = !pouring;
   const p = S.presets, st = S.snap?.state?.state;
+  if (pouring) {
+    const ctx = S.shotContext || S.loadedRecipe || S.next || {};
+    const target = ctx.yieldG ?? S.next?.yieldG ?? 0;
+    const prof = activeProfile();
+    const steps = prof?.steps || [];
+    const prog = E.stepProgress({ steps, points: S.live, targetYieldG: target, hasScale: S.scale.connected, manual: !!ctx.manual });
+    const canSkip = !ctx.manual && steps.length > 1 && (prog.index == null || prog.index < steps.length - 1);
+    const linkDown = unlinked() || !S.snap || S.shotAcross;
+    const note = linkDown
+      ? "No link, still pouring. Stop stays available."
+      : target > 0 && S.scale.connected
+        ? `At ${fmt1(target)} g on the scale. Changes you make now load when this shot ends.`
+        : "Stops when the profile finishes or when you tap Stop. Changes you make now load when this shot ends.";
+    patchHtml($("#controls"), `
+      <div class="pour-note muted">${esc(note)}</div>
+      <div class="stop-wrap">${canSkip ? `<button class="skip-btn" id="skipBtn" ${linkDown ? "disabled" : ""}>Skip step</button>` : ""}<button class="stop-btn active" id="stopBtn">STOP</button></div>`);
+    const skip = $("#skipBtn"); if (skip) skip.onclick = skipStep;
+    $("#stopBtn").onclick = stopMachine;
+    return;
+  }
   if (!p) {
     // Presets come from Decaid's key-value store; until they arrive, Stop is still here.
     $("#controls").innerHTML = `<div class="stop-wrap stack" style="gap:6px"><button class="stop-btn ${["espresso", "steam", "hotWater", "flush"].includes(st) ? "active" : ""}" id="stopBtn" ${S.snap ? "" : "disabled"}>STOP</button></div>`;
@@ -1559,6 +1619,73 @@ function stepsRailHtml(steps) {
   const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .08;
   return steps.map((step) => `<div class="step ${step.state === "now" ? "now" : step.state === "done" ? "done" : ""}" style="flex-grow:${Math.max(minimum, Number(step.weight) || 1)}"><strong>${esc(step.name)}</strong><span>${esc(step.detail)}</span>${step.progress != null ? `<progress max="1" value="${clamp(step.progress, 0, 1)}"></progress>` : ""}</div>`).join("");
 }
+function stepDetailText(step) {
+  const tgt = step.target ? `${step.target.smooth ? "ramping to " : "holding "}${fmt1(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : "";
+  if (step.state === "done") return `${fmt1(step.elapsedS ?? 0)} s`;
+  if (step.state === "now") {
+    const tr = step.tracking;
+    const trTxt = !tr ? (step.limitS != null ? `${fmt1(step.elapsedS ?? 0)} of ${fmtC(step.limitS)} s` : `${fmt1(step.elapsedS ?? 0)} s`)
+      : tr.kind === "time" ? `${fmt1(tr.value)} of ${fmtC(tr.goal)} s`
+      : tr.kind === "weight" || tr.kind === "yield" ? `${fmt1(tr.value)} of ${fmt1(tr.goal)} g`
+      : tr.kind === "volume" ? `${fmt1(tr.value)} of ${fmtC(tr.goal)} ml`
+      : `${fmt1(tr.value)} → ${fmt1(tr.goal)} ${tr.kind.startsWith("pressure") ? "bar" : "ml/s"}`;
+    return [trTxt, tgt].filter(Boolean).join(" · ");
+  }
+  return [step.limitS != null ? `${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
+}
+function renderPour() {
+  const ctx = S.shotContext || S.loadedRecipe || S.next || {};
+  const target = ctx.yieldG ?? S.next?.yieldG ?? 0;
+  const prof = activeProfile();
+  const steps = prof?.steps || [];
+  const prog = E.stepProgress({ steps, points: S.live, targetYieldG: target, weightFlow: S.scale.weightFlow ?? null, hasScale: S.scale.connected, manual: !!ctx.manual });
+  const coffee = ctx.coffeeName || (!S.noBag && S.current?.info.name.value) || null;
+  const dose = ctx.doseG ?? S.next?.doseG;
+  const temp = ctx.tempC ?? S.next?.tempC;
+  const grind = ctx.grind || S.next?.grind;
+  $("#pourProfile").textContent = ctx.profileTitle || prof?.title || S.next?.profileTitle || "Espresso";
+  $("#pourRecipe").textContent = [coffee, dose != null ? `${fmtC(dose)} → ${target > 0 ? `${fmtC(target)} g` : "manual"}` : null, temp != null ? `${fmtC(temp)} °C` : null, grind ? `grind ${grind}` : null].filter(Boolean).join(" · ");
+  $("#pourStepCount").textContent = prog.count ? `Step ${(prog.index ?? 0) + 1} of ${prog.count}` : "";
+  const rail = $("#pourSteps");
+  rail.hidden = !prog.steps.length;
+  patchHtml(rail, prog.steps.length ? stepsRailHtml(prog.steps.map((s) => ({
+    name: s.name,
+    detail: stepDetailText(s),
+    weight: s.state === "now" ? Math.max(s.limitS || 8, 12) : s.state === "done" ? Math.max(s.elapsedS || 2, 3) : Math.max(s.limitS || 4, 4),
+    state: s.state,
+    progress: s.state === "now" ? (s.tracking?.progress ?? 0) : null,
+  }))) : "");
+  const last = S.live.at(-1);
+  const t = last ? last.t : S.snap?.elapsed ?? 0;
+  const w = S.scale.connected ? (S.scale.weight ?? last?.w ?? 0) : null;
+  $("#pourTime").textContent = Number(t || 0).toFixed(1);
+  $("#pourWeight").textContent = w == null ? "–" : fmt1(w);
+  const yBox = $("#pourYield");
+  yBox.hidden = prog.yieldFraction == null;
+  if (prog.yieldFraction != null) {
+    const pct = Math.round(prog.yieldFraction * 100);
+    $("#pourYieldBar").style.width = `${clamp(pct, 0, 100)}%`;
+    $("#pourYieldText").textContent = `${pct}% of ${fmt1(target)} g`;
+    $("#pourEta").textContent = prog.etaS != null && prog.etaS > 0 ? `about ${Math.round(prog.etaS)} s to go` : "";
+  }
+  const s = (!unlinked() && S.snap) || last || {};
+  const sub = [["Pressure", s.pressure ?? s.p, "bar", "--pressure"], ["Flow", s.flow ?? s.f, "ml/s", "--flow"], ["Temp", s.mixTemperature ?? s.temp, "°C", "--temp"]];
+  patchHtml($("#pourSub"), sub.map(([k, v, u, c]) => `<div class="readout"><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></div>`).join(""));
+  const skip = $("#skipBtn");
+  const canSkip = !ctx.manual && steps.length > 1 && (prog.index == null || prog.index < steps.length - 1);
+  if (!!skip !== canSkip) renderControls();
+  else if (skip) skip.disabled = unlinked() || !S.snap || S.shotAcross;
+  const noteEl = $(".pour-note", $("#controls"));
+  if (noteEl) {
+    const linkDown = unlinked() || !S.snap || S.shotAcross;
+    noteEl.textContent = linkDown
+      ? "No link, still pouring. Stop stays available."
+      : target > 0 && S.scale.connected
+        ? `At ${fmt1(target)} g on the scale. Changes you make now load when this shot ends.`
+        : "Stops when the profile finishes or when you tap Stop. Changes you make now load when this shot ends.";
+  }
+  return prog;
+}
 function renderReadouts() {
   const s = (!unlinked() && S.snap) || {};
   const w = S.scale.connected ? S.scale.weight : null;
@@ -1569,10 +1696,33 @@ function renderReadouts() {
   $("#readouts").hidden = !shotRunning() && !["steam", "hotWater", "flush"].includes(s.state?.state) && !S.live.length;
   $("#shotClock").hidden = $("#readouts").hidden;
   renderScaleTile();
+  if (shotRunning() && !$("#view-brew").hidden) renderPour();
 }
 function renderLive() {
-  const target = S.next?.yieldG ?? 36;
+  const target = (shotRunning() ? S.shotContext?.yieldG : null) ?? S.next?.yieldG ?? 36;
   const pts = S.live;
+  const pouring = shotRunning();
+  if (pouring) {
+    const prog = renderPour();
+    const prof = activeProfile();
+    const rawSteps = prof?.steps || [];
+    const { start, lastT } = E.stepTimes(pts, rawSteps.length);
+    const nowT = lastT ?? (pts.at(-1)?.t ?? 0);
+    const curIdx = prog.index ?? 0;
+    const curStart = start[curIdx] ?? nowT;
+    const durs = rawSteps.map((st, idx) => {
+      const lim = Math.max(0, Number(st.seconds) || 0);
+      if (idx < curIdx) return Math.max(0, (start[idx + 1] ?? curStart) - (start[idx] ?? 0));
+      if (idx === curIdx) return Math.max(lim, nowT - curStart + 2);
+      return lim;
+    });
+    const livePlan = rawSteps.length ? E.profileCurve(prof, durs) : S.plan;
+    const curPlanStep = livePlan?.steps[curIdx];
+    const shade = curPlanStep ? [curStart, Math.max(nowT, curPlanStep.end)] : null;
+    const maxT = Math.max(40, Math.ceil(nowT / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, livePlan ? Math.ceil(planWindow(livePlan) / 10) * 10 : 0);
+    drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan: livePlan, targets: false, ahead: nowT, shade, endLabels: true });
+    return;
+  }
   // Before a shot the chart shows what the loaded profile asks for (S.plan); once one
   // starts, the machine's own targets take over.
   const plan = pts.length ? null : S.plan;
@@ -1645,7 +1795,7 @@ function onShotStart() {
   S.live = []; S.opStart = Date.now();
   const context = { ...S.loadedRecipe };
   S.shotContext = context;
-  S.api.machine.recipe().then((r) => { if (r) Object.assign(context, r); }, () => {});
+  S.api.machine.recipe().then((r) => { if (r) { Object.assign(context, r); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
   // Which shot was newest before this one, so the end can tell when Decaid has saved it.
   S.shotBefore = undefined;
   S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});
@@ -2980,6 +3130,7 @@ function route(scroll = true) {
   VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
   document.body.classList.toggle("on-brew", v === "brew");
   document.body.classList.toggle("on-shots", v === "shots");
+  document.body.classList.toggle("pouring", v === "brew" && shotRunning());
   $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
   if (v === "shelf") renderShelf();

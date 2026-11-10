@@ -181,6 +181,7 @@ function makeDemoApi() {
     const target = Number(workflow.context.targetYield ?? 0);
     // The puck follows the loaded profile's steps.
     const puck = state === "espresso" ? CE.shotSim(workflow.profile, { resistance: 0.92 + Math.random() * 0.16 }) : null;
+    sim.puck = puck;
     const limit = state === "steam" ? (wf.steamSettings.duration || 600) : state === "hotWater" ? wf.hotWaterData.volume / wf.hotWaterData.flow : state === "flush" ? wf.rinseData.duration : 120;
     let t = 0;
     if (state === "espresso") sim.scaleOffset = sim.scale;
@@ -380,13 +381,15 @@ function makeDemoApi() {
       async setState(s) {
         if (s === "idle") { if (sim.state === "sleeping") { sim.state = "heating"; snapshot(); } else stop("idle"); }
         else if (s === "sleeping") stop("sleeping");
+        else if (s === "skipStep") { if (sim.state === "espresso") sim.puck?.skip(); } // one step on, as Decaid's simulator does
         else run(s);
       },
+      skipStep() { return this.setState("skipStep"); },
       async tare() { sim.scaleOffset = sim.scale; },
       async recipe() {
         if (!workflow.applied) return null; // the demo's starting workflow is a placeholder, not a load
         const c = workflow.context;
-        return { profileTitle: workflow.profile.title, profileShape: brewProfileShape(workflow.profile), manual: manualKind(workflow.profile), coffeeName: c.coffeeName ?? null, coffeeRoaster: c.coffeeRoaster ?? null, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null };
+        return { profileTitle: workflow.profile.title, profileShape: brewProfileShape(workflow.profile), manual: manualKind(workflow.profile), coffeeName: c.coffeeName ?? null, coffeeRoaster: c.coffeeRoaster ?? null, doseG: c.targetDoseWeight, yieldG: c.targetYield, tempC: workflow.tempC ?? null, grind: String(c.grinderSetting ?? ""), batchId: c.beanBatchId ?? null, profile: clone(workflow.profile) };
       },
       workflowSettings: {
         get: async () => clone(wf),

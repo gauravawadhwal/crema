@@ -83,6 +83,8 @@ const sim = {
   scaleBattery: 86,
   live: { pressure: 0, flow: 0, targetPressure: 0, targetFlow: 0, elapsed: 0, profileFrame: 0 } as Json,
   timer: null as NodeJS.Timeout | null,
+  /** The running shot's puck, for skipStep. */
+  puck: null as ReturnType<typeof shotSim> | null,
   samples: [] as Json[],
   lastActive: Date.now(),
 };
@@ -111,6 +113,7 @@ function run(state: string) {
   const target = Number(ctx.targetYield ?? 36);
   // The puck follows the loaded profile's steps; resistance varies like grind does.
   const puck = state === "espresso" ? shotSim(workflow.profile ?? {}, { resistance: 0.9 + Math.random() * 0.2 }) : null;
+  sim.puck = puck;
   const limit =
     state === "steam" ? Number(shotSettings.targetSteamDuration || 600) :
     state === "hotWater" ? Number(shotSettings.targetHotWaterVolume) / Number(settings.hotWaterFlow || 6) :
@@ -286,6 +289,9 @@ const server = createServer(async (req, res) => {
         else stop("idle");
       } else if (next === "sleeping") {
         stop("sleeping");
+      } else if (next === "skipStep") {
+        // Like Decaid's simulated DE1: one step on, still in espresso; nothing outside a shot.
+        if (sim.state === "espresso") sim.puck?.skip();
       } else if (["espresso", "steam", "hotWater", "flush"].includes(next)) run(next);
       else return send(res, 400, { error: `unsupported state ${next}` });
       return send(res, 200, snapshot());
