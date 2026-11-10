@@ -843,9 +843,12 @@ function drawChart(canvas, pts, o = {}) {
     }
   }
 }
-function legendHtml(withGhost, withPlan = false, removable = false) {
+// Who chose a recipe, in words for the person at the machine; the provider id belongs in Settings.
+function pickLabel(src) { return src === "rules" ? "Rules pick" : src === "saved" ? "Saved pick" : "AI pick"; }
+// brief: Brew's own legend leaves out the line names, which the readouts above already carry.
+function legendHtml(withGhost, withPlan = false, removable = false, brief = false) {
   const item = (c, t, dash) => `<span><span class="swatch" style="background:var(${c})${dash ? ";opacity:.6" : ""}"></span>${t}</span>`;
-  return [item("--pressure", "Pressure (bar)"), item("--flow", "Flow (ml/s)"), item("--weight", "Weight (g, right)"), item("--temp", "Temp (70–100 °C)"),
+  return [...(brief ? [] : [item("--pressure", "Pressure (bar)"), item("--flow", "Flow (ml/s)"), item("--weight", "Weight (g, right)"), item("--temp", "Temp (70–100 °C)")]),
     `<span class="muted">${withPlan ? "Dashed: the profile" : "Dashed: targets"}</span>`,
     withGhost ? `<span class="muted">Faint: reference shot${removable ? ' <button type="button" class="linkish" id="clearRef">Remove</button>' : ""}</span>` : ""].join("");
 }
@@ -988,12 +991,12 @@ function renderNextShot() {
   const r = b?.recipe, i = b?.info, rest = b ? restOf(i) : null;
   const ratio = n?.yieldG > 0 && n?.doseG > 0 ? (n.yieldG / n.doseG).toFixed(1) : null;
   el.innerHTML = `
-    <div class="coffee-line ${b ? "" : "bagless"}">${b ? bagArt(b) : ""}<button class="coffee-choice" id="coffeeChoice"><span class="label">${b ? esc(i.roaster.value) : "Coffee"}</span><span class="coffee-name">${b ? esc(i.name.value) : "No bag"} ›</span>
-      ${b ? `<span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</span>` : `<span class="muted small">${S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag"}</span>`}</button>
-      ${b && S.shelf.length > 1 ? `<div class="cycler"><button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button></div>` : ""}
+    <div class="coffee-line ${b ? "" : "bagless"}">${b ? bagArt(b) : ""}<button class="coffee-choice" id="coffeeChoice"><span class="label">${b ? esc(i.roaster.value) : "Coffee"}</span><span class="coffee-name">${b ? esc(i.name.value) : "No bag"} ›</span></button>
+      <div class="coffee-meta">${b ? `<span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</span>` : `<span class="muted small">${S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag"}</span>`}
+      ${b && S.shelf.length > 1 ? `<div class="cycler"><button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button></div>` : ""}</div>
     </div>
     ${n ? `
-    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? `Chosen by ${b.recipeSource}` : "Selected from installed profiles")}</span></span><span>›</span></button></div>
+    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? pickLabel(b.recipeSource) : "Selected from installed profiles")}</span></span><span>›</span></button></div>
     <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
     <div class="field-row"><span class="label">Yield</span>${n.manual || S.noBag ? `<div class="stepper"><button type="button" data-step="yield:-1" aria-label="Less">−</button><button type="button" class="val stop-choice" id="stopMode">${n.yieldG > 0 ? fmt1(n.yieldG) : "Off"}<small>${n.yieldG > 0 ? "Tap for manual stop" : "Tap to set weight"}</small></button><button type="button" data-step="yield:1" aria-label="More">+</button></div>` : stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
     <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
@@ -1408,8 +1411,7 @@ function renderControls() {
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
   const chips = (kind, list) => `<div class="presets">${list.map((x, i) => `<button class="preset" data-preset="${kind}:${i}" aria-pressed="${i === sel[kind]}">${esc(x.label)}</button>`).join("")}</div>`;
   $("#controls").innerHTML = `
-    <div class="ctl"><button class="ctl-btn ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}` : "Choose a profile"}</span></button>
-      ${S.loaded || !S.next ? "" : '<span class="ghc-note">Starting loads the recipe first</span>'}</div>
+    <div class="ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.next ? `${fmtC(S.next.doseG)}→${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
     <div class="ctl"><button class="ctl-btn" data-run="steam" ${disabled || busy ? "disabled" : ""}>Steam<span class="sub">${steam.seconds ? `${steam.seconds} s` : "∞"}</span></button>${chips("steam", p.steam)}</div>
     <div class="ctl"><button class="ctl-btn" data-run="hotWater" ${disabled || busy ? "disabled" : ""}>Hot water<span class="sub">${water.ml} ml</span></button>${chips("water", p.water)}</div>
     <div class="ctl"><button class="ctl-btn" data-run="flush" ${disabled || busy ? "disabled" : ""}>Flush<span class="sub">${flush.seconds} s</span></button>${chips("flush", p.flush)}</div>
@@ -1519,7 +1521,9 @@ const PHASE = { preinfusion: "Preinfusion", pouring: "Pouring", pouringDone: "Do
 function renderReadouts() {
   const s = (!unlinked() && S.snap) || {};
   const w = S.scale.connected ? S.scale.weight : null;
-  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"], ["Steam", s.steamTemperature, "°C", "--muted"]];
+  const items = [["Pressure", s.pressure, "bar", "--pressure"], ["Flow", s.flow, "ml/s", "--flow"], ["Weight", w, "g", "--weight", true], ["Temp", s.mixTemperature, "°C", "--temp"]];
+  if (s.state?.state === "steam") items.push(["Steam", s.steamTemperature, "°C", "--muted"]);
+  $("#readouts").style.setProperty("--cols", items.length);
   patchHtml($("#readouts"), items.map(([k, v, u, c, tareable]) => `<${tareable ? 'button type="button" title="Tap to tare"' : "div"} class="readout" ${tareable ? 'id="weightReadout"' : ""}><span class="k label"><span class="swatch" style="background:var(${c})"></span>${k}</span><span class="v">${v == null ? "–" : fmt1(v)}<small>${u}</small></span></${tareable ? "button" : "div"}>`).join(""));
   const wr = $("#weightReadout"); if (wr) wr.onclick = tare;
 }
@@ -1534,9 +1538,8 @@ function renderLive() {
   const st = S.snap?.state?.state;
   const about = [plan ? `Dashed: what ${S.next.profileTitle} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
   $("#chartEmpty").hidden = pts.length > 0;
-  $("#chartEmpty").classList.toggle("over-plan", !!plan);
   $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
-  patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId));
+  patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId, true));
   const clear = $("#clearRef");
   if (clear) clear.onclick = () => setReference(S.current, null);
   $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
@@ -2322,7 +2325,7 @@ async function renderProfiles() {
       if (S.current !== b) return;
       const top = cands[0]?.score || 1;
       const chosen = b.recipe?.profileTitle;
-      rec.innerHTML = `${waiting}${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? `Chosen by ${b.recipeSource}` : "")}</span></div>
+      rec.innerHTML = `${waiting}${b.recipe ? `<div class="panel stack"><div class="row between"><span class="label">Recommended</span><span class="muted small">${esc(b.recipeSource ? pickLabel(b.recipeSource) : "")}</span></div>
           <div class="row between"><h2>${esc(chosen)}</h2><span class="num">${fmt1(b.recipe.doseG)} g → ${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C · ${b.recipe.targetTimeS?.join("–")} s</span></div>
           <ul class="why">${(b.recipe.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
           ${b.recipe.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(b.recipe.dialIn)}</div>` : ""}

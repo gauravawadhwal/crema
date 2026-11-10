@@ -230,6 +230,31 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       check(n === 3, `held taps on ${sel} each tare the scale`, `${n} of 3`);
     }
     await p.evaluate(() => clearInterval(window.__redraw));
+
+    // 12. Stop never moves: its rectangle is the same at rest (loaded or not), during a
+    // shot and after it, at each DE1 tablet size.
+    if (!hasRecipe) console.log("skip Stop keeps its rectangle (no coffee on the shelf, so no recipe)");
+    else for (const [w, h] of [[1340, 800], [1340, 752], [1206, 720], [1005, 600], [1005, 552]]) {
+      await p.setViewportSize({ width: w, height: h });
+      await reset();
+      const rect = () => p.evaluate(() => { const r = document.querySelector("#stopBtn").getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10).join(","); });
+      await tap('[data-step="dose:1"]'); // recipe not on the machine: the Espresso hint applies
+      await p.waitForTimeout(100);
+      const notLoaded = await rect();
+      await tap("#loadBtn");
+      await p.waitForFunction(() => S.loaded, null, { timeout: 5000 }).catch(() => {});
+      await p.waitForTimeout(100);
+      const atRest = await rect();
+      await tap('[data-run="espresso"]');
+      await p.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 }).catch(() => {});
+      await p.waitForTimeout(300);
+      const during = await rect();
+      await tap("#stopBtn");
+      await reset();
+      const after = await rect();
+      check(notLoaded === atRest && atRest === during && during === after, `Stop's rectangle is identical before, during and after a shot at ${w}x${h}`, `${notLoaded} | ${atRest} | ${during} | ${after}`);
+    }
+    await p.setViewportSize({ width: 1340, height: 800 });
   } catch (e) {
     check(false, e.message.split("\n")[0]);
   }
