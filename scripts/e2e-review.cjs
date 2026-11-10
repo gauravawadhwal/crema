@@ -140,6 +140,23 @@ const openShot = async (page, id, selector) => {
     check(true, "server failure falls back to saved rules review");
     const final = await evalPage(async (id) => S.api.shot(id), shotId);
     check(final.review?.review?.summary && final.review.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
+    // Taste taps stick in the after-shot panel too: saved on tap, no review needed (same code as the detail).
+    await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}`);
+    await page.waitForFunction(() => typeof showAfterShot === "function" && S.api);
+    await evalPage(async (id) => showAfterShot(await S.api.shot(id), [], {}), shotId);
+    const calls = reviewCalls.length;
+    await page.click('#sb [data-v="-2"]');
+    await waitForPage(async (id) => (await S.api.shot(id)).taste?.sourBitter === -2, shotId);
+    check((await (await fetch(`${decaid}/api/v1/shots/${encodeURIComponent(shotId)}`)).json()).annotations.extras.crema.sourBitter === -2, "a taste tap in the after-shot panel is saved without asking for a review");
+    check(reviewCalls.length === calls && await page.getAttribute('#bd [data-v="0"]', "aria-pressed") === "true", "and it sends no review request, keeping the other scale's saved answer");
+    const failTaste = (route) => (route.request().method() === "PUT" ? route.abort() : route.fallback());
+    await page.route(new RegExp(`/api/v1/shots/${shotId}$`), failTaste);
+    await page.click('#sb [data-v="2"]');
+    await page.waitForFunction(() => /Couldn't save taste feedback/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
+    check(/Couldn't save taste feedback/.test(await page.textContent("#toast")) && await page.getAttribute('#sb [data-v="-2"]', "aria-pressed") === "true" && await page.getAttribute('#sb [data-v="2"]', "aria-pressed") === "false", "a failed taste write says so and puts the previous answer back", await page.textContent("#toast"));
+    await page.unroute(new RegExp(`/api/v1/shots/${shotId}$`), failTaste);
+    await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#shots`);
+    await page.waitForFunction((id) => S.shots.some((s) => s.id === id), shotId);
     // Notes: "Notes saved" only when Decaid took the write. A failed write says so and keeps nothing.
     await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#shots`);
     await page.waitForFunction((id) => S.shots.some((s) => s.id === id), shotId);

@@ -49,6 +49,7 @@ var CremaEngine = (() => {
     recipeMatches: () => recipeMatches,
     recommendPatch: () => recommendPatch,
     reconcileOutcome: () => reconcileOutcome,
+    restOf: () => restOf,
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
     rulesReview: () => rulesReview,
@@ -653,7 +654,7 @@ var CremaEngine = (() => {
     dark: { temp: 88, ratio: 1.8, time: [24, 32], rest: [4, 21] }
   };
   function inferRoast(bean) {
-    let roast = bean.roastLevel.value;
+    let roast = bean.roastLevel?.value;
     if (!roast) {
       if (bean.roastedFor === "filter") roast = "light";
       else if (bean.roastedFor === "omni") roast = "medium-light";
@@ -706,8 +707,7 @@ var CremaEngine = (() => {
       reasons.push(`Grown high (${maxAlt} masl): dense beans, a little hotter and finer`);
     }
     const doseG = opts.doseG ?? 18;
-    const days = bean.roastDate.value ? daysBetween(bean.roastDate.value, today) : null;
-    const rest = restStatus(days, b.rest, roast);
+    const rest = restOf(bean, today);
     if (rest.status === "resting") {
       temp -= 0.5;
       reasons.push("Still degassing: expect more crema and channelling; slightly cooler helps");
@@ -723,6 +723,11 @@ var CremaEngine = (() => {
       rest,
       reasons
     };
+  }
+  function restOf(bean, today = /* @__PURE__ */ new Date()) {
+    const roast = inferRoast(bean);
+    const days = bean.roastDate?.value ? daysBetween(bean.roastDate.value, today) : null;
+    return restStatus(days, BASE[roast].rest, roast);
   }
   function restStatus(days, window, roast) {
     if (days == null) return { daysOffRoast: null, window, status: "unknown", advice: "No roast date. Add one from the bag for rest tracking." };
