@@ -28,7 +28,7 @@ Decaid.
 
 1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
    in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
-   Implement the inline favourites improvement below before the next release;
+   Implement the bottom favourites carousel below before the next release;
    the revised render is the current design proposal.
 2. **Startup edit race, fix ready for review:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
@@ -90,28 +90,39 @@ Reference patterns reviewed on 10 November:
   a scrollable card grid. Use these interaction/review ideas within Crema's existing
   design; do not infer a request to copy its visual theme or implementation.
 
-**Revised after the user's render feedback:** use the available area below
-**Load onto machine** for an inline, vertically scrolling list of full-width
-favourite tiles. The separate picker was rejected as a waste of space and an
-unnecessary extra tap. Keep direct one-tap loading through the existing guarded
-path. Show a clear Favourites heading and labelled **Edit** control; edit mode
-opens rename/replace/clear from a tile. Empty slots say **Save current recipe**.
+**Latest render direction, 10 November:** shorten the graph and place favourites
+in a bottom **carousel**. The user first rejected a separate picker, then found the
+vertical list awkward, and now wants swipeable cards rather than a fixed row of
+four saved recipes. Keep direct one-tap loading through the existing guarded path.
+Show a clear Favourites heading, labelled Edit control and previous/next buttons.
+Use a partial next card as the cue that more recipes are available. Swipe advances
+and snaps to a card; this is intentional carousel navigation, not a visible
+scrollbar or an automatically rotating strip. Do not loop or auto-advance.
 
 Each tile shows the name prominently, followed by profile and dose/yield/temperature;
-allow names to wrap. The revised preview uses approximately 92 px-high tiles with
-8 px gaps. The list uses the remaining column height and scrolls independently
-while the recipe controls stay still at the normal tablet size. At the shortest
-viewport, retain the existing left-column scroll if needed to keep a useful list
-viewport rather than shrinking touch targets. Check this explicitly at 1005×552,
-including access to Load, the final slot and Edit. Keep five slots, saved values
-and bagless semantics unchanged. Failed loads/saves remain visible without
-silently changing the selected recipe.
+allow two-line names without growing the bar. The latest preview uses 236 px-wide
+cards at 1340×800, with a shorter graph and a 142 px bottom region; the compact
+version uses narrower cards and protects the full-height control column so Stop
+remains visible. Details of the layout remain subject to render feedback. Keep
+card sizes comfortable as more favourites are added, rather than shrinking them.
+
+**Remove the fixed five-slot limit in the implementation.** `makeLiveApi` currently
+reads only five entries (`Array.from({ length: 5 })`), and the demo and UI assume five
+slots. Read all existing entries and preserve their order, values and bagless
+semantics. Reuse empty legacy slots when saving, or append a new entry; provide
+Save current recipe at the end of the carousel. Clearing a favourite must not
+discard other entries. Keep the existing KV record format if possible; verify
+upgrade compatibility and cross-device reads rather than truncating newer data
+when an older five-slot assumption is encountered. Failed loads/saves remain
+visible without silently changing the selected recipe.
 
 Acceptance: all targets meet the size floor at every supported viewport; names
 and saved recipe details are legible; load and edit are distinct; no outer-page
-overflow or moved machine controls; the deliberate list/left-column scrolling
-keeps every control reachable. Test touch scrolling without accidentally loading
-a tile, keyboard access, long names, and source/built/live/demo behavior.
+overflow; Stop, Load and Edit remain reachable before, during and after a shot,
+including at 1005×552. Test swipe versus tap (swiping never loads), arrow/keyboard
+navigation, snapping and end states, reduced motion, resize, long names, adding
+beyond five favourites, legacy records, saved position across redraws, and
+source/built/live/demo behavior. Keep mid-shot loads held through the existing path.
 This is a rendered proposal, not implemented production behavior.
 
 ### Shot history: independent panes (confirmed UI bug)
