@@ -1098,11 +1098,11 @@ let wfWrites = 0, wfReading = null;
 function reconcileWorkflow({ adopt = true, boot = false } = {}) {
   if (!S.api?.machine.recipe || shotRunning() || unlinked()) return Promise.resolve(null);
   if (wfReading) return wfReading;
-  const writesBefore = wfWrites;
+  const writesBefore = wfWrites, choiceBefore = JSON.stringify(S.next);
   const timeout = new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 4000));
   wfReading = Promise.race([S.api.machine.recipe(), timeout]).then(async (m) => {
     if (writesBefore !== wfWrites || !m || !S.next) return null;
-    const outcome = E.reconcileOutcome({ machine: m, next: S.next, noBag: S.noBag, currentBatch: S.current?.batch, loaded: S.loaded, adopt, boot });
+    const outcome = E.reconcileOutcome({ machine: m, next: S.next, noBag: S.noBag, currentBatch: S.current?.batch, loaded: S.loaded, adopt, boot, editedDuringRead: choiceBefore !== JSON.stringify(S.next) });
     if (outcome.kind === "same") {
       if (outcome.markLoaded) { S.loaded = true; renderNextShot(); }
       return "same";
@@ -1803,10 +1803,11 @@ async function renderShelf() {
 let shelfRequest = 0, shelfSync = null;
 async function refreshShelf() {
   const request = ++shelfRequest;
-  // The signal is read first, so a change made while the shelf is read shows up as a
-  // difference at the next poll rather than being lost.
-  const signal = await S.api.shelfSignal().catch(() => null);
-  const rows = await S.api.shelf();
+  // The signal is requested first, so a change made while the shelf is read shows up as a
+  // difference at the next poll rather than being lost. The two reads overlap, so a
+  // Decaid that never answers costs one time limit, not two.
+  const signalRead = S.api.shelfSignal().catch(() => null);
+  const rows = await S.api.shelf(), signal = await signalRead;
   if (request !== shelfRequest) return;
   S.shelf = rows; S.shelfSignal = signal;
   // Keep the selected object current without resetting edits to the next shot.
