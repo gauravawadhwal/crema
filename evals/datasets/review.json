@@ -486,6 +486,62 @@
         "noFaults": true,
         "askTaste": false
       }
+    },
+    {
+      "id": "review-limited-pour",
+      "split": "dev",
+      "tags": [
+        "limiter",
+        "real-shape",
+        "synthetic"
+      ],
+      "why": "Modelled on real Decaid shots: preinfusion ends on its pressure exit, then a 6 bar step with a 1 ml/s flow limiter settles at 5.5 bar. That is the profile working as designed, so there is no fault, and without taste no change.",
+      "input": {
+        "fixture": "limited-pour"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed",
+          "gushed",
+          "choked",
+          "off_target_temp"
+        ],
+        "noFaults": true,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-limited-pour-sour",
+      "split": "holdout",
+      "tags": [
+        "limiter",
+        "real-shape",
+        "taste",
+        "synthetic"
+      ],
+      "why": "The same limited pour tasted very sour. The curves show no fault that conflicts, so taste leads: a finer grind.",
+      "input": {
+        "fixture": "limited-pour-sour"
+      },
+      "expect": {
+        "accept": [
+          "finer"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "puck_failed",
+          "gushed",
+          "choked",
+          "off_target_temp"
+        ],
+        "noFaults": true,
+        "askTaste": false
+      }
     }
   ]
 }

@@ -249,8 +249,13 @@ phase 1, so real-hardware findings can reshape phases 1–3.
    user on 9 November 2026. One "Review shot" button replaces "Next adjustment": shot
    checks in `server/profiles/analysis.ts` (no AI, the fallback), then `/api/review`
    with the curves, findings and taste. Saved on the shot in Decaid. No score and no
-   follow-up chat yet. Released in v0.4.0 (PR #35); thresholds still need
-   calibration on real shots.
+   follow-up chat yet. Released in v0.4.0 (PR #35). The first 12 real shots, replayed
+   on 10 November 2026, showed it never produced a usable review in v0.4.0: Decaid's
+   `-1` "no target" and cup bumps made the server reject 8 of them, the rules
+   fallback took over silently, and the rest graded no step (each main pour had a
+   flow limiter) so the model's answer was replaced. Fixed after v0.4.0; see "Real
+   shots" in [shot-review-plan.md](shot-review-plan.md). Thresholds still need
+   calibration on more shots, especially with taste recorded.
 
 Items 2 and 4 both edit `skin/app.js`, so run them one after the other.
 

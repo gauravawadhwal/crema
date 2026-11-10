@@ -230,3 +230,36 @@ New `review` task in `evals/`:
 - Simulator shots with planted faults are flagged by the checks; the eval
   baselines are committed.
 - Tablet fit holds with a review open (`check-tablet-fit.cjs`).
+
+## Real shots — 10 November 2026
+
+The first 12 real shots on the user's DE1 were replayed read-only through v0.4.0's
+`/api/review` (the request rebuilt as `skin/app.js` does). None got a usable review:
+
+| Cause | Shots | Fix |
+|---|---|---|
+| Decaid records `-1` as "no target" (de1app imports, and the pump not in control); `ReviewPoint.tp`/`tf` were `min(0)`, so the server returned 400 and the skin fell back to rules without saying so | 7 | Readings outside a plausible range become null ("unavailable") in `ReviewPoint`, never a 400. The skin logs the failure |
+| A scale tare or cup bump reached −124 g, below `w`'s −5 g floor | 1 | Same: the reading becomes null, and so does a negative fallback yield |
+| `skippedStep()` skipped any step with a limiter. Every main pour on this machine has one (*Extractamundo Dos!* "6 bar", *Gentle and sweet* "rise and hold"), so no step was graded and `validateReview()` replaced the model's summary with "not enough comparable telemetry" | 4 | Limited steps are graded; no rule calls a fault from a shortfall a limiter could explain. Decaid's preinfusion phase is never graded instead. A well-recorded shot (20+ samples over 10+ s) keeps the model's narrative when nothing can be graded; only a thin shot gets the stock sentence |
+
+Two more problems turned up on the same shots:
+
+- **Temperature findings were wrong.** Most DE1 profiles use sensor "coffee": the
+  machine targets the group temperature and deliberately runs the mix water hotter or
+  cooler, so mix against its target (what v0.4.0 compared) reported −4.0 and +6.1 °C
+  on shots that were fine. Group temperature reads ~20 °C cold in preinfusion, and a
+  profile that steps down (82 → 73 °C) runs hot because the machine can't cool. The
+  check now uses the reading each step controls (`groupTemp` from skins that send it),
+  only during the pour, a few seconds after a target change, and never after a step
+  down to cooler water.
+- **The model had to estimate everything from 50 samples.** `shotFacts()` measures
+  time, preinfusion, first drips, yield, ratio, stop reason and pour pressure and
+  flow from every sample; the prompt carries them as SHOT FACTS, and the rules
+  summary leads with them ("34.6 g from 18 g (1:1.9) in 26 s, 5 s of it preinfusion,
+  stopped at the target weight.").
+
+Replayed again with `claude-cli` (Opus), every well-recorded shot gets a short,
+specific narrative and nothing is falsely flagged; the 7-sample shot is still
+refused. The fix needs the server redeployed (old skins then work) and the skin
+updated for group temperature.
+

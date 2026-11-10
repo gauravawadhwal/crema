@@ -5,23 +5,22 @@
   "provider": "rules",
   "model": null,
   "judge": null,
-  "startedAt": "2026-11-09T21:45:52.746Z",
+  "startedAt": "2026-11-10T00:58:42.761Z",
   "git": {
-   "commit": "0c8c11d48fce4c47b1dbfca8c1ab86b0351f254a",
+   "commit": "d89715b3f17e27ced7386505efb35ea562ae7bff",
    "dirty": true
   },
   "repeats": 1,
   "filter": null,
-  "prompts": {},
-  "label": "final-rules"
+  "prompts": {}
  },
  "summary": {
-  "cases": 20,
-  "runs": 20,
+  "cases": 22,
+  "runs": 22,
   "errors": 0,
   "passRate": 1,
   "passCI": [
-   0.839,
+   0.851,
    1
   ],
   "passAllRepeats": 1,
@@ -36,36 +35,36 @@
   },
   "checks": {
    "modelAnswered": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "acceptableMove": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "requiredIssues": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "noFalseAlarms": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "oneChange": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "validSwitch": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "groundedRanges": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "askTaste": {
-    "pass": 19,
-    "n": 19
+    "pass": 21,
+    "n": 21
    }
   },
   "tags": {
@@ -74,8 +73,8 @@
     "n": 1
    },
    "synthetic": {
-    "pass": 20,
-    "n": 20
+    "pass": 22,
+    "n": 22
    },
    "bloom": {
     "pass": 1,
@@ -98,6 +97,18 @@
     "n": 1
    },
    "gusher": {
+    "pass": 1,
+    "n": 1
+   },
+   "limiter": {
+    "pass": 2,
+    "n": 2
+   },
+   "real-shape": {
+    "pass": 2,
+    "n": 2
+   },
+   "taste": {
     "pass": 1,
     "n": 1
    },
@@ -156,18 +167,18 @@
   },
   "splits": {
    "holdout": {
-    "pass": 6,
-    "n": 6
+    "pass": 7,
+    "n": 7
    },
    "dev": {
-    "pass": 14,
-    "n": 14
+    "pass": 15,
+    "n": 15
    }
   },
   "latencyMs": {
-   "p50": 0,
+   "p50": 1,
    "p95": 2,
-   "max": 2
+   "max": 3
   },
   "cost": {
    "usdTotal": null,
@@ -189,7 +200,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -270,9 +281,9 @@
     "bloom",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 2,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "25.2 g from 18 g (1:1.4) in 30 s, 12 s of it preinfusion, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -346,9 +357,9 @@
     "channeling",
     "synthetic"
    ],
-   "ms": 0,
+   "ms": 1,
    "output": {
-    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure or flow stayed well away from the profile's target for a sustained stretch.",
     "wentWell": [],
     "issues": [
      {
@@ -431,7 +442,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "summary": "5.4 g from 18 g (1:0.3) in 30 s, ended by the machine. Pressure or flow stayed well away from the profile's target for a sustained stretch.",
     "wentWell": [],
     "issues": [
      {
@@ -519,9 +530,9 @@
     "clean",
     "synthetic"
    ],
-   "ms": 2,
+   "ms": 3,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -597,7 +608,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "4.2 g from 18 g (1:0.2) in 6 s, stopped from the app. There is not enough telemetry to draw a conclusion from this shot.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -671,7 +682,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "summary": "81 g from 18 g (1:4.5) in 30 s, ended by the machine. Pressure or flow stayed well away from the profile's target for a sustained stretch.",
     "wentWell": [],
     "issues": [
      {
@@ -752,6 +763,168 @@
    }
   },
   {
+   "caseId": "review-limited-pour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "limiter",
+    "real-shape",
+    "synthetic"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "39.1 g from 20 g (1:2.0) in 30 s, 7 s of it preinfusion, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-limited-pour-sour",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "limiter",
+    "real-shape",
+    "taste",
+    "synthetic"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "39.1 g from 20 g (1:2.0) in 30 s, 7 s of it preinfusion, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
+    "wentWell": [
+     "The controlled pressure or flow target stayed close to its recorded target."
+    ],
+    "issues": [],
+    "nextShot": {
+     "change": "Grind finer",
+     "grindDelta": "finer",
+     "yieldDeltaG": 0,
+     "tempDeltaC": 0,
+     "switchProfile": null,
+     "reasoning": "The shot tasted sour; finer grinding is a small extraction adjustment."
+    },
+    "confidence": "medium",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move finer; accept finer"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "finer",
+     "findings": ""
+    }
+   }
+  },
+  {
    "caseId": "review-manual",
    "repeat": 0,
    "split": "dev",
@@ -759,9 +932,9 @@
     "manual",
     "synthetic"
    ],
-   "ms": 0,
+   "ms": 1,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped from the app. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -835,7 +1008,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped from the app. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -909,7 +1082,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -983,9 +1156,9 @@
     "missing-scale",
     "synthetic"
    ],
-   "ms": 0,
+   "ms": 1,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "Ran for 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -1061,7 +1234,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "There is not enough telemetry to draw a conclusion from this shot.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -1133,9 +1306,9 @@
     "notes-only",
     "synthetic"
    ],
-   "ms": 0,
+   "ms": 1,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -1213,7 +1386,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "summary": "5.4 g from 18 g (1:0.3) in 30 s, ended by the machine. Pressure or flow stayed well away from the profile's target for a sustained stretch.",
     "wentWell": [],
     "issues": [
      {
@@ -1296,7 +1469,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "The recorded curves show a sustained difference from the profile in at least one part of the shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem. Temperature averaged 3.0 °C below its target.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -1304,9 +1477,9 @@
      {
       "kind": "off_target_temp",
       "what": "Recorded temperature averaged below its target.",
-      "evidence": "Mean offset -3.0 °C across 121 paired readings.",
+      "evidence": "Mean offset -3.0 °C across 77 paired readings.",
       "severity": "info",
-      "fromS": 0,
+      "fromS": 11,
       "toS": 30
      }
     ],
@@ -1381,7 +1554,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -1457,7 +1630,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "No sustained curve issue stood out in the recorded, comparable parts of the profile.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Where a step held a steady target, pressure or flow followed it without a sustained problem.",
     "wentWell": [
      "The controlled pressure or flow target stayed close to its recorded target."
     ],
@@ -1533,7 +1706,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -1607,7 +1780,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -1681,7 +1854,7 @@
    ],
    "ms": 0,
    "output": {
-    "summary": "There is not enough comparable telemetry to draw a conclusion from this shot.",
+    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,

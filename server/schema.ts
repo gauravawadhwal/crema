@@ -116,19 +116,32 @@ export const DialInAdvice = z.object({
 });
 export type DialInAdvice = z.infer<typeof DialInAdvice>;
 
+/**
+ * A recorded reading, or null when unavailable. Decaid records -1 as "no target"
+ * (de1app imports, and the target of whichever pump isn't in control), and a
+ * scale tare or cup bump mid-shot records large negative weights. Those are not
+ * measurements, so a value outside the plausible range becomes null instead of
+ * rejecting the whole review.
+ */
+const reading = (min: number, max: number) => z.number().nullable().transform((v) => v == null || v < min || v > max ? null : v);
+
 /** A bounded telemetry sample sent only when someone asks for a shot review. */
 export const ReviewPoint = z.object({
   t: z.number().min(0).max(600),
-  p: z.number().min(0).max(20).nullable(),
-  f: z.number().min(0).max(20).nullable(),
-  w: z.number().min(-5).max(500).nullable(),
-  temp: z.number().min(0).max(150).nullable(),
-  tp: z.number().min(0).max(20).nullable(),
-  tf: z.number().min(0).max(20).nullable(),
-  targetTemp: z.number().min(0).max(150).nullable(),
+  p: reading(-0.5, 20).transform((v) => v == null ? null : Math.max(0, v)),
+  f: reading(-0.5, 20).transform((v) => v == null ? null : Math.max(0, v)),
+  w: reading(-5, 500),
+  temp: reading(0, 150),
+  tp: reading(0, 20),
+  tf: reading(0, 20),
+  targetTemp: reading(0, 150),
+  // Group (coffee) temperature: what a profile step with sensor "coffee" targets.
+  // Optional, so reviews from skins that don't send it still validate.
+  groupTemp: reading(0, 150).optional(),
+  targetGroupTemp: reading(0, 150).optional(),
   frame: z.number().int().min(0).max(100).nullable(),
   substate: z.string().max(80).nullable(),
-  weightFlow: z.number().min(-20).max(100).nullable(),
+  weightFlow: reading(-20, 100),
 });
 
 const ReviewProfileStep = z.object({
@@ -136,7 +149,7 @@ const ReviewProfileStep = z.object({
   transition: z.string().max(30).optional(), pressure: z.union([z.string().max(30), z.number()]).optional(),
   flow: z.union([z.string().max(30), z.number()]).optional(), seconds: z.union([z.string().max(30), z.number()]).optional(),
   temperature: z.union([z.string().max(30), z.number()]).optional(), weight: z.union([z.string().max(30), z.number()]).optional(),
-  volume: z.union([z.string().max(30), z.number()]).optional(),
+  volume: z.union([z.string().max(30), z.number()]).optional(), sensor: z.string().max(20).optional(),
   exit: z.object({ type: z.string().max(30).optional(), condition: z.string().max(30).optional(), value: z.union([z.string().max(30), z.number()]).optional() }).nullable().optional(),
   limiter: z.object({ value: z.union([z.string().max(30), z.number()]).optional(), range: z.union([z.string().max(30), z.number()]).optional() }).nullable().optional(),
 });
@@ -149,7 +162,8 @@ export const ReviewBody = z.object({
   points: z.array(ReviewPoint).max(1800).superRefine((points, ctx) => {
     for (let i = 1; i < points.length; i++) if (points[i].t <= points[i - 1].t) ctx.addIssue({ code: "custom", path: [i, "t"], message: "times must increase without duplicates" });
   }), profile: ReviewProfile,
-  doseG: z.number().min(0).max(60).nullable(), yieldG: z.number().min(0).max(500).nullable(),
+  // The skin falls back to the last cup weight for yield, which a cup bump can leave negative.
+  doseG: z.number().min(0).max(60).nullable(), yieldG: reading(0, 500),
   targetYieldG: z.number().min(0).max(500).nullable(),
   targetTimeS: z.tuple([z.number().min(0).max(600), z.number().min(0).max(600)]).nullable(),
   stopReason: z.string().max(120).nullable(), feedback: TasteFeedback.extend({ notes: z.string().max(1000).nullable() }).nullable(), bean: BeanInfo.nullable(),

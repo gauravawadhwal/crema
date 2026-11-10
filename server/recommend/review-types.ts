@@ -11,6 +11,9 @@ export interface ReviewPoint {
   tp: number | null;
   tf: number | null;
   targetTemp: number | null;
+  /** Group (coffee) temperature and its target, when the skin sends them. */
+  groupTemp?: number | null;
+  targetGroupTemp?: number | null;
   frame: number | null;
   substate: string | null;
   weightFlow: number | null;

@@ -206,7 +206,7 @@ function makeLiveApi(conn) {
     const t0 = m.map((x) => Date.parse(x.machine?.timestamp)).find(Number.isFinite);
     if (t0 == null) return [];
     const points = m.filter((x) => x.machine).map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? null, f: x.machine.flow ?? null, w: x.scale?.weight ?? null, temp: x.machine.mixTemperature ?? null, tp: x.machine.targetPressure ?? null, tf: x.machine.targetFlow ?? null,
-      targetTemp: x.machine.targetMixTemperature ?? null, frame: x.machine.profileFrame ?? null, substate: x.machine.state?.substate ?? null, weightFlow: x.scale?.weightFlow ?? null }));
+      targetTemp: x.machine.targetMixTemperature ?? null, groupTemp: x.machine.groupTemperature ?? null, targetGroupTemp: x.machine.targetGroupTemperature ?? null, frame: x.machine.profileFrame ?? null, substate: x.machine.state?.substate ?? null, weightFlow: x.scale?.weightFlow ?? null }));
     const ordered = [];
     for (const point of points) {
       if (!Number.isFinite(point.t) || point.t < 0) continue;
@@ -535,7 +535,8 @@ function makeLiveApi(conn) {
       };
       let result = null;
       if (aiOn() && points.length) {
-        try { result = await cremaCall(() => post(C("/api/review"), input, { timeoutMs: AI_WAIT.review })); } catch {}
+        try { result = await cremaCall(() => post(C("/api/review"), input, { timeoutMs: AI_WAIT.review })); }
+        catch (e) { console.warn("AI shot review failed; using the rules review", e); }
       }
       if (!result?.review) result = { review: E.rulesReview(input), source: "rules" };
       const saved = { version: 1, review: result.review, source: result.source || "rules", createdAt: new Date().toISOString() };
