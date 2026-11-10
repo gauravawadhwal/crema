@@ -140,6 +140,23 @@ const openShot = async (page, id, selector) => {
     check(true, "server failure falls back to saved rules review");
     const final = await evalPage(async (id) => S.api.shot(id), shotId);
     check(final.review?.review?.summary && final.review.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
+    // Notes: "Notes saved" only when Decaid took the write. A failed write says so and keeps nothing.
+    await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#shots`);
+    await page.waitForFunction((id) => S.shots.some((s) => s.id === id), shotId);
+    await openShot(page, shotId, "#shotNotes");
+    const failPut = (route) => (route.request().method() === "PUT" ? route.abort() : route.fallback());
+    await page.route(new RegExp(`/api/v1/shots/${shotId}$`), failPut);
+    await page.fill("#shotNotes", "should not be saved");
+    await page.dispatchEvent("#shotNotes", "change");
+    await page.waitForFunction(() => /Couldn't save the notes/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
+    const failedToast = await page.textContent("#toast");
+    check(/Couldn't save the notes/.test(failedToast) && !/Notes saved/.test(failedToast), "a failed notes write says so instead of \"Notes saved\"", failedToast);
+    check((await (await fetch(`${decaid}/api/v1/shots/${encodeURIComponent(shotId)}`)).json()).annotations?.espressoNotes !== "should not be saved", "and Decaid didn't store the notes");
+    await page.unroute(new RegExp(`/api/v1/shots/${shotId}$`), failPut);
+    await page.fill("#shotNotes", "tastes fine");
+    await page.dispatchEvent("#shotNotes", "change");
+    await page.waitForFunction(() => /Notes saved/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
+    check(/Notes saved/.test(await page.textContent("#toast")), "a notes write that works still says \"Notes saved\"");
     check(!errors.length, "no browser errors", errors.join("; "));
   } catch (e) {
     console.error(e);

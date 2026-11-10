@@ -61,6 +61,25 @@ function toast(msg) {
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2800);
 }
 
+// A failed request in plain words. The browser's own text for an unreachable address is not.
+const failText = (e) => {
+  const m = String(e?.message ?? e ?? "").trim();
+  return !m || /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(m) ? "Decaid didn't answer" : m;
+};
+// Runs a write that has a button behind it. On failure it says so, runs `undo` to put the
+// screen back, and returns `undefined`; a success returns the write's own value (or true).
+async function attempt(what, write, undo) {
+  try { return (await write()) ?? true; }
+  catch (e) { try { undo?.(); } catch {} toast(`Couldn't ${what}: ${failText(e)}`); return undefined; }
+}
+// Anything that still fails without anyone catching it (a button nobody wrote handling for)
+// shows up instead of doing nothing.
+window.addEventListener("unhandledrejection", (e) => {
+  e.preventDefault();
+  console.error(e.reason);
+  toast(`Couldn't do that: ${failText(e.reason)}`);
+});
+
 /* ================= theme ================= */
 const HOST_THEME = document.documentElement.getAttribute("data-theme");
 // Fixed-look themes. Verde is the default. Crema follows the light/dark setting; the rest set their own.
@@ -440,6 +459,16 @@ function makeLiveApi(conn) {
       await patchRecord(beanId, { info, recipe: out.recipe, recipeSource: out.source, batchId: batch?.id ?? null });
       return out;
     },
+    // Preferences change what's recommended. Drop the saved recipe of every coffee except the
+    // one named (it is worked out again at once), so each is recomputed the next time it is
+    // picked, instead of coming back from Decaid's store with the old answer.
+    async resetRecipes(exceptBeanId = null) {
+      const beans = await j(D("/beans?includeArchived=true"));
+      await Promise.all(beans.filter((b) => b.id !== exceptBeanId).map(async (b) => {
+        const rec = await recordOf(b.id);
+        if (rec?.recipe) await kvSet(`bean:${b.id}`, { ...rec, recipe: null, recipeSource: null });
+      }));
+    },
     async rank(beanId) {
       const [{ info }, titles, prefs] = await Promise.all([coffee(beanId), installedTitles(), api.prefs.get()]);
       return E.rankProfiles(info, prefs, titles).map(E.strip);
@@ -660,12 +689,15 @@ function makeLiveApi(conn) {
         slots.push(slot);
         connect();
       };
-      let prev = null;
+      // A shot that was running when the socket dropped may end before it comes back, so the
+      // first snapshot that isn't espresso after a reconnect is the end of that shot.
+      let prev = null, shotAcross = false;
       open("/ws/v1/machine/snapshot", (s) => {
         const st = s.state?.state;
-        if (prev === "espresso" && st !== "espresso") s.finished = "latest";
+        if ((prev === "espresso" || shotAcross) && st !== "espresso") s.finished = "latest";
+        shotAcross = false;
         prev = st; h.snapshot?.(s);
-      }, () => { prev = null; h.lost?.("machine"); });
+      }, () => { shotAcross = shotAcross || prev === "espresso"; prev = null; h.lost?.("machine"); });
       open("/ws/v1/scale/snapshot", (s) => h.scale?.(s.status ? { connected: s.status === "connected" } : { connected: true, weight: s.weight, batteryLevel: s.batteryLevel }));
       open("/ws/v1/machine/waterLevels", (s) => h.water?.(s));
       open("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", (s) => h.ready?.(s));
@@ -987,7 +1019,9 @@ function step(spec) {
 // notes, Decaid's workflow_device_sync). So during espresso the load is held, and
 // sent when the shot ends. It reads S.next then, so the latest choice wins. Only
 // espresso runs profile steps; steam, hot water and flush don't.
-const shotRunning = () => S.snap?.state?.state === "espresso";
+// Also true while the machine socket is down after it dropped mid-shot: the DE1 keeps
+// pouring, so the profile must not be written until a snapshot shows the shot is over.
+const shotRunning = () => S.snap?.state?.state === "espresso" || S.shotAcross;
 // Loads run one at a time. A load reads the screen when its turn comes, so the
 // latest choice wins, and one queued behind another is skipped if that one already
 // left the recipe on the machine (Espresso pressed during a manual load waits for it
@@ -1200,8 +1234,8 @@ async function useFav(i) {
     if (!S.next) return toast("Pick a coffee first");
     const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 18);
     const fav = { ...favouriteRecipe(), name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
-    S.favourites = await S.api.favourites.set(i, fav);
-    renderFavs(); toast(`Saved "${name}" to slot ${i + 1}`);
+    const saved = await attempt("save the favourite", () => S.api.favourites.set(i, fav));
+    if (saved) { S.favourites = saved; renderFavs(); toast(`Saved "${name}" to slot ${i + 1}`); }
     return;
   }
   if (f.noBag === true) await selectBean(NO_BAG, { quiet: true });
@@ -1220,13 +1254,18 @@ function editFav(i) {
     <div class="field"><label class="label" for="favName">Name</label><input type="text" id="favName" value="${esc(f.name)}" maxlength="40"></div>
     <p class="muted small">${esc(f.profileTitle)} · ${fmt1(f.doseG)} g → ${fmt1(f.yieldG)} g · ${fmt1(f.tempC)} °C${f.grinderSetting ? ` · grind ${esc(f.grinderSetting)}` : ""}</p>
     <div class="row"><button class="btn primary" id="favSave">Save name</button><button class="btn" id="favUpdate">Replace with current shot</button><button class="btn ghost" id="favClear">Clear slot</button></div>`);
-  $("#favSave").onclick = async () => { S.favourites = await S.api.favourites.set(i, { ...f, name: $("#favName").value.trim() || f.name }); closeSheet(); renderFavs(); };
+  // The sheet stays open when the write fails, so the change can be tried again.
+  const writeFav = async (what, fav) => {
+    const saved = await attempt(what, () => S.api.favourites.set(i, fav));
+    if (saved) { S.favourites = saved; closeSheet(); renderFavs(); }
+    return !!saved;
+  };
+  $("#favSave").onclick = () => writeFav("save the name", { ...f, name: $("#favName").value.trim() || f.name });
   $("#favUpdate").onclick = async () => {
     if (!S.next) return;
-    S.favourites = await S.api.favourites.set(i, { ...f, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null });
-    closeSheet(); renderFavs(); toast("Favourite updated");
+    if (await writeFav("update the favourite", { ...f, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
   };
-  $("#favClear").onclick = async () => { S.favourites = await S.api.favourites.set(i, null); closeSheet(); renderFavs(); };
+  $("#favClear").onclick = () => writeFav("clear the slot", null);
 }
 
 /* ================= machine controls (brew home, right) ================= */
@@ -1381,6 +1420,7 @@ function renderLive() {
 // than show it as live. The socket reconnects on its own.
 function onStreamLost(which) {
   if (which === "machine") {
+    if (S.snap?.state?.state === "espresso") S.shotAcross = true;
     S.snap = null;
     renderStatus(); renderAlerts(); renderControls();
     if (!$("#view-brew").hidden) { renderReadouts(); renderLive(); }
@@ -1403,8 +1443,11 @@ function onSnapshot(s) {
   lastSnapAt = Date.now();
   S.snap = s;
   const st = s.state?.state;
+  // The first snapshot after a drop in mid-shot: still pouring (the same shot goes on), or over.
+  const resumed = S.shotAcross && st === "espresso", endedAway = S.shotAcross && st !== "espresso";
+  S.shotAcross = false;
   if (st !== prevState && S.starting?.kind === st) S.starting = null; // the machine has picked up the start
-  if (st !== prevState) { renderControls(); renderAlerts(); updateSaver(); if (st === "espresso") onShotStart(); opOverlay(); }
+  if (st !== prevState) { renderControls(); renderAlerts(); updateSaver(); if (st === "espresso" && !resumed) onShotStart(); opOverlay(); }
   if (st === "espresso") {
     // Decaid's snapshot has no timer; the simulators send one. Ignore a stale
     // value carried over from the previous operation on the first frame.
@@ -1417,7 +1460,7 @@ function onSnapshot(s) {
     opOverlay();
   }
   if (s.finished) onShotEnd(s.finished);
-  if (prevState === "espresso" && st !== "espresso" && S.heldLoad) {
+  if ((prevState === "espresso" || endedAway) && st !== "espresso" && S.heldLoad) {
     loadOntoMachine(true).then((ok) => ok === true && toast(`Loaded ${S.next.profileTitle} for the next shot`));
   }
   renderStatus(); renderReadouts();
@@ -1664,14 +1707,15 @@ async function renderShelf() {
   const bag = (key) => S.shelf.find((x) => x.key === key);
   $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
     const b = bag(btn.dataset.freeze);
-    await S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch); b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
+    if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
+    b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
   }));
   $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
     const b = bag(btn.dataset.finish);
     const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
     openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
     $("#confirmFinish").onclick = async () => {
-      await S.api.setBeanState(b.id, { finished: true }, b.batch);
+      if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
       closeSheet(); await refreshShelf();
       if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
       renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
@@ -1776,11 +1820,16 @@ function noMicrophone() {
   local.set("micDenied", true); local.set("speechDenied", true);
   toast("The microphone isn't available here, so Speak is hidden. Use your keyboard's microphone instead.");
 }
-const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && AudioCtx && window.isSecureContext && !micBroken);
-const canSpeak = () => !!SpeechRec && window.isSecureContext && !speechBroken;
+// Decaid's WebView adds window.decentApp. It never hands skins the microphone, so there
+// Speak isn't offered at all and the keyboard's own microphone is the way to dictate.
+const inDecaid = () => !!window.decentApp;
+const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && AudioCtx && window.isSecureContext && !micBroken && !inDecaid());
+const canSpeak = () => !!SpeechRec && window.isSecureContext && !speechBroken && !inDecaid();
 const voicePref = () => (local.get("voice", "gemini") === "device" ? "device" : "gemini");
 const voiceKind = () => (voicePref() === "gemini" && S.api.ai.voice && canRecord() ? "gemini" : canSpeak() ? "browser" : null);
+const KEYBOARD_MIC = "Tap the box, then the microphone on your keyboard.";
 function voiceHint() {
+  if (inDecaid()) return `Decaid doesn't give Crema the microphone. ${KEYBOARD_MIC}`;
   const fallback = canSpeak() ? "this device's speech recognition" : "your keyboard's microphone";
   if (micBroken && window.isSecureContext) return "The microphone isn't available to this page (Decaid doesn't give skins one), so use your keyboard's microphone. Choose an option to try again";
   if (voicePref() === "device") return `Uses ${fallback}. Nothing goes to Gemini. Set on each device`;
@@ -1798,7 +1847,7 @@ function renderSpeak() {
   $("#speakHint").textContent = state === "listening" ? "Listening. Say the roaster and name, plus the roast date and weight if you have them."
     : state === "writing" ? "Writing down what you said…"
     : kind ? "Tap Speak and say what's on the bag. Crema looks it up when you stop talking."
-    : "Type it, or dictate with your keyboard's microphone. Roaster and name are enough; add the roast date and weight if you have them.";
+    : `${inDecaid() ? KEYBOARD_MIC : "Type it, or dictate with your keyboard's microphone."} Roaster and name are enough; add the roast date and weight if you have them.`;
 }
 const describeAndGo = () => { if (addMode === "describe" && !$("#view-add").hidden) $("#identifyBtn").click(); };
 const appendToBox = (text) => { const box = $("#describeInput"); box.value = [box.value.trim(), text.trim()].filter(Boolean).join(" "); };
@@ -2308,7 +2357,11 @@ function renderShotDetail() {
     if (row) row.innerHTML = n ? starsHtml(n) : "Not rated";
     await S.api.annotate(s.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating"));
   });
-  $("#shotNotes").onchange = async (e) => { s.notes = e.target.value; await S.api.annotate(s.id, { espressoNotes: s.notes }).catch(() => {}); toast("Notes saved"); };
+  $("#shotNotes").onchange = async (e) => {
+    const before = s.notes, text = e.target.value;
+    try { await S.api.annotate(s.id, { espressoNotes: text }); s.notes = text; toast("Notes saved"); }
+    catch (err) { s.notes = before; toast(`Couldn't save the notes: ${err.message}. They're still in the box`); }
+  };
   for (const [selector, key] of [["#detailSb", "sourBitter"], ["#detailBody", "body"]]) {
     const group = $(selector);
     if (!group) continue;
@@ -2430,7 +2483,7 @@ async function renderSettings() {
   <div class="panel stack"><h2>AI features</h2>
     <div class="set-row first"><span>Use AI<span class="hint">${aiHint(ai)}</span></span>${sw("sAi", ai.enabled)}</div>
     ${ai.enabled && S.api.ai.available ? `<div class="set-row"><span>AI providers<span class="hint">Tried in order. Set with LLM_PROVIDERS on the Crema server</span></span><span class="num small">${esc((S.api.info.providers || []).map((x) => x.id).join(" → ") || "none")}</span></div>` : ""}
-    ${ai.enabled ? `<div class="set-row"><span>Speaking a description<span class="hint" id="voiceHint">${esc(voiceHint())}</span></span>${seg("sVoice", [["gemini", "Gemini"], ["device", "This device"]], voicePref())}</div>` : ""}
+    ${ai.enabled ? `<div class="set-row"><span>Speaking a description<span class="hint" id="voiceHint">${esc(voiceHint())}</span></span>${inDecaid() ? "" : seg("sVoice", [["gemini", "Gemini"], ["device", "This device"]], voicePref())}</div>` : ""}
   </div>
 
   <div class="panel stack"><h2>Connections</h2>
@@ -2443,7 +2496,19 @@ async function renderSettings() {
   </div>` : ""}`;
 
   // ---- wire up ----
-  const savePrefs = async (patch) => { S.prefs = await S.api.prefs.set(patch); for (const b of S.shelf) b.recipe = null; S.current && (await selectBean(S.current.key, { quiet: true })); toast("Saved. Recommendations updated"); };
+  // A new preference changes what's recommended. The coffee on screen is worked out again now;
+  // the others have their saved recipe cleared and get a new one when picked.
+  const savePrefs = async (patch) => {
+    S.prefs = await S.api.prefs.set(patch);
+    const hasOthers = S.shelf.some((b) => b.id !== S.current?.id);
+    let cleared = true;
+    try { await S.api.resetRecipes(S.current?.id ?? null); } catch { cleared = false; }
+    for (const b of S.shelf) if (cleared || b.id === S.current?.id) b.recipe = null;
+    S.current && (await selectBean(S.current.key, { quiet: true }));
+    toast(!hasOthers ? "Saved. Recommendation updated"
+      : cleared ? "Saved. This coffee's recommendation is updated, and the others update when you pick them"
+      : "Saved. This coffee's recommendation is updated, but the others may keep their old ones");
+  };
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
@@ -2496,8 +2561,10 @@ async function renderSettings() {
     } catch (e) { toast(`Couldn't save: ${e.message}`); renderSettings(); }
   }));
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
-  const usb = $("#sUsb"); if (usb) usb.onchange = (e) => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }).then(() => toast("Saved"));
-  const pr = $("#sPresence"); if (pr) pr.onchange = (e) => m.presence.set({ userPresenceEnabled: e.target.checked }).then(() => toast("Saved"));
+  // A switch that can't be saved goes back to where it was.
+  const flip = (el) => () => { el.checked = !el.checked; };
+  const usb = $("#sUsb"); if (usb) usb.onchange = async (e) => { if (await attempt("save USB charging", () => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }), flip(e.target))) toast("Saved"); };
+  const pr = $("#sPresence"); if (pr) pr.onchange = async (e) => { if (await attempt("save sleep when idle", () => m.presence.set({ userPresenceEnabled: e.target.checked }), flip(e.target))) toast("Saved"); };
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   $$("#sVoice button").forEach((b) => (b.onclick = () => {
     local.set("voice", b.dataset.v);
@@ -2519,18 +2586,24 @@ async function renderSettings() {
     const [id, d] = b.dataset.day.split(":"); const s = scheds.find((x) => x.id === id);
     const days = s.daysOfWeek.length ? s.daysOfWeek.slice() : [1, 2, 3, 4, 5, 6, 7];
     const i = days.indexOf(+d); i >= 0 ? days.splice(i, 1) : days.push(+d);
-    s.daysOfWeek = days.sort(); await m.schedules.update(id, { daysOfWeek: s.daysOfWeek }); renderSettings();
+    s.daysOfWeek = days.sort();
+    // On failure, draw again from Decaid's schedules, not from the edit that didn't take.
+    if (await attempt("change the wake days", () => m.schedules.update(id, { daysOfWeek: s.daysOfWeek }), renderSettings)) renderSettings();
   }));
-  scheds.forEach((s) => { const t = $(`#en-${CSS.escape(s.id)}`); if (t) t.onchange = (e) => m.schedules.update(s.id, { enabled: e.target.checked }); });
-  $$("[data-del]").forEach((b) => (b.onclick = async () => { await m.schedules.remove(b.dataset.del); renderSettings(); }));
-  $("#addWake").onclick = async () => { const t = $("#newWake").value; if (!t) return; await m.schedules.add({ time: t, daysOfWeek: [1, 2, 3, 4, 5], enabled: true }); toast(`Wakes at ${t} on weekdays`); renderSettings(); };
-  const db = $("#doneBackflush"); if (db) db.onclick = async () => { await S.api.maintenance.done("backflush"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Backflush recorded"); };
-  const dd = $("#doneDescale"); if (dd) dd.onclick = async () => { await S.api.maintenance.done("descale"); S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast("Descale recorded"); };
+  scheds.forEach((s) => { const t = $(`#en-${CSS.escape(s.id)}`); if (t) t.onchange = (e) => attempt("change the wake schedule", () => m.schedules.update(s.id, { enabled: e.target.checked }), flip(e.target)); });
+  $$("[data-del]").forEach((b) => (b.onclick = async () => { if (await attempt("remove the wake time", () => m.schedules.remove(b.dataset.del))) renderSettings(); }));
+  $("#addWake").onclick = async () => { const t = $("#newWake").value; if (!t) return; if (await attempt("add the wake time", () => m.schedules.add({ time: t, daysOfWeek: [1, 2, 3, 4, 5], enabled: true }))) { toast(`Wakes at ${t} on weekdays`); renderSettings(); } };
+  const markDone = (kind, noun) => async () => {
+    if (!(await attempt(`record the ${noun}`, () => S.api.maintenance.done(kind)))) return;
+    S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast(`${noun[0].toUpperCase()}${noun.slice(1)} recorded`);
+  };
+  const db = $("#doneBackflush"); if (db) db.onclick = markDone("backflush", "backflush");
+  const dd = $("#doneDescale"); if (dd) dd.onclick = markDone("descale", "descale");
   $("#editPresets").onclick = editPresets;
   $("#changeServer").onclick = () => connectSheet();
   const ex = $("#exitDash"); if (ex) ex.onclick = exitToDashboard;
   $("#sAi").onchange = async (e) => {
-    try { S.appSettings = await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { toast(`Couldn't save: ${err.message}`); }
+    try { S.appSettings = await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { renderSettings(); return toast(`Couldn't save: ${failText(err)}`); }
     renderStatus(); renderSettings();
     toast(e.target.checked ? "AI features on" : "AI features off. Crema uses its rules");
   };

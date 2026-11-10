@@ -207,6 +207,110 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       page.off("request", capture);
     }
 
+    // Changing a preference says "Recommendations updated", so every coffee's recipe must be
+    // worked out again, not just the one on screen. Decaid's stored recipes are what comes back
+    // on the next read, so they have to be cleared too. Rules only: no server here.
+    {
+      await addByHand("Second Roasters", "Second Entry");
+      const doses = () => S(() => Object.fromEntries(S.shelf.map((b) => [b.info.name.value, b.recipe?.doseG ?? null])));
+      const before = await doses();
+      await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#pDose", { timeout: 10000 });
+      await page.fill("#pDose", "15"); await page.locator("#pDose").press("Tab");
+      await page.waitForFunction(() => S.prefs?.basketDoseG === 15 && !S.recommending && /Saved/.test(document.querySelector("#toast").textContent), null, { timeout: 15000 });
+      const toastText = await page.textContent("#toast");
+      await page.reload(); await page.waitForFunction(() => S.shelfLoaded && S.current, null, { timeout: 15000 });
+      const other = "Hand Entry"; // the coffee that wasn't on screen
+      await page.evaluate((n) => selectBean(S.shelf.find((b) => b.info.name.value === n).key), other);
+      await page.waitForFunction((n) => S.current?.info.name.value === n && S.current.recipe && !S.recommending, other, { timeout: 15000 });
+      const after = await doses();
+      check(before[other] !== 15 && after[other] === 15, `a coffee that wasn't on screen when a preference changed gets its recipe worked out again (${other}: ${before[other]} → ${after[other]})`, JSON.stringify({ before, after }));
+      check(/Saved/.test(toastText) && !/Recommendations updated/.test(toastText), "and the toast doesn't claim every recommendation is already updated", toastText);
+      await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#pDose", { timeout: 10000 });
+      await page.fill("#pDose", "18"); await page.locator("#pDose").press("Tab");
+      await page.waitForFunction(() => S.prefs?.basketDoseG === 18 && !S.recommending, null, { timeout: 15000 });
+    }
+
+    // A write that fails must say so, and a switch or toggle must go back to what Decaid holds.
+    // Writes (anything but a GET) to the matching address are dropped, as if Decaid had gone.
+    {
+      const toastNow = () => page.textContent("#toast");
+      const sayCant = (what) => page.waitForFunction((w) => new RegExp(`Couldn't ${w}`).test(document.querySelector("#toast").textContent), what, { timeout: 5000 }).then(() => true, () => false);
+      const drop = async (re) => { const h = (r) => (r.request().method() === "GET" ? r.fallback() : r.abort()); await page.route(re, h); return () => page.unroute(re, h); };
+      const resetToast = () => S(() => { document.querySelector("#toast").textContent = ""; });
+      await page.goto(`http://localhost:${SKIN}/?full#settings`); await page.waitForSelector("#sUsb", { timeout: 10000 });
+      await page.waitForSelector('[id^="en-"]', { timeout: 10000 });
+      // A switch.
+      for (const [id, url, label] of [["sUsb", /\/machine\/settings$/, "USB charging"], ["sPresence", /\/presence\/settings$/, "sleep when idle"], ['[id^="en-"]', /\/presence\/schedules\//, "wake schedule"]]) {
+        const sel = id.startsWith("[") ? id : `#${id}`;
+        const was = await page.isChecked(sel);
+        await resetToast();
+        const undrop = await drop(url);
+        await page.locator(sel).evaluate((el) => el.click());
+        const said = await sayCant("");
+        await page.waitForTimeout(100);
+        check(said && /Couldn't/.test(await toastNow()), `a failed write for the ${label} switch says so`, await toastNow());
+        check(await page.isChecked(sel) === was, `and the ${label} switch goes back to what Decaid holds`);
+        await undrop();
+      }
+      // A day toggle on the wake schedule.
+      {
+        const day = '[data-day]:nth-of-type(2)';
+        const was = await page.getAttribute(day, "aria-pressed");
+        await resetToast();
+        const undrop = await drop(/\/presence\/schedules\//);
+        await page.click(day);
+        await sayCant("");
+        await page.waitForFunction((w) => document.querySelector('[data-day]:nth-of-type(2)').getAttribute("aria-pressed") === w, was, { timeout: 5000 }).catch(() => {});
+        check(/Couldn't/.test(await toastNow()) && await page.getAttribute(day, "aria-pressed") === was, "a failed wake-day toggle says so and shows what Decaid holds", await toastNow());
+        await undrop();
+      }
+      // Add and Remove a wake time.
+      {
+        const count = () => page.locator(".sched").count();
+        const n = await count();
+        await resetToast();
+        let undrop = await drop(/\/presence\/schedules/);
+        await page.click("#addWake");
+        check(await sayCant("") && await count() === n, "a failed Add wake time says so and adds nothing");
+        await resetToast();
+        await page.click("[data-del]");
+        check(await sayCant("") && await count() === n, "a failed Remove says so and removes nothing");
+        await undrop();
+      }
+      // Backflush "Done today" writes to Decaid's store.
+      {
+        await resetToast();
+        const undrop = await drop(/\/store\/crema\//);
+        await page.click("#doneBackflush");
+        check(await sayCant("") && !/Backflush recorded/.test(await toastNow()), "a failed Done for the backflush says so, not \"Backflush recorded\"", await toastNow());
+        // A favourite goes to the store too.
+        await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForSelector("[data-fav]", { timeout: 10000 });
+        await page.waitForFunction(() => S.next, null, { timeout: 10000 });
+        await resetToast();
+        await page.click('[data-fav="4"]');
+        check(await sayCant("") && !/Saved "/.test(await toastNow()) && await S(() => S.favourites[4] === null), "a failed favourite save says so and leaves the slot empty", await toastNow());
+        await undrop();
+      }
+      // Freeze / Thaw on the shelf.
+      {
+        await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector("[data-freeze]", { timeout: 10000 });
+        const label = await page.textContent("[data-freeze]");
+        await resetToast();
+        const undrop = await drop(/\/bean-batches\//);
+        await page.click("[data-freeze]");
+        check(await sayCant("") && await page.textContent("[data-freeze]") === label, "a failed Freeze says so and the bag stays as it was", await toastNow());
+        await resetToast();
+        await page.click("[data-finish]"); await page.click("#confirmFinish");
+        check(await sayCant("") && await S(() => S.shelf.length > 0), "a failed Mark finished says so and the bag stays on the shelf", await toastNow());
+        await undrop();
+        await S(() => closeSheet());
+      }
+      // Anything else that rejects with nobody listening still shows up.
+      await resetToast();
+      await S(() => { Promise.reject(new Error("boom")); });
+      check(await sayCant("do that: boom"), "an unhandled failure shows \"Couldn't do that\" instead of nothing", await toastNow());
+    }
+
     // Slow or stuck requests mustn't hold up the machine. Boot subscribes to the
     // machine streams before it loads the shelf (which can mean an AI recipe), and every
     // request has a time limit.
@@ -406,6 +510,45 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await page.waitForFunction(() => /hasn't saved this shot yet/.test(document.querySelector("#afterShot").textContent), null, { timeout: 20000 }).catch(() => {});
       check(/hasn't saved this shot yet/.test(await page.textContent("#afterShot")), "if Decaid hasn't saved the shot, the panel says the rating can't be attached yet");
       await page.unroute(/\/api\/v1\/shots\/latest/);
+    }
+
+    // A shot that ends while the machine socket is down. The tablet's link drops mid-pour, the
+    // machine finishes the shot, and the link comes back. The app has to know the shot ended:
+    // show the after-shot panel, send the recipe it was holding, and write nothing to the
+    // workflow's profile while the shot may still be running.
+    {
+      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.reload();
+      await page.waitForFunction(() => S.next && S.link.connected && S.snap && S.shelfLoaded, null, { timeout: 15000 });
+      await page.waitForTimeout(500);
+      const profileWrites = [];
+      const watch = (r) => { if (["PUT", "POST"].includes(r.method()) && /\/api\/v1\/workflow$/.test(r.url())) profileWrites.push(r.postDataJSON()); };
+      const prevLatest = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots/latest`)).json()).id;
+      await S(() => loadOntoMachine(true));
+      await S(() => startOp("espresso"));
+      await page.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
+      await page.waitForTimeout(2500);
+      // An edit made mid-shot is held until the shot ends.
+      await S(() => step("dose:1"));
+      const newDose = await S(() => S.next.doseG);
+      check(await S(() => loadOntoMachine(true)) === "held" && await S(() => S.heldLoad), "a recipe loaded during a shot is held");
+      page.on("request", watch);
+      await dev("sockets/drop", { refuse: true });
+      await page.waitForFunction(() => !S.snap, null, { timeout: 10000 });
+      check(await S(() => shotRunning()), "with the socket down mid-pour, the shot still counts as running");
+      await S(() => loadOntoMachine(true));
+      await fetch(`http://localhost:${MOCK}/api/v1/machine/state/idle`, { method: "PUT" }); // the shot ends while the app is away
+      await page.waitForTimeout(1500);
+      check(profileWrites.length === 0, "nothing is written to the workflow while the socket is down", JSON.stringify(profileWrites).slice(0, 200));
+      await dev("sockets/drop", { refuse: false, drop: false });
+      await page.waitForFunction(() => S.snap && S.snap.state.state !== "espresso", null, { timeout: 30000 });
+      await page.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 }).catch(() => {});
+      check(await page.isVisible("#afterShot"), "after the reconnect, the after-shot panel appears");
+      const newest = (await (await fetch(`http://localhost:${MOCK}/api/v1/shots/latest`)).json()).id;
+      check(newest !== prevLatest && await S(() => S.lastShotId) === newest, "and it is for the shot that ended while the socket was down");
+      await page.waitForFunction(() => !S.heldLoad && S.loaded, null, { timeout: 10000 }).catch(() => {});
+      const wf = await (await fetch(`http://localhost:${MOCK}/api/v1/workflow`)).json();
+      check(await S(() => !S.heldLoad) && wf.context?.targetDoseWeight === newDose, `the held recipe is sent once the shot is known to be over (dose ${wf.context?.targetDoseWeight}, wanted ${newDose})`);
+      page.off("request", watch);
     }
 
     // Profiles: the library is what's installed in Decaid; Crema's guide only adds notes.
@@ -661,6 +804,24 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     check(wav && (audioRuns ? wav.seconds > 1.5 && wav.seconds < 6 : wav.seconds === 2), `the recording is the right length (${wav?.seconds} s)`);
     check((await page.textContent("#speakBtn")).trim() === "Speak", "Speak is ready again");
     await page.click("#discardBean");
+
+    // Inside Decaid (window.decentApp) the microphone is never given to a skin, so Speak isn't
+    // offered even though the server could transcribe: the hint points to the keyboard's microphone.
+    {
+      const inDecaid = await browser.newPage({ viewport: { width: 1340, height: 800 } });
+      inDecaid.on("pageerror", (e) => errs.push(`inDecaid: ${e.message}`));
+      await inDecaid.addInitScript(FAKE_MIC);
+      await inDecaid.addInitScript(() => { window.decentApp = { exitToDashboard() {} }; });
+      const u = new URL(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}&server=http://localhost:${CREMA}#add`);
+      await inDecaid.goto(u.href);
+      await inDecaid.waitForFunction(() => S.shelfLoaded && S.api.ai.voice, null, { timeout: 15000 });
+      await inDecaid.click("#mode-describe");
+      const d = await inDecaid.evaluate(() => ({ hidden: document.querySelector("#speakBtn").hidden, kind: voiceKind(), hint: document.querySelector("#speakHint").textContent }));
+      check(d.hidden && d.kind === null && /microphone on your keyboard/.test(d.hint), "inside Decaid, Speak is hidden from the start and the hint points to the keyboard's microphone", JSON.stringify(d));
+      await inDecaid.goto(`${u.origin}${u.pathname}${u.search}#settings`); await inDecaid.waitForSelector("#voiceHint", { timeout: 10000 });
+      check(await inDecaid.locator("#sVoice").count() === 0 && /microphone on your keyboard/.test(await inDecaid.textContent("#voiceHint")), "and Settings says the same, with no voice choice to make");
+      await inDecaid.close();
+    }
 
     // Settings → "Speaking a description": this device instead of Gemini, kept per device.
     const voiceSetting = async (v) => {
