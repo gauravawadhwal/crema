@@ -142,10 +142,18 @@ The demo's controller movements are simulated, not a physical-controller test.
 
 ### Editing favourites
 
-Tap the large **⋯** button beside the five favourites, then choose a slot to
-rename, replace or clear. The edit target is at least 44 × 44 px and is separate
-from the buttons that load favourites. A favourite saved in No bag mode restores
+The bottom of Brew has a favourites carousel. Swipe it, drag with a mouse, or use
+the arrows to see more recipes; the cards snap into place. Tap a recipe to load
+it. During a pour, it loads after the shot ends. The graph is shorter to leave
+room for the carousel, and Stop stays available.
+
+The last card is **Save current recipe**. You can keep adding recipes; there is no
+five-slot limit. Tap **Edit**, then a recipe, to rename, replace or clear it; tap
+**Done** to return to loading recipes. A favourite saved in No bag mode restores
 that mode rather than attaching whichever bag is currently selected.
+
+Existing favourites stay in Decaid without a data migration. After upgrading the
+skin, reload any open phone tabs so all devices use the current favourites UI.
 
 ### Connecting the tablet to the server
 
@@ -205,7 +213,7 @@ through Decaid. Sleep timeout follows Decaid's 0–240 minute range (0 disables 
 idle timer); the refill warning is a water height in millimetres, not a percentage.
 
 - **Decaid:** installing and switching skins, connecting the machine and scale, and plugin settings such as your Visualizer account.
-- **The [Streamline Settings](https://github.com/decentespresso/streamline-setting) plugin** (optional): Streamline's full machine settings, including calibration, firmware, cleaning and steam modes. Install it from Decaid's Plugins screen with its release ZIP, or with `curl -X POST http://<tablet-ip>:8080/api/v1/plugins/install/github-release -H 'Content-Type: application/json' -d '{"repo":"decentespresso/streamline-setting"}'`. Then open `http://<tablet-ip>:8080/api/v1/plugins/streamline-settings.reaplugin/ui` in any browser on your network. Its skin preferences (language, units, zoom) apply to Streamline only, not Crema.
+- **The [Streamline Settings](https://github.com/decentespresso/streamline-setting) plugin** (optional): specialist machine settings, including calibration, firmware and cleaning. Its released version can lag behind the Streamline skin. Install it from Decaid's Plugins screen with its release ZIP, or with `curl -X POST http://<tablet-ip>:8080/api/v1/plugins/install/github-release -H 'Content-Type: application/json' -d '{"repo":"decentespresso/streamline-setting"}'`. Then open `http://<tablet-ip>:8080/api/v1/plugins/streamline-settings.reaplugin/ui` in a browser on your network. Its skin preferences (language, units, zoom) do not apply to Crema, and Streamline runtime features such as eco steam and wake-profile loading are not inherited. The [source audit](parity.md#integration-findings) records an unresolved saved-settings restore conflict to check before integrating it into Crema.
 - **The Streamline skin:** profile editing and importing profiles from Visualizer. Switch skins in Decaid, then switch back to Crema; Crema's data stays in Decaid.
 
 To get to Decaid's dashboard from Crema on the tablet, open **Settings → Decaid → Open Decaid**. It calls Decaid's `exitToDashboard()`, which closes the skin. The row appears only inside Decaid (not on a phone or in a desktop browser) and is greyed out while the machine is running. If it's missing on your Decaid version, use Decaid's own navigation; its **Skin navigation guide** option (Settings → General) shows how it works. [parity.md](parity.md) lists features against the stock app and other skins.

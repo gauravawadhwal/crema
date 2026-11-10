@@ -236,13 +236,29 @@ details[open] summary { margin-bottom: 8px; }
 .coffee-choice { display: grid; gap: 3px; min-height: 44px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .coffee-choice .pill { justify-self: start; }
 .coffee-line.bagless { grid-template-columns: minmax(0, 1fr); }
-.favs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 44px; gap: 6px; }
-.fav-wrap { min-width: 0; }
-.fav { display: grid; align-content: center; gap: 1px; width: 100%; min-height: 56px; padding: 6px 4px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; text-align: center; font-size: .7rem; line-height: 1.2; overflow: hidden; }
-.fav strong { font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fav.empty { border-style: dashed; color: var(--muted); }
-.fav-wrap .fav { min-width: 0; min-height: 44px; }
-.fav-edit { flex: 0 0 44px; width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--fg); cursor: pointer; font-size: 1.25rem; line-height: 1; }
+.favs-panel { grid-column: 1 / -1; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; min-width: 0; min-height: 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.fav-tools { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; min-height: 0; }
+.fav-tools h2 { font-size: 1rem; line-height: 1.2; }
+.fav-nav { display: flex; gap: 4px; }
+.fav-nav button, .fav-edit { min-height: 48px; border: 1px solid var(--line); border-radius: 10px; background: transparent; cursor: pointer; }
+.fav-nav button { width: 48px; height: 48px; padding: 0; font-size: 1.6rem; line-height: 1; }
+.fav-edit { width: 100%; font-size: .84rem; color: var(--muted); }
+.fav-nav button:disabled { opacity: .28; cursor: default; }
+.favs { display: grid; grid-auto-flow: column; grid-auto-columns: 236px; gap: 10px; min-height: 0; min-width: 0; position: relative; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+.favs::-webkit-scrollbar { display: none; }
+.fav { min-width: 0; min-height: 108px; padding: 14px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: left; scroll-snap-align: start; scroll-snap-stop: always; user-select: none; }
+.fav:hover, .fav-edit:hover, .fav-nav button:hover:not(:disabled) { border-color: var(--muted); }
+.fav[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.fav strong { font-family: var(--font-display); font-size: 1rem; line-height: 1.2; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fav-profile { display: block; color: var(--muted); font-size: .78rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fav-recipe { margin-top: auto; font-size: .78rem; line-height: 1.3; white-space: nowrap; }
+.fav-temp { color: var(--muted); }
+.fav.empty { justify-content: center; border-style: dashed; background: transparent; }
+.fav.empty strong { font-size: .91rem; font-weight: 500; }
+.fav-plus { font-size: 1.35rem; line-height: 1; color: var(--accent); }
+.fav-action { color: var(--accent); font-size: .75rem; margin-top: auto; }
+.fav:disabled, .fav-edit:disabled { opacity: .5; cursor: default; }
+.favs:focus-visible, .favs .fav:focus-visible { outline-offset: -3px; }
 
 .readouts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .readout { display: grid; gap: 0; min-width: 0; }
@@ -429,7 +445,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .dev { position: absolute; left: 50%; top: 50%; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 30px 70px rgba(0, 0, 0, .45); transform-origin: 50% 50%; }
 .dev iframe { display: block; border: 0; background: #0e1a15; }
 .dev-note { text-align: center; }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 70; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 70; box-shadow: var(--shadow); max-width: calc(100% - 32px); pointer-events: none; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -451,6 +467,11 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   main { padding-block: 12px calc(92px + env(safe-area-inset-bottom, 0px)); }
   .brew-grid, .two-col, .shots-grid { grid-template-columns: minmax(0, 1fr); }
   .brew-grid .live-col { order: 2; } .brew-grid .next-col { order: 3; } .brew-grid .controls-col { order: 1; }
+  .favs-panel { order: 4; display: block; }
+  .fav-tools { flex-direction: row; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .fav-tools h2 { margin-right: auto; }
+  .fav-edit { width: 64px; }
+  .favs { grid-auto-columns: 220px; }
   .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .controls .stop-wrap, .controls .ctl:first-child { grid-column: 1 / -1; }
   .ctl-btn { font-size: .92rem; min-height: 48px; padding: 6px 10px; }
@@ -482,7 +503,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .brand { margin-bottom: 6px; }
   .tab { padding: 7px 0; }
   .panel { padding: 12px; }
-  #view-brew { height: 100%; min-height: 0; gap: 10px; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: minmax(0, 1fr); }
+  #view-brew { height: 100%; min-height: 0; gap: 14px; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(168px, 196px); grid-template-rows: minmax(0, 1fr) 142px; }
+  .favs-panel { grid-row: 2; }
   #view-brew .controls-col { grid-column: auto; }
   #view-brew > .stack { height: 100%; min-height: 0; overflow-y: auto; gap: 10px; align-content: start; scrollbar-width: thin; }
   #view-brew .live-col { display: flex; flex-direction: column; overflow: hidden; }
@@ -511,7 +533,6 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .profile-btn { min-height: 42px; padding: 6px 10px; }
   .profile-btn .t { font-size: .92rem; }
   #nextShot .btn { min-height: 40px; }
-  .fav { min-height: 46px; }
   .controls { gap: 8px; grid-template-columns: 1fr; }
   .ctl { padding: 8px; gap: 5px; }
   .ctl-btn { min-height: 44px; font-size: .92rem; padding: 6px 10px; }
@@ -539,7 +560,19 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .ctl { padding: 6px; }
   .stop-btn { min-height: 44px; }
   #nextShot details { display: none; }
-  .fav { min-height: 40px; }
+  #view-brew { grid-template-rows: minmax(0, 1fr) 108px; gap: 8px; }
+  #view-brew > .controls-col { grid-column: 3; grid-row: 1 / 3; }
+  .favs-panel { grid-column: 1 / 3; padding-top: 7px; gap: 10px; }
+  .fav-tools { justify-content: start; }
+  .fav-tools h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .favs { grid-auto-columns: 206px; gap: 8px; }
+  .fav { min-height: 96px; padding: 10px; gap: 4px; }
+  .fav strong { font-size: .9rem; }
+  .fav-profile, .fav-recipe { font-size: .73rem; }
+  .fav-temp { display: none; }
+  #view-brew .live-col.has-after > .panel:first-child { flex: 0 0 46%; overflow: hidden; }
+  #view-brew .live-col.has-after .chart-box { min-height: 0; }
+  #view-brew .live-col.has-after #afterShot { flex: 1 1 0; min-height: 0; max-height: none; overflow-y: auto; }
   #afterShot .metrics { display: none; }
   .pick-src, .fav-hint { display: none; }
   #nextShot { gap: 8px; }
@@ -552,7 +585,6 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .panel { padding: 10px; }
   .field-row { min-height: 34px; padding-top: 3px; gap: 8px; }
   .stepper button { height: 32px; }
-  .fav { min-height: 36px; }
 }
 /* History is a master/detail workspace whenever the two panes sit side by side.
    Phones retain the ordinary, stacked page; neither desktop pane chains to it. */
@@ -595,10 +627,6 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <section id="view-brew" class="brew-grid" hidden>
         <div class="stack next-col">
           <div class="panel stack" id="nextShot"></div>
-          <div class="panel stack">
-            <div class="row between"><span class="label">Favourites</span><span class="muted small fav-hint">Tap to load · ⋯ to edit</span></div>
-            <div class="favs" id="favs"></div>
-          </div>
         </div>
         <div class="stack live-col">
           <div class="panel stack">
@@ -615,6 +643,10 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
         <div class="stack controls-col">
           <div class="controls" id="controls"></div>
         </div>
+        <section class="favs-panel" aria-label="Favourite recipes" aria-roledescription="carousel">
+          <div class="fav-tools"><h2>Favourites</h2><div class="fav-nav"><button id="favPrev" aria-label="Previous favourites" aria-controls="favs">‹</button><button id="favNext" aria-label="Next favourites" aria-controls="favs">›</button></div><button class="fav-edit" id="editFavs" aria-label="Edit favourites" aria-pressed="false">Edit</button></div>
+          <div class="favs" id="favs" role="group" aria-label="Saved recipes" tabindex="0"></div>
+        </section>
       </section>
 
       <!-- SHELF -->
@@ -2432,7 +2464,7 @@ function makeDemoApi() {
     flush: [{ label: "3 s", seconds: 3 }, { label: "5 s", seconds: 5 }, { label: "8 s", seconds: 8 }],
     selected: { steam: 1, water: 1, flush: 1 },
   };
-  let favourites = [null, null, null, null, null];
+  let favourites = [];
   let maintenance = { backflushEveryShots: 100, descaleEveryDays: 90, lastBackflush: iso(9), lastDescale: iso(76) };
   const listeners = [];
   const emit = (kind, data) => listeners.forEach((l) => l[kind] && l[kind](data));
@@ -2672,7 +2704,7 @@ function makeDemoApi() {
     },
     prefs: { get: async () => ({ ...prefs }), set: async (p) => { prefs = { ...prefs, ...p }; for (const b of all) { const r = recipeFor(b); b.recipe = r.recipe; b.recipeSource = r.source; } return prefs; } },
     resetRecipes: async () => {}, // prefs.set above already recomputes every coffee
-    favourites: { get: async () => favourites.slice(), set: async (slot, fav) => { favourites[slot] = fav; return favourites.slice(); } },
+    favourites: { get: async () => favourites.slice(), set: async (slot, fav) => { const empty = favourites.findIndex((x) => x == null); favourites[slot ?? (empty < 0 ? favourites.length : empty)] = fav; return favourites.slice(); } },
     presets: { get: async () => clone(presets), set: async (p) => { presets = clone(p); return presets; } },
     maintenance: {
       get: async () => {
@@ -3342,8 +3374,15 @@ function makeLiveApi(conn) {
 
     prefs: { get: () => kvGet("preferences", {}), set: async (p) => { const next = { ...(await kvGet("preferences", {})), ...p }; await kvSet("preferences", next); return next; } },
     favourites: {
-      get: async () => { const f = await kvGet("favourites", []); return Array.from({ length: 5 }, (_, i) => f[i] ?? null); },
-      set: async (slot, fav) => { const f = await api.favourites.get(); f[slot] = fav; await kvSet("favourites", f); return f; },
+      get: async () => { const f = await kvGet("favourites", []); return Array.isArray(f) ? f.map((x) => x ?? null) : []; },
+      set: async (slot, fav) => {
+        const f = await api.favourites.get();
+        // A null slot adds against a fresh read, so a stale phone doesn't overwrite
+        // a favourite another device just added. Keep legacy empty slots and indices.
+        const empty = f.findIndex((x) => x == null);
+        f[slot ?? (empty < 0 ? f.length : empty)] = fav;
+        await kvSet("favourites", f); return f;
+      },
     },
     presets: { get: () => kvGet("presets", E.DEFAULT_PRESETS), set: async (p) => { await kvSet("presets", p); return p; } },
     maintenance: {
@@ -3467,7 +3506,7 @@ const S = {
   shelf: [], shelfLoaded: false, shelfError: null, current: null, next: null, loaded: false, heldLoad: false,
   noBag: local.get("current", null) === NO_BAG, machineInfo: null, loadedRecipe: null,
   link: { connected: null, error: null }, // from Decaid's ws/v1/devices; null until it says
-  prefs: {}, favourites: [null, null, null, null, null], presets: null, maint: null,
+  prefs: {}, favourites: [], presets: null, maint: null,
   appSettings: null, // S.api.settings, once read
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
   catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
@@ -3691,6 +3730,7 @@ function coffeePicker() {
   $$("[data-choose-bag]").forEach((el) => el.onclick = () => { closeSheet(); selectBean(el.dataset.chooseBag); });
 }
 function renderNextShot() {
+  renderFavs();
   void refreshPlan();
   const el = $("#nextShot"), b = S.current, n = S.next;
   if (!b && !S.noBag && !S.shelfLoaded) { el.innerHTML = `<p class="muted">Loading your coffees…</p>`; return; }
@@ -3952,31 +3992,132 @@ async function refreshPlan() {
 }
 
 /* ================= favourites ================= */
+const FAV_UI = { editing: false, saving: false, loading: false, bound: false, selectedSlot: null };
 function favouriteRecipe() {
   const n = S.next;
   return { noBag: S.noBag, profileId: n.profileId ?? null, profileShape: n.profileShape ?? null, manual: n.manual ?? null, direct: !!n.direct, targetTimeS: n.targetTimeS ?? null };
 }
-function renderFavs() {
-  $("#favs").innerHTML = S.favourites.map((f, i) => f
-    ? `<div class="fav-wrap"><button class="fav" data-fav="${i}" title="${esc(f.name)}"><strong>${esc(f.name)}</strong><span class="muted num">${fmtC(f.doseG)}→${fmtC(f.yieldG)}</span></button></div>`
-    : `<div class="fav-wrap"><button class="fav empty" data-fav="${i}"><strong>+</strong><span>Save</span></button></div>`).join("") + `<button class="fav-edit" id="editFavs" aria-label="Edit favourites">⋯</button>`;
-  $("#editFavs").onclick = () => {
-    openSheet(`<h2>Edit favourites</h2><div class="stack">${S.favourites.map((f, i) => `<button class="btn" data-favedit="${i}" ${f ? "" : "disabled"}>${i + 1} · ${esc(f?.name || "Empty slot")}</button>`).join("")}</div>`);
-    $$("[data-favedit]").forEach((b) => b.onclick = () => editFav(Number(b.dataset.favedit)));
+function favouriteSelected(f) {
+  const n = S.next;
+  return !!n && (f.noBag !== true || S.noBag) && (!f.beanId || f.beanId === S.current?.id)
+    && (f.profileId && n.profileId ? f.profileId === n.profileId : f.profileTitle === n.profileTitle)
+    && (!f.profileShape || !n.profileShape || f.profileShape === n.profileShape)
+    && f.doseG === n.doseG && f.yieldG === n.yieldG && f.tempC === n.tempC
+    && E.sameGrind(f.grinderSetting || savedGrind(S.current?.id), n.grind);
+}
+function favouriteScroll(left, smooth = true) {
+  const list = $("#favs");
+  list.scrollTo({ left, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "instant" });
+}
+function favouriteStops() {
+  const list = $("#favs"), max = Math.max(0, list.scrollWidth - list.clientWidth);
+  return [...new Set([0, ...[...list.children].map((b) => Math.min(max, b.offsetLeft)), max])].sort((a, b) => a - b);
+}
+function moveFavourites(dir) {
+  const left = $("#favs").scrollLeft, stops = favouriteStops();
+  favouriteScroll(dir > 0 ? stops.find((x) => x > left + 2) ?? stops.at(-1) : stops.findLast((x) => x < left - 2) ?? 0);
+}
+function updateFavouriteNav() {
+  const list = $("#favs"), max = list.scrollWidth - list.clientWidth;
+  $("#favPrev").disabled = list.scrollLeft <= 1;
+  $("#favNext").disabled = list.scrollLeft >= max - 1;
+}
+function bindFavouriteCarousel() {
+  if (FAV_UI.bound) return;
+  FAV_UI.bound = true;
+  const list = $("#favs");
+  $("#favPrev").onclick = () => moveFavourites(-1);
+  $("#favNext").onclick = () => moveFavourites(1);
+  list.addEventListener("scroll", updateFavouriteNav, { passive: true });
+  new ResizeObserver(updateFavouriteNav).observe(list);
+  list.addEventListener("keydown", (e) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    e.preventDefault();
+    const buttons = [...list.children], i = Math.max(0, buttons.indexOf(document.activeElement));
+    const next = e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : clamp(i + (e.key === "ArrowRight" ? 1 : -1), 0, buttons.length - 1);
+    buttons[next]?.focus({ preventScroll: true }); favouriteScroll(buttons[next]?.offsetLeft ?? 0);
+  });
+  list.addEventListener("focusin", (e) => {
+    const b = e.target.closest("button");
+    if (b && (b.offsetLeft < list.scrollLeft || b.offsetLeft + b.offsetWidth > list.scrollLeft + list.clientWidth)) favouriteScroll(b.offsetLeft);
+  });
+  // Touch uses native pan and CSS snapping. Mouse dragging gets the same card
+  // navigation; cancel the resulting click so a swipe never loads a recipe.
+  let drag = null, ignoreClickUntil = 0;
+  list.addEventListener("pointerdown", (e) => {
+    if (e.button === 0) drag = { id: e.pointerId, mouse: e.pointerType === "mouse", x: e.clientX, y: e.clientY, left: list.scrollLeft, moved: false };
+  });
+  list.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - drag.y)) drag.moved = true;
+    if (drag.mouse && drag.moved) {
+      list.setPointerCapture(e.pointerId); list.style.scrollSnapType = "none";
+      list.scrollLeft = drag.left - dx; e.preventDefault();
+    }
+  });
+  const finish = (e) => {
+    if (!drag) return;
+    if (drag.moved) ignoreClickUntil = performance.now() + 400;
+    if (drag.mouse && drag.moved) {
+      const stops = favouriteStops(), dx = e.clientX - drag.x;
+      const start = stops.reduce((a, b) => Math.abs(a - drag.left) < Math.abs(b - drag.left) ? a : b);
+      const target = Math.abs(dx) > 35
+        ? (dx < 0 ? stops.find((x) => x > start + 2) ?? stops.at(-1) : stops.findLast((x) => x < start - 2) ?? 0)
+        : stops.reduce((a, b) => Math.abs(a - list.scrollLeft) < Math.abs(b - list.scrollLeft) ? a : b);
+      list.style.removeProperty("scroll-snap-type"); favouriteScroll(target);
+      if (list.hasPointerCapture(drag.id)) list.releasePointerCapture(drag.id);
+    }
+    drag = null;
   };
-  $$("[data-fav]").forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
-  $$("[data-favedit]").forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
+  list.addEventListener("pointerup", finish); list.addEventListener("pointercancel", finish);
+  list.addEventListener("click", (e) => {
+    if (performance.now() < ignoreClickUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+}
+function renderFavs(revealSlot) {
+  bindFavouriteCarousel();
+  const list = $("#favs"), left = list.scrollLeft, busy = FAV_UI.saving || FAV_UI.loading;
+  const chosen = FAV_UI.selectedSlot;
+  const selected = chosen != null && S.favourites[chosen] && favouriteSelected(S.favourites[chosen])
+    ? chosen : S.favourites.findIndex((f) => f && favouriteSelected(f));
+  patchHtml(list, S.favourites.map((f, i) => f ? `<button class="fav" id="fav-${i}" ${FAV_UI.editing ? `data-favedit="${i}"` : `data-fav="${i}" aria-pressed="${i === selected}"`} title="${esc(f.name)} · ${esc(f.profileTitle)}" aria-label="${FAV_UI.editing ? "Edit" : "Load"} favourite ${esc(f.name)}" ${busy ? "disabled" : ""}>
+    <strong>${esc(f.name)}</strong><span class="fav-profile">${esc(f.profileTitle)}</span>${FAV_UI.editing ? '<span class="fav-action">Rename, replace or clear</span>' : `<span class="num fav-recipe">${fmtC(f.doseG)} → ${f.yieldG > 0 ? `${fmtC(f.yieldG)} g` : "manual"}<span class="fav-temp"> · ${fmtC(f.tempC)}°</span></span>`}</button>` : "").join("")
+    + `<button class="fav empty" id="addFav" ${busy || !S.next ? "disabled" : ""}><span class="fav-plus" aria-hidden="true">+</span><strong>Save current recipe</strong><span class="fav-profile">${S.next ? esc(S.current?.info.name.value || S.next.profileTitle) : "Choose a recipe first"}</span></button>`);
+  favouriteScroll(left, false);
+  $("#editFavs").textContent = FAV_UI.editing ? "Done" : "Edit";
+  $("#editFavs").setAttribute("aria-pressed", String(FAV_UI.editing));
+  $("#editFavs").disabled = busy || (!FAV_UI.editing && !S.favourites.some(Boolean));
+  $("#editFavs").onclick = () => { FAV_UI.editing = !FAV_UI.editing; renderFavs(); };
+  $("#addFav").onclick = () => saveFavourite();
+  $$("[data-fav]", list).forEach((b) => (b.onclick = () => useFav(Number(b.dataset.fav))));
+  $$("[data-favedit]", list).forEach((b) => (b.onclick = () => editFav(Number(b.dataset.favedit))));
+  if (revealSlot != null) favouriteScroll($(`#fav-${revealSlot}`)?.offsetLeft ?? left);
+  requestAnimationFrame(updateFavouriteNav);
+}
+async function writeFavourite(slot, fav, action) {
+  if (FAV_UI.saving) return null;
+  FAV_UI.saving = true; renderFavs();
+  try {
+    const saved = await attempt(action, () => S.api.favourites.set(slot, fav));
+    if (saved) S.favourites = saved;
+    return saved;
+  } finally { FAV_UI.saving = false; renderFavs(); }
+}
+async function saveFavourite(slot = null) {
+  if (!S.next || FAV_UI.saving) return;
+  const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 40);
+  const fav = { ...favouriteRecipe(), name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
+  const saved = await writeFavourite(slot, fav, "save the favourite");
+  if (saved) { FAV_UI.selectedSlot = saved.indexOf(fav); renderFavs(FAV_UI.selectedSlot); toast(`Saved "${name}" to favourites`); }
 }
 async function useFav(i) {
   const f = S.favourites[i];
-  if (!f) {
-    if (!S.next) return toast("Pick a coffee first");
-    const name = (S.current?.info.name.value || S.next.profileTitle).slice(0, 18);
-    const fav = { ...favouriteRecipe(), name, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };
-    const saved = await attempt("save the favourite", () => S.api.favourites.set(i, fav));
-    if (saved) { S.favourites = saved; renderFavs(); toast(`Saved "${name}" to slot ${i + 1}`); }
-    return;
-  }
+  if (!f) return saveFavourite(i);
+  if (FAV_UI.loading || FAV_UI.saving) return;
+  FAV_UI.selectedSlot = i;
+  FAV_UI.loading = true; renderFavs();
+  try { await attempt("load the favourite", async () => {
   if (f.noBag === true) await selectBean(NO_BAG, { quiet: true });
   if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
   if (f.beanId && !S.shelf.some((b) => b.id === f.beanId)) return toast("That favourite's coffee is no longer on the shelf");
@@ -3986,23 +4127,25 @@ async function useFav(i) {
   const loaded = await loadOntoMachine(true);
   if (loaded === "held") toast(`"${f.name}" loads when this shot ends`);
   else if (loaded) toast(`Loaded favourite "${f.name}"`);
+  }); } finally { FAV_UI.loading = false; renderFavs(); }
 }
 function editFav(i) {
   const f = S.favourites[i];
-  openSheet(`<h2>Favourite ${i + 1}</h2>
+  if (!f) return;
+  openSheet(`<h2>Edit favourite</h2>
     <div class="field"><label class="label" for="favName">Name</label><input type="text" id="favName" value="${esc(f.name)}" maxlength="40"></div>
     <p class="muted small">${esc(f.profileTitle)} · ${fmt1(f.doseG)} g → ${fmt1(f.yieldG)} g · ${fmt1(f.tempC)} °C${f.grinderSetting ? ` · grind ${esc(f.grinderSetting)}` : ""}</p>
     <div class="row"><button class="btn primary" id="favSave">Save name</button><button class="btn" id="favUpdate">Replace with current shot</button><button class="btn ghost" id="favClear">Clear slot</button></div>`);
   // The sheet stays open when the write fails, so the change can be tried again.
   const writeFav = async (what, fav) => {
-    const saved = await attempt(what, () => S.api.favourites.set(i, fav));
+    const saved = await writeFavourite(i, fav, what);
     if (saved) { S.favourites = saved; closeSheet(); renderFavs(); }
     return !!saved;
   };
   $("#favSave").onclick = () => writeFav("save the name", { ...f, name: $("#favName").value.trim() || f.name });
   $("#favUpdate").onclick = async () => {
     if (!S.next) return;
-    if (await writeFav("update the favourite", { ...f, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
+    if (await writeFav("update the favourite", { ...f, ...favouriteRecipe(), profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
   };
   $("#favClear").onclick = () => writeFav("clear the slot", null);
 }

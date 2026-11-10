@@ -284,11 +284,12 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         await page.click("#doneBackflush");
         check(await sayCant("") && !/Backflush recorded/.test(await toastNow()), "a failed Done for the backflush says so, not \"Backflush recorded\"", await toastNow());
         // A favourite goes to the store too.
-        await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForSelector("[data-fav]", { timeout: 10000 });
+        await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForSelector("#addFav", { timeout: 10000 });
         await page.waitForFunction(() => S.next, null, { timeout: 10000 });
         await resetToast();
-        await page.click('[data-fav="4"]');
-        check(await sayCant("") && !/Saved "/.test(await toastNow()) && await S(() => S.favourites[4] === null), "a failed favourite save says so and leaves the slot empty", await toastNow());
+        const favouritesBefore = await S(() => JSON.stringify(S.favourites));
+        await page.click('#addFav');
+        check(await sayCant("") && !/Saved "/.test(await toastNow()) && await S(() => JSON.stringify(S.favourites)) === favouritesBefore, "a failed favourite save says so and keeps the stored favourites", await toastNow());
         await undrop();
       }
       // Freeze / Thaw on the shelf.

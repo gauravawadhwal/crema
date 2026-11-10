@@ -13,7 +13,8 @@ supervised tablet session is not planned and agents should not ask for tablet ac
 unless the user offers it. A code review the same day found problems this plan had not
 listed (see "Code review and findings"). The fixes for F1 to F5 and the control logic
 under unit tests (phase 4 re-scoped) were merged into `main` on 10 November 2026 as
-PRs #42 to #46 and #48, with the review itself (#41) and the plan trim (#47). Nothing
+PRs #42 to #46 and #48, with the review itself (#41), the plan trim (#47), and the
+startup-edit race fix (#50). This carousel implementation includes PR #50. Nothing
 has been released or tagged since v0.4.1, and none of it has run on the tablet: it is
 checked against the simulator and CI only. Agents open a PR per piece of work and do
 not merge; tagging a release is the user's call. Software checks use
@@ -26,15 +27,18 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
-   in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
-   Implement the bottom favourites carousel below before the next release;
-   the revised render is the current design proposal.
-2. **Startup edit race, fix ready for review:**
+1. **UI feedback, 10 November:** independent shot-history scrolling is merged
+   in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), alongside the accepted
+   plan in [PR #51](https://github.com/gauravawadhwal/crema/pull/51). The bottom
+   favourites carousel is [PR #53](https://github.com/gauravawadhwal/crema/pull/53),
+   which now includes current `main`, the history integration and the Streamline
+   source audit. Both UI changes remain unreleased.
+2. **Startup edit race, merged and included:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
    recipe edits". The initial workflow read can overwrite edits made while the read
-   is in flight; the shelf refresh is not the cause. The fix preserves those edits.
+   is in flight; the shelf refresh is not the cause. PR #50 is merged into `main`
+   and is an ancestor of this implementation branch (`c578625` base).
    **Separate CI issue observed while checking this UI work:** the live suite's
    shelf-request timeout scenario stayed at "Loading your coffees" rather than
    reporting the 15-second timeout. It failed on both the documentation-only
@@ -42,15 +46,21 @@ Decaid.
    and the [PR #52 run](https://github.com/gauravawadhwal/crema/actions/runs/42777928669).
    Stop remained available. This predates the history change; whether it is a
    production timeout defect or the check's clock/interception setup is not yet
-   established. Investigate separately from the startup-edit race before release.
+   established. The complete live suite, including both assertions, passes locally
+   on the PR #50 base used here. Preserve the failed runs as evidence; investigate
+   further if the timeout assertion recurs on the current base.
 3. **Package the completed fixes for installation when ready.** The latest release,
    v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
    installable GitHub release. A release runs CI and attaches a new skin ZIP for
    Decaid to install. It is distribution work, not a separate feature or a reason
    to pause implementation. Tagging remains the user's call.
-4. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
-   is ready with desktop Decaid. Build and check it against desktop Decaid; the user
-   confirms on the tablet in normal use.
+4. **Streamline Settings entry and feature access** (phase 3). The source audit is
+   complete in [parity.md](parity.md): all 42 Streamline settings sub-pages and the
+   daily features, with owners and proposed routes. The integration remains on hold
+   until the user is ready with desktop Decaid. Resolve the published plugin's
+   version gap and machine-settings restore conflict before adding its link; see
+   phase 3's audit findings and proposed order. The user confirms on the tablet in
+   normal use; no supervised tablet session is requested.
 5. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
    shared JSDoc type for the API object, which turns the live/demo contract into a type
    check. Splitting the file further is optional after PR #44.
@@ -64,11 +74,11 @@ Housekeeping (F6) is the user's call.
 
 ## UI feedback — 10 November 2026
 
-### Favourites: larger, readable targets (proposal)
+### Favourites: bottom carousel (implemented, not released)
 
-The user still finds the favourites too small to press comfortably. The five slots
-plus the 44 px edit button share a 300 px Brew column, leaving some slots less than
-40 px wide. Increasing height alone does not fix the cramped names or touch targets.
+The previous five slots plus the edit button shared a 300 px Brew column, leaving
+some slots less than 40 px wide. The implemented carousel uses the width below a
+shorter graph, with large cards that stay the same size as more recipes are added.
 
 Reference patterns reviewed on 10 November:
 
@@ -90,31 +100,25 @@ Reference patterns reviewed on 10 November:
   a scrollable card grid. Use these interaction/review ideas within Crema's existing
   design; do not infer a request to copy its visual theme or implementation.
 
-**Latest render direction, 10 November:** shorten the graph and place favourites
-in a bottom **carousel**. The user first rejected a separate picker, then found the
-vertical list awkward, and now wants swipeable cards rather than a fixed row of
-four saved recipes. Keep direct one-tap loading through the existing guarded path.
-Show a clear Favourites heading, labelled Edit control and previous/next buttons.
-Use a partial next card as the cue that more recipes are available. Swipe advances
-and snaps to a card; this is intentional carousel navigation, not a visible
-scrollbar or an automatically rotating strip. Do not loop or auto-advance.
+**Implemented:** a bottom **carousel** with direct one-tap loading through the
+existing guarded path. Favourites has a labelled Edit control and previous/next
+buttons. A partial next card indicates more recipes. Swipe/drag snaps to a card;
+there is no visible scrollbar, automatic advance or looparound. Touch uses native
+pan and snapping; mouse dragging cancels its click so it cannot load a recipe.
 
 Each tile shows the name prominently, followed by profile and dose/yield/temperature;
-allow two-line names without growing the bar. The latest preview uses 236 px-wide
+allow two-line names without growing the bar. The implementation uses 236 px-wide
 cards at 1340×800, with a shorter graph and a 142 px bottom region; the compact
 version uses narrower cards and protects the full-height control column so Stop
-remains visible. Details of the layout remain subject to render feedback. Keep
-card sizes comfortable as more favourites are added, rather than shrinking them.
+remains visible. The phone retains normal page scrolling with its own carousel.
 
-**Remove the fixed five-slot limit in the implementation.** `makeLiveApi` currently
-reads only five entries (`Array.from({ length: 5 })`), and the demo and UI assume five
-slots. Read all existing entries and preserve their order, values and bagless
-semantics. Reuse empty legacy slots when saving, or append a new entry; provide
-Save current recipe at the end of the carousel. Clearing a favourite must not
-discard other entries. Keep the existing KV record format if possible; verify
-upgrade compatibility and cross-device reads rather than truncating newer data
-when an older five-slot assumption is encountered. Failed loads/saves remain
-visible without silently changing the selected recipe.
+**The fixed five-slot limit is removed.** Live/demo/UI reads preserve all entries,
+their order, values and bagless semantics. Save current recipe re-reads the KV
+array and fills an empty legacy slot or appends. Rename/replace/clear change only
+the chosen entry. Replace updates installed-profile identity and bagless/manual
+mode as well as the displayed recipe values. The KV key and format are unchanged;
+reload older open clients after upgrading to retire their five-entry writer.
+Failed writes preserve the saved data and leave the editor available for retry.
 
 Acceptance: all targets meet the size floor at every supported viewport; names
 and saved recipe details are legible; load and edit are distinct; no outer-page
@@ -123,7 +127,13 @@ including at 1005×552. Test swipe versus tap (swiping never loads), arrow/keybo
 navigation, snapping and end states, reduced motion, resize, long names, adding
 beyond five favourites, legacy records, saved position across redraws, and
 source/built/live/demo behavior. Keep mid-shot loads held through the existing path.
-This is a rendered proposal, not implemented production behavior.
+Verification: all 294 unit/server tests, typecheck, source/built demo, Stop/start
+checks, complete live suite, saved-review checks, all five tablet-fit sizes and skin
+packaging pass locally. `favourites-checks.cjs` runs inside `e2e-brewing.cjs` against
+live mode and the exact built demo; it covers records beyond five, legacy holes,
+stale-device writes, failure handling, mouse/touch/keyboard interaction, held loads,
+replace/clear and the empty state. The full brewing suite also passes. Screenshots
+and demo assets are refreshed. Physical-tablet acceptance remains unverified.
 
 ### Shot history: independent panes (confirmed UI bug)
 
@@ -136,7 +146,7 @@ This is a rendered proposal, not implemented production behavior.
   and long saved reviews, empty/error states, keyboard access, tablet sizes and
   resizing to/from the phone layout. Record source and built-demo verification.
 
-Implemented in PR #52, pending review/merge and not released. Source and built-demo
+Merged in PR #52 on 10 November 2026, not released. Source and built-demo
 regressions pass at 1340×800, 1005×552, 1600×1000 and 800×1000, with phone resize,
 keyboard, paging, empty/error and scroll-boundary checks. Source/built demo
 click-through, all five Brew tablet-fit sizes, the saved-review simulator checks,
@@ -363,7 +373,7 @@ separate supervised step; implement and test locally first.
 | 0 | Establish compatibility and reproducible tests | None | Started: desktop Decaid set up, findings below; Playwright declared and the UI checks run in CI |
 | 1 | Machine-control reliability | Minimal test setup from 0 | Done in software (PRs #12, #13, #14, #16, #17, #18, and the overlapping-loads and busy-states change): Stop races, no profile writes mid-shot, link state, workflow settings, reconciliation, time limits, sockets. Software work done; all of it unverified on the tablet |
 | 2 | Profiles, ratings, bags and history | 0; coordinate with 1 | Done in software: ratings, shot history (#22), installed profiles (#23), bags per batch. Unverified on the tablet |
-| 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Started: dashboard exit in Settings (unverified on the tablet) |
+| 3 | Reuse Streamline Settings and verify feature access | 0, 1; profile work from 2 | Source ownership audit complete (10 November, `docs/parity.md`); dashboard exit implemented. Plugin integration, restore-conflict reproduction and profile-management round trip pending; no new runtime validation in the audit |
 | 4 | Frontend boundaries and stored-data migrations | Incremental alongside 1–3 | In progress. Re-scoped on 10 November 2026: control, load-hold, reconcile, start-gate and bag-weight decisions moved to `server/control/` with vitest (PR #44, merged 10 November 2026; simulator and CI, not on the tablet), with the shelf, record-merge and rest-table logic added by #45, #46 and #48. File splitting and `tsc --checkJs` later (see "Next") |
 | 5 | Image-fetch security | Independent after 0 | Done: `server/safe-fetch.ts` (PR #10) |
 | 6 | Build, release and installation maintenance | Implemented fixes from 1–5 | Mostly done: CI (`verify`, `ui`, `docker`) gates releases and Pages; tablet fit fails on overflow; skin ZIP checked; Docker image smoke-tested. The complete saved-shot regression is covered by `e2e-brewing.cjs`. Left: backup/restore docs; repository in the manifest |
@@ -432,9 +442,10 @@ building on them.
 6. **Profile editing and other specialist features (phase 3, ownership audit).** The
    docs now route profile editing, Visualizer import and hiding built-in profiles to
    the Streamline skin (switch skins, then switch back). Firmware, calibration,
-   cleaning cycles and eco steam go to Streamline Settings, and scale pairing to
-   Decaid. Treat these as the working assumption for the `docs/parity.md` rewrite,
-   not as verified routes.
+   cleaning cycles go to specialist Settings, and scale pairing to Decaid. The
+   10 November source audit in `docs/parity.md` supersedes the earlier assumption
+   that opening Settings also gives Crema eco steam: that needs Streamline's runtime.
+   All new handoff routes remain runtime-unverified.
 7. **Playwright is installed globally, not declared (phase 0, R11).** The UI scripts
    only work where `playwright` is installed globally. A fresh checkout can't run them.
    *Fixed: Playwright is a dev dependency and CI's `ui` job runs the UI checks.*
@@ -986,6 +997,76 @@ without silently losing records. See phase 4 for shared schema work.
 
 ## Phase 3 — reuse settings and preserve feature access (R12)
 
+### Source audit and proposed order — 10 November 2026
+
+[parity.md](parity.md) now covers all 11 sections / 42 static sub-pages in
+Streamline v0.2.24 and the features outside Settings. Crema was inspected at
+`5d07139` on the carousel branch, so local capabilities include unreleased work.
+This completes the source inventory, not plugin integration or runtime acceptance.
+No app/tablet was opened, settings written or procedures started for this audit.
+
+The main findings change the earlier “add a Settings link” assumption:
+
+- The latest published standalone Settings plugin is v0.1.4. Its tagged source
+  records Streamline v0.2.9; plugin `main` records v0.2.12, while the skin is at
+  v0.2.24. Grinder and sounds pages are absent from the released plugin. Its
+  committed generated manifest also differs from the release tag; verify the
+  actual installed/release artifact rather than inferring it from the branch.
+- Released plugin code can silently restore previously saved DE1/advanced values
+  when its legacy settings UI loads (`checkMachineSettingsDrift`). This could undo
+  a later fan or USB edit in Crema. This is a source finding; reproduce on disposable
+  simulator/desktop data before choosing the integration. The lightweight landing
+  page alone does not exercise this path. Prefer an upstream resolution or a
+  supported configuration; do not add a private settings fork by inference.
+- Skin preferences do not supply Crema runtimes. Language, °F, shortcuts, zoom,
+  screensaver options, wake-profile loading, Home Assistant and eco steam do not
+  become Crema features when their plugin toggle is saved. The settings plugin
+  also contains no profile editor.
+- Preserve the distinctions already in the working setup: recommendation scale
+  preference versus `blockOnNoScale`, USB versus charging policy, reminder versus
+  maintenance cycle, and Crema's capped Manual steam versus unlimited duration.
+  Visualizer's present “Available” indicator only establishes a matching plugin ID.
+
+Proposed implementation order, for discussion; this audit does not authorize
+building every feature below:
+
+1. **Validate the specialist-settings dependency, then add access.** Select a
+   released artifact and check its actual version/routes in desktop Decaid. Seed
+   a prior saved fan/USB record, change the value through the Crema path, then open
+   a legacy plugin category and check for unsolicited writes. Resolve that conflict
+   before making the plugin a routine Crema route. Keep current daily controls
+   initially, read effective values after Save or Cancel, and do not hydrate
+   Crema from Streamline preferences. Check installed-but-disabled/missing/update
+   states, cross-origin full-page return, no-server/AI-off and the phone proxy route.
+2. **Make profile management reachable.** Verify a switch-to-Streamline-and-return
+   path for create/edit/JSON import/Visualizer import/hide/restore on disposable
+   profiles. Record account prerequisites and refresh the library on return;
+   retain selected bag and unsaved recipe choices without loading a profile as a
+   side effect. No new profile editor is proposed.
+3. **Make plugin access/status honest.** Prefer Decaid's generic plugin settings
+   and pages over rebuilding each plugin's UI. Distinguish installed, enabled/loaded,
+   configured and verified upload success where Decaid exposes them; never label
+   installation alone “ready to upload.” Keep Visualizer and Decent Shot Uploader
+   separate. A small Crema plugin/help entry is a candidate, not yet selected work.
+4. **Discuss only the useful daily omissions.** Skip-step is a concrete control
+   Streamline exposes and Crema lacks. If requested, use Decaid's `skipStep`, show it
+   only during an applicable espresso step, retain Stop, reject stale/double actions
+   and cover disconnect/start/stop races in live/demo/mock checks. Shortcuts and
+   shot-summary copy are smaller optional conveniences. Auto/eco-steam, °F,
+   richer screensavers and grinder control need their own user priority and runtime
+   design. Bengle-only controls, chat, translations and Home Assistant remain deferred.
+
+Acceptance must exercise pre-existing settings and return-after-Cancel, not only a
+fresh plugin install. Check that opening/returning does not restore stale machine
+values, apply a profile or wipe Crema edits; selected steam/water/flush presets
+must still have explicit ownership. Keep runtime and hardware rows pending until
+their checks are actually recorded. Desktop work remains subject to the hold in
+“Next”; the source audit did not require desktop/tablet access.
+
+Documentation verification: `git diff --check`, local Markdown link/reference
+checks and the 42-row settings coverage check passed. No application tests were
+run for these documentation-only changes.
+
 ### Streamline Settings integration
 
 The proposed dependency is
@@ -1024,14 +1105,19 @@ be isolated rather than worked around with a new private settings fork.
 
 ### Feature ownership and profile-editor decision
 
-- [ ] Revise `docs/parity.md` into an evidence-backed matrix: feature, actual owner,
-  route from Crema, minimum capability/version, supported device and verification.
-  Separate “implemented locally”, “accessible elsewhere”, “unverified” and “missing”.
-- [ ] Cover every existing parity row, including profile editing/import/hide/restore,
+- [x] Revise `docs/parity.md` into a source-backed ownership matrix with baseline
+  versions, actual Crema exposure, proposed handoff routes and explicit verification
+  limits. *Done 10 November 2026; source audit only, no new runtime checks.*
+- [x] Cover every existing parity row, including profile editing/import/hide/restore,
   Profile Generator, grinder entities, scale reconnect/required/power behaviour,
   Visualizer, shot deletion, cleaning/descaling, calibration, firmware, language,
   units, steam modes, help and keyboard controls. Distinguish reminders from an
   actual machine maintenance workflow.
+  *Done in the source matrix, including all 42 static Streamline settings sub-pages.*
+- [ ] Verify the proposed routes against the selected artifact/Decaid version,
+  record supported tablet/browser surfaces and establish minimum capabilities
+  where needed. “Exposed upstream” is not “accessible from Crema”; the source
+  audit's versions are not minimum-version guarantees.
 - [ ] Investigate a maintained profile-editor entry point independently. A settings
   plugin is not evidence of an editor. If no supported reusable route exists,
   document a tested switch-to-Streamline-and-return flow as the initial solution.

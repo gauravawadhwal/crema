@@ -93,7 +93,7 @@ function makeDemoApi() {
     flush: [{ label: "3 s", seconds: 3 }, { label: "5 s", seconds: 5 }, { label: "8 s", seconds: 8 }],
     selected: { steam: 1, water: 1, flush: 1 },
   };
-  let favourites = [null, null, null, null, null];
+  let favourites = [];
   let maintenance = { backflushEveryShots: 100, descaleEveryDays: 90, lastBackflush: iso(9), lastDescale: iso(76) };
   const listeners = [];
   const emit = (kind, data) => listeners.forEach((l) => l[kind] && l[kind](data));
@@ -333,7 +333,7 @@ function makeDemoApi() {
     },
     prefs: { get: async () => ({ ...prefs }), set: async (p) => { prefs = { ...prefs, ...p }; for (const b of all) { const r = recipeFor(b); b.recipe = r.recipe; b.recipeSource = r.source; } return prefs; } },
     resetRecipes: async () => {}, // prefs.set above already recomputes every coffee
-    favourites: { get: async () => favourites.slice(), set: async (slot, fav) => { favourites[slot] = fav; return favourites.slice(); } },
+    favourites: { get: async () => favourites.slice(), set: async (slot, fav) => { const empty = favourites.findIndex((x) => x == null); favourites[slot ?? (empty < 0 ? favourites.length : empty)] = fav; return favourites.slice(); } },
     presets: { get: async () => clone(presets), set: async (p) => { presets = clone(p); return presets; } },
     maintenance: {
       get: async () => {
