@@ -26,6 +26,7 @@ function patchHtml(el, html) {
   const t = document.createElement("template");
   t.innerHTML = html;
   patchChildren(el, t.content);
+  reapplyPending();
 }
 function patchChildren(el, from) {
   const want = [...from.childNodes];
@@ -55,22 +56,82 @@ const fmt1 = (n) => (n == null || Number.isNaN(n) ? "–" : Number(n).toFixed(1)
 const fmtC = (n) => (n == null || Number.isNaN(n) ? "–" : Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(1));
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
-function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg; t.hidden = false;
-  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2800);
+// Up to three toasts at once, newest at the bottom, each timing out on its own. A message
+// already showing is refreshed, not repeated. `opts.action` ({ label, run }) adds a button
+// (Undo) and keeps the toast longer; `opts.duration` overrides the time in ms.
+const TOAST_MAX = 3;
+function toast(msg, opts = {}) {
+  const box = $("#toast");
+  if (!box) return;
+  const text = String(msg ?? "");
+  const ms = opts.duration ?? (opts.action ? 6000 : 2800);
+  let item = [...box.children].find((c) => c._msg === text);
+  if (item) item.remove();
+  else item = document.createElement("div");
+  clearTimeout(item._timer);
+  item._msg = text;
+  item.className = "toast-item";
+  item.textContent = "";
+  const span = document.createElement("span"); span.textContent = text; item.append(span);
+  if (opts.action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-act"; b.textContent = opts.action.label;
+    b.onclick = () => { clearTimeout(item._timer); item.remove(); syncToasts(); Promise.resolve().then(opts.action.run).catch((e) => toast(`Couldn't ${opts.action.label.toLowerCase()}: ${failText(e)}`)); };
+    item.append(b);
+  }
+  box.append(item);
+  while (box.children.length > TOAST_MAX) { clearTimeout(box.firstChild._timer); box.firstChild.remove(); }
+  box.hidden = false;
+  item._timer = setTimeout(() => { item.remove(); syncToasts(); }, ms);
 }
+const syncToasts = () => { const box = $("#toast"); if (box) box.hidden = !box.children.length; };
 
-// A failed request in plain words. The browser's own text for an unreachable address is not.
-const failText = (e) => {
+// A failed request in plain words. The browser's own text for an unreachable address is not,
+// and neither are status codes, paths, exception names, JSON or provider ids (E.plainError).
+// `fallback` is the sentence for the action when the message isn't fit to show.
+const failText = (e, fallback = "Decaid couldn't do that. Try again.") => {
   const m = String(e?.message ?? e ?? "").trim();
-  return !m || /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(m) ? "Decaid didn't answer" : m;
+  return !m || /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(m) ? "Decaid didn't answer" : E.plainError(m, fallback);
 };
 // Runs a write that has a button behind it. On failure it says so, runs `undo` to put the
 // screen back, and returns `undefined`; a success returns the write's own value (or true).
 async function attempt(what, write, undo) {
   try { return (await write()) ?? true; }
   catch (e) { try { undo?.(); } catch {} toast(`Couldn't ${what}: ${failText(e)}`); return undefined; }
+}
+// Wraps a button's click handler for a write that hits the network. While the handler's
+// promise is unsettled further taps do nothing; after 300 ms the button shows it is working
+// (.pending, aria-busy). The state is kept by selector, so a panel that redraws the button
+// (patchHtml) gets it back, and it always clears when the promise settles or after 20 s.
+const PENDING = new Map();
+let pendingSeq = 0;
+function pendingSelector(btn) {
+  if (btn.id) return `#${CSS.escape(btn.id)}`;
+  const a = [...btn.attributes].find((x) => x.name.startsWith("data-") && x.name !== "data-pend");
+  if (a) return `${btn.localName}[${a.name}="${a.value.replace(/["\\]/g, "\\$&")}"]`;
+  if (!btn.dataset.pend) btn.dataset.pend = String(++pendingSeq);
+  return `[data-pend="${btn.dataset.pend}"]`;
+}
+function markPending(sel, on) {
+  document.querySelectorAll(sel).forEach((b) => { b.classList.toggle("pending", on); if (on) b.setAttribute("aria-busy", "true"); else b.removeAttribute("aria-busy"); });
+}
+function reapplyPending() { for (const [sel, slot] of PENDING) if (slot.shown) markPending(sel, true); }
+function pendingTap(fn) {
+  return function (ev) {
+    const btn = ev?.currentTarget;
+    if (!btn || btn.nodeType !== 1) return fn.apply(this, arguments);
+    const sel = pendingSelector(btn);
+    if (PENDING.has(sel)) return undefined;
+    const slot = { shown: false };
+    const done = () => { clearTimeout(slot.show); clearTimeout(slot.cap); if (PENDING.get(sel) === slot) PENDING.delete(sel); markPending(sel, false); };
+    slot.show = setTimeout(() => { slot.shown = true; markPending(sel, true); }, 300);
+    slot.cap = setTimeout(done, 20000);
+    PENDING.set(sel, slot);
+    let r;
+    try { r = fn.apply(this, arguments); } catch (e) { done(); throw e; }
+    Promise.resolve(r).then(done, done);
+    return r;
+  };
 }
 // Anything that still fails without anyone catching it (a button nobody wrote handling for)
 // shows up instead of doing nothing.
@@ -453,7 +514,12 @@ function makeLiveApi(conn) {
         const others = (await j(D(`/beans/${id}/batches?includeArchived=false`)).catch(() => [])).filter((x) => x.id !== batch?.id && !x.archived);
         if (!others.length) { await put(D(`/beans/${id}`), { archived: true }); await patchRecord(id, { finished: true }); }
       }
-      if (patch.finished === false) { await put(D(`/beans/${id}`), { archived: false }); await patchRecord(id, { finished: false }); }
+      if (patch.finished === false) {
+        // Undoing Finished: the bag's batch was archived (and, for the last bag, the coffee with it).
+        await put(D(`/beans/${id}`), { archived: false });
+        if (batchId) await put(D(`/bean-batches/${batchId}`), { archived: false });
+        await patchRecord(id, { finished: false });
+      }
     },
     pinBest: (id, shotId) => patchRecord(id, { bestShotId: shotId }),
 
@@ -927,6 +993,17 @@ function renderStatus() {
 }
 // AI is switched on but the Crema server can't be reached: the rules are standing in.
 const aiDown = () => !!(S.api && !S.api.demo && S.api.ai.enabled && (S.api.info.serverError || (S.api.ai.available && !S.api.ai.healthy)));
+const LINK_BANNER_DELAY = 1500;
+let linkLostAt = null, linkBannerTimer = null;
+function linkLossLasted(down) {
+  if (!down) { linkLostAt = null; clearTimeout(linkBannerTimer); linkBannerTimer = null; return false; }
+  if (linkLostAt == null) linkLostAt = Date.now();
+  const left = LINK_BANNER_DELAY - (Date.now() - linkLostAt);
+  if (left <= 0) return true;
+  clearTimeout(linkBannerTimer);
+  linkBannerTimer = setTimeout(renderAlerts, left + 20);
+  return false;
+}
 function renderAlerts() {
   const st = S.snap?.state?.state;
   const a = [];
@@ -934,7 +1011,11 @@ function renderAlerts() {
   if (st === "needsWater") a.push(`<div class="banner bad"><span><b>Refill the water tank.</b> The machine stops until it has water.</span>${S.api.demo ? '<button class="btn small" id="refillBtn">Refill (demo)</button>' : ""}</div>`);
   const err = S.link.error;
   const exit = S.api.host?.canExit ? '<button class="btn small" data-exit-dash>Open Decaid</button>' : "";
-  if (unlinked()) {
+  // The banner for a lost link appears only once the loss has lasted 1.5 s; a blip that
+  // recovers sooner shows nothing. Everything else about the loss is immediate.
+  const showLinkBanner = linkLossLasted(unlinked() || (!S.snap && !S.api.demo));
+  if (!showLinkBanner) { /* not down, or not down for long enough yet */ }
+  else if (unlinked()) {
     a.push(`<div class="banner bad"><span><b>The machine isn't connected.</b> Decaid is running but can't reach the DE1. Check it's switched on, or reconnect it in Decaid.</span>${exit}</div>`);
   } else if (!S.snap && !S.api.demo) a.push(`<div class="banner bad"><span><b>Can't reach the machine.</b> Check that Decaid is running on the tablet and on the same network.</span></div>`);
   if (err?.kind === "profileUploadFailed") a.push(`<div class="banner warn"><span><b>The recipe hasn't reached the machine yet.</b> Decaid is trying again. Wait before pulling a shot.</span></div>`);
@@ -944,7 +1025,7 @@ function renderAlerts() {
   const r = $("#refillBtn"); if (r) r.onclick = () => S.api.machine.refill();
 }
 async function tare() {
-  try { await S.api.machine.tare(); toast("Scale tared"); } catch (e) { toast(`Couldn't tare: ${e.message}`); }
+  try { await S.api.machine.tare(); toast("Scale tared"); } catch (e) { toast(`Couldn't tare: ${failText(e)}`); }
 }
 
 /* ================= next shot (brew home, left) ================= */
@@ -1010,7 +1091,7 @@ function renderNextShot() {
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
   $$("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
   $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
-  $("#loadBtn").onclick = () => loadOntoMachine();
+  $("#loadBtn").onclick = pendingTap(() => loadOntoMachine());
   $("#resetRecipe").onclick = () => n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot());
   const stopMode = $("#stopMode");
   if (stopMode) stopMode.onclick = () => {
@@ -1082,7 +1163,7 @@ async function loadNow(silent, queued) {
     renderNextShot();
     if (!silent) toast(`Loaded ${n.profileTitle}: ${n.doseG} g → ${n.yieldG} g at ${n.tempC} °C`);
     return S.loaded;
-  } catch (e) { toast(`Couldn't load the recipe: ${e.message}`); return false; }
+  } catch (e) { toast(`Couldn't load the recipe: ${failText(e)}`); return false; }
 }
 /* ================= the machine's recipe vs the screen ================= */
 // Decaid publishes no workflow stream and no revision, so a change made elsewhere
@@ -1168,7 +1249,7 @@ async function selectBean(key, opts = {}) {
       const row = fresh();
       if (row?.recipe) sameCoffee(b.id, (x) => { x.recipe = row.recipe; x.recipeSource = row.recipeSource; });
       else if (row) { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); }
-    } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    } catch (e) { toast(`Couldn't get a recipe: ${failText(e)}`); }
     finally { if (S.recommending === b.id) S.recommending = null; }
     // Profiles may have been drawn while waiting (Add sends you there first).
     if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
@@ -1187,13 +1268,21 @@ async function loadGhost() {
   S.ghost = (S.shots.find((s) => s.id === b.bestShotId) || (await S.api.shot(b.bestShotId).catch(() => null)))?.points || null;
 }
 // A coffee's reference shot (shared by its bags) is optional: `shotId` null removes it.
-async function setReference(bean, shotId, points = null) {
+async function setReference(bean, shotId, points = null, opts = {}) {
   if (!bean) return;
-  try { await S.api.pinBest(bean.id, shotId); } catch (e) { toast(`Couldn't save the reference: ${e.message}`); return false; }
+  const previous = bean.bestShotId ?? null;
+  try { await S.api.pinBest(bean.id, shotId); } catch (e) { toast(`Couldn't save the reference: ${failText(e)}`); return false; }
   sameCoffee(bean.id, (x) => (x.bestShotId = shotId));
   if (S.current?.id === bean.id) { if (points && shotId) S.ghost = points; else await loadGhost(); }
   renderLive();
-  toast(shotId ? "Set as the reference shot for this coffee" : "Reference shot removed");
+  if (shotId) toast("Set as the reference shot for this coffee");
+  else if (opts.quiet) toast("Reference shot back");
+  else toast("Reference shot removed", previous ? { action: { label: "Undo", run: async () => {
+    // Put it back through the same write, unless another reference has been set since.
+    const now = S.shelf.find((x) => x.id === bean.id) || bean;
+    if (now.bestShotId) return toast("Another reference shot is set now");
+    await setReference(now, previous, null, { quiet: true });
+  } } } : {});
   return true;
 }
 
@@ -1384,12 +1473,22 @@ function editFav(i) {
     if (saved) { S.favourites = saved; closeSheet(); renderFavs(); }
     return !!saved;
   };
+  // Undo puts the favourite back in its slot through the same write (a fresh read, then that slot),
+  // unless the slot has been filled since.
+  const restoreFav = async () => {
+    const now = await S.api.favourites.get();
+    if (now[i]) return toast("That slot has a favourite in it now");
+    const saved = await writeFavourite(i, f, "bring the favourite back");
+    if (saved) { S.favourites = saved; renderFavs(); }
+  };
   $("#favSave").onclick = () => writeFav("save the name", { ...f, name: $("#favName").value.trim() || f.name });
   $("#favUpdate").onclick = async () => {
     if (!S.next) return;
     if (await writeFav("update the favourite", { ...f, ...favouriteRecipe(), profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
   };
-  $("#favClear").onclick = () => writeFav("clear the slot", null);
+  $("#favClear").onclick = pendingTap(async () => {
+    if (await writeFav("clear the slot", null)) toast(`Cleared "${f.name}"`, { action: { label: "Undo", run: restoreFav } });
+  });
 }
 
 /* ================= machine controls (brew home, right) ================= */
@@ -1421,7 +1520,7 @@ function renderControls() {
     S.presets.selected[kind] = Number(idx);
     renderControls();
     await S.api.presets.set(S.presets).catch(() => {});
-    await pushPresetSettings(kind).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
+    await pushPresetSettings(kind).catch((e) => toast(`Couldn't update the machine: ${failText(e)}`));
   }));
   $("#stopBtn").onclick = stopMachine;
 }
@@ -1485,7 +1584,7 @@ async function startOp(kind) {
     if (E.afterStartSent(current()) === "stopAgain") { S.api.machine.setState("idle").catch(() => {}); return; }
     S.api.machine.heartbeat();
   } catch (e) {
-    if (current()) toast(`Couldn't start: ${e.message}`);
+    if (current()) toast(`Couldn't start: ${failText(e)}`);
   } finally {
     const settled = E.startSettled({ stillCurrent: current(), sent, kind, now: Date.now() });
     if (settled.update) {
@@ -1511,7 +1610,7 @@ function exitToDashboard() {
 function stopMachine() {
   cancelStart();
   renderControls();
-  return S.api.machine.setState("idle").catch((e) => toast(`Couldn't stop: ${e.message}`));
+  return S.api.machine.setState("idle").catch((e) => toast(`Couldn't stop: ${failText(e)}`));
 }
 
 /* ================= live panel + running overlay ================= */
@@ -1538,7 +1637,7 @@ function renderLive() {
   $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
   patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId));
   const clear = $("#clearRef");
-  if (clear) clear.onclick = () => setReference(S.current, null);
+  if (clear) clear.onclick = pendingTap(() => setReference(S.current, null));
   $("#phase").textContent = unlinked() ? "Disconnected" : st === "espresso" ? (PHASE[S.snap.state.substate] || "Espresso") : STATE_LABEL[st] || "Ready";
   $("#phaseSub").textContent = st === "espresso" && S.next ? `${S.next.profileTitle} · target ${fmt1(target)} g` : "";
 }
@@ -1738,7 +1837,7 @@ function bindReviewButton(shot, { buttonSel, boxSel, isCurrent, manual }) {
       if (listed && listed !== shot) { listed.review = saved; if (feedback) listed.taste = shot.taste; }
       if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = reviewHtml(saved);
     } catch (err) {
-      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = `<p class="error">${esc(failText(err, "The review didn't work. Try again."))}</p>`;
     } finally {
       S.reviewPending.delete(shot.id);
       const now = isCurrent() && $(buttonSel);
@@ -1794,11 +1893,11 @@ function showAfterShot(shot, pts, context = {}) {
   const pinBtn = $("#pinShot");
   const pinLabel = () => (pinBtn.textContent = bean?.bestShotId === shot?.id ? "Remove reference" : "Set as reference");
   pinLabel();
-  pinBtn.onclick = async () => {
+  pinBtn.onclick = pendingTap(async () => {
     if (!shot || !bean) return;
     const isRef = bean.bestShotId === shot.id;
     if (await setReference(bean, isRef ? null : shot.id, pts.length ? pts : shot.points)) pinLabel();
-  };
+  });
 }
 function opOverlay() {
   const st = S.snap?.state?.state, o = $("#opOverlay");
@@ -1832,7 +1931,7 @@ function tickSaver() {
 async function sleepWake() {
   const asleep = S.snap?.state?.state === "sleeping";
   cancelStart();
-  try { await S.api.machine.setState(asleep ? "idle" : "sleeping"); toast(asleep ? "Waking up" : "Going to sleep"); } catch (e) { toast(e.message); }
+  try { await S.api.machine.setState(asleep ? "idle" : "sleeping"); toast(asleep ? "Waking up" : "Going to sleep"); } catch (e) { toast(failText(e)); }
 }
 
 /* ================= sheet ================= */
@@ -1868,21 +1967,32 @@ async function renderShelf() {
   }).join("");
   $$("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
   const bag = (key) => S.shelf.find((x) => x.key === key);
-  $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
-    const b = bag(btn.dataset.freeze);
-    if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
-    b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
-  }));
+  $$("[data-freeze]").forEach((btn) => (btn.onclick = pendingTap(async () => {
+    const key = btn.dataset.freeze, b = bag(key), was = b.frozen;
+    if (!(await attempt(was ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !was }, b.batch)))) return;
+    b.frozen = !was; renderShelf();
+    // Undo writes the opposite state through the same call. Thawing then re-freezing stamps a new freeze date.
+    toast(b.frozen ? "Marked as frozen" : "Thawed", { action: { label: "Undo", run: async () => {
+      await S.api.setBeanState(b.id, { frozen: was }, b.batch);
+      const now = bag(key); if (now) now.frozen = was;
+      renderShelf();
+    } } });
+  })));
   $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
     const b = bag(btn.dataset.finish);
     const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
     openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
-    $("#confirmFinish").onclick = async () => {
+    $("#confirmFinish").onclick = pendingTap(async () => {
       if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
       closeSheet(); await refreshShelf();
       if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
-      renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
-    };
+      renderShelf();
+      // Undo brings the bag (and, for the last bag, the coffee) back through the same call.
+      toast(others ? "Bag finished" : "Moved off the shelf", { action: { label: "Undo", run: async () => {
+        await S.api.setBeanState(b.id, { finished: false }, b.batch);
+        await refreshShelf(); renderShelf();
+      } } });
+    });
   }));
   $$("[data-addbag]").forEach((btn) => (btn.onclick = () => {
     const b = bag(btn.dataset.addbag);
@@ -1890,25 +2000,25 @@ async function renderShelf() {
       <div class="field"><label class="label" for="bagRoast">Roast date</label><input type="date" id="bagRoast" max="${new Date().toISOString().slice(0, 10)}"></div>
       <div class="field"><label class="label" for="bagWeight">Weight</label><input id="bagWeight" inputmode="decimal" value="${esc(String(b.weight || 250))}" aria-label="Grams"></div>
       <div class="row"><button class="btn primary" id="confirmBag">Add bag</button></div>`);
-    $("#confirmBag").onclick = async () => {
+    $("#confirmBag").onclick = pendingTap(async () => {
       const w = parseFloat($("#bagWeight").value);
       try {
         const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
         closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
         if (!S.current) await selectBean(added.key, { quiet: true });
-      } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
-    };
+      } catch (e) { toast(`Couldn't add the bag: ${failText(e)}`); }
+    });
   }));
   $$("[data-left]").forEach((btn) => (btn.onclick = () => {
     const b = bag(btn.dataset.left);
     openSheet(`<h2>How much is left?</h2><p class="muted">Crema counts it from your shots. Correct it here if you've weighed the bag, spilled some or brewed it another way.</p>
       <div class="field"><label class="label" for="leftG">Grams left</label><input id="leftG" inputmode="decimal" value="${esc(String(b.remaining ?? b.weight))}" aria-label="Grams left"></div>
       <div class="row"><button class="btn primary" id="confirmLeft">Save</button></div>`);
-    $("#confirmLeft").onclick = async () => {
+    $("#confirmLeft").onclick = pendingTap(async () => {
       const g = parseFloat($("#leftG").value);
       if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
-      try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
-    };
+      try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${failText(e)}`); }
+    });
   }));
 }
 let shelfRequest = 0, shelfSync = null;
@@ -2061,7 +2171,7 @@ async function startRecording() {
   } catch (err) {
     if (listening === me) listening = null;
     renderSpeak();
-    toast(`Couldn't write that down: ${err.message}. Type it instead.`);
+    toast(`Couldn't write that down: ${failText(err)}. Type it instead.`);
   }
 }
 
@@ -2276,7 +2386,7 @@ function renderReview(info, photo) {
         location.hash = "#profiles";
         await selectBean(saved.key);
       }
-    } catch (err) { toast(`Couldn't save: ${err.message}`); e.target.disabled = false; }
+    } catch (err) { toast(`Couldn't save: ${failText(err)}`); e.target.disabled = false; }
   };
   $("#discardBean").onclick = () => { pending = null; $("#reviewPanel").innerHTML = introFor(addMode); };
 }
@@ -2300,7 +2410,7 @@ async function onIdentify(e) {
     const info = await S.api.identify({ ...input, offline }, draw);
     renderReview(info, files[0] ? await thumbnail(files[0]) : null);
   } catch (err) {
-    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or describe it again with the roaster's name first.</p>`;
+    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(failText(err, "Crema couldn't identify that. Try again."))}</p><p class="muted">Try a photo with the label in focus, or describe it again with the roaster's name first.</p>`;
   }
   btn.disabled = false;
 }
@@ -2342,11 +2452,11 @@ async function renderProfiles() {
         toast(`${r.profileTitle} set for the next shot. Tap Load or Espresso.`);
       }));
       const again = $("#askAgain");
-      if (again) again.onclick = async () => {
+      if (again) again.onclick = pendingTap(async () => {
         again.disabled = true; again.textContent = "Asking…";
-        try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(e.message); again.disabled = false; }
-      };
-    } catch (e) { rec.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+        try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(failText(e)); again.disabled = false; }
+      });
+    } catch (e) { rec.innerHTML = `<p class="error">${esc(failText(e, "Crema couldn't get a recommendation. Try again."))}</p>`; }
   } else rec.innerHTML = "";
   if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
   [S.library, S.machineInfo] = await Promise.all([S.api.library().catch(() => null), S.api.machine.info().catch(() => null)]);
@@ -2419,12 +2529,12 @@ function showProfile(key) {
   const bagless = $("#baglessProfile");
   if (bagless) bagless.onclick = () => chooseInstalledProfile(lp, true);
   const u = $("#useProfile");
-  if (u) u.onclick = async () => {
+  if (u) u.onclick = pendingTap(async () => {
     const cands = await S.api.rank(S.current.id).catch(() => []);
     const c = cands.find((x) => x.title === p.title);
     const r = { ...S.current.recipe, profileTitle: p.title, profileId: lp?.id ?? null, doseG: c?.recipe.doseG ?? p.recipe.doseG, yieldG: c?.recipe.yieldG ?? p.recipe.yieldG, tempC: c?.recipe.tempC ?? p.recipe.tempC, targetTimeS: p.recipe.timeS, dialIn: p.dialIn };
     setNextFromRecipe(S.current, r); closeSheet(); location.hash = "#brew"; toast(`${p.title} set for the next shot`);
-  };  drawProfilePlan(lp);
+  });  drawProfilePlan(lp);
 }
 // An installed profile Crema's guide doesn't know: show what Decaid knows about it.
 // Using it starts from your usual dose and the profile's own target weight and first-step
@@ -2558,7 +2668,7 @@ function renderShotDetail() {
   bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
   bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", manual: s.manual, isCurrent: () => S.selShot === s.id });
   const pin = $("#pinDetail");
-  if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShotList(); };
+  if (pin) pin.onclick = pendingTap(async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShotList(); });
 }
 
 /* ================= settings ================= */
@@ -2706,7 +2816,7 @@ async function renderSettings() {
         }
         saved = input.value;
         if (!id.startsWith("p")) toast("Saved");
-      } catch (e) { input.value = saved; toast(`Couldn't save: ${e.message}`); }
+      } catch (e) { input.value = saved; toast(`Couldn't save: ${failText(e)}`); }
       finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
     };
     input.onchange = run;
@@ -2720,7 +2830,7 @@ async function renderSettings() {
       $$('[data-mini^="gStart:"]').forEach((x) => (x.dataset.mini = `gStart:${x.dataset.mini.includes("-") ? -v : v}`));
       $("#gStart").step = String(v);
       toast("Saved");
-    } catch (e) { toast(`Couldn't save: ${e.message}`); renderSettings(); }
+    } catch (e) { toast(`Couldn't save: ${failText(e)}`); renderSettings(); }
   }));
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
   // A switch that can't be saved goes back to where it was.
@@ -2754,11 +2864,11 @@ async function renderSettings() {
   }));
   scheds.forEach((s) => { const t = $(`#en-${CSS.escape(s.id)}`); if (t) t.onchange = (e) => attempt("change the wake schedule", () => m.schedules.update(s.id, { enabled: e.target.checked }), flip(e.target)); });
   $$("[data-del]").forEach((b) => (b.onclick = async () => { if (await attempt("remove the wake time", () => m.schedules.remove(b.dataset.del))) renderSettings(); }));
-  $("#addWake").onclick = async () => { const t = $("#newWake").value; if (!t) return; if (await attempt("add the wake time", () => m.schedules.add({ time: t, daysOfWeek: [1, 2, 3, 4, 5], enabled: true }))) { toast(`Wakes at ${t} on weekdays`); renderSettings(); } };
-  const markDone = (kind, noun) => async () => {
+  $("#addWake").onclick = pendingTap(async () => { const t = $("#newWake").value; if (!t) return; if (await attempt("add the wake time", () => m.schedules.add({ time: t, daysOfWeek: [1, 2, 3, 4, 5], enabled: true }))) { toast(`Wakes at ${t} on weekdays`); renderSettings(); } });
+  const markDone = (kind, noun) => pendingTap(async () => {
     if (!(await attempt(`record the ${noun}`, () => S.api.maintenance.done(kind)))) return;
     S.maint = await S.api.maintenance.get(); renderStatus(); renderSettings(); toast(`${noun[0].toUpperCase()}${noun.slice(1)} recorded`);
-  };
+  });
   const db = $("#doneBackflush"); if (db) db.onclick = markDone("backflush", "backflush");
   const dd = $("#doneDescale"); if (dd) dd.onclick = markDone("descale", "descale");
   $("#editPresets").onclick = editPresets;
@@ -2785,11 +2895,11 @@ function editPresets() {
     <span class="label">Hot water (ml)</span>${rows("water", "ml", "ml")}
     <span class="label">Flush (seconds)</span>${rows("flush", "s", "seconds")}
     <div class="row"><button class="btn primary" id="savePresets">Save presets</button></div>`);
-  $("#savePresets").onclick = async () => {
+  $("#savePresets").onclick = pendingTap(async () => {
     $$("[data-pl]").forEach((i) => { const [k, n] = i.dataset.pl.split(":"); p[k][n].label = i.value.trim() || p[k][n].label; });
     $$("[data-pv]").forEach((i) => { const [k, n, key] = i.dataset.pv.split(":"); const v = parseFloat(i.value); if (Number.isFinite(v)) p[k][n][key] = v; });
-    try { S.presets = await S.api.presets.set(p); closeSheet(); renderControls(); toast("Presets saved"); } catch (e) { toast(e.message); }
-  };
+    try { S.presets = await S.api.presets.set(p); closeSheet(); renderControls(); toast("Presets saved"); } catch (e) { toast(failText(e)); }
+  });
 }
 
 /* ================= device frame (demo on a desktop) =================

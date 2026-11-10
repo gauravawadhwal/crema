@@ -4,3 +4,4 @@ export * from "./start.js";
 export * from "./bag.js";
 export * from "./shelf.js";
 export * from "./record.js";
+export * from "./plain-error.js";

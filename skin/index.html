@@ -474,7 +474,13 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .dev { position: absolute; left: 50%; top: 50%; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 30px 70px rgba(0, 0, 0, .45); transform-origin: 50% 50%; }
 .dev iframe { display: block; border: 0; background: #0e1a15; }
 .dev-note { text-align: center; }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 70; box-shadow: var(--shadow); max-width: calc(100% - 32px); pointer-events: none; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 70; display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 32px); pointer-events: none; }
+.toast[hidden] { display: none; }
+.toast-item { display: flex; align-items: center; gap: 12px; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; box-shadow: var(--shadow); max-width: 100%; overflow-wrap: anywhere; }
+.toast-item .toast-act { pointer-events: auto; flex: none; min-height: var(--hit); padding: 0 12px; margin: -6px -8px -6px 0; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+/* A button whose request is still running after 300 ms (pendingTap in app.js). */
+button.pending, .btn.pending { opacity: .6; cursor: progress; }
+.btn.pending::after { content: ""; display: inline-block; width: .8em; height: .8em; margin-left: 8px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; vertical-align: -.1em; animation: spin .8s linear infinite; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -484,6 +490,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .controls { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 }
 @media (max-width: 760px) {
+  .toast { top: auto; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .app { grid-template-columns: 1fr; }
   .rail {
     position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto;
@@ -512,7 +519,6 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .shot-row { grid-template-columns: 22px 80px minmax(0,1fr); }
   .shot-row canvas { width: 80px; }
   h1 { font-size: 1.4rem; }
-  .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (min-width: 761px) { #phoneSleep { display: none; } }
 
@@ -778,7 +784,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 <div class="overlay" id="opOverlay" hidden><div class="panel op-card" id="opCard"></div></div>
 <div class="saver" id="saver" hidden role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div>Asleep · tap to wake</div></div></div>
 <div class="sheet-back" id="sheetBack" hidden><div class="panel sheet stack" id="sheet" role="dialog" aria-modal="true"></div></div>
-<div class="toast" id="toast" role="status" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="demo-data.js"></script>
 <script src="engine.js"></script>

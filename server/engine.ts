@@ -16,3 +16,4 @@ export {
   adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, NOT_READY, reconcileOutcome, recipeMatches,
   mergeRecord, recommendPatch, saveBeanPatch, pruneNewRows, sameGrind, shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps, trackNewRows, waitingForRecipe,
 } from "./control/index.js";
+export { plainError } from "./control/index.js";
