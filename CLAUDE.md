@@ -15,6 +15,7 @@ unverified.
 
 Read next, as needed:
 - `docs/implementation-plan.md`: the handoff and current plan. Start with "Where things stand" at its top; the progress table and ticked items say what is implemented, and "Next" lists what to pick up. Dated status updates and superseded lists are in `docs/history.md`.
+- `docs/ui-plan.md`: the UI plan in progress: eleven workstreams, layout specifications, the user's decisions and a status table to update with each PR.
 - `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
 - `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
 - `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.

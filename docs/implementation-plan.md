@@ -27,6 +27,16 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
+0. **UI plan, in progress (started 10 November 2026):** eleven workstreams in
+   [ui-plan.md](ui-plan.md), from a review of `main` at `8834dd7` against Mono and
+   the items here. Its status table is the handoff: it says which workstream is
+   done, open as a PR, or next. The user accepted its four decisions the same day
+   (full pour-mode takeover, a value sheet for dose/yield/temperature, chime and
+   hold-to-wake off by default, skip-step only if Decaid exposes it). It absorbs
+   these items listed under "Improvements seen in Streamline": step name and
+   skip-step (WS 4), stop reason (WS 5), step previews on profile cards (WS 9) and
+   preset strips for dose, yield and temperature (WS 6). The user has a private
+   page with the renders; the layout specifications in ui-plan.md stand in for it.
 1. **UI feedback, 10 November:** independent shot-history scrolling is merged
    in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), alongside the accepted
    plan in [PR #51](https://github.com/gauravawadhwal/crema/pull/51). The bottom
