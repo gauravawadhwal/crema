@@ -27,7 +27,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 | 7 | Feedback layer | M | 2 | Not started |
 | 8 | Phone | M | 4 | Not started |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Not started |
-| 10 | Sleep screen and sound | S | 2 | Not started |
+| 10 | Sleep screen and sound | S | 2 | PR open, not merged. `e2e-sleep.cjs` (source and built) covers tap vs hold to wake with machine state asserted, early release, reduced motion, keyboard, persistence and the chime; full suite run; real tablet touch and audio unverified |
 | 11 | Motion and finish | S | all | Not started |
 
 Order: 1, then 2, then 3 with 7, then 4 with 9, then 5 with 6, then 8 with 10, then 11.

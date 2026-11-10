@@ -87,6 +87,12 @@ jobs:
       - name: Stop and start races, built single-file demo
         if: matrix.group == 'controls'
         run: node scripts/e2e-controls.cjs --built
+      - name: Sleep screen and chime, source app
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-sleep.cjs
+      - name: Sleep screen and chime, built single-file demo
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-sleep.cjs --built
       - name: Home screen fits the tablet
         if: matrix.group == 'brewing'
         run: node scripts/check-tablet-fit.cjs ui-shots/fit
