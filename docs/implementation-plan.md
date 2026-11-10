@@ -26,24 +26,132 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-1. **The next release** (tagging is the user's call) **and its in-place tablet
-   upgrade.** It would be the first time the merged review work runs on the tablet.
-2. **Flaky check, in progress** (separate branch): `e2e-live.cjs` sometimes fails
-   "inventory refresh preserves the tablet's unsaved recipe edits". Being investigated;
-   not yet explained.
-3. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
+1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
+   in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
+   Implement the bottom favourites carousel below before the next release;
+   the revised render is the current design proposal.
+2. **Startup edit race, fix ready for review:**
+   [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
+   `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
+   recipe edits". The initial workflow read can overwrite edits made while the read
+   is in flight; the shelf refresh is not the cause. The fix preserves those edits.
+   **Separate CI issue observed while checking this UI work:** the live suite's
+   shelf-request timeout scenario stayed at "Loading your coffees" rather than
+   reporting the 15-second timeout. It failed on both the documentation-only
+   [PR #51 run](https://github.com/gauravawadhwal/crema/actions/runs/42778043324)
+   and the [PR #52 run](https://github.com/gauravawadhwal/crema/actions/runs/42777928669).
+   Stop remained available. This predates the history change; whether it is a
+   production timeout defect or the check's clock/interception setup is not yet
+   established. Investigate separately from the startup-edit race before release.
+3. **Package the completed fixes for installation when ready.** The latest release,
+   v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
+   installable GitHub release. A release runs CI and attaches a new skin ZIP for
+   Decaid to install. It is distribution work, not a separate feature or a reason
+   to pause implementation. Tagging remains the user's call.
+4. **Streamline Settings entry and the parity audit** (phase 3). On hold until the user
    is ready with desktop Decaid. Build and check it against desktop Decaid; the user
    confirms on the tablet in normal use.
-4. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
+5. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
    shared JSDoc type for the API object, which turns the live/demo contract into a type
    check. Splitting the file further is optional after PR #44.
-5. **Held until there is a reason:** shot-review threshold calibration (needs more real
+6. **Held until there is a reason:** shot-review threshold calibration (needs more real
    shots with taste recorded); grinder entities and a numeric grind advisor; Home
    Assistant sensors; order-email ingestion (see "Deferred product work").
-6. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
+7. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
    request for a tablet session.
 
 Housekeeping (F6) is the user's call.
+
+## UI feedback — 10 November 2026
+
+### Favourites: larger, readable targets (proposal)
+
+The user still finds the favourites too small to press comfortably. The five slots
+plus the 44 px edit button share a 300 px Brew column, leaving some slots less than
+40 px wide. Increasing height alone does not fix the cramped names or touch targets.
+
+Reference patterns reviewed on 10 November:
+
+- [Streamline](https://github.com/decentespresso/streamline-js#7-the-main-screen)
+  puts five quick-access favourites across a broad top bar. It uses tap to load and
+  long-press to reassign. Crema's narrow column cannot accommodate the same row.
+- [Home Assistant tiles](https://contributors.home-assistant.io/design/dashboards/tile-card/)
+  give a named item a readable primary label and secondary state, with a distinct
+  route to more detail. Use the hierarchy, without copying its split icon action.
+- [Android touch guidance](https://support.google.com/accessibility/android/answer/7101858)
+  recommends at least 48 dp targets and 8 dp separation. For Crema, use at least
+  48 CSS px in both dimensions as a layout floor, then check physical size on the
+  scaled tablet; CSS px and Android dp are not assumed equivalent.
+- [Mono](https://github.com/meldavy/decaid-mono-skin), supplied by the user as a
+  general UI reference, not only for favourites. Its
+  [style guide](https://github.com/meldavy/decaid-mono-skin/blob/main/docs/STYLE.md)
+  keeps action positions consistent, specifies generous touch targets and checks
+  freeform text with long names. Its favourites CSS separates fixed controls from
+  a scrollable card grid. Use these interaction/review ideas within Crema's existing
+  design; do not infer a request to copy its visual theme or implementation.
+
+**Latest render direction, 10 November:** shorten the graph and place favourites
+in a bottom **carousel**. The user first rejected a separate picker, then found the
+vertical list awkward, and now wants swipeable cards rather than a fixed row of
+four saved recipes. Keep direct one-tap loading through the existing guarded path.
+Show a clear Favourites heading, labelled Edit control and previous/next buttons.
+Use a partial next card as the cue that more recipes are available. Swipe advances
+and snaps to a card; this is intentional carousel navigation, not a visible
+scrollbar or an automatically rotating strip. Do not loop or auto-advance.
+
+Each tile shows the name prominently, followed by profile and dose/yield/temperature;
+allow two-line names without growing the bar. The latest preview uses 236 px-wide
+cards at 1340×800, with a shorter graph and a 142 px bottom region; the compact
+version uses narrower cards and protects the full-height control column so Stop
+remains visible. Details of the layout remain subject to render feedback. Keep
+card sizes comfortable as more favourites are added, rather than shrinking them.
+
+**Remove the fixed five-slot limit in the implementation.** `makeLiveApi` currently
+reads only five entries (`Array.from({ length: 5 })`), and the demo and UI assume five
+slots. Read all existing entries and preserve their order, values and bagless
+semantics. Reuse empty legacy slots when saving, or append a new entry; provide
+Save current recipe at the end of the carousel. Clearing a favourite must not
+discard other entries. Keep the existing KV record format if possible; verify
+upgrade compatibility and cross-device reads rather than truncating newer data
+when an older five-slot assumption is encountered. Failed loads/saves remain
+visible without silently changing the selected recipe.
+
+Acceptance: all targets meet the size floor at every supported viewport; names
+and saved recipe details are legible; load and edit are distinct; no outer-page
+overflow; Stop, Load and Edit remain reachable before, during and after a shot,
+including at 1005×552. Test swipe versus tap (swiping never loads), arrow/keyboard
+navigation, snapping and end states, reduced motion, resize, long names, adding
+beyond five favourites, legacy records, saved position across redraws, and
+source/built/live/demo behavior. Keep mid-shot loads held through the existing path.
+This is a rendered proposal, not implemented production behavior.
+
+### Shot history: independent panes (confirmed UI bug)
+
+- [x] On tablet and desktop, constrain Shots to the available viewport and let the
+  left shot list and right detail panel scroll independently. Keep the status bar
+  and Shots heading visible. Reaching a pane's end must not scroll its neighbour
+  or the outer page. Keep the phone's single-column page scrolling normally.
+- [x] Preserve list position when selecting/comparing shots or loading older ones;
+  selecting a different shot starts its detail at the top. Check long histories
+  and long saved reviews, empty/error states, keyboard access, tablet sizes and
+  resizing to/from the phone layout. Record source and built-demo verification.
+
+Implemented in PR #52, pending review/merge and not released. Source and built-demo
+regressions pass at 1340×800, 1005×552, 1600×1000 and 800×1000, with phone resize,
+keyboard, paging, empty/error and scroll-boundary checks. Source/built demo
+click-through, all five Brew tablet-fit sizes, the saved-review simulator checks,
+typecheck, 293 unit/server tests and skin packaging also pass locally. Physical
+tablet behavior has not been checked.
+
+## Backup/restore scope — clarified 10 November 2026
+
+The user does not want a separate backup/restore project unless Crema departs from
+normal skin practice. Continue using Decaid-owned beans, profiles, shots and its
+skin KV store. Backup/restore testing is not a release blocker or a prerequisite
+for ordinary UI work. Revisit only if a proposed storage change or migration
+creates a concrete compatibility concern; first check Decaid's standard mechanism
+rather than building a Crema backup system. Older unticked backup tasks below are
+deferred under this decision, not requirements for the current work.
 
 ## Still unverified on hardware
 
@@ -57,8 +165,8 @@ for a tablet session:
 - Stop pressed at the same moment as a load or a start, on the real machine.
 - Manual flow and pressure with the physical group-head controller.
 - Whether steam, hot water and flush preset values reach the machine.
-- Decaid backup and restore including Crema's key-value records. This is the one worth
-  doing deliberately, on disposable data, because a failure would lose records.
+- Decaid backup and restore including Crema's key-value records. Deferred under the
+  backup/restore scope above; not a requested tablet check or a release blocker.
 
 ## Code review and findings — 10 November 2026
 
