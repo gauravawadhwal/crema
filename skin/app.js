@@ -2285,10 +2285,10 @@ function showInstalledProfile(lp) {
 
 /* ================= shots ================= */
 const SHOTS_PER_PAGE = 20;
-// A shot pulled from another skin may record a bag but no coffee name: name it from the shelf.
 // The coffee record of the bag a shot was pulled from, for the review's context. A shot
 // with no bag matches a shelf row with no bag, as it always has.
 const bagInfoForShot = (s) => S.shelf.find((b) => b.batch === (s.batch ?? null))?.info ?? null;
+// A shot pulled from another skin may record a bag but no coffee name: name it from the shelf.
 const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch === s.batch)?.info.name.value || "No coffee recorded";
 async function renderShots(more = false) {
   const list = $("#shotList");
