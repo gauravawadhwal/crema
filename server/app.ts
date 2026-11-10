@@ -1,7 +1,8 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z, ZodError } from "zod";
-import { identify } from "./identify.js";
+import { identifyWithProvider } from "./identify.js";
 import { cacheImage, findProductImage, isPlaceholderImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
 import type { AudioInput, ImageInput } from "./llm/types.js";
@@ -29,6 +30,33 @@ const IdentifyText = z.object({
 
 const MEDIA = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const AUDIO = new Set(["audio/wav", "audio/mpeg", "audio/ogg", "audio/flac", "audio/aac"]);
+/** The app sends at most four bag photos, straight from the camera (a phone JPEG is a few MB, up to ~15 MB on the biggest sensors). */
+export const MAX_PHOTOS = 4;
+export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+/** The whole identify request: the photos plus some headroom for the text fields. */
+export const MAX_IDENTIFY_BYTES = MAX_PHOTOS * MAX_PHOTO_BYTES + 1024 * 1024;
+
+/**
+ * Which pages may call /api/*. A browser sends Origin on cross-origin calls and on
+ * same-origin POSTs. Allowed without configuration:
+ *   - the server's own origin (the phone app, served from here)
+ *   - http on port 3000 from any host: where Decaid serves the Crema skin on the tablet
+ *     (its address changes per network, so the host can't be fixed)
+ *   - localhost, 127.0.0.1 and [::1] on any port (development and the repo's own checks)
+ * CORS_ORIGINS adds exact origins (comma-separated); "*" allows every page.
+ */
+export function originAllowed(origin: string, host: string | undefined, extra: string[] = parseOrigins(process.env.CORS_ORIGINS)): boolean {
+  if (extra.includes("*") || extra.includes(origin.replace(/\/+$/, ""))) return true;
+  let u: URL;
+  try { u = new URL(origin); } catch { return false; }
+  if (host && u.host === host) return true;
+  if (u.protocol !== "http:") return false;
+  return u.port === "3000" || ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+}
+export function parseOrigins(raw: string | undefined): string[] {
+  return (raw ?? "").split(",").map((s) => s.trim().replace(/\/+$/, "")).filter(Boolean);
+}
+
 /** About two minutes of the 16 kHz mono WAV the app sends; the app stops at 30 s. */
 const MAX_AUDIO = 4 * 1024 * 1024;
 
@@ -66,17 +94,27 @@ const DialInBody = z.object({
   history: z.array(PastShot).max(50).optional(),
 });
 
-export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null }) {
+export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null; corsOrigins?: string }) {
   const { llm } = deps;
   const decaidUrl = deps.decaidUrl?.replace(/\/+$/, "") || null;
   const app = new Hono();
-  // The tablet skin is served by Decaid from another origin, so allow cross-origin calls.
-  app.use("/api/*", cors());
+  // The tablet skin is served by Decaid from another origin, so cross-origin calls are
+  // allowed, but only from the origins originAllowed() names. Other pages are refused
+  // outright (not just left unreadable), so they can't spend AI calls either.
+  const extraOrigins = parseOrigins(deps.corsOrigins ?? process.env.CORS_ORIGINS);
+  app.use("/api/*", async (c, next) => {
+    const origin = c.req.header("origin");
+    if (origin && !originAllowed(origin, c.req.header("host"), extraOrigins)) {
+      return c.json({ error: "this page isn't allowed to use the Crema server (see CORS_ORIGINS)" }, 403);
+    }
+    await next();
+  });
+  app.use("/api/*", cors({ origin: (origin) => origin }));
 
   app.onError((err, c) => {
     if (err instanceof ZodError) return c.json({ error: "invalid request", issues: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`) }, 400);
     console.error(err);
-    return c.json({ error: err.message }, 500);
+    return c.json({ error: "something went wrong on the Crema server" }, 500);
   });
 
   /** What this server offers. The app reads it to decide what to switch on. */
@@ -99,7 +137,7 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
   });
 
   /** A short voice note describing a coffee bag → text, for the "Describe it" box. */
-  app.post("/api/transcribe", async (c) => {
+  app.post("/api/transcribe", bodyLimit({ maxSize: MAX_AUDIO + 1024 * 1024, onError: (c) => c.json({ error: "recording too long" }, 413) }), async (c) => {
     if (!llm.transcribers.length) return c.json({ error: "Speaking needs a Gemini API key on the Crema server (GEMINI_API_KEY)." }, 501);
     const form = await c.req.parseBody();
     const f = form["audio"];
@@ -115,9 +153,11 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
   });
 
   /** Photo(s), search text, a spoken or typed description, or a URL → BeanInfo. */
-  app.post("/api/identify", async (c) => {
+  app.post("/api/identify", bodyLimit({ maxSize: MAX_IDENTIFY_BYTES, onError: (c) => c.json({ error: `those photos are too large to upload (limit ${MAX_IDENTIFY_BYTES / 1024 / 1024} MB in all)` }, 413) }), async (c) => {
     const form = await c.req.parseBody({ all: true });
     const files = ([] as unknown[]).concat(form["images"] ?? []).filter((f): f is File => f instanceof File);
+    if (files.length > MAX_PHOTOS) return c.json({ error: `send at most ${MAX_PHOTOS} photos` }, 400);
+    if (files.some((f) => f.size > MAX_PHOTO_BYTES)) return c.json({ error: `each photo must be under ${MAX_PHOTO_BYTES / 1024 / 1024} MB` }, 413);
     const images: ImageInput[] = [];
     for (const f of files) {
       if (!MEDIA.has(f.type)) return c.json({ error: `unsupported image type ${f.type}` }, 400);
@@ -125,14 +165,14 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null 
     }
     const str = (k: string) => (typeof form[k] === "string" && form[k] ? (form[k] as string).trim() || undefined : undefined);
     const text = IdentifyText.parse({ query: str("query"), description: str("description"), url: str("url"), today: str("today") });
-    const info = await identify(llm, { images, ...text, offline: str("offline") === "true" });
+    const { info, provider } = await identifyWithProvider(llm, { images, ...text, offline: str("offline") === "true" });
     // The roaster's own packshot: prefer what the page's metadata says over a URL the model may have guessed.
     if (info.imageUrl && (!isSafeUrl(info.imageUrl) || isPlaceholderImage(info.imageUrl))) info.imageUrl = null;
     if (info.productUrl && str("offline") !== "true") {
       const found = await findProductImage(info.productUrl);
       info.imageUrl = (found && !isPlaceholderImage(found) ? found : null) ?? info.imageUrl;
     }
-    return c.json({ info, provider: llm.lastUsed });
+    return c.json({ info, provider });
   });
 
   /** Coffee + installed profiles + past shots + setup → recipe (rules ranking, then AI choice). */

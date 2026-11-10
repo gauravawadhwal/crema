@@ -10,7 +10,7 @@ import type { StructuredRequest } from "../server/llm/types.js";
 // A provider chain that records what identify() asks for instead of calling a model.
 function recorder() {
   const seen: StructuredRequest<any>[] = [];
-  const llm = { structured: async (req: StructuredRequest<any>) => { seen.push(req); return mockBean(""); } } as unknown as ProviderChain;
+  const llm = { structuredWithProvider: async (req: StructuredRequest<any>) => { seen.push(req); return { value: mockBean(""), provider: "mock" }; } } as unknown as ProviderChain;
   return { llm, seen };
 }
 

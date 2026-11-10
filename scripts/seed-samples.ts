@@ -6,7 +6,7 @@
  *   LLM_PROVIDERS=claude-cli npx tsx scripts/seed-samples.ts
  */
 import { writeFile } from "node:fs/promises";
-import { identify } from "../server/identify.js";
+import { identifyWithProvider } from "../server/identify.js";
 import { ProviderChain } from "../server/llm/index.js";
 
 const COFFEES = [
@@ -29,8 +29,8 @@ async function worker() {
     const [i, q] = next;
     const t0 = Date.now();
     try {
-      const info = await identify(llm, { query: q });
-      results[i] = { query: q, info, seconds: (Date.now() - t0) / 1000, provider: llm.lastUsed };
+      const { info, provider } = await identifyWithProvider(llm, { query: q });
+      results[i] = { query: q, info, seconds: (Date.now() - t0) / 1000, provider };
       console.log(`✓ ${q} (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
     } catch (e) {
       results[i] = { query: q, error: (e as Error).message };
