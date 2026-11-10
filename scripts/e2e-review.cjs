@@ -152,6 +152,13 @@ const openShot = async (page, id, selector) => {
     const failedToast = await page.textContent("#toast");
     check(/Couldn't save the notes/.test(failedToast) && !/Notes saved/.test(failedToast), "a failed notes write says so instead of \"Notes saved\"", failedToast);
     check((await (await fetch(`${decaid}/api/v1/shots/${encodeURIComponent(shotId)}`)).json()).annotations?.espressoNotes !== "should not be saved", "and Decaid didn't store the notes");
+    // The rating goes back too, in the detail's stars and in the list row.
+    const ratingBefore = await page.getAttribute("#detailStars", "aria-valuenow");
+    await page.focus("#detailStars");
+    await page.keyboard.press(ratingBefore === "10" ? "Home" : "End");
+    await page.waitForFunction(() => /Couldn't save the rating/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
+    await page.waitForSelector("#detailStars", { timeout: 5000 });
+    check(/Couldn't save the rating/.test(await page.textContent("#toast")) && await page.getAttribute("#detailStars", "aria-valuenow") === ratingBefore && await evalPage((id) => String(S.shots.find((s) => s.id === id).enjoyment ?? 0), shotId) === ratingBefore, "a failed rating write says so and restores the previous rating", await page.textContent("#toast"));
     await page.unroute(new RegExp(`/api/v1/shots/${shotId}$`), failPut);
     await page.fill("#shotNotes", "tastes fine");
     await page.dispatchEvent("#shotNotes", "change");

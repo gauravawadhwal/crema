@@ -2352,15 +2352,19 @@ function renderShotDetail() {
     <div id="detailReview">${reviewHtml(s.review)}</div>`;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
   bindStars($("#detailStars"), s.enjoyment, async (n) => {
-    s.enjoyment = n;
-    const row = $$("[data-rating]").find((x) => x.dataset.rating === s.id);
-    if (row) row.innerHTML = n ? starsHtml(n) : "Not rated";
-    await S.api.annotate(s.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating"));
+    const before = s.enjoyment;
+    const draw = () => {
+      const row = $$("[data-rating]").find((x) => x.dataset.rating === s.id);
+      if (row) row.innerHTML = s.enjoyment ? starsHtml(s.enjoyment) : "Not rated";
+    };
+    s.enjoyment = n; draw();
+    // On failure, put the old rating back in the list and redraw the detail's stars.
+    await attempt("save the rating", () => S.api.annotate(s.id, { enjoyment: n }), () => { s.enjoyment = before; draw(); if (S.selShot === s.id) renderShotDetail(); });
   });
   $("#shotNotes").onchange = async (e) => {
     const before = s.notes, text = e.target.value;
     try { await S.api.annotate(s.id, { espressoNotes: text }); s.notes = text; toast("Notes saved"); }
-    catch (err) { s.notes = before; toast(`Couldn't save the notes: ${err.message}. They're still in the box`); }
+    catch (err) { s.notes = before; toast(`Couldn't save the notes: ${failText(err)}. They're still in the box`); }
   };
   for (const [selector, key] of [["#detailSb", "sourBitter"], ["#detailBody", "body"]]) {
     const group = $(selector);
