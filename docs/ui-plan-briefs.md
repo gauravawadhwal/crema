@@ -320,8 +320,10 @@ branch of `renderLive` (the rest rail), `stepsRailHtml` (minimum segment width),
 `skin/index.html` under the `max-height: 860px` landscape block.
 
 `ui/ws4.5-pour-polish` has a stopped attempt as one WIP commit. Read its diff for the
-small fixes, which may be usable as they are, but rewrite the axis: it fed `etaS`
-into a grow-only axis and still reached 80 s. Verify everything yourself.
+small fixes, which may be usable as they are, but rewrite the axis to the rule in
+ui-plan.md (40 s, widening 10 s at a time one second before the edge, nothing else
+sizing it). The attempt fed `etaS` and the plan length into it and still reached 80 s.
+Verify everything yourself.
 
 Run also: `e2e-controls.cjs`, `e2e-demo.cjs`. Look at pour mode at about 5 s, 15 s and
 the end of a demo shot (the demo runs about three times faster than real time), at

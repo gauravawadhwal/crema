@@ -16,6 +16,10 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
+time one second before the edge. See "WS 4.5". This replaces the earlier wording
+that started the axis at the expected shot length.
+
 **11 November 2026 — review of merged `main` (`566b26c`), WS 4.5 defined**
 
 Looked at the merged app in the demo at 1340×800, 1005×552 and 390×844. WS 1, 2, 3, 4,
@@ -540,19 +544,19 @@ left quarter of the chart. How the reference skins do it: Streamline v0.2.24 kee
 live trace at a fixed fraction of the width and rescales the axis continuously
 (`liveXRange` in its `src/modules/chart.js`: range `[0, time / LIVE_X_DATA_FRACTION]`),
 so drawn lines keep sliding left; Mono starts at 40 s and widens 10 s at a time, a
-second before the edge, so lines hold still between steps. Crema takes Mono's stepped
-approach, which is also what its Shots and rest charts already do:
+second before the edge, so lines hold still between steps. **Crema does it Mono's way** (user's choice,
+11 November 2026):
 
-- The axis starts at the shot's expected length rounded up to 10 s, and never below
-  40 s. Expected length is the last shot with this profile when the pre-shot plan was
-  timed from one (`S.plan.timed === "shot"`, same profile as `S.shotContext`), else the
-  reference shot's length, else 40 s.
-- It widens by 10 s when the trace comes within about 3 s of the edge, and never
-  shrinks within a shot. Reset it when a new shot starts.
-- **Do not** feed the time-to-go estimate (`etaS`) into the axis: early in a shot it is
-  large and unstable (this is what broke the stopped attempt). At most use it once it
-  has been steady for a few seconds, and cap what it can add.
-- Plan beyond the right edge is clipped, not squeezed in. Cap the axis at 120 s.
+- The axis shows the first 40 s.
+- A longer shot widens it by 10 s at a time, one second before the trace reaches the
+  edge, so the "now" line never leaves the chart and drawn lines hold still between
+  widenings. It never shrinks within a shot; reset it to 40 s when a new shot starts.
+- Seconds are labelled every 10 s.
+- Nothing else sizes the axis: not the plan's length, not the reference shot, not the
+  time-to-go estimate (`etaS` is large and unstable early in a shot, which is what
+  broke the stopped attempt).
+- Plan and reference-shot lines beyond the right edge are clipped, not squeezed in.
+  Cap the axis at 120 s.
 - Steps still ahead are drawn, on the chart and in the rail, at the last shot's
   duration when known, not at their limit. The pour rail currently says "Decline 30 s"
   where the rest rail says 14.9 s; both should agree. Say "up to 30 s" when only the
@@ -568,8 +572,8 @@ approach, which is also what its Shots and rest charts already do:
 - "about N s to go" was not seen during the review at 16 s into a shot; check when it
   appears and that it does.
 
-Done when: at 1340×800 and 1005×552 a demo shot's trace reaches at least 60% of the
-chart width by the end; the axis value never decreases during a shot (assert in
+Done when: at 1340×800 and 1005×552 the axis reads 40 s for a demo shot that ends
+under 39 s, and 50 s once a shot passes 39 s; the axis value never decreases during a shot (assert in
 `e2e-controls.cjs` or the pour check); the rest and pour rails agree on step
 durations; Stop's rectangle checks in `e2e-controls.cjs` section 12 still pass; tablet
 fit and the target check pass.
