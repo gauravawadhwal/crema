@@ -28,7 +28,7 @@ const BASE: Record<RoastLevel, { temp: number; ratio: number; time: [number, num
 };
 
 export function inferRoast(bean: BeanInfo): RoastLevel {
-  let roast = bean.roastLevel.value;
+  let roast = bean.roastLevel?.value;
   if (!roast) {
     // Roasters that sell "omni"/filter roasts are almost always light.
     if (bean.roastedFor === "filter") roast = "light";
@@ -89,8 +89,7 @@ export function baseline(bean: BeanInfo, opts: { doseG?: number; today?: Date } 
   }
 
   const doseG = opts.doseG ?? 18;
-  const days = bean.roastDate.value ? daysBetween(bean.roastDate.value, today) : null;
-  const rest = restStatus(days, b.rest, roast);
+  const rest = restOf(bean, today);
   if (rest.status === "resting") {
     temp -= 0.5;
     reasons.push("Still degassing: expect more crema and channelling; slightly cooler helps");
@@ -107,6 +106,13 @@ export function baseline(bean: BeanInfo, opts: { doseG?: number; today?: Date } 
     rest,
     reasons,
   };
+}
+
+/** Where a coffee is in its rest window, from its roast level (inferred if unset) and roast date. */
+export function restOf(bean: BeanInfo, today: Date = new Date()): Baseline["rest"] {
+  const roast = inferRoast(bean);
+  const days = bean.roastDate?.value ? daysBetween(bean.roastDate.value, today) : null;
+  return restStatus(days, BASE[roast].rest, roast);
 }
 
 function restStatus(days: number | null, window: [number, number], roast: RoastLevel): Baseline["rest"] {

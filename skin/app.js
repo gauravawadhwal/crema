@@ -115,16 +115,11 @@ function applyTheme(mode, redraw = true) {
   if (redraw && S.api) route(false);
 }
 
-/* ================= rest window (mirror server/profiles/match) ================= */
-const REST = { light: [14, 40], "medium-light": [10, 35], medium: [7, 28], "medium-dark": [5, 24], dark: [4, 21] };
+/* ================= rest window (rules from server/recommend/rules via the engine) ================= */
+const REST_LABEL = { resting: "Resting", peak: "In its window", fading: "Past its best", unknown: "No roast date" };
 function restOf(info) {
-  const roast = info?.roastLevel?.value || (info?.isBlend ? "medium" : "medium-light");
-  const w = REST[roast] || REST["medium-light"];
-  const d = daysSince(info?.roastDate?.value);
-  if (d == null) return { days: null, window: w, status: "unknown", label: "No roast date" };
-  if (d < w[0]) return { days: d, window: w, status: "resting", label: "Resting" };
-  if (d <= w[1]) return { days: d, window: w, status: "peak", label: "In its window" };
-  return { days: d, window: w, status: "fading", label: "Past its best" };
+  const r = E.restOf(info || {});
+  return { days: r.daysOffRoast, window: r.window, status: r.status, label: REST_LABEL[r.status] };
 }
 /* ================= live API =================
    Everything except AI goes straight to Decaid: machine control, beans,
@@ -1581,6 +1576,65 @@ function reviewHtml(saved) {
     ${review.nextShot ? `<div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
+/* ===== Taste scales and the Review button, shared by the after-shot panel and the shot detail ===== */
+const TASTE_SCALES = [
+  { key: "sourBitter", label: "Taste", opts: [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]] },
+  { key: "body", label: "Body", opts: [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]] },
+];
+// ids: { sourBitter: "sb", body: "bd" }, the element id of each scale.
+function tasteScalesHtml(taste, ids) {
+  const t = taste ?? {};
+  return TASTE_SCALES.map(({ key, label, opts }) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${ids[key]}" role="radiogroup" aria-label="${label}">${opts.map(([v, text]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${t[key] === v}" aria-pressed="${t[key] === v}">${text}</button>`).join("")}</div></div>`).join("")
+    + `<p class="muted small">Tap to save. A review uses taste once both are chosen.</p>`;
+}
+const markPressed = (group, button) => $$("button", group).forEach((x) => { const on = x === button; x.setAttribute("aria-pressed", String(on)); x.setAttribute("aria-checked", String(on)); });
+// A tap marks the answer and saves it on the shot at once (no shot yet: just marks it).
+function bindTasteScales(shot, ids) {
+  for (const { key } of TASTE_SCALES) {
+    const group = $("#" + ids[key]);
+    if (!group) continue;
+    $$("button", group).forEach((button) => (button.onclick = async () => {
+      const value = Number(button.dataset.v);
+      const before = shot?.taste?.[key] ?? null;
+      const previous = $$("button", group).find((x) => Number(x.dataset.v) === before && before !== null);
+      markPressed(group, button);
+      if (!shot) return;
+      shot.taste = { ...(shot.taste ?? {}), [key]: value };
+      await attempt("save taste feedback", () => S.api.annotate(shot.id, { extras: { crema: { [key]: value } } }), () => {
+        shot.taste = { ...(shot.taste ?? {}), [key]: before };
+        if (previous) markPressed(group, previous); else $$("button", group).forEach((x) => { x.setAttribute("aria-pressed", "false"); x.setAttribute("aria-checked", "false"); });
+      });
+    }));
+  }
+}
+// Runs a review for `shot`. Taste goes with it once both scales are chosen (never for manual shots).
+// buttonSel/boxSel find the live elements again afterwards; isCurrent() says the view still shows this shot.
+function bindReviewButton(shot, { buttonSel, boxSel, isCurrent, manual }) {
+  const button = $(buttonSel);
+  if (!button) return;
+  const label = () => (shot?.review ? "Review again" : "Review shot");
+  if (!shot || S.reviewPending.has(shot.id)) button.disabled = true;
+  button.onclick = async () => {
+    if (!shot || S.reviewPending.has(shot.id)) return;
+    const sb = shot.taste?.sourBitter, body = shot.taste?.body;
+    const feedback = !manual && sb != null && body != null ? { sourBitter: sb, body, enjoyment: shot.enjoyment ?? null, notes: null } : null;
+    S.reviewPending.add(shot.id); button.disabled = true; button.textContent = "Reviewing…";
+    try {
+      const saved = await S.api.review(shot.id, feedback, bagInfoForShot(shot));
+      shot.review = saved;
+      if (feedback) shot.taste = { sourBitter: feedback.sourBitter, body: feedback.body };
+      const listed = S.shots.find((x) => x.id === shot.id);
+      if (listed && listed !== shot) { listed.review = saved; if (feedback) listed.taste = shot.taste; }
+      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = reviewHtml(saved);
+    } catch (err) {
+      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    } finally {
+      S.reviewPending.delete(shot.id);
+      const now = isCurrent() && $(buttonSel);
+      if (now) { now.disabled = false; now.textContent = label(); }
+    }
+  };
+}
 function showAfterShot(shot, pts, context = {}) {
   const p = $("#afterShot");
   p.hidden = false;
@@ -1598,17 +1652,13 @@ function showAfterShot(shot, pts, context = {}) {
   const window = !manual && (shot?.profileTitle ?? context.profileTitle) === r?.profileTitle ? r?.targetTimeS ?? null : null;
   const [lo, hi] = window || [0, 0];
   const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
-  const taste = shot?.taste ?? {};
-  const scale = (id, label, opts, initial) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${id}" role="radiogroup" aria-label="${label}">${opts.map(([v, t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${initial === v}" aria-pressed="${initial === v}">${t}</button>`).join("")}</div></div>`;
   p.innerHTML = `
     <div class="row between"><h2>How was it?</h2>${timing}</div>${unsaved}
     ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
-    <div id="tasteControls">${scale("sb", "Taste", [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]], taste.sourBitter)}
-    ${scale("bd", "Body", [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]], taste.body)}<p class="muted small">Choose both to include taste; leave them untouched if you haven't rated this shot.</p></div>
+    <div id="tasteControls">${tasteScalesHtml(shot?.taste, { sourBitter: "sb", body: "bd" })}</div>
     <div class="row between"><div class="row"><span class="label">Enjoyment</span>${starsHtml(rating, "afterStars")}</div>
       <div class="row"><button class="btn primary" id="reviewShot" ${!shot ? "disabled" : ""}>${shot?.review ? "Review again" : "Review shot"}</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
     <div id="reviewBox">${reviewHtml(shot?.review)}</div>`;
-  const val = (id) => { const selected = $(`#${id} [aria-pressed="true"]`); return selected ? Number(selected.dataset.v) : null; };
   if (manual) {
     $("#tasteControls").hidden = true;
     $("#pinShot").hidden = !bean;
@@ -1619,7 +1669,7 @@ function showAfterShot(shot, pts, context = {}) {
     $("#reviewBox").before(notes);
     $("#afterNotes").onchange = (e) => { shot.notes = e.target.value; S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes")); };
   }
-  $$(".seg.tap", p).forEach((g) => $$("button", g).forEach((b) => (b.onclick = () => $$("button", g).forEach((x) => { x.setAttribute("aria-pressed", String(x === b)); x.setAttribute("aria-checked", String(x === b)); }))));
+  bindTasteScales(shot, { sourBitter: "sb", body: "bd" });
   // Closing the review readies the chart for the next shot: the profile again, not this one.
   $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); if (S.snap?.state?.state !== "espresso") S.live = []; renderLive(); };
   $(".live-col").classList.add("has-after");
@@ -1629,25 +1679,7 @@ function showAfterShot(shot, pts, context = {}) {
     rating = n;
     if (shot) { shot.enjoyment = n; S.api.annotate(shot.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating")); }
   });
-  const reviewButton = $("#reviewShot");
-  if (S.reviewPending.has(shot?.id)) reviewButton.disabled = true;
-  reviewButton.onclick = async () => {
-    if (!shot || S.reviewPending.has(shot.id)) return;
-    const sb = val("sb"), body = val("bd");
-    const feedback = !manual && sb != null && body != null ? { sourBitter: sb, body, enjoyment: rating, notes: null } : null;
-    S.reviewPending.add(shot.id); reviewButton.disabled = true; reviewButton.textContent = "Reviewing…";
-    try {
-      const saved = await S.api.review(shot.id, feedback, bagInfoForShot(shot));
-      shot.review = saved;
-      if (feedback) shot.taste = { sourBitter: feedback.sourBitter, body: feedback.body };
-      if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) $("#reviewBox").innerHTML = reviewHtml(saved);
-    } catch (err) {
-      if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) $("#reviewBox").innerHTML = `<p class="error">${esc(err.message)}</p>`;
-    } finally {
-      S.reviewPending.delete(shot.id);
-      if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) { reviewButton.disabled = false; reviewButton.textContent = shot.review ? "Review again" : "Review shot"; }
-    }
-  };
+  bindReviewButton(shot, { buttonSel: "#reviewShot", boxSel: "#reviewBox", manual, isCurrent: () => p.dataset.shotId === (shot?.id ?? "") && S.afterViewToken === viewToken });
   const pinBtn = $("#pinShot");
   const pinLabel = () => (pinBtn.textContent = bean?.bestShotId === shot?.id ? "Remove reference" : "Set as reference");
   pinLabel();
@@ -2382,8 +2414,7 @@ function renderShotDetail() {
     <div class="legend">${legendHtml(false)}${c ? `<span><span class="swatch" style="background:var(--muted)"></span>Faint: ${esc(c.coffee || "")} ${new Date(c.timestamp).toLocaleDateString()}</span>` : ""}</div>
     <div class="row"><span class="label">Rating</span>${starsHtml(s.enjoyment, "detailStars")}</div>
     <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
-    ${s.manual ? "" : `<div class="scale-row"><span class="label">Taste</span><div class="seg tap" id="detailSb" role="radiogroup" aria-label="Taste">${[[-2,"Sour"],[-1,"A bit sour"],[0,"Balanced"],[1,"A bit bitter"],[2,"Bitter"]].map(([v,t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${s.taste?.sourBitter === v}" aria-pressed="${s.taste?.sourBitter === v}">${t}</button>`).join("")}</div></div>
-    <div class="scale-row"><span class="label">Body</span><div class="seg tap" id="detailBody" role="radiogroup" aria-label="Body">${[[-2,"Thin"],[-1,"Light"],[0,"Just right"],[1,"Rich"],[2,"Heavy"]].map(([v,t]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${s.taste?.body === v}" aria-pressed="${s.taste?.body === v}">${t}</button>`).join("")}</div></div><p class="muted small">Choose both to include taste in a review.</p>`}
+    ${s.manual ? "" : tasteScalesHtml(s.taste, { sourBitter: "detailSb", body: "detailBody" })}
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>
     <div class="row"><button class="btn primary" id="reviewDetail">${s.review ? "Review again" : "Review shot"}</button></div>
     <div id="detailReview">${reviewHtml(s.review)}</div>`;
@@ -2403,39 +2434,8 @@ function renderShotDetail() {
     try { await S.api.annotate(s.id, { espressoNotes: text }); s.notes = text; toast("Notes saved"); }
     catch (err) { s.notes = before; toast(`Couldn't save the notes: ${failText(err)}. They're still in the box`); }
   };
-  for (const [selector, key] of [["#detailSb", "sourBitter"], ["#detailBody", "body"]]) {
-    const group = $(selector);
-    if (!group) continue;
-    $$('button', group).forEach((button) => button.onclick = async () => {
-      const value = Number(button.dataset.v);
-      $$('button', group).forEach((other) => { const selected = other === button; other.setAttribute("aria-pressed", String(selected)); other.setAttribute("aria-checked", String(selected)); });
-      s.taste = { ...(s.taste ?? {}), [key]: value };
-      await S.api.annotate(s.id, { extras: { crema: { [key]: value } } }).catch(() => toast("Couldn't save taste feedback"));
-    });
-  }
-  const reviewButton = $("#reviewDetail");
-  if (S.reviewPending.has(s.id)) reviewButton.disabled = true;
-  reviewButton.onclick = async () => {
-    if (S.reviewPending.has(s.id)) return;
-    const sb = s.taste?.sourBitter, body = s.taste?.body;
-    const feedback = sb != null && body != null ? { sourBitter: sb, body, enjoyment: s.enjoyment, notes: null } : null;
-    S.reviewPending.add(s.id); reviewButton.disabled = true; reviewButton.textContent = "Reviewing…";
-    try {
-      const saved = await S.api.review(s.id, feedback, bagInfoForShot(s));
-      s.review = saved;
-      const current = S.shots.find((shot) => shot.id === s.id);
-      if (current) current.review = saved;
-      if (S.selShot === s.id && $("#detailReview")) $("#detailReview").innerHTML = reviewHtml(saved);
-    } catch (err) {
-      if (S.selShot === s.id && $("#detailReview")) $("#detailReview").innerHTML = `<p class="error">${esc(err.message)}</p>`;
-    } finally {
-      S.reviewPending.delete(s.id);
-      if (S.selShot === s.id) {
-        const currentButton = $("#reviewDetail");
-        if (currentButton) { currentButton.disabled = false; currentButton.textContent = s.review ? "Review again" : "Review shot"; }
-      }
-    }
-  };
+  bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
+  bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", manual: s.manual, isCurrent: () => S.selShot === s.id });
   const pin = $("#pinDetail");
   if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShots(); };
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mockBean } from "../server/llm/mock.js";
 import { extractJson } from "../server/llm/types.js";
 import { rulesDialIn, rulesRecipe } from "../server/recommend/index.js";
-import { baseline } from "../server/recommend/rules.js";
+import { baseline, restOf } from "../server/recommend/rules.js";
 import type { BeanInfo } from "../server/schema.js";
 
 const today = new Date("2026-11-05T08:00:00Z");
@@ -77,5 +77,23 @@ describe("extractJson", () => {
   it("reads fenced and bare JSON", () => {
     expect(extractJson('Here:\n```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(extractJson('sure {"a":{"b":2}} done')).toEqual({ a: { b: 2 } });
+  });
+});
+
+describe("restOf", () => {
+  const roasted = (days: number, roast: "light" | "medium" | "dark" = "medium"): BeanInfo => {
+    const d = new Date(today.getTime() - days * 864e5).toISOString().slice(0, 10);
+    return bean({ roastLevel: { value: roast, source: "web" }, roastDate: { value: d, source: "web" } });
+  };
+  it("uses the per-roast windows", () => {
+    expect(restOf(roasted(3), today)).toMatchObject({ status: "resting", window: [7, 28] });
+    expect(restOf(roasted(7), today).status).toBe("peak");
+    expect(restOf(roasted(28), today).status).toBe("peak");
+    expect(restOf(roasted(29), today).status).toBe("fading");
+    expect(restOf(roasted(10, "light"), today)).toMatchObject({ status: "resting", window: [14, 40] });
+    expect(restOf(roasted(4, "dark"), today)).toMatchObject({ status: "peak", window: [4, 21] });
+  });
+  it("is unknown without a roast date", () => {
+    expect(restOf(bean(), today)).toMatchObject({ status: "unknown", daysOffRoast: null });
   });
 });
