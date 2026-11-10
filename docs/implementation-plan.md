@@ -28,7 +28,8 @@ Decaid.
 
 1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
    in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
-   Preview the larger favourites proposal below before implementing it.
+   Implement the inline favourites improvement below before the next release;
+   the revised render is the current design proposal.
 2. **Startup edit race, fix ready for review:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
@@ -81,28 +82,37 @@ Reference patterns reviewed on 10 November:
   recommends at least 48 dp targets and 8 dp separation. For Crema, use at least
   48 CSS px in both dimensions as a layout floor, then check physical size on the
   scaled tablet; CSS px and Android dp are not assumed equivalent.
+- [Mono](https://github.com/meldavy/decaid-mono-skin), supplied by the user as a
+  general UI reference, not only for favourites. Its
+  [style guide](https://github.com/meldavy/decaid-mono-skin/blob/main/docs/STYLE.md)
+  keeps action positions consistent, specifies generous touch targets and checks
+  freeform text with long names. Its favourites CSS separates fixed controls from
+  a scrollable card grid. Use these interaction/review ideas within Crema's existing
+  design; do not infer a request to copy its visual theme or implementation.
 
-Recommended first preview: replace the squeezed strip with one full-width
-**Favourites** button, at least 48 px high, opening the existing sheet. Show the
-five saved slots as two columns of large tiles (one column on narrow phones),
-at least 64 px high with 8 px gaps. Each tile shows the name prominently and the
-saved profile plus dose/yield below; allow names to wrap. Tap the whole tile to
-load through the existing guarded path and close the sheet after success. Empty
-slots say **Save current recipe**. Use a labelled **Edit** action to enter edit
-mode, where tapping a tile opens rename/replace/clear; no long-press requirement
-or tiny adjacent menu. Failed saves/loads remain visible and keep the sheet open.
+**Revised after the user's render feedback:** use the available area below
+**Load onto machine** for an inline, vertically scrolling list of full-width
+favourite tiles. The separate picker was rejected as a waste of space and an
+unnecessary extra tap. Keep direct one-tap loading through the existing guarded
+path. Show a clear Favourites heading and labelled **Edit** control; edit mode
+opens rename/replace/clear from a tile. Empty slots say **Save current recipe**.
 
-Tradeoff: opening the picker adds one tap to loading a favourite, in exchange for
-readable names and comfortable targets without adding three rows to the already
-tight Brew panel. Preview at 1340×800 and 1005×552, plus phone size, before committing
-to the interaction. If direct one-tap access is essential, compare a full-width
-top strip as a separate layout option; do not squeeze five tiles into the left
-column again. Keep five slots, saved values and bagless semantics unchanged.
+Each tile shows the name prominently, followed by profile and dose/yield/temperature;
+allow names to wrap. The revised preview uses approximately 92 px-high tiles with
+8 px gaps. The list uses the remaining column height and scrolls independently
+while the recipe controls stay still at the normal tablet size. At the shortest
+viewport, retain the existing left-column scroll if needed to keep a useful list
+viewport rather than shrinking touch targets. Check this explicitly at 1005×552,
+including access to Load, the final slot and Edit. Keep five slots, saved values
+and bagless semantics unchanged. Failed loads/saves remain visible without
+silently changing the selected recipe.
 
 Acceptance: all targets meet the size floor at every supported viewport; names
-and saved recipe details are legible; load and edit are distinct; no Brew overflow
-or moved machine controls; live/demo behavior and guarded loading remain intact.
-This is a proposal, not implemented behavior.
+and saved recipe details are legible; load and edit are distinct; no outer-page
+overflow or moved machine controls; the deliberate list/left-column scrolling
+keeps every control reachable. Test touch scrolling without accidentally loading
+a tile, keyboard access, long names, and source/built/live/demo behavior.
+This is a rendered proposal, not implemented production behavior.
 
 ### Shot history: independent panes (confirmed UI bug)
 
