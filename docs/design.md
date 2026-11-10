@@ -55,6 +55,7 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 | Tighter tablet heights (`max-height 640`, `580`) | Progressive compaction | Hides the legend, after-shot metrics and favourites hint, and shrinks steppers |
 | Desktop / wide | `max-width 1180` breakpoint | Controls wrap under the chart |
 | Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, then the next shot |
+| Shots (`min-width 761`) | Fixed-height workspace | Status and heading stay visible; the shot list and detail panel scroll independently. Selecting a shot preserves the list position and starts its detail at the top; phone keeps stacked page scrolling |
 | Desktop demo, top-level | `showDeviceFrame()` | The app in a 1340×800 (or 390×844) iframe inside a bezel, scaled to fit; `?full` opts out |
 
 **Target device:** a 1340×800 landscape Android tablet, the size the community Lumen skin also targets (for example an 8.7-inch Samsung Galaxy Tab A-series). Android may scale web pages, so the tablet layout is tested at 1340×800, 1340×752 (nav bar), 1206×720, 1005×600 and 1005×552 by `scripts/check-tablet-fit.cjs`.

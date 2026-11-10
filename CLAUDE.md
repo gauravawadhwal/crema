@@ -63,6 +63,7 @@ UI checks (Playwright is a dev dependency; `npx playwright install chromium` onc
 ```bash
 node scripts/e2e-demo.cjs            # click through the demo at tablet and phone size
 node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
+node scripts/e2e-shot-history.cjs    # independent history panes, paging, keyboard and phone resize (--built too)
 node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
 node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy

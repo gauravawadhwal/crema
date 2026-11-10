@@ -2379,6 +2379,7 @@ const bagInfoForShot = (s) => (s.batch ? S.shelf.find((b) => b.batch === s.batch
 const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch === s.batch)?.info.name.value || "No coffee recorded";
 async function renderShots(more = false) {
   const list = $("#shotList");
+  const scrollTop = list.scrollTop;
   if (!more) list.innerHTML = `<p class="muted">Loading…</p>`;
   try {
     const page = await S.api.shotPage(more ? S.shots.length : 0, SHOTS_PER_PAGE);
@@ -2389,6 +2390,10 @@ async function renderShots(more = false) {
     list.innerHTML = `<p class="muted">Couldn't load your shots (${esc(e.message)}).</p><button class="btn" id="retryShots">Try again</button>`;
     $("#retryShots").onclick = () => renderShots(); $("#shotDetail").innerHTML = ""; return;
   }
+  renderShotList(scrollTop);
+}
+function renderShotList(scrollTop = $("#shotList").scrollTop) {
+  const list = $("#shotList");
   if (!S.shots.length) { list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
   if (!S.shots.some((s) => s.id === S.selShot)) S.selShot = S.shots[0].id;
   list.innerHTML = S.shots.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
@@ -2397,15 +2402,18 @@ async function renderShots(more = false) {
       <button class="open" data-open="${esc(s.id)}"><strong>${esc(shotCoffee(s))}</strong>
         <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("")
     + (S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "");
+  list.scrollTop = scrollTop;
   const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
   requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
-  $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShots(); }));
-  $$("[data-cmp]").forEach((b) => (b.onchange = () => { S.cmpShot = b.checked ? b.dataset.cmp : null; renderShots(); }));
+  $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShotList(); list.querySelector(`[data-open="${CSS.escape(S.selShot)}"]`)?.focus({ preventScroll: true }); }));
+  $$("[data-cmp]").forEach((b) => (b.onchange = () => { const id = b.dataset.cmp; S.cmpShot = b.checked ? id : null; renderShotList(); list.querySelector(`[data-cmp="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }); }));
   renderShotDetail();
 }
 function renderShotDetail() {
   const s = S.shots.find((x) => x.id === S.selShot), c = S.shots.find((x) => x.id === S.cmpShot);
   if (!s) { $("#shotDetail").innerHTML = ""; return; }
+  const detail = $("#shotDetail"), changedShot = detail.dataset.shotId !== s.id, scrollTop = detail.scrollTop;
+  detail.dataset.shotId = s.id;
   const bean = S.shelf.find((b) => b.id === s.beanId || (s.batch && b.batch === s.batch));
   $("#shotDetail").innerHTML = `
     <div class="row between"><div><span class="label">${esc(new Date(s.timestamp).toLocaleString())}</span><h2>${esc(s.coffee || "Shot")}</h2></div><span class="muted small">${esc(s.profileTitle || "")}</span></div>
@@ -2418,6 +2426,7 @@ function renderShotDetail() {
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>
     <div class="row"><button class="btn primary" id="reviewDetail">${s.review ? "Review again" : "Review shot"}</button></div>
     <div id="detailReview">${reviewHtml(s.review)}</div>`;
+  detail.scrollTop = changedShot ? 0 : scrollTop;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
   bindStars($("#detailStars"), s.enjoyment, async (n) => {
     const before = s.enjoyment;
@@ -2437,7 +2446,7 @@ function renderShotDetail() {
   bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
   bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", manual: s.manual, isCurrent: () => S.selShot === s.id });
   const pin = $("#pinDetail");
-  if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShots(); };
+  if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShotList(); };
 }
 
 /* ================= settings ================= */
@@ -2809,6 +2818,7 @@ function route(scroll = true) {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "brew";
   VIEWS.forEach((n) => ($(`#view-${n}`).hidden = n !== v));
   document.body.classList.toggle("on-brew", v === "brew");
+  document.body.classList.toggle("on-shots", v === "shots");
   $$(".tab[data-view]").forEach((t) => (t.dataset.view === v || (v === "add" && t.dataset.view === "shelf") ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current")));
   if (v === "brew") { renderNextShot(); renderFavs(); renderControls(); renderReadouts(); requestAnimationFrame(renderLive); }
   if (v === "shelf") renderShelf();
