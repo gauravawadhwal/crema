@@ -23,11 +23,21 @@
 
 ## Data
 
-Visible live clients refresh the shelf every five seconds and on focus/resume,
-so a bag added from a phone appears on an already-open tablet. Reads do not overlap;
-failed background reads keep the last shelf, and refreshes retain the selected bag
-and unsaved next-shot edits. “Brew this” selects a bag on that device; loading its
-recipe onto the machine remains a separate action.
+Visible live clients check the shelf every five seconds and on focus/resume, so a bag
+added from a phone appears on an already-open tablet. The five-second check reads a
+cheap signal (the open coffees, their open bags and the newest shot, which changes
+whenever the shelf changes on another device) and reads the whole shelf only when it
+differs. Crema's own records (recipe, photo, reference shot) are not in the signal, so
+focus, the minute check and the end of a shot read in full, as does every poll while a
+coffee that just appeared is still waiting for its recipe (up to about two minutes).
+Reads do not overlap; failed background reads keep the last shelf, and refreshes retain
+the selected bag and unsaved next-shot edits. “Brew this” selects a bag on that device;
+loading its recipe onto the machine remains a separate action.
+
+Records that several devices share (`settings`, `bean:<id>`) are never written from a
+copy read earlier. Decaid's key-value store has no revisions, so each writer re-reads
+the record right before writing and merges only the fields it changes
+(`server/control/record.ts`). Other keys are per-device or written whole.
 
 | What | Where |
 |---|---|
@@ -63,6 +73,26 @@ the next selected bag is never used to identify the shot just finished.
 ## The rules engine (`skin/engine.js`)
 
 `server/engine.ts` re-exports the profile catalog, ranking, recipes, dial-in rules and defaults. `scripts/build-engine.mjs` bundles it with esbuild into `skin/engine.js`, a classic script that sets `window.CremaEngine`. The file is committed so the skin has no build step. `npm test` fails if it's stale; rebuild with `npm run build:engine`.
+
+## Control and record logic (`server/control/`)
+
+Decisions that used to sit inline in `skin/app.js` are pure functions here: they take
+state and return what to do, and the app does the reading, writing, toasts and redraws.
+They reach the browser through `server/engine.ts` and `skin/engine.js` (as `E.<name>`),
+so they are tested by vitest without a DOM: `test/control.test.ts` for the control
+modules and `test/record.test.ts` for the record merges.
+
+| Module | Decides |
+|---|---|
+| `workflow.ts` | Whether the machine's recipe (read back from the workflow) matches the next-shot panel (`recipeMatches`, `sameGrind`), what to do about a difference (`reconcileOutcome`), and the patch that adopts the machine's recipe (`adoptPatch`) |
+| `shot.ts` | Whether a shot is running (`shotRunning`: espresso, or the machine socket is down after dropping mid-shot, `S.shotAcross`), whether a recipe load is held, skipped or sent (`loadDecision`), and what a machine snapshot means given the previous one, including the end of a shot (`snapshotDecision`, `socketFrame`, `socketLost`) |
+| `start.ts` | Whether a start may go ahead (`startGate`: already starting, machine unlinked, something running, machine not ready), what a start does first (`startSteps`), and how a start or stop settles (`startSettled`, `afterStartSent`) |
+| `bag.ts` | How much of a bag is left: grams used from recorded shots, and Crema's correction when `weightRemaining` was changed elsewhere (`gramsUsed`, `bagRemaining`) |
+| `shelf.ts` | Which shelf rows are new and still waiting for their recipe, so the poll reads in full (`trackNewRows`, `pruneNewRows`, `waitingForRecipe`) |
+| `record.ts` | The patch for a shared-record write, merged into a fresh read (`mergeRecord`, `recommendPatch`, `saveBeanPatch`) |
+
+The rest-window table is in `server/recommend/rules.ts` (`restOf`) and reaches the
+shelf through the same bundle.
 
 ## The web app's API contract
 
@@ -119,7 +149,7 @@ Snapshots carry `state.state` and `state.substate`, pressure, flow, targets, tem
 
 ## Crema server
 
-- **Routes** (`server/app.ts`) are listed in the README. Every body is validated with Zod; a validation error is a 400. `/api/*` answers cross-origin calls only from the server's own origin, `http://` pages on port 3000 (Decaid serving the skin on the tablet), `localhost`, and anything in `CORS_ORIGINS`; other browser origins get 403. `/api/identify` accepts at most four photos of 20 MB each.
+- **Routes** (`server/app.ts`) are listed in the README. Every body is validated with Zod; a validation error is a 400. `/api/*` answers cross-origin calls only from the server's own origin, `http://` pages on port 3000 (Decaid serving the skin on the tablet), `localhost`, and anything in `CORS_ORIGINS`; other browser origins get 403. `/api/identify` accepts at most four photos of 20 MB each (413 or 400 beyond that), and `/api/transcribe` has a body limit. Results say which provider answered. Unexpected errors return a generic 500 and the detail goes to the server log.
 - **Product photos** (`server/images.ts`) are read from the roaster page's Open Graph, JSON-LD or Twitter metadata, and `/api/images/cache` keeps a copy. Fetches go through `server/safe-fetch.ts`: only public addresses, checked after DNS resolution and again on every redirect before it's requested, with one 12 s deadline and an 8 MB limit enforced while streaming.
 - **LLM chain** (`server/llm/`): each provider implements `structured(req)` and returns Zod-validated output. The chain falls through to the next provider on failure. The CLI providers run the official `claude` and `codex` CLIs headless, so calls bill to whichever account is logged in on the host. That suits a personal installation; shared deployments should use API keys.
 
