@@ -18,7 +18,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 | WS | Work | Size | Depends on | Status / evidence |
 |---|---|---|---|---|
-| 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #NN open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
+| 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #56 open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
 | 2 | Quick fixes for measured defects | S | 1 | Not started |
 | 3 | Brew at rest | M | 2 | Not started |
 | 4 | Pour mode | L | 3 | Not started |
