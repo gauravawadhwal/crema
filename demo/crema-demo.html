@@ -745,6 +745,47 @@ body.pouring #controls { position: relative; z-index: 5; }
   body.pouring #controls .stop-wrap { display: flex; gap: var(--s-8); width: 100%; }
   body.pouring #controls .stop-btn { flex: 1; width: auto; }
 }
+
+/* Recipe values (WS 6). These overrides also apply at compact tablet heights. */
+#nextShot .profile-btn .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; }
+#nextShot .profile-btn .t.long { font-size: var(--t-s); }
+.recipe-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.recipe-tile { min-width: 0; min-height: calc(var(--hit) + var(--s-24) + var(--s-12)); padding: var(--s-8) var(--s-4); display: grid; gap: var(--s-4); justify-items: center; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); cursor: pointer; }
+.recipe-tile .num { font-size: var(--t-xl); white-space: nowrap; }
+.recipe-tile small { margin-left: var(--s-4); font-size: var(--t-xs); }
+.recipe-tile > .muted { font-size: var(--t-xs); white-space: nowrap; }
+#nextShot .stepper { grid-template-columns: calc(var(--hit) + var(--s-8)) minmax(0, 1fr) calc(var(--hit) + var(--s-8)); }
+#nextShot .stepper button, #grindInput { min-height: calc(var(--hit) + var(--s-8)); font-size: var(--t-l); touch-action: none; }
+#settings .mini { grid-template-columns: var(--hit) calc(var(--hit) + var(--s-24)) var(--hit); }
+#settings .mini button { height: var(--hit); touch-action: none; }
+.recipe-sheet { width: min(calc(var(--hit) * 12), 100%); }
+.value-sheet { display: grid; gap: var(--s-12); }
+.value-handle { min-height: var(--hit); width: 100%; border: 0; background: transparent; display: grid; place-items: center; cursor: pointer; touch-action: none; }
+.value-handle span { width: var(--hit); height: var(--s-4); background: var(--muted); border-radius: var(--r); }
+.value-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-8); }
+.value-tabs button { min-height: var(--hit); border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); font-size: var(--t-m); cursor: pointer; }
+.value-tabs [aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.value-number { text-align: center; font: calc(var(--t-hero) - var(--t-xl)) var(--font-mono); font-variant-numeric: tabular-nums; }
+.value-number small { font-size: var(--t-xl); margin-left: var(--s-8); }
+.value-caption { text-align: center; font-size: var(--t-s); min-height: var(--s-24); }
+.value-ruler { position: relative; height: calc(var(--hit) + var(--s-8)); overflow: hidden; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); touch-action: none; cursor: ew-resize; }
+.ruler-ticks { position: absolute; inset: var(--s-12) 0; background: repeating-linear-gradient(to right, var(--muted) 0 1px, transparent 1px var(--s-12)); background-position-x: var(--ruler-offset, 0px); }
+.ruler-marker { position: absolute; left: 50%; top: var(--s-4); bottom: var(--s-4); border-left: var(--s-4) solid var(--accent); }
+.value-limits { display: flex; justify-content: space-between; font-size: var(--t-xs); color: var(--muted); margin-top: var(--s-4); }
+.value-stop, .value-recent { margin-top: var(--s-12); }
+.value-stop { display: flex; flex-wrap: wrap; gap: var(--s-8); }
+.value-stop [aria-pressed="true"] { border-color: var(--accent); }
+.value-stop p { margin: 0; }
+.value-recent > div { display: flex; flex-wrap: wrap; gap: var(--s-8); margin-top: var(--s-4); }
+.value-footer, .value-footer > div { display: flex; gap: var(--s-8); }
+.value-footer { justify-content: space-between; position: sticky; bottom: 0; background: var(--surface); padding-top: var(--s-8); }
+.value-footer .btn { min-height: calc(var(--hit) + var(--s-8)); padding: var(--s-8) var(--s-12); }
+#valueMinus, #valuePlus { width: calc(var(--hit) + var(--s-12)); touch-action: none; }
+@media (min-width: 900px) and (max-height: 640px) and (orientation: landscape) {
+  .recipe-tile { min-height: calc(var(--hit) + var(--s-24)); }
+  #nextShot .stepper { grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); }
+  #nextShot .stepper button, #grindInput { min-height: var(--hit); }
+}
 </style>
 <div class="app">
   <nav class="rail" aria-label="Sections">
@@ -4162,10 +4203,8 @@ function renderNextShot() {
       ${b && S.shelf.length > 1 ? `<div class="cycler"><button class="btn icon-only small" id="prevBean" aria-label="Previous coffee">‹</button><button class="btn icon-only small" id="nextBean" aria-label="Next coffee">›</button></div>` : ""}</div>
     </div>
     ${n ? `
-    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t">${esc(n.profileTitle)}</span><br><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? pickLabel(b.recipeSource) : "Selected from installed profiles")}</span></span><span>›</span></button></div>
-    <div class="field-row"><span class="label">Dose</span>${stepper("dose", `${fmt1(n.doseG)}<small>grams in</small>`)}</div>
-    <div class="field-row"><span class="label">Yield</span>${n.manual || S.noBag ? `<div class="stepper"><button type="button" data-step="yield:-1" aria-label="Less">−</button><button type="button" class="val stop-choice" id="stopMode">${n.yieldG > 0 ? fmt1(n.yieldG) : "Off"}<small>${n.yieldG > 0 ? "Tap for manual stop" : "Tap to set weight"}</small></button><button type="button" data-step="yield:1" aria-label="More">+</button></div>` : stepper("yield", `${fmt1(n.yieldG)}<small>1:${ratio}${S.scale.connected ? " · auto-stop" : ""}</small>`)}</div>
-    <div class="field-row"><span class="label">Temp</span>${stepper("temp", `${fmt1(n.tempC)}<small>°C first step</small>`)}</div>
+    <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t ${n.profileTitle.length > 45 ? "long" : ""}">${esc(n.profileTitle)}</span><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? pickLabel(b.recipeSource) : "Selected from installed profiles")}</span></span><span>›</span></button></div>
+    <div class="recipe-tiles">${Object.entries(RECIPE_FIELDS).map(([key, f]) => `<button type="button" class="recipe-tile" data-value="${key}"><span class="label">${f.label}</span><span class="num">${key === "yield" && n.yieldG === 0 ? "Off" : fmtC(n[f.field])}<small>${key === "yield" && n.yieldG === 0 ? "" : f.unit}</small></span><span class="muted">${key === "dose" ? `${fmtC(S.prefs.basketDoseG ?? n.doseG)} g basket` : key === "yield" ? ratio ? `1:${ratio}` : "Manual stop" : "all steps"}</span></button>`).join("")}</div>
     <div class="field-row"><span class="label">Grind</span><div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
     <div class="row"><button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine"}</button><button class="btn ghost" id="resetRecipe">Reset</button></div>
     ${r && !n.direct && !n.manual ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px"><ul class="why">${(r.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${r.dialIn ? `<div class="advice small">${esc(r.dialIn)}</div>` : ""}<div class="muted small">Target ${r.targetTimeS?.join("–") ?? "–"} s · ${esc(r.grindHint || "")}</div></div></details>` : ""}
@@ -4177,34 +4216,145 @@ function renderNextShot() {
   }
   if (!n) return;
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
-  $$("[data-step]", el).forEach((btn) => (btn.onclick = () => step(btn.dataset.step)));
+  $$("[data-value]", el).forEach((btn) => (btn.onclick = () => openValueSheet(btn.dataset.value)));
+  $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, () => { renderNextShot(); renderControls(); }));
   $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
   $("#resetRecipe").onclick = () => n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot());
-  const stopMode = $("#stopMode");
-  if (stopMode) stopMode.onclick = () => {
-    if (n.yieldG > 0) { n.lastYieldG = n.yieldG; n.yieldG = 0; S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls(); }
-    else {
-      openSheet(`<h2>Stop at weight</h2><p class="muted">Requires a connected scale. Profile time limits still apply. Manual-profile scale stopping still needs a supervised check on your machine.</p><div class="field"><label for="weightTarget">Grams out</label><input type="number" min="1" id="weightTarget" value="${n.lastYieldG ?? ""}"></div><button class="btn primary" id="saveWeight">Set target</button>`);
-      $("#saveWeight").onclick = () => { const v = Number($("#weightTarget").value); if (!Number.isFinite(v) || v <= 0 || v > 1000) return toast("Enter a weight between 1 and 1000 g"); n.yieldG = v; S.loaded = false; saveBrewChoice(); closeSheet(); renderNextShot(); renderControls(); };
-    }
-  };
 }
-function stepper(key, valHtml) {
-  return `<div class="stepper"><button type="button" data-step="${key}:-1" aria-label="Less">−</button><div class="val">${valHtml}</div><button type="button" data-step="${key}:1" aria-label="More">+</button></div>`;
+// One source for recipe editing bounds. Yield may be zero for direct/manual profiles.
+const RECIPE_FIELDS = {
+  dose: { field: "doseG", label: "Dose", unit: "g", step: 0.5, min: 5, max: 30 },
+  yield: { field: "yieldG", label: "Yield", unit: "g", step: 1, min: 10, max: 1000 },
+  temp: { field: "tempC", label: "Temp", unit: "°C", step: 0.5, min: 60, max: 100 },
+};
+function recipeField(key, recipe = S.next) {
+  const f = RECIPE_FIELDS[key];
+  return { ...f, min: key === "yield" && (recipe.direct || recipe.manual || S.noBag) ? 0 : f.min };
 }
-function step(spec) {
-  const [key, dir] = spec.split(":"); const d = Number(dir), n = S.next;
-  if (key === "dose") n.doseG = clamp(round(n.doseG + d * 0.5, 0.5), 5, 30);
-  if (key === "yield") n.yieldG = clamp(round(n.yieldG + d, 0.5), n.direct || n.manual ? 0 : 10, 1000);
-  if (key === "temp") n.tempC = clamp(round(n.tempC + d * 0.5, 0.5), 60, 100);
+function recipeValue(key, value, recipe = S.next) {
+  const f = recipeField(key, recipe);
+  return clamp(round(value, f.step), f.min, f.max);
+}
+function recipeEdited() { S.loaded = false; saveBrewChoice(); }
+function step(spec, render = true) {
+  const [key, dir] = spec.split(":"), d = Number(dir), n = S.next;
+  if (RECIPE_FIELDS[key]) n[RECIPE_FIELDS[key].field] = recipeValue(key, n[RECIPE_FIELDS[key].field] + d * RECIPE_FIELDS[key].step);
   if (key === "grind") {
-    // Empty or not a number (a note like "2.3 turns"): start from the start value.
     const g = grindSettings(), v = parseFloat(n.grind);
     n.grind = String(Number.isFinite(v) ? +(v + d * g.step).toFixed(3) : g.start);
     local.set(`grind:${n.beanId ?? "bagless"}`, n.grind);
   }
-  S.loaded = false; saveBrewChoice(); renderNextShot(); renderControls();
+  recipeEdited();
+  if (render) { renderNextShot(); renderControls(); }
+}
+// Shared pointer/keyboard stepper: the pointer's click is consumed, keyboard clicks
+// still take one step. Keep the pressed element mounted until the gesture ends.
+let stopRepeat = null;
+function bindRepeat(button, change, commit = () => {}) {
+  let timer, active = false, started = 0, pointerClick = false;
+  const finish = () => {
+    if (!active) return;
+    active = false; clearTimeout(timer);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    window.removeEventListener("blur", finish);
+    if (stopRepeat === finish) stopRepeat = null;
+    commit();
+  };
+  const repeat = () => {
+    if (!active || !button.isConnected || button.disabled) return finish();
+    change();
+    timer = setTimeout(repeat, Date.now() - started > 1400 ? 65 : 130);
+  };
+  button.onpointerdown = (e) => {
+    if (e.button !== 0 || button.disabled) return;
+    stopRepeat?.();
+    active = true; pointerClick = true; started = Date.now(); stopRepeat = finish;
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    window.addEventListener("blur", finish);
+    change(); timer = setTimeout(repeat, 400);
+  };
+  button.onpointerleave = finish;
+  button.onclick = (e) => {
+    if (pointerClick && e.detail !== 0) { pointerClick = false; return; }
+    pointerClick = false;
+    if (!button.disabled) { change(); commit(); }
+  };
+}
+function openValueSheet(key) {
+  const recipe = S.next, coffee = S.current, draft = { ...recipe };
+  let tab = key, recent = [];
+  const canStopManually = !!(recipe.manual || S.noBag);
+  openSheet(`<div class="value-sheet"><button type="button" class="value-handle" aria-label="Close value sheet"><span></span></button>
+    <div class="value-tabs" role="tablist" aria-label="Recipe value">${Object.entries(RECIPE_FIELDS).map(([k, f]) => `<button type="button" role="tab" id="value-tab-${k}" aria-controls="valuePanel" data-value-tab="${k}">${f.label}</button>`).join("")}</div>
+    <div id="valuePanel" role="tabpanel"><div class="value-number"><span id="valueNumber"></span><small id="valueUnit"></small></div><div class="muted value-caption" id="valueCaption"></div>
+    <div id="valueRuler" class="value-ruler" role="slider" tabindex="0" aria-orientation="horizontal"><div class="ruler-ticks" aria-hidden="true"></div><span class="ruler-marker" aria-hidden="true"></span></div>
+    <div class="value-limits num"><span id="valueMin"></span><span>Drag to adjust</span><span id="valueMax"></span></div>
+    <div class="value-stop" id="valueStop" hidden><button class="btn" type="button" id="stopManual">Stop manually</button><button class="btn" type="button" id="stopWeight">Stop at weight</button><p class="muted small">Requires a connected scale. Profile time limits still apply. Manual-profile scale stopping still needs a supervised check on your machine.</p></div>
+    <div class="value-recent" id="valueRecent"></div></div>
+    <div class="value-footer"><div><button class="btn" id="valueMinus" aria-label="Less">−</button><button class="btn" id="valuePlus" aria-label="More">+</button></div><div><button class="btn ghost" id="valueCancel">Cancel</button><button class="btn primary" id="valueSet">Set</button></div></div></div>`);
+  $("#sheetClose").parentElement.remove();
+  const sheet = $("#sheet"), ruler = $("#valueRuler"), handle = $(".value-handle", sheet);
+  sheet.classList.add("recipe-sheet");
+  sheet.setAttribute("aria-label", "Edit recipe values");
+  const current = () => !$("#sheetBack").hidden && sheet.contains(ruler);
+  const paintRecent = () => {
+    const f = recipeField(tab, recipe);
+    const values = [...new Set(recent.filter((s) => coffee ? s.beanId === coffee.id || (s.batch && S.shelf.some((b) => b.id === coffee.id && b.batch === s.batch)) : !s.beanId && !s.batch)
+      .map((s) => tab === "temp" ? s.profile?.steps?.[0]?.temperature : s[f.field])
+      .filter((v) => v != null && Number.isFinite(Number(v)) && Number(v) >= f.min && Number(v) <= f.max)
+      .map((v) => recipeValue(tab, Number(v), recipe)))].slice(0, 4);
+    $("#valueRecent").innerHTML = values.length ? `<span class="label">Recent</span><div>${values.map((v) => `<button type="button" class="btn" data-recent="${v}">${fmtC(v)} ${f.unit}</button>`).join("")}</div>` : "";
+    $$("[data-recent]", sheet).forEach((b) => b.onclick = () => setValue(Number(b.dataset.recent)));
+  };
+  const paint = () => {
+    const f = recipeField(tab, recipe), v = draft[f.field];
+    $$("[data-value-tab]", sheet).forEach((b) => { const selected = b.dataset.valueTab === tab; b.setAttribute("aria-selected", String(selected)); b.tabIndex = selected ? 0 : -1; });
+    $("#valuePanel").setAttribute("aria-labelledby", `value-tab-${tab}`);
+    $("#valueNumber").textContent = tab === "yield" && v === 0 ? "Off" : fmtC(v);
+    $("#valueUnit").textContent = tab === "yield" && v === 0 ? "" : f.unit;
+    $("#valueCaption").textContent = tab === "yield" ? v > 0 ? `1:${(v / draft.doseG).toFixed(1)} · grams out` : "Stop manually" : tab === "temp" ? "Shifts all profile steps together" : `${fmtC(S.prefs.basketDoseG ?? draft.doseG)} g basket`;
+    for (const [k, value] of Object.entries({ "aria-label": f.label, "aria-valuemin": f.min, "aria-valuemax": f.max, "aria-valuenow": v, "aria-valuetext": `${v} ${f.unit}` })) ruler.setAttribute(k, value);
+    ruler.style.setProperty("--ruler-offset", `${-(v / f.step % 10) * 12}px`);
+    $("#valueMin").textContent = `${f.min} ${f.unit}`; $("#valueMax").textContent = `${f.max} ${f.unit}`;
+    $("#valueStop").hidden = !(tab === "yield" && canStopManually);
+    $("#stopManual").setAttribute("aria-pressed", String(draft.yieldG === 0)); $("#stopWeight").setAttribute("aria-pressed", String(draft.yieldG > 0));
+    paintRecent();
+  };
+  const setValue = (value) => { const f = recipeField(tab, recipe); draft[f.field] = recipeValue(tab, value, recipe); paint(); };
+  const chooseTab = (next) => { stopRepeat?.(); tab = next; paint(); };
+  $$("[data-value-tab]", sheet).forEach((b) => {
+    b.onclick = () => chooseTab(b.dataset.valueTab);
+    b.onkeydown = (e) => { const keys = Object.keys(RECIPE_FIELDS), i = keys.indexOf(tab); if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) { e.preventDefault(); chooseTab(keys[e.key === "Home" ? 0 : e.key === "End" ? 2 : (i + (e.key === "ArrowRight" ? 1 : 2)) % 3]); $(`#value-tab-${tab}`).focus(); } };
+  });
+  let drag = null;
+  ruler.onpointerdown = (e) => { if (e.button !== 0) return; const f = recipeField(tab, recipe); drag = { id: e.pointerId, x: e.clientX, value: draft[f.field] }; ruler.setPointerCapture(e.pointerId); ruler.focus(); };
+  ruler.onpointermove = (e) => { if (drag?.id === e.pointerId) setValue(drag.value + (e.clientX - drag.x) / 12 * recipeField(tab, recipe).step); };
+  ruler.onpointerup = ruler.onpointercancel = ruler.onlostpointercapture = () => { drag = null; };
+  ruler.onkeydown = (e) => {
+    const f = recipeField(tab, recipe), d = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+    if (d || e.key === "Home" || e.key === "End") { e.preventDefault(); setValue(e.key === "Home" ? f.min : e.key === "End" ? f.max : draft[f.field] + d * f.step); }
+  };
+  bindRepeat($("#valueMinus"), () => { const f = recipeField(tab, recipe); setValue(draft[f.field] - f.step); });
+  bindRepeat($("#valuePlus"), () => { const f = recipeField(tab, recipe); setValue(draft[f.field] + f.step); });
+  $("#stopManual").onclick = () => { if (draft.yieldG > 0) draft.lastYieldG = draft.yieldG; setValue(0); };
+  $("#stopWeight").onclick = () => setValue(draft.yieldG || draft.lastYieldG || draft.doseG * 2);
+  $("#valueCancel").onclick = closeSheet;
+  $("#valueSet").onclick = () => {
+    if (S.next !== recipe || S.current !== coffee) { closeSheet(); toast("Recipe changed. Open the value again"); return; }
+    for (const f of Object.values(RECIPE_FIELDS)) recipe[f.field] = draft[f.field];
+    if (draft.lastYieldG != null) recipe.lastYieldG = draft.lastYieldG;
+    recipeEdited(); closeSheet(); renderNextShot(); renderControls();
+  };
+  let handleY = null;
+  handle.onclick = closeSheet;
+  handle.onpointerdown = (e) => { handleY = e.clientY; handle.setPointerCapture(e.pointerId); };
+  handle.onpointerup = (e) => { if (handleY != null && e.clientY - handleY > 48) closeSheet(); handleY = null; };
+  handle.onpointercancel = () => { handleY = null; };
+  paint(); $(`#value-tab-${tab}`).focus();
+  S.api.shots(40).then((shots) => { if (current()) { recent = shots; paintRecent(); } }).catch(() => {});
 }
 // Writing the workflow sends its profile to the machine at once, and Decaid doesn't
 // wait for a shot to finish: the DE1 runs its steps by index from that table, so a
@@ -5158,8 +5308,8 @@ async function sleepWake() {
 }
 
 /* ================= sheet ================= */
-function openSheet(html) { $("#sheet").innerHTML = html + `<div class="row"><button class="btn ghost small" id="sheetClose">Close</button></div>`; $("#sheetBack").hidden = false; $("#sheetClose").onclick = closeSheet; }
-function closeSheet() { $("#sheetBack").hidden = true; }
+function openSheet(html) { stopRepeat?.(); $("#sheet").classList.remove("recipe-sheet"); $("#sheet").removeAttribute("aria-label"); $("#sheet").innerHTML = html + `<div class="row"><button class="btn ghost small" id="sheetClose">Close</button></div>`; $("#sheetBack").hidden = false; $("#sheetClose").onclick = closeSheet; }
+function closeSheet() { stopRepeat?.(); $("#sheetBack").hidden = true; }
 
 /* ================= shelf ================= */
 async function renderShelf() {
@@ -5996,7 +6146,8 @@ async function renderSettings() {
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
-  const num = (id) => settingNumber($(`#${id}`)?.value, SETTING_LIMITS[id]);
+  const settingInputs = Object.fromEntries($$(".mini input", el).map((input) => [input.id, input]));
+  const num = (id) => settingNumber(settingInputs[id]?.value, SETTING_LIMITS[id]);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
     gStart: async () => { S.appSettings = await S.api.settings.set({ grindStart: num("gStart") }); },
@@ -6031,8 +6182,15 @@ async function renderSettings() {
       } catch (e) { input.value = saved; toast(`Couldn't save: ${e.message}`); }
       finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
     };
-    input.onchange = run;
-    $$(`[data-mini^="${id}:"]`).forEach((b) => (b.onclick = () => { if (saving || input.disabled) return; const d = Number(b.dataset.mini.split(":")[1]); const dp = (x) => (String(Math.abs(x)).split(".")[1] ?? "").length, places = Math.min(3, Math.max(dp(d), dp(Number(input.value)))); input.value = String(+(Number(input.value) + d).toFixed(places)); run(); }));
+    let saveTimer;
+    const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(run, 180); };
+    input.onchange = () => { clearTimeout(saveTimer); run(); };
+    $$(`[data-mini^="${id}:"]`).forEach((b) => bindRepeat(b, () => {
+      clearTimeout(saveTimer);
+      if (saving || input.disabled) return;
+      const d = Number(b.dataset.mini.split(":")[1]);
+      input.value = String(settingNumber(+(Number(input.value) + d).toFixed(3), SETTING_LIMITS[id]));
+    }, scheduleSave));
   }
   $$("#gStep button").forEach((b) => (b.onclick = async () => {
     const v = Number(b.dataset.v);

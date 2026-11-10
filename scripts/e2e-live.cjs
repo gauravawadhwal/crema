@@ -131,7 +131,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await recheck();
     const adopted = await S(() => ({ dose: S.next.doseG, loaded: S.loaded, toast: document.querySelector("#toast").textContent, label: document.querySelector(".pick-src")?.textContent }));
     check(adopted.dose === dose0 + 1.5 && adopted.loaded && /changed elsewhere/.test(adopted.toast) && /set on the machine/.test(adopted.label), "a change made elsewhere for this coffee's bag is taken, labelled and announced", JSON.stringify(adopted));
-    await S(() => step("dose:1")); // an unsaved edit here...
+    await S(() => (document.querySelector('[data-value="dose"]').click(), document.querySelector('#valuePlus').click(), document.querySelector('#valueSet').click())); // an unsaved edit here...
     const mine = await S(() => S.next.doseG);
     await wfPut({ context: { targetDoseWeight: 15 } }); // ...and another change elsewhere
     await recheck();
@@ -529,7 +529,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await page.waitForFunction(() => S.snap?.state?.state === "espresso", null, { timeout: 10000 });
       await page.waitForTimeout(2500);
       // An edit made mid-shot is held until the shot ends.
-      await S(() => step("dose:1"));
+      await S(() => (document.querySelector('[data-value="dose"]').click(), document.querySelector('#valuePlus').click(), document.querySelector('#valueSet').click()));
       const newDose = await S(() => S.next.doseG);
       check(await S(() => loadOntoMachine(true)) === "held" && await S(() => S.heldLoad), "a recipe loaded during a shot is held");
       page.on("request", watch);
@@ -602,7 +602,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       const tablet = await browser.newPage({ viewport: { width: 1340, height: 800 } });
       await tablet.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#shelf`);
       await tablet.waitForFunction(() => S.shelfLoaded && S.current?.recipe, null, { timeout: 15000 });
-      await tablet.evaluate(() => { step("dose:1"); });
+      await tablet.evaluate(() => { (document.querySelector('[data-value="dose"]').click(), document.querySelector('#valuePlus').click(), document.querySelector('#valueSet').click()); });
       const editedDose = await tablet.evaluate(() => S.next.doseG);
       // Add a second bag from the shelf.
       await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector(`[data-addbag="${bag1}"]`, { timeout: 10000 });
