@@ -13,7 +13,8 @@ supervised tablet session is not planned and agents should not ask for tablet ac
 unless the user offers it. A code review the same day found problems this plan had not
 listed (see "Code review and findings"). The fixes for F1 to F5 and the control logic
 under unit tests (phase 4 re-scoped) were merged into `main` on 10 November 2026 as
-PRs #42 to #46 and #48, with the review itself (#41) and the plan trim (#47). Nothing
+PRs #42 to #46 and #48, with the review itself (#41), the plan trim (#47), and the
+startup-edit race fix (#50). This carousel implementation includes PR #50. Nothing
 has been released or tagged since v0.4.1, and none of it has run on the tablet: it is
 checked against the simulator and CI only. Agents open a PR per piece of work and do
 not merge; tagging a release is the user's call. Software checks use
@@ -28,13 +29,14 @@ Decaid.
 
 1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
    in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
-   Implement the bottom favourites carousel below before the next release;
-   the revised render is the current design proposal.
-2. **Startup edit race, fix ready for review:**
+   The bottom favourites carousel below is implemented in this change and ready
+   for review before the next release.
+2. **Startup edit race, merged and included:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
    recipe edits". The initial workflow read can overwrite edits made while the read
-   is in flight; the shelf refresh is not the cause. The fix preserves those edits.
+   is in flight; the shelf refresh is not the cause. PR #50 is merged into `main`
+   and is an ancestor of this implementation branch (`c578625` base).
    **Separate CI issue observed while checking this UI work:** the live suite's
    shelf-request timeout scenario stayed at "Loading your coffees" rather than
    reporting the 15-second timeout. It failed on both the documentation-only
@@ -42,7 +44,9 @@ Decaid.
    and the [PR #52 run](https://github.com/gauravawadhwal/crema/actions/runs/42777928669).
    Stop remained available. This predates the history change; whether it is a
    production timeout defect or the check's clock/interception setup is not yet
-   established. Investigate separately from the startup-edit race before release.
+   established. The complete live suite, including both assertions, passes locally
+   on the PR #50 base used here. Preserve the failed runs as evidence; investigate
+   further if the timeout assertion recurs on the current base.
 3. **Package the completed fixes for installation when ready.** The latest release,
    v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
    installable GitHub release. A release runs CI and attaches a new skin ZIP for
@@ -64,11 +68,11 @@ Housekeeping (F6) is the user's call.
 
 ## UI feedback — 10 November 2026
 
-### Favourites: larger, readable targets (proposal)
+### Favourites: bottom carousel (implemented, not released)
 
-The user still finds the favourites too small to press comfortably. The five slots
-plus the 44 px edit button share a 300 px Brew column, leaving some slots less than
-40 px wide. Increasing height alone does not fix the cramped names or touch targets.
+The previous five slots plus the edit button shared a 300 px Brew column, leaving
+some slots less than 40 px wide. The implemented carousel uses the width below a
+shorter graph, with large cards that stay the same size as more recipes are added.
 
 Reference patterns reviewed on 10 November:
 
@@ -90,31 +94,25 @@ Reference patterns reviewed on 10 November:
   a scrollable card grid. Use these interaction/review ideas within Crema's existing
   design; do not infer a request to copy its visual theme or implementation.
 
-**Latest render direction, 10 November:** shorten the graph and place favourites
-in a bottom **carousel**. The user first rejected a separate picker, then found the
-vertical list awkward, and now wants swipeable cards rather than a fixed row of
-four saved recipes. Keep direct one-tap loading through the existing guarded path.
-Show a clear Favourites heading, labelled Edit control and previous/next buttons.
-Use a partial next card as the cue that more recipes are available. Swipe advances
-and snaps to a card; this is intentional carousel navigation, not a visible
-scrollbar or an automatically rotating strip. Do not loop or auto-advance.
+**Implemented:** a bottom **carousel** with direct one-tap loading through the
+existing guarded path. Favourites has a labelled Edit control and previous/next
+buttons. A partial next card indicates more recipes. Swipe/drag snaps to a card;
+there is no visible scrollbar, automatic advance or looparound. Touch uses native
+pan and snapping; mouse dragging cancels its click so it cannot load a recipe.
 
 Each tile shows the name prominently, followed by profile and dose/yield/temperature;
-allow two-line names without growing the bar. The latest preview uses 236 px-wide
+allow two-line names without growing the bar. The implementation uses 236 px-wide
 cards at 1340×800, with a shorter graph and a 142 px bottom region; the compact
 version uses narrower cards and protects the full-height control column so Stop
-remains visible. Details of the layout remain subject to render feedback. Keep
-card sizes comfortable as more favourites are added, rather than shrinking them.
+remains visible. The phone retains normal page scrolling with its own carousel.
 
-**Remove the fixed five-slot limit in the implementation.** `makeLiveApi` currently
-reads only five entries (`Array.from({ length: 5 })`), and the demo and UI assume five
-slots. Read all existing entries and preserve their order, values and bagless
-semantics. Reuse empty legacy slots when saving, or append a new entry; provide
-Save current recipe at the end of the carousel. Clearing a favourite must not
-discard other entries. Keep the existing KV record format if possible; verify
-upgrade compatibility and cross-device reads rather than truncating newer data
-when an older five-slot assumption is encountered. Failed loads/saves remain
-visible without silently changing the selected recipe.
+**The fixed five-slot limit is removed.** Live/demo/UI reads preserve all entries,
+their order, values and bagless semantics. Save current recipe re-reads the KV
+array and fills an empty legacy slot or appends. Rename/replace/clear change only
+the chosen entry. Replace updates installed-profile identity and bagless/manual
+mode as well as the displayed recipe values. The KV key and format are unchanged;
+reload older open clients after upgrading to retire their five-entry writer.
+Failed writes preserve the saved data and leave the editor available for retry.
 
 Acceptance: all targets meet the size floor at every supported viewport; names
 and saved recipe details are legible; load and edit are distinct; no outer-page
@@ -123,7 +121,13 @@ including at 1005×552. Test swipe versus tap (swiping never loads), arrow/keybo
 navigation, snapping and end states, reduced motion, resize, long names, adding
 beyond five favourites, legacy records, saved position across redraws, and
 source/built/live/demo behavior. Keep mid-shot loads held through the existing path.
-This is a rendered proposal, not implemented production behavior.
+Verification: all 294 unit/server tests, typecheck, source/built demo, Stop/start
+checks, complete live suite, saved-review checks, all five tablet-fit sizes and skin
+packaging pass locally. `favourites-checks.cjs` runs inside `e2e-brewing.cjs` against
+live mode and the exact built demo; it covers records beyond five, legacy holes,
+stale-device writes, failure handling, mouse/touch/keyboard interaction, held loads,
+replace/clear and the empty state. The full brewing suite also passes. Screenshots
+and demo assets are refreshed. Physical-tablet acceptance remains unverified.
 
 ### Shot history: independent panes (confirmed UI bug)
 
@@ -975,24 +979,6 @@ pagination behaviour rather than the current permissive mock.
 Acceptance: add two bags, freeze one, brew from each, finish one, reload from another
 device and retain the other bag plus its history. Existing installations migrate
 without silently losing records. See phase 4 for shared schema work.
-
-## Favourites carousel implementation — 10 November 2026
-
-Implemented in this change, not released: a shorter Brew graph with a bottom
-carousel, consistent-width recipe cards, touch swipe and mouse drag, snapping,
-previous/next buttons, keyboard navigation and reduced-motion handling. Save
-current recipe adds beyond five; Edit manages recipes without loading them. Swipe
-does not trigger a load. Existing shot-time profile guards still hold a favourite
-until the pour ends. Compact layouts keep Stop visible and contain after-shot
-feedback scrolling.
-
-The KV array and its key are unchanged. Reads preserve entries beyond five and
-legacy empty slots; adding re-reads the array and fills an empty slot or appends.
-Rename/replace/clear modify only the chosen entry, with failure feedback. Reload
-older open phone tabs after upgrading so their old five-entry writer is retired.
-`scripts/favourites-checks.cjs`, run by `e2e-brewing.cjs` against live mode and the
-built demo, covers the carousel and storage behavior. The implementation branch
-starts at `c578625`, which includes merged PR #50; PR #52 remains separate.
 
 ## Phase 3 — reuse settings and preserve feature access (R12)
 
