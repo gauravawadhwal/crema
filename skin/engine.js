@@ -65,7 +65,11 @@ var CremaEngine = (() => {
     startGate: () => startGate,
     startSettled: () => startSettled,
     startSteps: () => startSteps,
+    steadyWeightFlow: () => steadyWeightFlow,
     stepDurations: () => stepDurations,
+    stepProgress: () => stepProgress,
+    stepTimes: () => stepTimes,
+    stopReason: () => stopReason,
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
     toPastShot: () => toPastShot,
@@ -1610,6 +1614,159 @@ var CremaEngine = (() => {
     else if (!("productImage" in f)) patch.productImage = null;
     patch.art = add.art || f.art || (add.productImage ? "product" : "photo");
     return patch;
+  }
+
+  // server/control/steps.ts
+  var ETA_MIN_WEIGHT_G = 2;
+  var ETA_MIN_FLOW_GS = 0.3;
+  var ETA_WINDOW_S = 2;
+  var ETA_MAX_S = 120;
+  var num2 = (v) => {
+    if (v == null || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  var clamp01 = (n) => Math.min(1, Math.max(0, n));
+  var round1 = (n) => Math.round(n * 10) / 10;
+  function stepTimes(points, count) {
+    const start = new Array(count).fill(null);
+    let index = null;
+    let lastT = null;
+    for (const pt of points) {
+      if (!Number.isFinite(pt.t)) continue;
+      lastT = pt.t;
+      const fr = pt.frame;
+      if (fr == null || !Number.isInteger(fr) || fr < 0 || fr >= count) continue;
+      if (index != null && fr <= index) continue;
+      for (let i = (index ?? -1) + 1; i <= fr; i++) start[i] = pt.t;
+      index = fr;
+    }
+    return { index, start, lastT };
+  }
+  function steadyWeightFlow(points, weightFlow) {
+    const pts = points.filter((p) => Number.isFinite(p.t) && typeof p.w === "number" && Number.isFinite(p.w));
+    const last = pts.at(-1);
+    if (!last || last.w < ETA_MIN_WEIGHT_G) return null;
+    const win = pts.filter((p) => p.t >= last.t - ETA_WINDOW_S && p.t <= last.t);
+    const first = win[0];
+    const span = last.t - first.t;
+    if (win.length < 3 || span < ETA_WINDOW_S * 0.75) return null;
+    const midT = first.t + span / 2;
+    const mid = win.reduce((a2, b2) => Math.abs(b2.t - midT) < Math.abs(a2.t - midT) ? b2 : a2);
+    if (mid.t <= first.t || mid.t >= last.t) return null;
+    const a = (mid.w - first.w) / (mid.t - first.t);
+    const b = (last.w - mid.w) / (last.t - mid.t);
+    if (a < ETA_MIN_FLOW_GS || b < ETA_MIN_FLOW_GS) return null;
+    if (Math.abs(a - b) > 0.35 * Math.max(a, b)) return null;
+    const rate = (last.w - first.w) / span;
+    if (weightFlow != null && Number.isFinite(weightFlow)) {
+      if (weightFlow < ETA_MIN_FLOW_GS || Math.abs(weightFlow - rate) > 0.5 * Math.max(weightFlow, rate)) return null;
+    }
+    return rate;
+  }
+  function crossing(from, now, goal, over2) {
+    if (over2 ? now >= goal : now <= goal) return 1;
+    const whole = over2 ? goal - from : from - goal;
+    if (whole <= 0) return 0;
+    return clamp01((over2 ? now - from : from - now) / whole);
+  }
+  function stepProgress(i) {
+    const raw = i.steps ?? [];
+    const points = i.points ?? [];
+    const count = raw.length;
+    const plan = profileCurve({ steps: raw })?.steps ?? [];
+    const { index, start, lastT } = stepTimes(points, count);
+    const last = points.at(-1);
+    const hasScale = i.hasScale ?? points.some((p) => typeof p.w === "number" && Number.isFinite(p.w));
+    const weight = hasScale && last && typeof last.w === "number" && Number.isFinite(last.w) ? last.w : null;
+    const target = i.targetYieldG != null && Number.isFinite(i.targetYieldG) && i.targetYieldG > 0 ? i.targetYieldG : null;
+    const steps = plan.map((s, n) => {
+      const state = index == null || n > index ? "ahead" : n < index ? "done" : "now";
+      const began = start[n];
+      const ended = state === "done" ? start[n + 1] : lastT;
+      const elapsedS = state === "ahead" || began == null || ended == null ? state === "ahead" ? null : 0 : round1(Math.max(0, ended - began));
+      return {
+        index: n,
+        name: s.name,
+        state,
+        elapsedS,
+        limitS: s.limitS > 0 ? s.limitS : null,
+        target: i.manual ? null : { kind: s.pump, value: s.target, smooth: s.smooth },
+        tempC: s.tempC,
+        tracking: null
+      };
+    });
+    if (index != null && !i.manual) {
+      const s = raw[index], now = steps[index], began = start[index];
+      const inStep = points.filter((p) => Number.isFinite(p.t) && p.t >= began);
+      const exits = [];
+      const e = s.exit, ev = num2(e?.value);
+      if (e && ev != null && (e.type === "pressure" || e.type === "flow")) {
+        const read = (p) => e.type === "pressure" ? p?.p : p?.f;
+        const from = read(inStep[0]), cur = read(last);
+        if (typeof from === "number" && typeof cur === "number" && Number.isFinite(from) && Number.isFinite(cur)) {
+          const over2 = e.condition !== "under";
+          const kind = e.type === "pressure" ? over2 ? "pressureOver" : "pressureUnder" : over2 ? "flowOver" : "flowUnder";
+          exits.push({ kind, progress: crossing(from, cur, ev, over2), value: cur, goal: ev });
+        }
+      }
+      const sw = num2(s.weight);
+      if (sw != null && sw > 0 && weight != null) exits.push({ kind: "weight", progress: clamp01(weight / sw), value: weight, goal: sw });
+      if (target != null && weight != null) exits.push({ kind: "yield", progress: clamp01(weight / target), value: weight, goal: target });
+      const sv = num2(s.volume);
+      if (sv != null && sv > 0) {
+        let ml = 0;
+        for (let k = 1; k < inStep.length; k++) ml += Math.max(0, inStep[k].f ?? 0) * Math.max(0, inStep[k].t - inStep[k - 1].t);
+        exits.push({ kind: "volume", progress: clamp01(ml / sv), value: round1(ml), goal: sv });
+      }
+      if (now.limitS != null) exits.push({ kind: "time", progress: clamp01(now.elapsedS / now.limitS), value: now.elapsedS, goal: now.limitS });
+      now.tracking = exits.reduce((best, x) => !best || x.progress > best.progress ? x : best, null);
+    }
+    let etaS = null;
+    if (target != null && weight != null) {
+      if (weight >= target) etaS = 0;
+      else {
+        const rate = steadyWeightFlow(hasScale ? points : [], i.weightFlow);
+        if (rate != null) etaS = round1(Math.min(ETA_MAX_S, Math.max(0, (target - weight) / rate)));
+      }
+    }
+    return { steps, index, count, yieldFraction: target != null && weight != null ? clamp01(weight / target) : null, etaS };
+  }
+
+  // server/control/stop.ts
+  var RECORDED = {
+    targetWeight: "weight",
+    targetVolume: "volume",
+    apiStop: "user",
+    appStop: "user",
+    machineEnded: "machine",
+    error: "error"
+  };
+  var NEAR_TARGET_UNDER_G = 3;
+  var NEAR_TARGET_OVER_G = 3;
+  var LIMIT_SLACK_S = 0.5;
+  function lastStepRanOut(steps, points) {
+    if (!steps?.length || !points?.length) return false;
+    const { index, start, lastT } = stepTimes(points, steps.length);
+    if (index !== steps.length - 1 || lastT == null) return false;
+    const limit = Number(steps[index].seconds);
+    return Number.isFinite(limit) && limit > 0 && lastT - start[index] >= limit - LIMIT_SLACK_S;
+  }
+  function stopReason(i) {
+    const w = i.finalWeightG, target = i.targetYieldG;
+    const comparable = w != null && Number.isFinite(w) && target != null && Number.isFinite(target) && target > 0;
+    const nearTarget = comparable ? w >= target - NEAR_TARGET_UNDER_G && w <= target + NEAR_TARGET_OVER_G : null;
+    const ranOut = lastStepRanOut(i.steps, i.points);
+    const known = i.recorded ? RECORDED[i.recorded] : void 0;
+    if (known) {
+      return { reason: known === "machine" && ranOut && !nearTarget ? "profile" : known, source: "recorded", nearTarget };
+    }
+    const inferred = (reason) => ({ reason, source: "inferred", nearTarget });
+    if (i.stoppedByCrema) return inferred("user");
+    if (nearTarget && ranOut) return inferred("unknown");
+    if (nearTarget && i.stopAtWeight !== false) return inferred("weight");
+    if (ranOut) return inferred("profile");
+    return inferred("unknown");
   }
   return __toCommonJS(engine_exports);
 })();

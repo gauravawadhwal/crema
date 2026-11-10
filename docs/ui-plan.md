@@ -47,6 +47,31 @@ still open the PR against `main`. Agents do not merge.
    Mono tests a skip against Decaid's simulator, which suggests it exists; neither was
    read at source level for this plan. `dev/mock-decaid.ts` has no skip command today.
    Without the command, leave the button out; Stop takes the corner alone.
+
+   **Finding (10 November 2026, read at source for Decaid v0.9.1; not run):** the
+   command exists. The request is `PUT /api/v1/machine/state/skipStep` with no body,
+   the same route Crema uses for `idle` and `espresso`. `skipStep` is a value of
+   `MachineState` in the
+   [REST spec](https://github.com/decentespresso/decaid/blob/v0.9.1/assets/api/rest_v1.yml)
+   (path `/api/v1/machine/state/{newState}`), the
+   [handler](https://github.com/decentespresso/decaid/blob/v0.9.1/lib/src/services/webserver/de1handler.dart)
+   (`_requestStateHandler`) passes any `MachineState` name to the machine and answers
+   200, and
+   [`de1.models.dart`](https://github.com/decentespresso/decaid/blob/v0.9.1/lib/src/models/device/impl/de1/de1.models.dart)
+   maps it to the DE1's skip-to-next state request (`0x0E`). Decaid's simulated
+   machine advances one step and stays in `espresso`
+   ([`mock_de1.dart`](https://github.com/decentespresso/decaid/blob/v0.9.1/lib/src/models/device/impl/mock_de1/mock_de1.dart));
+   on the last step it does nothing. Streamline v0.2.24 sends the same request
+   (`setMachineState('skipStep')` in
+   [`ui.js`](https://github.com/decentespresso/streamline-js/blob/v0.2.24/src/modules/ui.js),
+   a `PUT` in
+   [`api.js`](https://github.com/decentespresso/streamline-js/blob/v0.2.24/src/modules/api.js)).
+   The value is in the spec at the earliest tag, v0.1.0, so it was not added recently.
+   Not established: the handler's behaviour on a real DE1, whether a real machine
+   ever reports `skipStep` as its state for a moment (the spec lists it as a state,
+   and `shotRunning()` treats only `espresso` as a shot), and what a skip does
+   outside espresso. The layout agent should check those on desktop Decaid before
+   building the button.
 5. Machine keyboard shortcuts stay out unless the user asks.
 
 ## Defects measured on `main` (demo, 1340×800)
@@ -236,6 +261,38 @@ passes unchanged; the screen fits from 1340×800 to 1005×552 with Stop visible.
 - Skip step under decision 4, in both API objects and the simulator.
 - Make the demo and `dev/mock-decaid.ts` advance `profileFrame` through named steps.
 
+**Logic done (WS 4a), not yet called by the app.** `server/control/steps.ts`, tested in
+`test/steps.test.ts`. Call it on each frame of a shot:
+
+```js
+E.stepProgress({ steps, points: S.live, targetYieldG, weightFlow, hasScale, manual })
+// steps: the loaded profile's steps as Decaid stores them; points: { t, w, p, f, frame }
+// weightFlow, hasScale and manual are optional. Pass hasScale: false with no scale,
+// because S.live records a missing weight as 0.
+→ {
+  steps: [{ index, name, state: "done" | "now" | "ahead",
+            elapsedS,   // seconds spent; 0 for a step that was jumped over; null when ahead
+            limitS,     // the step's time limit, or null
+            target: { kind: "pressure" | "flow", value, smooth } | null,   // null when manual
+            tempC,
+            tracking: { kind, progress, value, goal } | null }],   // on the "now" step only
+  index,          // current step, 0-based, or null (no steps, or no usable frame yet)
+  count,
+  yieldFraction,  // 0..1, null with no target or no scale
+  etaS            // 0..120 s, null until weight flow is steady
+}
+```
+
+`tracking.kind` is `time`, `weight` (the step's own weight exit), `volume`,
+`pressureOver`, `pressureUnder`, `flowOver`, `flowUnder` or `yield` (the shot's target);
+it is the exit with the most progress, with `value` and `goal` in that exit's unit.
+Volume is summed from flow readings, so it is an estimate. The step only moves forward:
+a frame that is null, lower than one already seen, or beyond the profile is ignored.
+`etaS` needs 2 g in the cup and about 2 s of samples whose two halves both rise faster
+than 0.3 g/s and agree within 35%, and the scale's own flow (if passed) within 50% of
+that. `E.stepTimes(points, count)` and `E.steadyWeightFlow(points, weightFlow)` are the
+parts, exported for reuse. All values are data; the layout formats them.
+
 Done when: `e2e-controls.cjs` passes on source, built demo and desktop Decaid; a new
 check starts a shot, asserts hero numbers, the step name and Stop's size, drops the
 socket mid-shot and asserts the layout holds; no workflow write happens mid-shot;
@@ -250,6 +307,31 @@ socket mid-shot and asserts the layout holds; no workflow write happens mid-shot
 - Apply button: edits `S.next` only, marks the field, and Reset undoes it. One stepper
   step per change type (grind, yield, temperature, dose); no button for a change with
   no numeric form.
+
+**Stop reason: found and logic done (WS 4a), not yet called by the app.** Decaid 0.9.1's
+shot record does carry one: `stopReason` on `ShotRecord` in the
+[REST spec](https://github.com/decentespresso/decaid/blob/v0.9.1/assets/api/rest_v1.yml),
+an open set with known values `targetWeight`, `targetVolume`, `apiStop`, `appStop`,
+`machineEnded` and `error`, and null for older shots and shots Decaid did not sequence.
+`history.md` notes a real shot from the tablet recorded `targetWeight`. The app already
+reads it into the review input (`s.stopReason ?? s.annotations?.stopReason`). The
+simulator and demo do not set it. `server/control/stop.ts`, tested in
+`test/steps.test.ts`:
+
+```js
+E.stopReason({ recorded, stoppedByCrema, finalWeightG, targetYieldG, stopAtWeight, steps, points })
+→ { reason: "weight" | "volume" | "user" | "profile" | "machine" | "error" | "unknown",
+    source: "recorded" | "inferred",
+    nearTarget }   // final weight within 3 g of the target; null when either is missing
+```
+
+A known recorded value wins (`apiStop` and `appStop` are both `user`). `machineEnded`
+is `machine`, since it covers the group-head control, the profile ending and firmware
+stop-at-weight, and becomes `profile` only when the samples show the last step ran to
+its time limit away from the target. With no record: a Stop from Crema is `user`; near
+the target with stop-at-weight on is `weight`; the last step running out is `profile`;
+near the target as the last step ran out, or anything else, is `unknown`. Show "stopped
+near target" for `unknown` with `nearTarget` true.
 
 Done when: `e2e-review.cjs` passes; a new case taps Apply and asserts the recipe
 changed and the machine workflow did not; the feedback panel still scrolls inside its
@@ -323,5 +405,6 @@ screenshots match the app.
 
 ## Not verified
 
-Anything on the real tablet; the six themes on the new layouts; whether Decaid's shot
-record carries a stop reason; whether Decaid 0.9.1 has a skip-step command.
+Anything on the real tablet; the six themes on the new layouts; a skip-step request
+actually run against Decaid or a machine (the command was read at source only, see
+decision 4); `stepProgress` and `stopReason` against real shot records.
