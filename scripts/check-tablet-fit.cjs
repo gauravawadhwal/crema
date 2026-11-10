@@ -39,49 +39,56 @@ const measure = (p) => p.evaluate(() => ({
   }),
 }));
 
+// One size: home, after a shot, review shown. Returns its log lines and problems so the
+// sizes can run side by side (each page is its own context) and still print in order.
+async function checkSize(b, [w, h, label]) {
+  const log = [], problems = [];
+  const p = await b.newPage({ viewport: { width: w, height: h }, colorScheme: "dark" });
+  const errs = [];
+  p.on("pageerror", (e) => errs.push(e.message));
+  const check = (stage, m) => {
+    const where = `${w}x${h} (${label}) ${stage}`;
+    if (m.sh > m.ih) problems.push(`${where}: page scrolls (${m.sh}px in ${m.ih}px)`);
+    if (m.sw > m.iw) problems.push(`${where}: page scrolls sideways (${m.sw}px in ${m.iw}px)`);
+    for (const c of m.cols) {
+      if (c.overY > 1) problems.push(`${where}: ${c.name} column clips vertically by ${c.overY}px`);
+      if (c.overX > 1) problems.push(`${where}: ${c.name} column overflows horizontally by ${c.overX}px`);
+      if (c.escaped.length) problems.push(`${where}: ${c.name} children extend past the column (${c.escaped.join(", ")})`);
+    }
+    const cols = m.cols.map((c) => `${c.name} ${c.overY > 1 ? `Y ${c.overY}px` : "Y ok"}/${c.overX > 1 ? `X ${c.overX}px` : "X ok"}${c.escaped.length ? ` escaped: ${c.escaped.join("|")}` : ""}`).join(", ");
+    log.push(`${where}: ${m.sh}/${m.ih}${m.sh > m.ih ? " SCROLLS" : " fits"}; columns: ${cols}`);
+  };
+  try {
+    await p.goto(url + "#brew");
+    // Web fonts come from Google Fonts; measure with them when they arrive in time,
+    // but don't let a stalled download hold the check.
+    const fonts = await p.evaluate(() => Promise.race([document.fonts.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 5000))]));
+    if (!fonts) log.push(`   ${w}x${h}: web fonts didn't load within 5 s; measuring with fallback fonts`);
+    await p.waitForTimeout(1200);
+    check("home", await measure(p));
+    await p.screenshot({ path: `${out}/fit-${w}x${h}-home.png` });
+    await p.click('[data-run="espresso"]');
+    await p.waitForSelector("#afterShot:not([hidden])", { timeout: 30000 });
+    await p.waitForTimeout(400);
+    check("after shot", await measure(p));
+    await p.screenshot({ path: `${out}/fit-${w}x${h}-after.png` });
+    await p.click("#reviewShot");
+    await p.waitForFunction(() => document.querySelector("#reviewBox")?.textContent.trim().length > 0);
+    check("review shown", await measure(p));
+    await p.screenshot({ path: `${out}/fit-${w}x${h}-review.png` });
+  } catch (e) {
+    errs.push(e.message.split("\n")[0]);
+  }
+  for (const e of errs) problems.push(`${w}x${h} (${label}): ${e}`);
+  await p.close();
+  return { log, problems };
+}
+
 (async () => {
   const b = await chromium.launch();
-  const problems = [];
-  for (const [w, h, label] of SIZES) {
-    const p = await b.newPage({ viewport: { width: w, height: h }, colorScheme: "dark" });
-    const errs = [];
-    p.on("pageerror", (e) => errs.push(e.message));
-    const check = (stage, m) => {
-      const where = `${w}x${h} (${label}) ${stage}`;
-      if (m.sh > m.ih) problems.push(`${where}: page scrolls (${m.sh}px in ${m.ih}px)`);
-      if (m.sw > m.iw) problems.push(`${where}: page scrolls sideways (${m.sw}px in ${m.iw}px)`);
-      for (const c of m.cols) {
-        if (c.overY > 1) problems.push(`${where}: ${c.name} column clips vertically by ${c.overY}px`);
-        if (c.overX > 1) problems.push(`${where}: ${c.name} column overflows horizontally by ${c.overX}px`);
-        if (c.escaped.length) problems.push(`${where}: ${c.name} children extend past the column (${c.escaped.join(", ")})`);
-      }
-      const cols = m.cols.map((c) => `${c.name} ${c.overY > 1 ? `Y ${c.overY}px` : "Y ok"}/${c.overX > 1 ? `X ${c.overX}px` : "X ok"}${c.escaped.length ? ` escaped: ${c.escaped.join("|")}` : ""}`).join(", ");
-      console.log(`${where}: ${m.sh}/${m.ih}${m.sh > m.ih ? " SCROLLS" : " fits"}; columns: ${cols}`);
-    };
-    try {
-      await p.goto(url + "#brew");
-      // Web fonts come from Google Fonts; measure with them when they arrive in time,
-      // but don't let a stalled download hold the check.
-      const fonts = await p.evaluate(() => Promise.race([document.fonts.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 5000))]));
-      if (!fonts) console.log(`   ${w}x${h}: web fonts didn't load within 5 s; measuring with fallback fonts`);
-      await p.waitForTimeout(1200);
-      check("home", await measure(p));
-      await p.screenshot({ path: `${out}/fit-${w}x${h}-home.png` });
-      await p.click('[data-run="espresso"]');
-      await p.waitForSelector("#afterShot:not([hidden])", { timeout: 30000 });
-      await p.waitForTimeout(400);
-      check("after shot", await measure(p));
-      await p.screenshot({ path: `${out}/fit-${w}x${h}-after.png` });
-      await p.click("#reviewShot");
-      await p.waitForFunction(() => document.querySelector("#reviewBox")?.textContent.trim().length > 0);
-      check("review shown", await measure(p));
-      await p.screenshot({ path: `${out}/fit-${w}x${h}-review.png` });
-    } catch (e) {
-      errs.push(e.message.split("\n")[0]);
-    }
-    for (const e of errs) problems.push(`${w}x${h} (${label}): ${e}`);
-    await p.close();
-  }
+  const results = await Promise.all(SIZES.map((size) => checkSize(b, size)));
+  for (const r of results) for (const line of r.log) console.log(line);
+  const problems = results.flatMap((r) => r.problems);
   await b.close();
   console.log(`Screenshots in ${out}`);
   if (problems.length) {

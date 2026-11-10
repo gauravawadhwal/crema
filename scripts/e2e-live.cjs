@@ -221,6 +221,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       const ready = (Date.now() - t0) / 1000;
       const loading = await slow.textContent("#nextShot");
       check(ready < 4 && /Loading your coffees/.test(loading), `readings and Stop arrive while the shelf is still loading (${ready.toFixed(1)} s; "${loading.trim()}")`);
+      held = false; // Decaid answers now
       await slow.waitForFunction(() => S.shelfLoaded && S.current, null, { timeout: 15000 }).catch(() => {});
       check(await slow.evaluate(() => !!S.current && !S.shelfError), "the shelf fills in once Decaid answers");
       await slow.close();
@@ -229,7 +230,11 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       stuck.on("pageerror", (e) => errs.push(`stuck: ${e.message}`));
       let release = null;
       await stuck.route(/\/api\/v1\/beans/, (route) => { if (release === null) return; route.continue().catch(() => {}); }); // never answers
+      // A fake clock that otherwise runs in real time, so the 15 s limit can be skipped to.
+      await stuck.clock.install();
       await stuck.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#brew`);
+      await stuck.waitForFunction(() => /Loading your coffees/.test(document.querySelector("#nextShot").textContent), null, { timeout: 5000 }).catch(() => {});
+      await stuck.clock.fastForward(16000);
       await stuck.waitForFunction(() => /Couldn't load your coffees/.test(document.querySelector("#nextShot").textContent), null, { timeout: 25000 }).catch(() => {});
       const failed = await stuck.evaluate(() => ({ err: S.shelfError, text: document.querySelector("#nextShot").textContent, stop: !document.querySelector("#stopBtn").disabled }));
       check(/no answer within 15 s/.test(failed.err || "") && /Couldn't load your coffees/.test(failed.text) && failed.stop, "a request that never answers gives up after 15 s and says so; Stop still works", JSON.stringify(failed));
@@ -290,19 +295,28 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     // Decaid goes away.
     {
       const sockets = async (port = MOCK) => (await fetch(`http://localhost:${port}/dev/sockets`)).json();
-      await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForFunction(() => S.snap && S.link.connected, null, { timeout: 15000 });
-      await page.waitForTimeout(1000);
+      // Its own page with a fake clock (running in real time), so the 15 s quiet limit can
+      // be skipped to. The main page steps away so its sockets aren't frozen or counted.
+      await page.goto("about:blank");
+      const quiet = await browser.newPage({ viewport: { width: 1340, height: 800 } });
+      quiet.on("pageerror", (e) => errs.push(`quiet: ${e.message}`));
+      await quiet.clock.install();
+      await quiet.goto(`http://localhost:${SKIN}/?full&decaid=http://localhost:${MOCK}#brew`);
+      await quiet.waitForFunction(() => S.snap && S.link.connected, null, { timeout: 15000 });
+      await quiet.waitForTimeout(1000);
       const before = (await sockets())["/ws/v1/machine/snapshot"];
       // Older Decaid kept the machine socket open but quiet after a machine swap.
       await dev("machine/freeze-sockets");
-      const frozenAt = await S(() => S.snap.timestamp);
-      await page.waitForTimeout(2000);
-      check(await S(() => S.snap.timestamp) === frozenAt, "a frozen machine socket stops sending (simulated)");
-      const back = await page.waitForFunction((t) => S.snap?.timestamp !== t, frozenAt, { timeout: 35000 }).then(() => true, () => false);
+      const frozenAt = await quiet.evaluate(() => S.snap.timestamp);
+      await quiet.waitForTimeout(2000);
+      check(await quiet.evaluate(() => S.snap.timestamp) === frozenAt, "a frozen machine socket stops sending (simulated)");
+      await quiet.clock.fastForward(16000);
+      const back = await quiet.waitForFunction((t) => S.snap?.timestamp !== t, frozenAt, { timeout: 35000 }).then(() => true, () => false);
       check(back, "a quiet machine socket is reopened and readings resume");
-      await page.waitForTimeout(1000);
+      await quiet.waitForTimeout(1000);
       const after = (await sockets())["/ws/v1/machine/snapshot"];
       check(after === before, `reopening doesn't leave extra sockets open (${before} before, ${after} after)`);
+      await quiet.close();
 
       // Decaid goes away entirely, then comes back.
       const PORT2 = base + 7;

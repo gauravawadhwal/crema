@@ -1,9 +1,10 @@
 # Checks every pull request and push to main. The release and Pages workflows
 # call this first, so a failing check stops a skin release or a site deploy.
 #
-# Three jobs run side by side: `verify` (types, unit and server tests, generated files,
-# the skin ZIP), `ui` (the Playwright checks in a real Chromium) and `docker` (the
-# optional server's image builds and works, with the mock AI; no secrets needed).
+# Jobs run side by side: `verify` (types, unit and server tests, generated files, the
+# skin ZIP), `ui` (the Playwright checks in a real Chromium, split into four groups of
+# about a minute each so no one job holds up the rest) and `docker` (the optional
+# server's image builds and works, with the mock AI; no secrets needed).
 name: CI
 
 on:
@@ -41,8 +42,13 @@ jobs:
           node scripts/check-skin-zip.mjs
 
   ui:
+    name: ui (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [demo, live, controls, brewing]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,24 +70,34 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
       - name: Click-through, source app
+        if: matrix.group == 'demo'
         run: node scripts/e2e-demo.cjs --shots ui-shots/demo
       - name: Click-through, built single-file demo
+        if: matrix.group == 'demo'
         run: node scripts/e2e-demo.cjs --built
-      - name: Stop and start races
-        run: node scripts/e2e-controls.cjs && node scripts/e2e-controls.cjs --built
-      - name: Home screen fits the tablet
-        run: node scripts/check-tablet-fit.cjs ui-shots/fit
       - name: Live mode against the simulator
+        if: matrix.group == 'live'
         run: node scripts/e2e-live.cjs
+      - name: Stop and start races, source app
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-controls.cjs
+      - name: Stop and start races, built single-file demo
+        if: matrix.group == 'controls'
+        run: node scripts/e2e-controls.cjs --built
+      - name: Home screen fits the tablet
+        if: matrix.group == 'brewing'
+        run: node scripts/check-tablet-fit.cjs ui-shots/fit
       - name: Bagless and manual brewing
+        if: matrix.group == 'brewing'
         run: node scripts/e2e-brewing.cjs
       - name: Saved shot review and fallback
+        if: matrix.group == 'brewing'
         run: node scripts/e2e-review.cjs
       - name: Keep screenshots when a check fails
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-screenshots
+          name: ui-screenshots-${{ matrix.group }}
           path: ui-shots/
           retention-days: 7
 
