@@ -19,7 +19,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 | WS | Work | Size | Depends on | Status / evidence |
 |---|---|---|---|---|
 | 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #56 open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
-| 2 | Quick fixes for measured defects | S | 1 | Not started |
+| 2 | Quick fixes for measured defects | S | 1 | PR #58 open, not merged. 15 allowlist entries removed (121 left); npm test, typecheck, check-targets, check-tablet-fit, e2e-controls (with the new Stop assertion at five sizes) and e2e-demo pass; --built, live, brewing, review and shot-history scripts not run. |
 | 3 | Brew at rest | M | 2 | Not started |
 | 4 | Pour mode | L | 3 | Not started |
 | 5 | After the shot | M | 4 | Not started |
