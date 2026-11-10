@@ -240,6 +240,7 @@ function makeDemoApi() {
         return { ...demoGrind, aiEnabled };
       },
     },
+    async shelfSignal() { return ""; }, // the demo's shelf is local: nothing to poll
     async shelf() { return shelf().map(shelfItem); },
     async identify({ files, query, description, url }, onStep) {
       if (!aiEnabled) throw new Error("AI features are off. Enter the details by hand, or switch AI on in Settings.");

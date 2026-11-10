@@ -625,6 +625,20 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await tablet.click(`[data-brew="${bag2}"]`);
       await tablet.waitForFunction((key) => location.hash === "#brew" && S.current?.key === key, bag2);
       check(await tablet.evaluate((key) => S.current.key === key, bag2), "Brew this selects the second bag on the tablet");
+      // The 5 s poll is cheap: with nothing changed it reads the bean list, each coffee's
+      // bags and the newest shot, never a coffee's record or a bag's shots.
+      const idle = []; const countIdle = (r) => { if (r.url().startsWith(`http://localhost:${MOCK}/api/`) && /beans|bean-batches|shots|store/.test(r.url())) idle.push(`${r.method()} ${new URL(r.url()).pathname}${new URL(r.url()).search}`); };
+      await tablet.evaluate(() => S.api.shelfSignal && syncShelf(true)); await tablet.waitForTimeout(1200);
+      tablet.on("request", countIdle); await tablet.waitForTimeout(11000); tablet.off("request", countIdle);
+      const beanCount = await tablet.evaluate(() => new Set(S.shelf.map((b) => b.id)).size);
+      const heavy = idle.filter((u) => /store|beanBatchId/.test(u));
+      check(idle.length > 0 && idle.length <= 3 * (beanCount + 2) && !idle.some((u) => /\/store\//.test(u)) && !heavy.length, `an idle shelf poll reads only the bean and bag lists and the newest shot (${idle.length} requests in 11 s for ${beanCount} coffees)`, idle.join(", "));
+      // A change made on another device still arrives without a full read being forced.
+      await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag2}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: true }) });
+      await tablet.waitForFunction((key) => S.shelf.find((b) => b.key === key)?.frozen === true, bag2, { timeout: 12000 }).catch(() => {});
+      check(await tablet.evaluate((key) => S.shelf.find((b) => b.key === key)?.frozen === true, bag2), "a bag frozen on another device shows on an idle tablet within a poll");
+      await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag2}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: false }) });
+      await page.waitForFunction((key) => S.shelf.find((b) => b.key === key)?.frozen === false, bag2, { timeout: 12000 }).catch(() => {});
       await tablet.close();
       await page.setViewportSize({ width: 1340, height: 800 });
       await page.goto(`http://localhost:${SKIN}/?full#shelf`);
@@ -646,6 +660,14 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await dev("shots/seed", { count: 1, batchId: bag2, dose: 18 });
       const adopted = await page.evaluate(async (k) => (await S.api.shelf()).find((x) => x.key === k).remaining, bag2);
       check(adopted === 400 - 18 || adopted === 400, `a remaining weight changed elsewhere is kept (${adopted})`);
+      // Reading the shelf never writes: the correction is stored by syncRemaining.
+      const posts = []; const watchKv = (r) => { if (r.method() === "POST" && /\/store\//.test(r.url())) posts.push(r.url()); };
+      page.on("request", watchKv); const readTwice = await page.evaluate(async (k) => [(await S.api.shelf()).find((x) => x.key === k).remaining, (await S.api.shelf()).find((x) => x.key === k).remaining], bag2); page.off("request", watchKv);
+      check(!posts.length && readTwice[0] === readTwice[1] && readTwice[0] === adopted, `reading the shelf writes nothing and gives the same remaining each time (${posts.length} writes, ${readTwice})`);
+      const stored = async () => (await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema/${encodeURIComponent("bag:" + bag2)}`)).json()) ?? {};
+      const beforeSync = (await stored()).written;
+      const synced = await page.evaluate(async (k) => { const b = S.shelf.find((x) => x.key === k); return S.api.syncRemaining(b.id, b.batch); }, bag2);
+      check(synced === adopted && (await stored()).written === adopted && beforeSync !== adopted, `syncRemaining stores the correction (remaining ${synced}, written ${(await stored()).written})`);
       // Set by hand.
       await page.evaluate(async () => { await refreshShelf(); }); await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.goto(`http://localhost:${SKIN}/?full#shelf`);
       await page.waitForSelector(`[data-left="${bag2}"]`, { timeout: 10000 }); await page.click(`[data-left="${bag2}"]`); await page.fill("#leftG", "300"); await page.click("#confirmLeft"); await page.waitForTimeout(500);

@@ -301,4 +301,12 @@ describe("bag weight", () => {
     expect(bagRemaining({ used: 90, weight: null, weightRemaining: undefined, state: {} }).remaining).toBeNull();
     expect(bagRemaining({ used: null, weight: 250, weightRemaining: 120, state: {} }).remaining).toBeNull();
   });
+
+  it("every reader computes the same remaining from the same stored state, so a correction needn't be written to be shown", () => {
+    const input = { used: 90, weight: 250, weightRemaining: 200, state: { adjust: 0, written: 160 } };
+    const a = bagRemaining(input), b = bagRemaining({ ...input, state: { ...input.state } });
+    expect(a).toEqual(b);
+    // Once the correction is stored (adjust 40, written 200), a reader gets the same figure without needing to correct.
+    expect(bagRemaining({ ...input, state: { adjust: a.adjust, written: 200 } })).toEqual({ adjust: 40, remaining: a.remaining, corrected: false });
+  });
 });
