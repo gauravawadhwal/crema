@@ -2815,7 +2815,7 @@ function showDeviceFrame() {
     <p class="muted small dev-note">A simulated DE1 and scale with real ONA and Haven coffees. Try Espresso, Steam, the shelf, profiles and themes.</p>
   </div>`;
   const frame = $("#devFrame"), dev = $("#dev"), stage = $("#devStage");
-  frame.src = `${location.pathname}?embed&demo${location.hash}`;
+  frame.src = `${location.pathname}?embed&demo${/[?&]stress\b/.test(location.search) ? "&stress" : ""}${location.hash}`;
   let mode = local.get("device", "tablet");
   const fit = () => {
     const d = DEVICES[mode];

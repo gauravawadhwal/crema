@@ -44,6 +44,24 @@
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r: 14px;
+  /* Type scale, spacing steps and control heights (UI plan, WS 1). Defined here for
+     the later workstreams to adopt; nothing uses them yet. Sizes are in rem like the
+     rest of the sheet (1rem = 16px): 11, 12.5, 14, 16, 20 px, and 84 px for the hero
+     numbers. --hit is the smallest touch target; --hit-tight applies only at the two
+     shortest tablet heights (max-height 640). scripts/check-targets.cjs enforces both. */
+  --t-xs: .6875rem;
+  --t-s: .78125rem;
+  --t-m: .875rem;
+  --t-l: 1rem;
+  --t-xl: 1.25rem;
+  --t-hero: 5.25rem;
+  --s-4: 4px;
+  --s-8: 8px;
+  --s-12: 12px;
+  --s-16: 16px;
+  --s-24: 24px;
+  --hit: 44px;
+  --hit-tight: 40px;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {

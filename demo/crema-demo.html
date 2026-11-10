@@ -33,6 +33,24 @@
   --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r: 14px;
+  /* Type scale, spacing steps and control heights (UI plan, WS 1). Defined here for
+     the later workstreams to adopt; nothing uses them yet. Sizes are in rem like the
+     rest of the sheet (1rem = 16px): 11, 12.5, 14, 16, 20 px, and 84 px for the hero
+     numbers. --hit is the smallest touch target; --hit-tight applies only at the two
+     shortest tablet heights (max-height 640). scripts/check-targets.cjs enforces both. */
+  --t-xs: .6875rem;
+  --t-s: .78125rem;
+  --t-m: .875rem;
+  --t-l: 1rem;
+  --t-xl: 1.25rem;
+  --t-hero: 5.25rem;
+  --s-4: 4px;
+  --s-8: 8px;
+  --s-12: 12px;
+  --s-16: 16px;
+  --s-24: 24px;
+  --hit: 44px;
+  --hit-tight: 40px;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -2497,6 +2515,35 @@ function makeDemoApi() {
   });
   for (const [id, entry] of Object.entries(savedReviews)) if (entry?.shot && !shots.some((shot) => shot.id === id)) shots.push(clone(entry.shot));
   let shotCounter = 0;
+
+  // ---------- stress fixture (?stress) ----------
+  // Awkward text for layout work and scripts/check-targets.cjs: a coffee with a long
+  // name on a recipe whose profile has a long name, a coffee whose name is one unbroken
+  // word, a coffee with no roaster, and a favourite carrying the long names. They go
+  // first on the shelf, so Brew opens on the long one. Without ?stress nothing here runs.
+  if (/[?&]stress\b/.test(location.search)) {
+    const longProfile = "Extended blooming with an adaptive pressure decline for very light roasts, revision 3.2";
+    demoProfiles.push({ ...CE.outlineProfile(longProfile, "blooming", 93, 45, "Stress fixture"), notes: "A made-up profile with a long name, for testing layouts." });
+    const base = all[0];
+    const stressBean = (n, name, roaster, byDrink = null) => {
+      const info = { ...clone(base.info), roaster: { value: roaster, source: "bag" }, name: { value: name, source: "bag" }, productUrl: null, sources: [], summary: "A made-up coffee for testing layouts with awkward text." };
+      const art = packshot({ roaster, name, origin: info.country.value, ...base.pack });
+      info.imageUrl = art;
+      const b = { ...clone(base), id: `stress-${n}`, batch: `stress-batch-${n}`, info, used: 40 * n, shelf: true, byDrink, productImage: art, art: "product", frozen: false, finished: false, bestShotId: null };
+      const r = recipeFor(b);
+      return Object.assign(b, { recipe: r.recipe, recipeSource: r.source });
+    };
+    const pick = clone(base.byDrink.both);
+    const longRecipe = { ...pick.recipe, profileTitle: longProfile, yieldG: 45, tempC: 93, rationale: ["A made-up recipe whose profile has a long name."], alternatives: [] };
+    const longPick = { recipe: longRecipe, source: "rules", ranking: [{ ...pick.ranking[0], title: longProfile, recipe: { ...pick.ranking[0].recipe, yieldG: 45, tempC: 93, basis: "A made-up profile with a long name" } }, ...pick.ranking.slice(0, 3)] };
+    const stressBeans = [
+      stressBean(1, "Hacienda Monte Largo Extended Fermentation Natural Pink Bourbon Microlot Forty-Two", "Long Name Coffee Roasters and Importers", { both: longPick }),
+      stressBean(2, "Hochlandkaffeespezialmischungsnummerdreiundzwanzigausgabe", "Unbroken Word Roasters"),
+      stressBean(3, "No Roaster Blend", ""),
+    ];
+    all.unshift(...stressBeans);
+    favourites.push({ name: stressBeans[0].info.name.value.slice(0, 40), profileTitle: longProfile, doseG: longRecipe.doseG, yieldG: longRecipe.yieldG, tempC: longRecipe.tempC, beanId: stressBeans[0].id, grinderSetting: null });
+  }
   const nextShotId = () => { while (shots.some((shot) => shot.id === `demo-shot-${shotCounter}`) || savedReviews[`demo-shot-${shotCounter}`]) shotCounter++; return `demo-shot-${shotCounter++}`; };
 
   function stop(next = "idle", stopReason = "user") {
@@ -5573,7 +5620,7 @@ function showDeviceFrame() {
     <p class="muted small dev-note">A simulated DE1 and scale with real ONA and Haven coffees. Try Espresso, Steam, the shelf, profiles and themes.</p>
   </div>`;
   const frame = $("#devFrame"), dev = $("#dev"), stage = $("#devStage");
-  frame.src = `${location.pathname}?embed&demo${location.hash}`;
+  frame.src = `${location.pathname}?embed&demo${/[?&]stress\b/.test(location.search) ? "&stress" : ""}${location.hash}`;
   let mode = local.get("device", "tablet");
   const fit = () => {
     const d = DEVICES[mode];

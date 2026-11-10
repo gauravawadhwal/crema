@@ -18,7 +18,7 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 | WS | Work | Size | Depends on | Status / evidence |
 |---|---|---|---|---|
-| 1 | Guard rails: tokens, target check, stress fixture | S | none | Not started |
+| 1 | Guard rails: tokens, target check, stress fixture | S | none | PR #NN open, not merged. Tokens defined and unused; `check-targets.cjs` passes on source and built demo with 136 allowlisted failures; unit tests, typecheck, tablet fit, `e2e-demo` (source and built) and `e2e-live` pass. Simulator and demo only. See "Notes from WS 1" |
 | 2 | Quick fixes for measured defects | S | 1 | Not started |
 | 3 | Brew at rest | M | 2 | Not started |
 | 4 | Pour mode | L | 3 | Not started |
@@ -198,6 +198,45 @@ Files: `skin/index.html`, `scripts/check-targets.cjs` (new), `skin/demo.js`,
 Done when: the check runs in CI's `ui` job; the allowlist names every current failure
 (including the 28 px chips, the 38 px steppers and the coffee-header overlap); no
 screen looks different; `npm test`, typecheck and the existing UI checks pass.
+
+#### Notes from WS 1
+
+- **Tokens** (`:root` in `skin/index.html`, nothing uses them yet): type `--t-xs` 11 px,
+  `--t-s` 12.5, `--t-m` 14, `--t-l` 16, `--t-xl` 20, `--t-hero` 84, written in rem like
+  the rest of the sheet; spacing `--s-4`, `--s-8`, `--s-12`, `--s-16`, `--s-24`; control
+  heights `--hit` 44 px and `--hit-tight` 40 px.
+- **Run the check**: `node scripts/check-targets.cjs` (`--built` for the built demo,
+  `--all` to print the allowlisted failures with sizes, `--shots <dir>` for a screenshot
+  of every state). Its rules are in the comment at the top of the script. It checks
+  Brew, Brew after a shot, Shelf, Profiles, Shots and Settings at the five tablet sizes
+  and 390×844, each with the demo's coffees and with the stress fixture. It does not
+  check open sheets, toasts, a running shot or operation, Add coffee, or themes.
+- **Allowlist**: `scripts/check-targets.allow.json`. A key is
+  `<tablet|phone> <view> <rule> <selector>` and covers every size of that device and
+  both fixtures; `ws` is the workstream expected to fix it. Delete entries as you fix
+  them (a stale entry fails the check) and do not add any. Entries are tagged by the
+  component's workstream, so phone entries for a shared component sit with WS 2, 3, 5,
+  6 or 9, not WS 8. By workstream: WS 2 15, WS 3 8, WS 5 14, WS 6 5, WS 8 1, WS 9 93.
+- **Stress fixture**: add `stress` to the demo's URL
+  (`skin/index.html?demo&full&stress`; the device frame passes it on). It puts three
+  coffees first on the shelf: an 82-character name on a recipe with an 87-character
+  profile name, a name that is one 57-letter word, and a coffee with no roaster. It
+  also saves one favourite with the long names. Bags `stress-batch-1` to `-3`.
+- **WS 3 and WS 6**: WS 3's "no Brew entries" cannot hold while the dose, yield and
+  temperature steppers stay until WS 6. The stepper and grind-input entries are tagged
+  WS 6, and the after-shot entries WS 5.
+- **Found by the check, not in the defect list above**: on the tablet the shot detail's
+  metrics row (time, yield, ratio, peak, flow) is squeezed to a 2 px line at all five
+  sizes (WS 9). At 1005 px wide the "Pressure" readout label is wider than its cell
+  (WS 2). The taste scale's "Balanced" is wider than its button at 1005 px and on the
+  phone, in Brew and Shots (WS 5, WS 9). On the phone the Settings "Experience" row's
+  label and buttons overlap (WS 9). The coffee arrows cover the name only for long
+  names; with the demo's own first coffee they cover the rest pill. The preset chips
+  are 28 px and the steppers 38 px (32 px at the two shortest sizes).
+- **Not caught**: the toast over the carousel (WS 7), since toasts are waited out and
+  fixed layers are not compared with the content under them. A long unbroken word also
+  overflows the "Now brewing" toast on the phone.
+- `scripts/screenshots.cjs` was left alone: no stress or pour states were added.
 
 ### WS 2 — Quick fixes (S)
 

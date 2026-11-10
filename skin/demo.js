@@ -126,6 +126,35 @@ function makeDemoApi() {
   });
   for (const [id, entry] of Object.entries(savedReviews)) if (entry?.shot && !shots.some((shot) => shot.id === id)) shots.push(clone(entry.shot));
   let shotCounter = 0;
+
+  // ---------- stress fixture (?stress) ----------
+  // Awkward text for layout work and scripts/check-targets.cjs: a coffee with a long
+  // name on a recipe whose profile has a long name, a coffee whose name is one unbroken
+  // word, a coffee with no roaster, and a favourite carrying the long names. They go
+  // first on the shelf, so Brew opens on the long one. Without ?stress nothing here runs.
+  if (/[?&]stress\b/.test(location.search)) {
+    const longProfile = "Extended blooming with an adaptive pressure decline for very light roasts, revision 3.2";
+    demoProfiles.push({ ...CE.outlineProfile(longProfile, "blooming", 93, 45, "Stress fixture"), notes: "A made-up profile with a long name, for testing layouts." });
+    const base = all[0];
+    const stressBean = (n, name, roaster, byDrink = null) => {
+      const info = { ...clone(base.info), roaster: { value: roaster, source: "bag" }, name: { value: name, source: "bag" }, productUrl: null, sources: [], summary: "A made-up coffee for testing layouts with awkward text." };
+      const art = packshot({ roaster, name, origin: info.country.value, ...base.pack });
+      info.imageUrl = art;
+      const b = { ...clone(base), id: `stress-${n}`, batch: `stress-batch-${n}`, info, used: 40 * n, shelf: true, byDrink, productImage: art, art: "product", frozen: false, finished: false, bestShotId: null };
+      const r = recipeFor(b);
+      return Object.assign(b, { recipe: r.recipe, recipeSource: r.source });
+    };
+    const pick = clone(base.byDrink.both);
+    const longRecipe = { ...pick.recipe, profileTitle: longProfile, yieldG: 45, tempC: 93, rationale: ["A made-up recipe whose profile has a long name."], alternatives: [] };
+    const longPick = { recipe: longRecipe, source: "rules", ranking: [{ ...pick.ranking[0], title: longProfile, recipe: { ...pick.ranking[0].recipe, yieldG: 45, tempC: 93, basis: "A made-up profile with a long name" } }, ...pick.ranking.slice(0, 3)] };
+    const stressBeans = [
+      stressBean(1, "Hacienda Monte Largo Extended Fermentation Natural Pink Bourbon Microlot Forty-Two", "Long Name Coffee Roasters and Importers", { both: longPick }),
+      stressBean(2, "Hochlandkaffeespezialmischungsnummerdreiundzwanzigausgabe", "Unbroken Word Roasters"),
+      stressBean(3, "No Roaster Blend", ""),
+    ];
+    all.unshift(...stressBeans);
+    favourites.push({ name: stressBeans[0].info.name.value.slice(0, 40), profileTitle: longProfile, doseG: longRecipe.doseG, yieldG: longRecipe.yieldG, tempC: longRecipe.tempC, beanId: stressBeans[0].id, grinderSetting: null });
+  }
   const nextShotId = () => { while (shots.some((shot) => shot.id === `demo-shot-${shotCounter}`) || savedReviews[`demo-shot-${shotCounter}`]) shotCounter++; return `demo-shot-${shotCounter++}`; };
 
   function stop(next = "idle", stopReason = "user") {
