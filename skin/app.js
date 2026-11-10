@@ -288,15 +288,10 @@ function makeLiveApi(conn) {
   const bagKey = (batchId) => `bag:${batchId}`;
   const bagUse = async (batch) => {
     const shots = await shotSummaries({ batchId: batch.id }).then((all) => all.filter((s) => isEspresso(s.workflow?.profile?.title ?? s.workflow?.name)), () => null);
-    const used = shots ? shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0) : null;
+    const used = E.gramsUsed(shots);
     const state = await kvGet(bagKey(batch.id), {}).catch(() => ({}));
-    let adjust = state.adjust ?? 0;
-    const weight = batch.weight ?? null;
-    if (used != null && weight != null && batch.weightRemaining != null && state.written != null && Math.abs(batch.weightRemaining - state.written) > 0.5) {
-      adjust = batch.weightRemaining - (weight - used);
-      await kvSet(bagKey(batch.id), { ...state, adjust, written: batch.weightRemaining }).catch(() => {});
-    }
-    const remaining = weight != null && used != null ? Math.max(0, Math.round(weight - used + adjust)) : used == null ? null : batch.weightRemaining ?? null;
+    const { adjust, remaining, corrected } = E.bagRemaining({ used, weight: batch.weight ?? null, weightRemaining: batch.weightRemaining, state });
+    if (corrected) await kvSet(bagKey(batch.id), { ...state, adjust, written: batch.weightRemaining }).catch(() => {});
     return { shots, used, adjust, remaining, state };
   };
   const installedProfiles = async () => (await j(D("/profiles?visibility=visible"))).filter((p) => (p.profile.beverage_type ?? "espresso") === "espresso");
@@ -538,7 +533,8 @@ function makeLiveApi(conn) {
       try { return await pending; }
       finally { if (annotationWrites.get(id) === pending) annotationWrites.delete(id); }
     },
-    async review(shotId, feedback = null) {
+    // `bean` is the coffee's record (info) from the caller's shelf, for the model's context.
+    async review(shotId, feedback = null, bean = null) {
       await annotationWrites.get(shotId);
       const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
       const recorded = shotPoints(full);
@@ -546,8 +542,6 @@ function makeLiveApi(conn) {
       const ctx = full.workflow?.context ?? {};
       const profile = full.workflow?.profile ?? null;
       const batchId = ctx.beanBatchId ?? null;
-      const beanBag = S.shelf.find((b) => b.batch === batchId);
-      const bean = beanBag?.info ?? null;
       const installed = await api.library().then((items) => items.map((p) => p.title)).catch(() => []);
       const history = batchId ? (await batchShots(batchId, 10)).filter((s) => s.id !== shotId && Date.parse(s.timestamp) < Date.parse(full.timestamp)).map((s) => {
         const saved = s.annotations?.extras?.crema?.review;
@@ -560,7 +554,7 @@ function makeLiveApi(conn) {
         yieldG: full.annotations?.actualYield ?? (points.at(-1)?.w ?? null), targetYieldG,
         targetTimeS: Array.isArray(targetTimeS) && targetTimeS.length === 2 ? targetTimeS : null,
         stopReason: full.stopReason ?? full.annotations?.stopReason ?? ctx.stopReason ?? null,
-        feedback, notes: full.annotations?.espressoNotes?.slice(0, 1000) ?? null, bean, installedProfiles: installed, history,
+        feedback, notes: full.annotations?.espressoNotes?.slice(0, 1000) ?? null, bean: bean ?? null, installedProfiles: installed, history,
       };
       let result = null;
       if (aiOn() && points.length) {
@@ -643,7 +637,8 @@ function makeLiveApi(conn) {
         };
       },
       settings: { get: () => j(D("/machine/settings")), set: (p) => post(D("/machine/settings"), p) },
-      waterThreshold: (mm) => post(D("/machine/waterLevels"), { refillLevel: settingNumber(mm, SETTING_LIMITS.sWaterWarn) }),
+      // `mm` is already validated and clamped by the settings view.
+      waterThreshold: (mm) => post(D("/machine/waterLevels"), { refillLevel: mm }),
       presence: { get: () => j(D("/presence/settings")), set: (p) => post(D("/presence/settings"), p) },
       schedules: {
         list: () => j(D("/presence/schedules")),
@@ -691,13 +686,12 @@ function makeLiveApi(conn) {
       };
       // A shot that was running when the socket dropped may end before it comes back, so the
       // first snapshot that isn't espresso after a reconnect is the end of that shot.
-      let prev = null, shotAcross = false;
+      let track = { prev: null, across: false };
       open("/ws/v1/machine/snapshot", (s) => {
-        const st = s.state?.state;
-        if ((prev === "espresso" || shotAcross) && st !== "espresso") s.finished = "latest";
-        shotAcross = false;
-        prev = st; h.snapshot?.(s);
-      }, () => { shotAcross = shotAcross || prev === "espresso"; prev = null; h.lost?.("machine"); });
+        const frame = E.socketFrame(track, s.state?.state);
+        if (frame.finished) s.finished = "latest";
+        track = frame.track; h.snapshot?.(s);
+      }, () => { track = E.socketLost(track); h.lost?.("machine"); });
       open("/ws/v1/scale/snapshot", (s) => h.scale?.(s.status ? { connected: s.status === "connected" } : { connected: true, weight: s.weight, batteryLevel: s.batteryLevel }));
       open("/ws/v1/machine/waterLevels", (s) => h.water?.(s));
       open("/ws/v1/plugins/time-to-ready.reaplugin/timeToReady", (s) => h.ready?.(s));
@@ -1021,7 +1015,7 @@ function step(spec) {
 // espresso runs profile steps; steam, hot water and flush don't.
 // Also true while the machine socket is down after it dropped mid-shot: the DE1 keeps
 // pouring, so the profile must not be written until a snapshot shows the shot is over.
-const shotRunning = () => S.snap?.state?.state === "espresso" || S.shotAcross;
+const shotRunning = () => E.shotRunning(S.snap?.state?.state, S.shotAcross);
 // Loads run one at a time. A load reads the screen when its turn comes, so the
 // latest choice wins, and one queued behind another is skipped if that one already
 // left the recipe on the machine (Espresso pressed during a manual load waits for it
@@ -1038,12 +1032,13 @@ function loadOntoMachine(silent = false) {
 async function loadNow(silent, queued) {
   const n = S.next, b = S.current;
   if (!n) return false;
-  if (shotRunning()) {
+  const decision = E.loadDecision({ shotRunning: shotRunning(), queued, loaded: S.loaded });
+  if (decision === "hold") {
     S.heldLoad = true; renderNextShot();
     if (!silent) toast("Loads when this shot ends");
     return "held";
   }
-  if (queued && S.loaded) return true;
+  if (decision === "skip") return true;
   S.heldLoad = false;
   wfWrites++;
   const draft = JSON.stringify(n);
@@ -1077,15 +1072,7 @@ async function loadNow(silent, queued) {
 // A read that began before one of our own writes finished is dropped, so it can't
 // undo that write. Approach from Streamline's workflow-watch.js, reimplemented here.
 let wfWrites = 0, wfReading = null;
-const near = (a, b) => a == null || b == null ? a == b : Math.abs(Number(a) - Number(b)) < 0.05;
-// Grind is only a note on the recipe (it never reaches the machine), so a side that
-// has none doesn't count as a difference. Writers format numbers differently ("21",
-// "21.00"), so numbers compare as numbers.
-const sameGrind = (a, b) => {
-  const x = String(a ?? "").trim(), y = String(b ?? "").trim();
-  return x === "" || y === "" || x === y || (Number.isFinite(Number(x)) && Number(x) === Number(y));
-};
-const recipeMatches = (m, n) => !!(m && n) && m.profileTitle === n.profileTitle && (!n.profileShape || m.profileShape === n.profileShape) && near(m.doseG, n.doseG) && near(m.yieldG, n.yieldG) && near(m.tempC, n.tempC) && sameGrind(m.grind, n.grind);
+// near, sameGrind and recipeMatches live in server/control/workflow.ts (E.recipeMatches).
 function reconcileWorkflow({ adopt = true, boot = false } = {}) {
   if (!S.api?.machine.recipe || shotRunning() || unlinked()) return Promise.resolve(null);
   if (wfReading) return wfReading;
@@ -1093,36 +1080,26 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
   const timeout = new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 4000));
   wfReading = Promise.race([S.api.machine.recipe(), timeout]).then(async (m) => {
     if (writesBefore !== wfWrites || !m || !S.next) return null;
-    // A recipe recorded against another bag is another coffee's, whatever its numbers.
-    const otherCoffee = S.noBag ? !!(m.batchId || m.coffeeName || m.coffeeRoaster) : !!m.batchId && m.batchId !== S.current?.batch;
-    if (!otherCoffee && recipeMatches(m, S.next)) {
-      if (!S.loaded) { S.loaded = true; renderNextShot(); }
+    const outcome = E.reconcileOutcome({ machine: m, next: S.next, noBag: S.noBag, currentBatch: S.current?.batch, loaded: S.loaded, adopt, boot });
+    if (outcome.kind === "same") {
+      if (outcome.markLoaded) { S.loaded = true; renderNextShot(); }
       return "same";
     }
-    const unsaved = !S.loaded && !boot;
     S.loaded = false;
-    if (!adopt || unsaved) { renderNextShot(); return "differs"; }
-    const forThisBag = S.noBag ? !otherCoffee && m.profileShape === S.next.profileShape : !!m.batchId && m.batchId === S.current?.batch;
-    if (!forThisBag || !m.profileTitle) { toast("The machine has another recipe, set elsewhere. Starting here loads this one"); renderNextShot(); return "other"; }
+    if (outcome.kind === "differs") { renderNextShot(); return "differs"; }
+    if (outcome.kind === "other") { toast("The machine has another recipe, set elsewhere. Starting here loads this one"); renderNextShot(); return "other"; }
     let profileId = S.next.profileId;
-    if (m.profileShape !== S.next.profileShape) {
+    if (outcome.lookupProfile) {
       const nextBefore = S.next, choice = JSON.stringify(S.next), beanBefore = S.current;
       const library = await S.api.library().catch(() => []);
       if (writesBefore !== wfWrites || shotRunning() || S.next !== nextBefore || S.current !== beanBefore || JSON.stringify(S.next) !== choice) return null;
       profileId = library.find((p) => p.profileShape === m.profileShape)?.id ?? "unlisted-workflow-profile";
     }
-    // A different profile than the recommendation's: its time window no longer applies.
-    if (m.profileTitle !== S.current?.recipe?.profileTitle) S.next.targetTimeS = null;
-    Object.assign(S.next, {
-      fromMachine: true,
-      profileTitle: m.profileTitle,
-      profileId, profileShape: m.profileShape, manual: m.manual,
-      doseG: m.doseG ?? S.next.doseG, yieldG: m.yieldG ?? S.next.yieldG, tempC: m.tempC ?? S.next.tempC,
-      grind: m.grind || S.next.grind,
-    });
+    // A different profile than the recommendation's: its time window no longer applies (adoptPatch).
+    Object.assign(S.next, E.adoptPatch(m, S.next, profileId, S.current?.recipe?.profileTitle));
     if (m.grind) local.set(`grind:${S.current?.id ?? "bagless"}`, m.grind);
     saveBrewChoice();
-    S.loaded = recipeMatches(m, S.next);
+    S.loaded = E.recipeMatches(m, S.next);
     renderNextShot();
     if (!boot) toast(`Recipe changed elsewhere: ${m.profileTitle}, ${fmtC(S.next.doseG)} → ${fmtC(S.next.yieldG)} g`);
     return "adopted";
@@ -1331,40 +1308,42 @@ async function pushPresetSettings(kind) {
 // second start until the machine reports the first (or a few seconds pass).
 // A start command is never retried.
 let opGen = 0; // S.starting is { kind, until } while a start is under way
-const isStarting = () => !!S.starting && Date.now() < S.starting.until;
-// Machine states (Decaid's names) in which nothing new should start. Stop is never
-// blocked. Heating and preheating are left alone: the DE1 handles a start while warming.
-const NOT_READY = ["sleeping", "needsWater", "error", "booting", "steamRinse", "cleaning", "descaling", "transportMode", "fwUpgrade"];
+const isStarting = () => E.isStarting(S.starting, Date.now());
+// The states in which nothing new should start (Stop is never blocked) are in server/control/start.ts.
+const NOT_READY = E.NOT_READY;
 async function startOp(kind) {
-  if (isStarting()) return;
-  if (unlinked()) return toast("The machine isn't connected");
   const st = S.snap?.state?.state;
-  if (["espresso", "steam", "hotWater", "flush"].includes(st)) return toast("Stop the current operation before starting another");
-  if (NOT_READY.includes(st)) return toast(`Not now: the machine says "${STATE_LABEL[st] || st}"`);
+  const refused = E.startGate({ starting: S.starting, now: Date.now(), unlinked: unlinked(), state: st });
+  if (refused) {
+    if (refused.refuse === "unlinked") return toast("The machine isn't connected");
+    if (refused.refuse === "running") return toast("Stop the current operation before starting another");
+    if (refused.refuse === "notReady") return toast(`Not now: the machine says "${STATE_LABEL[st] || st}"`);
+    return;
+  }
   const gen = ++opGen, current = () => gen === opGen;
   S.starting = { kind, until: Infinity };
   renderControls();
   let sent = false;
   try {
-    if (kind === "espresso" && S.loaded) await reconcileWorkflow({ adopt: false }); // still on the machine?
+    const steps = E.startSteps(kind, S.loaded);
+    if (steps.reconcileFirst) await reconcileWorkflow({ adopt: false }); // still on the machine?
     if (!current()) return;
-    if (kind === "espresso" && !S.loaded) { const ok = await loadOntoMachine(true); if (!ok) return; }
-    if (kind === "steam") await pushPresetSettings("steam");
-    if (kind === "hotWater") await pushPresetSettings("water");
-    if (kind === "flush") await pushPresetSettings("flush");
+    if (E.startSteps(kind, S.loaded).loadFirst) { const ok = await loadOntoMachine(true); if (!ok) return; }
+    if (steps.presets) await pushPresetSettings(steps.presets);
     if (!current()) return;
     await S.api.machine.setState(kind);
     sent = true;
     // Stop was pressed while the start command was on its way. The two requests
     // can reach the machine in either order, so stop again now that it has landed.
-    if (!current()) { S.api.machine.setState("idle").catch(() => {}); return; }
+    if (E.afterStartSent(current()) === "stopAgain") { S.api.machine.setState("idle").catch(() => {}); return; }
     S.api.machine.heartbeat();
   } catch (e) {
     if (current()) toast(`Couldn't start: ${e.message}`);
   } finally {
-    if (current()) {
-      S.starting = sent ? { kind, until: Date.now() + 3000 } : null;
-      if (sent) setTimeout(renderControls, 3100);
+    const settled = E.startSettled({ stillCurrent: current(), sent, kind, now: Date.now() });
+    if (settled.update) {
+      S.starting = settled.starting;
+      if (settled.redrawLater) setTimeout(renderControls, 3100);
       renderControls();
     }
   }
@@ -1420,7 +1399,7 @@ function renderLive() {
 // than show it as live. The socket reconnects on its own.
 function onStreamLost(which) {
   if (which === "machine") {
-    if (S.snap?.state?.state === "espresso") S.shotAcross = true;
+    S.shotAcross = E.shotAcrossOnLoss(S.snap?.state?.state, S.shotAcross);
     S.snap = null;
     renderStatus(); renderAlerts(); renderControls();
     if (!$("#view-brew").hidden) { renderReadouts(); renderLive(); }
@@ -1444,10 +1423,10 @@ function onSnapshot(s) {
   S.snap = s;
   const st = s.state?.state;
   // The first snapshot after a drop in mid-shot: still pouring (the same shot goes on), or over.
-  const resumed = S.shotAcross && st === "espresso", endedAway = S.shotAcross && st !== "espresso";
+  const d = E.snapshotDecision({ prevState, state: st, shotAcross: S.shotAcross, heldLoad: S.heldLoad, startingKind: S.starting?.kind });
   S.shotAcross = false;
-  if (st !== prevState && S.starting?.kind === st) S.starting = null; // the machine has picked up the start
-  if (st !== prevState) { renderControls(); renderAlerts(); updateSaver(); if (st === "espresso" && !resumed) onShotStart(); opOverlay(); }
+  if (d.clearStarting) S.starting = null; // the machine has picked up the start
+  if (d.changed) { renderControls(); renderAlerts(); updateSaver(); if (d.shotStart) onShotStart(); opOverlay(); }
   if (st === "espresso") {
     // Decaid's snapshot has no timer; the simulators send one. Ignore a stale
     // value carried over from the previous operation on the first frame.
@@ -1460,7 +1439,7 @@ function onSnapshot(s) {
     opOverlay();
   }
   if (s.finished) onShotEnd(s.finished);
-  if ((prevState === "espresso" || endedAway) && st !== "espresso" && S.heldLoad) {
+  if (d.sendHeldLoad) {
     loadOntoMachine(true).then((ok) => ok === true && toast(`Loaded ${S.next.profileTitle} for the next shot`));
   }
   renderStatus(); renderReadouts();
@@ -1617,7 +1596,7 @@ function showAfterShot(shot, pts, context = {}) {
     const feedback = !manual && sb != null && body != null ? { sourBitter: sb, body, enjoyment: rating, notes: null } : null;
     S.reviewPending.add(shot.id); reviewButton.disabled = true; reviewButton.textContent = "Reviewing…";
     try {
-      const saved = await S.api.review(shot.id, feedback);
+      const saved = await S.api.review(shot.id, feedback, bagInfoForShot(shot));
       shot.review = saved;
       if (feedback) shot.taste = { sourBitter: feedback.sourBitter, body: feedback.body };
       if (p.dataset.shotId === shot.id && S.afterViewToken === viewToken) $("#reviewBox").innerHTML = reviewHtml(saved);
@@ -2306,6 +2285,9 @@ function showInstalledProfile(lp) {
 
 /* ================= shots ================= */
 const SHOTS_PER_PAGE = 20;
+// The coffee record of the bag a shot was pulled from, for the review's context. A shot
+// with no bag matches a shelf row with no bag, as it always has.
+const bagInfoForShot = (s) => S.shelf.find((b) => b.batch === (s.batch ?? null))?.info ?? null;
 // A shot pulled from another skin may record a bag but no coffee name: name it from the shelf.
 const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch === s.batch)?.info.name.value || "No coffee recorded";
 async function renderShots(more = false) {
@@ -2384,7 +2366,7 @@ function renderShotDetail() {
     const feedback = sb != null && body != null ? { sourBitter: sb, body, enjoyment: s.enjoyment, notes: null } : null;
     S.reviewPending.add(s.id); reviewButton.disabled = true; reviewButton.textContent = "Reviewing…";
     try {
-      const saved = await S.api.review(s.id, feedback);
+      const saved = await S.api.review(s.id, feedback, bagInfoForShot(s));
       s.review = saved;
       const current = S.shots.find((shot) => shot.id === s.id);
       if (current) current.review = saved;
