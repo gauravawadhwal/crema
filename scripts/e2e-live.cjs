@@ -665,7 +665,18 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await dec(`/store/crema/${encodeURIComponent("bean:" + pend.id)}`, "POST", { recipe, recipeSource: "saved", batchId: pendBag.id, finished: false, addedAt: new Date().toISOString() });
       await picking;
       check(await tablet.evaluate((k) => S.current.key === k && !!S.current.recipe, pendBag.id) && await tablet.evaluate(() => window.__rec) === 0, "picking a coffee whose recipe is pending elsewhere waits for it instead of asking for another");
-      for (const b of [phoneBean, pend]) await dec(`/beans/${b.id}`, "PUT", { archived: true });
+      // Switching to another coffee during the wait must not lead to a second recipe request.
+      const away = await dec("/beans", "POST", { roaster: "Phone Roasters", name: "Switched away" });
+      const awayBag = await dec(`/beans/${away.id}/batches`, "POST", { weight: 250 });
+      await tablet.waitForFunction((k) => S.shelf.some((b) => b.key === k), awayBag.id, { timeout: 12000 });
+      const waiting = tablet.evaluate((k) => selectBean(k, { quiet: true }), awayBag.id);
+      await tablet.waitForTimeout(1500);
+      await tablet.evaluate((k) => selectBean(k, { quiet: true }), bag2);
+      await dec(`/store/crema/${encodeURIComponent("bean:" + away.id)}`, "POST", { recipe: { ...recipe, doseG: 17.5 }, recipeSource: "saved", batchId: awayBag.id, finished: false, addedAt: new Date().toISOString() });
+      await waiting;
+      await tablet.evaluate((k) => selectBean(k, { quiet: true }), awayBag.id);
+      check(await tablet.evaluate((k) => S.current.key === k && S.current.recipe?.doseG === 17.5, awayBag.id) && await tablet.evaluate(() => window.__rec) === 0, "a coffee left while waiting for another device's recipe shows that recipe when picked again, with no recommend");
+      for (const b of [phoneBean, pend, away]) await dec(`/beans/${b.id}`, "PUT", { archived: true });
       await tablet.evaluate((k) => selectBean(k, { quiet: true }), bag2);
       await tablet.waitForFunction(() => S.newRows.size === 0 && !S.shelf.some((b) => /Phone Roasters/.test(b.info.roaster?.value ?? "")), null, { timeout: 15000 }).catch(() => {});
       await page.waitForFunction(() => !S.shelf.some((b) => /Phone Roasters/.test(b.info.roaster?.value ?? "")), null, { timeout: 15000 }).catch(() => {});

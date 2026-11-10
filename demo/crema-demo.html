@@ -3822,13 +3822,17 @@ async function selectBean(key, opts = {}) {
     try {
       // Added on another device a moment ago: its recipe is probably being worked out
       // there. Wait for it (up to ~30 s) rather than ask the AI a second time.
-      for (let i = 0; i < 10 && !b.recipe && E.waitingForRecipe(S.newRows, b.key, Date.now()); i++) {
+      // A shelf read replaces the rows (only the current one is merged in place), so look at the fresh row, not `b`.
+      const fresh = () => S.shelf.find((x) => x.key === b.key);
+      for (let i = 0; i < 10 && fresh() && !fresh().recipe && E.waitingForRecipe(S.newRows, b.key, Date.now()); i++) {
         await new Promise((r) => setTimeout(r, 3000));
         const previous = S.shelf.map((x) => x.key);
         await refreshShelf().catch(() => {});
         S.newRows = E.trackNewRows(S.newRows, previous, S.shelf, Date.now());
       }
-      if (!b.recipe) { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); }
+      const row = fresh();
+      if (row?.recipe) sameCoffee(b.id, (x) => { x.recipe = row.recipe; x.recipeSource = row.recipeSource; });
+      else if (row) { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); }
     } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
     finally { if (S.recommending === b.id) S.recommending = null; }
     // Profiles may have been drawn while waiting (Add sends you there first).
