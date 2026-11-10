@@ -116,6 +116,9 @@ jobs:
       - name: Saved shot review and fallback
         if: matrix.group == 'brewing'
         run: node scripts/e2e-review.cjs
+      - name: Shelf, Shots and Settings screens
+        if: matrix.group == 'brewing'
+        run: node scripts/e2e-screens.cjs
       - name: Keep screenshots when a check fails
         if: failure()
         uses: actions/upload-artifact@v4

@@ -761,7 +761,7 @@ const S = {
 
 /* ================= chart ================= */
 function drawChart(canvas, pts, o = {}) {
-  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true, ahead = null, shade = null, endLabels = false } = o;
+  const { maxT = 40, maxW = 50, compact = false, ghost = null, targets = true, plan = null, weightAxis = true, ahead = null, shade = null, endLabels = false, thumb = false } = o;
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   if (!rect.width) return;
@@ -804,14 +804,14 @@ function drawChart(canvas, pts, o = {}) {
   // for the steps that drive it, the temperature, and faint lines where steps change.
   // Pour mode passes `ahead` (now, in s): the plan is drawn only after it, behind a
   // "now" line, and `shade` ([start, end] in s) marks the step being poured.
-  if (plan && !compact) {
+  if (plan && (!compact || thumb)) {
     ctx.save(); ctx.beginPath(); ctx.rect(pad.l, 0, iw, H); ctx.clip();
     ctx.strokeStyle = css("--line"); ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
-    for (const st of plan.steps.slice(1)) if (st.end > st.start && st.start > 0) { ctx.beginPath(); ctx.moveTo(x(st.start), pad.t); ctx.lineTo(x(st.start), pad.t + ih); ctx.stroke(); }
+    if (!thumb) for (const st of plan.steps.slice(1)) if (st.end > st.start && st.start > 0) { ctx.beginPath(); ctx.moveTo(x(st.start), pad.t); ctx.lineTo(x(st.start), pad.t + ih); ctx.stroke(); }
     if (shade && shade[1] > shade[0]) { ctx.globalAlpha = .1; ctx.fillStyle = css("--accent"); ctx.fillRect(x(shade[0]), pad.t, x(shade[1]) - x(shade[0]), ih); ctx.globalAlpha = 1; }
     if (ahead != null) { ctx.beginPath(); ctx.rect(x(ahead), 0, W, H); ctx.clip(); }
     const planLine = (key, color, y, width, alpha) => {
-      ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash([5, 4]); ctx.lineJoin = "round"; ctx.beginPath();
+      ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(thumb ? [] : [5, 4]); ctx.lineJoin = "round"; ctx.beginPath();
       let down = false;
       for (const d of plan.points) {
         if (d[key] == null) { down = false; continue; }
@@ -819,9 +819,9 @@ function drawChart(canvas, pts, o = {}) {
       }
       ctx.stroke(); ctx.restore();
     };
-    planLine("temp", css("--temp"), yT, 1.2, .55);
-    planLine("tp", css("--pressure"), yB, 1.8, .85);
-    planLine("tf", css("--flow"), yB, 1.8, .85);
+    if (!thumb) planLine("temp", css("--temp"), yT, 1.2, .55);
+    planLine("tp", css("--pressure"), yB, thumb ? 1.5 : 1.8, .85);
+    planLine("tf", css("--flow"), yB, thumb ? 1.5 : 1.8, .85);
     ctx.restore();
     if (ahead != null) { ctx.save(); ctx.strokeStyle = css("--muted"); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x(ahead), pad.t); ctx.lineTo(x(ahead), pad.t + ih); ctx.stroke(); ctx.restore(); }
     if (!pts.length) {
@@ -2200,75 +2200,109 @@ function openSheet(html) { stopRepeat?.(); $("#sheet").classList.remove("recipe-
 function closeSheet() { stopRepeat?.(); $("#sheetBack").hidden = true; }
 
 /* ================= shelf ================= */
+// Shelf filters use the facts the cards already show: the rest status behind the
+// "In its window" and "Resting" pills, and the "Running low" warning (4 shots or fewer).
+const SHELF_FILTERS = [["all", "All", ""], ["peak", "In its window", "No coffees in their window right now"], ["resting", "Resting", "No coffees resting right now"], ["low", "Running low", "No coffees running low"]];
+let shelfFilter = "all";
+const shelfShotsLeft = (b) => (b.remaining != null ? Math.floor(b.remaining / (b.recipe?.doseG ?? 18)) : null);
+const shelfMatches = (b, f) => f === "all" || (f === "low" ? shelfShotsLeft(b) != null && shelfShotsLeft(b) <= 4 : restOf(b.info).status === f);
+function skeletonCards(n = 3) { return Array.from({ length: n }, () => `<div class="panel skeleton-card" aria-hidden="true"><div class="sk sk-head"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div><div class="sk sk-btn"></div></div>`).join(""); }
 async function renderShelf() {
-  const el = $("#shelf");
-  if (!S.shelf.length) { el.innerHTML = `<div class="panel stack"><h2>Your shelf is empty</h2><p class="muted">Photograph a bag, search for a coffee or paste a roaster's link.</p><div><a class="btn primary" href="#add">Add coffee</a></div></div>`; return; }
-  el.innerHTML = S.shelf.map((b) => {
+  const el = $("#shelf"), filters = $("#shelfFilters");
+  if (!S.shelfLoaded) { filters.hidden = true; el.setAttribute("aria-busy", "true"); el.innerHTML = skeletonCards(); return; }
+  el.removeAttribute("aria-busy");
+  if (S.shelfError && !S.shelf.length) {
+    filters.hidden = true;
+    el.innerHTML = `<div class="panel stack"><h2>Couldn't load your coffees</h2><p class="muted">Decaid didn't answer (${esc(S.shelfError)}).</p><div><button class="btn" id="retryShelfView">Try again</button></div></div>`;
+    $("#retryShelfView").onclick = async () => { await retryShelf(); renderShelf(); };
+    return;
+  }
+  if (!S.shelf.length) { filters.hidden = true; el.innerHTML = `<div class="panel stack"><h2>Your shelf is empty</h2><p class="muted">Photograph a bag, search for a coffee or paste a roaster's link.</p><div><a class="btn primary" href="#add">Add coffee</a></div></div>`; return; }
+  filters.hidden = false;
+  filters.innerHTML = SHELF_FILTERS.map(([id, label]) => `<button type="button" class="fchip" role="radio" data-sf="${id}" aria-checked="${shelfFilter === id}" tabindex="${shelfFilter === id ? 0 : -1}">${label}</button>`).join("");
+  $$("[data-sf]", filters).forEach((btn, i, all) => {
+    btn.onclick = () => { shelfFilter = btn.dataset.sf; renderShelf(); $(`[data-sf="${shelfFilter}"]`, filters)?.focus(); };
+    btn.onkeydown = (e) => {
+      const to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1 }[e.key];
+      if (to == null) return;
+      e.preventDefault(); all[(to + all.length) % all.length].click();
+    };
+  });
+  const shown = S.shelf.filter((b) => shelfMatches(b, shelfFilter));
+  if (!shown.length) { el.innerHTML = `<div class="panel"><p class="muted">${SHELF_FILTERS.find((f) => f[0] === shelfFilter)[2]}.</p></div>`; return; }
+  const moreIcon = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>`;
+  el.innerHTML = shown.map((b) => {
     const i = b.info, rest = restOf(i);
     const left = b.remaining != null && b.weight ? clamp((b.remaining / b.weight) * 100, 0, 100) : null;
-    const shotsLeft = b.remaining != null ? Math.floor(b.remaining / (b.recipe?.doseG ?? 18)) : null;
+    const shotsLeft = shelfShotsLeft(b);
     const bagNote = b.bags > 1 ? `<span class="pill plain">Bag ${b.bagNo} of ${b.bags}${i.roastDate?.value ? ` · roasted ${esc(i.roastDate.value)}` : ""}</span>` : "";
     return `<article class="panel bean-card ${S.current?.key === b.key ? "current" : ""}">
-      <div class="coffee-head">${bagArt(b, "lg")}<div style="min-width:0" class="stack" style="gap:2px"><div><div class="label">${esc(i.roaster.value)}</div><h2>${esc(i.name.value)}</h2>
-        <div class="muted small">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div>${bagNote ? `<div>${bagNote}</div>` : ""}</div>
+      <div class="coffee-head">${bagArt(b, "lg")}<div class="stack bean-text"><div><div class="label clip1">${esc(i.roaster.value)}</div><h2 class="clamp2">${esc(i.name.value)}</h2>
+        <div class="muted small clamp2">${esc([i.country?.value, i.process?.value].filter(Boolean).join(" · "))}</div>${bagNote ? `<div>${bagNote}</div>` : ""}</div>
         ${i.tastingNotes?.value?.length ? `<div class="tags">${i.tastingNotes.value.slice(0, 3).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}</div></div>
       ${restBar(rest)}
       ${b.remaining == null && b.batch && b.shots == null ? `<div class="muted small">Couldn't count what's left: Decaid's shots didn't load.</div>` : ""}
       ${left != null ? `<div class="stack" style="gap:6px"><div class="row between"><span class="label">Left</span><span class="num muted small">${b.remaining} / ${b.weight} g · about ${shotsLeft} shots</span></div><div class="grams"><div style="width:${left}%"></div></div>
         ${shotsLeft != null && shotsLeft <= 4 ? '<span class="pill warn" style="justify-self:start">Running low. Time to reorder</span>' : ""}</div>` : ""}
-      <div class="muted small">${esc(b.recipe ? `${b.recipe.profileTitle} · ${fmt1(b.recipe.doseG)}→${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C` : "No recipe yet")}</div>
-      <div class="row">
-        <button class="btn small ${S.current?.key === b.key ? "" : "primary"}" data-brew="${esc(b.key)}">${S.current?.key === b.key ? "Brewing" : "Brew this"}</button>
-        <button class="btn small ghost" data-freeze="${esc(b.key)}">${b.frozen ? "Thaw" : "Freeze"}</button>
-        <button class="btn small ghost" data-finish="${esc(b.key)}">Finished</button>
-        <button class="btn small ghost" data-addbag="${esc(b.key)}">Another bag</button>
-        ${b.batch && b.weight ? `<button class="btn small ghost" data-left="${esc(b.key)}">Set what's left</button>` : ""}
-        ${i.productUrl ? `<a class="btn small ghost" href="${esc(i.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}
+      <div class="muted small clamp2">${esc(b.recipe ? `${b.recipe.profileTitle} · ${fmt1(b.recipe.doseG)}→${fmt1(b.recipe.yieldG)} g · ${fmt1(b.recipe.tempC)} °C` : "No recipe yet")}</div>
+      <div class="card-actions">
+        <button class="btn grow ${S.current?.key === b.key ? "" : "primary"}" data-brew="${esc(b.key)}">${S.current?.key === b.key ? "Brewing" : "Brew this"}</button>
+        <button class="btn more-btn" data-more="${esc(b.key)}" aria-haspopup="dialog" aria-label="More actions for ${esc(i.name.value)}">${moreIcon}</button>
       </div></article>`;
   }).join("");
   $$("[data-brew]").forEach((btn) => (btn.onclick = async () => { await selectBean(btn.dataset.brew); location.hash = "#brew"; }));
   const bag = (key) => S.shelf.find((x) => x.key === key);
-  $$("[data-freeze]").forEach((btn) => (btn.onclick = async () => {
-    const b = bag(btn.dataset.freeze);
-    if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
-    b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
-  }));
-  $$("[data-finish]").forEach((btn) => (btn.onclick = () => {
-    const b = bag(btn.dataset.finish);
-    const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
-    openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
-    $("#confirmFinish").onclick = async () => {
-      if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
-      closeSheet(); await refreshShelf();
-      if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
-      renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
-    };
-  }));
-  $$("[data-addbag]").forEach((btn) => (btn.onclick = () => {
-    const b = bag(btn.dataset.addbag);
-    openSheet(`<h2>Another bag of ${esc(b.info.name.value)}</h2><p class="muted">It gets its own roast date, frozen state and weight, and shares this coffee's recipe and reference shot.</p>
-      <div class="field"><label class="label" for="bagRoast">Roast date</label><input type="date" id="bagRoast" max="${new Date().toISOString().slice(0, 10)}"></div>
-      <div class="field"><label class="label" for="bagWeight">Weight</label><input id="bagWeight" inputmode="decimal" value="${esc(String(b.weight || 250))}" aria-label="Grams"></div>
-      <div class="row"><button class="btn primary" id="confirmBag">Add bag</button></div>`);
-    $("#confirmBag").onclick = async () => {
-      const w = parseFloat($("#bagWeight").value);
-      try {
-        const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
-        closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
-        if (!S.current) await selectBean(added.key, { quiet: true });
-      } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
-    };
-  }));
-  $$("[data-left]").forEach((btn) => (btn.onclick = () => {
-    const b = bag(btn.dataset.left);
-    openSheet(`<h2>How much is left?</h2><p class="muted">Crema counts it from your shots. Correct it here if you've weighed the bag, spilled some or brewed it another way.</p>
-      <div class="field"><label class="label" for="leftG">Grams left</label><input id="leftG" inputmode="decimal" value="${esc(String(b.remaining ?? b.weight))}" aria-label="Grams left"></div>
-      <div class="row"><button class="btn primary" id="confirmLeft">Save</button></div>`);
-    $("#confirmLeft").onclick = async () => {
-      const g = parseFloat($("#leftG").value);
-      if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
-      try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
-    };
+  // The actions behind More. Each does what its button on the card used to do.
+  const actions = {
+    freeze: async (b) => {
+      closeSheet();
+      if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
+      b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
+    },
+    finish: (b) => {
+      const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
+      openSheet(`<h2>Finished this bag of ${esc(b.info.name.value)}?</h2><p class="muted">${others ? `Your other ${others > 1 ? `${others} bags` : "bag"} of it stay${others > 1 ? "" : "s"} on the shelf, with the same recipe.` : "It moves off your shelf. Its shots stay in your history."}</p><div class="row"><button class="btn primary" id="confirmFinish">Mark finished</button></div>`);
+      $("#confirmFinish").onclick = async () => {
+        if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
+        closeSheet(); await refreshShelf();
+        if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
+        renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
+      };
+    },
+    addbag: (b) => {
+      openSheet(`<h2>Another bag of ${esc(b.info.name.value)}</h2><p class="muted">It gets its own roast date, frozen state and weight, and shares this coffee's recipe and reference shot.</p>
+        <div class="field"><label class="label" for="bagRoast">Roast date</label><input type="date" id="bagRoast" max="${new Date().toISOString().slice(0, 10)}"></div>
+        <div class="field"><label class="label" for="bagWeight">Weight</label><input id="bagWeight" inputmode="decimal" value="${esc(String(b.weight || 250))}" aria-label="Grams"></div>
+        <div class="row"><button class="btn primary" id="confirmBag">Add bag</button></div>`);
+      $("#confirmBag").onclick = async () => {
+        const w = parseFloat($("#bagWeight").value);
+        try {
+          const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
+          closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
+          if (!S.current) await selectBean(added.key, { quiet: true });
+        } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
+      };
+    },
+    left: (b) => {
+      openSheet(`<h2>How much is left?</h2><p class="muted">Crema counts it from your shots. Correct it here if you've weighed the bag, spilled some or brewed it another way.</p>
+        <div class="field"><label class="label" for="leftG">Grams left</label><input id="leftG" inputmode="decimal" value="${esc(String(b.remaining ?? b.weight))}" aria-label="Grams left"></div>
+        <div class="row"><button class="btn primary" id="confirmLeft">Save</button></div>`);
+      $("#confirmLeft").onclick = async () => {
+        const g = parseFloat($("#leftG").value);
+        if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
+        try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
+      };
+    },
+  };
+  $$("[data-more]").forEach((btn) => (btn.onclick = () => {
+    const b = bag(btn.dataset.more);
+    openSheet(`<h2 class="clamp2">${esc(b.info.name.value)}</h2><div class="stack more-list">
+      <button class="btn ghost" data-act="freeze">${b.frozen ? "Thaw" : "Freeze"}</button>
+      <button class="btn ghost" data-act="finish">Finished</button>
+      <button class="btn ghost" data-act="addbag">Another bag</button>
+      ${b.batch && b.weight ? `<button class="btn ghost" data-act="left">Set what's left</button>` : ""}
+      ${b.info.productUrl ? `<a class="btn ghost" href="${esc(b.info.productUrl)}" target="_blank" rel="noopener">Roaster's page</a>` : ""}</div>`);
+    $$("[data-act]", $("#sheet")).forEach((row) => (row.onclick = () => actions[row.dataset.act](b)));
   }));
 }
 let shelfRequest = 0, shelfSync = null;
@@ -2674,7 +2708,7 @@ async function renderProfiles() {
   $("#profilesSub").textContent = b ? `Matched against what ${b.info.roaster.value} says about it: ${[b.info.roastLevel?.value, b.info.processKind, (b.info.tastingNotes?.value || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ")}` : "Choose an installed profile, with or without a bag.";
   const rec = $("#recommended");
   if (b) {
-    rec.innerHTML = `<p class="muted">Ranking profiles…</p>`;
+    rec.innerHTML = `<p class="muted">Ranking profiles…</p><div class="cands" aria-hidden="true">${skeletonCards(3)}</div>`;
     const waiting = !b.recipe && S.recommending === b.id
       ? `<div class="panel stack"><span class="label">Recommended</span><p class="muted">${S.api.ai.on ? "Asking the AI to choose among these…" : "Working out a recipe…"}</p></div>` : "";
     try {
@@ -2688,8 +2722,9 @@ async function renderProfiles() {
           ${b.recipe.dialIn ? `<div class="advice small"><div class="label">Dial-in</div>${esc(b.recipe.dialIn)}</div>` : ""}
           <div class="row"><button class="btn primary" data-use="${esc(chosen)}" data-rec="1">Use this</button><button class="btn" id="askAgain">Ask the AI again</button></div></div>` : ""}
         <div class="row between"><span class="label">Ranked by the rules</span><span class="muted small">The AI chooses among the top candidates</span></div>
-        <div class="cands">${cands.slice(0, 6).map((c, i) => `<div class="cand ${c.title === chosen ? "top" : ""}">
-          <div class="row between"><h3>${esc(c.title)}</h3>${c.title === chosen ? '<span class="pill accent">AI pick</span>' : `<span class="muted small num">#${i + 1}</span>`}</div>
+        <div class="cands">${cands.slice(0, 6).map((c, i) => c.title === chosen ? `<div class="cand shown-above"><div class="row between"><h3 class="clamp2">${esc(c.title)}</h3><span class="muted small"><span class="num">#${i + 1}</span> · Shown above</span></div></div>` : `<div class="cand">
+          <div class="row between"><h3 class="clamp2">${esc(c.title)}</h3><span class="muted small num">#${i + 1}</span></div>
+          <canvas class="prof-thumb" data-thumb-title="${esc(c.title)}" aria-hidden="true"></canvas>
           <div class="scorebar" aria-label="Match score ${c.score}"><div style="width:${clamp((c.score / top) * 100, 5, 100)}%"></div></div>
           <ul>${c.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}${c.cautions.map((r) => `<li class="caution">${esc(r)}</li>`).join("")}</ul>
           <div class="row between"><span class="num small">${fmt1(c.recipe.doseG)}→${fmt1(c.recipe.yieldG)} g · ${fmt1(c.recipe.tempC)} °C</span>${c.installed === false ? '<span class="pill plain">Not on this machine</span>' : `<button class="btn small" data-use="${esc(c.title)}">Use</button>`}</div></div>`).join("")}</div>`;
@@ -2711,6 +2746,18 @@ async function renderProfiles() {
   if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
   [S.library, S.machineInfo] = await Promise.all([S.api.library().catch(() => null), S.api.machine.info().catch(() => null)]);
   renderCatalog();
+  drawThumbs($("#recommended"));
+}
+// A profile's step outline (pressure and flow), from the same plan the profile sheet draws.
+// Cards without usable steps lose the canvas, so no empty box is left.
+const profileThumb = (lp) => (lp?.profile?.steps?.length ? `<canvas class="prof-thumb" data-thumb="${esc(lp.id)}" aria-hidden="true"></canvas>` : "");
+function drawThumbs(root) {
+  requestAnimationFrame(() => $$("[data-thumb], [data-thumb-title]", root).forEach((c) => {
+    const lp = c.dataset.thumb ? S.library?.find((x) => x.id === c.dataset.thumb) : S.library?.find((x) => x.title === c.dataset.thumbTitle);
+    const plan = lp?.profile?.steps?.length ? E.profileCurve(lp.profile) : null;
+    if (!plan) { c.remove(); return; }
+    drawChart(c, [], { compact: true, thumb: true, plan, maxT: Math.max(20, Math.ceil(planWindow(plan, 60) / 10) * 10) });
+  }));
 }
 function renderCatalog() {
   const f = catFilter;
@@ -2746,17 +2793,18 @@ function renderCatalog() {
     const dup = (t) => lib.filter((x) => x.title === t).length > 1;
     const missing = (S.catalog || []).filter((p) => p.installed === false && matches(p));
     $("#catCount").textContent = `${shown.length} of ${lib.length} on this machine`;
-    $("#catalog").innerHTML = shown.map((p) => p.guide ? guideCard(p.guide, p.id, dup(p.title) ? p.author : "") : `<button class="cat-card" data-p="${esc(p.id)}">
-        <div class="row between"><h3>${esc(p.title)}</h3><span class="pill plain">Not in Crema's guide</span></div>
+    $("#catalog").innerHTML = shown.map((p) => p.guide ? guideCard(p.guide, p.id, dup(p.title) ? p.author : "", p) : `<button class="cat-card" data-p="${esc(p.id)}">
+        <div class="row between"><h3 class="clamp2">${esc(p.title)}</h3><span class="pill plain">Not in Crema's guide</span></div>${profileThumb(p)}
         <div class="muted small">${esc(p.author || "Unknown author")}${p.steps ? ` · ${p.steps} steps` : ""}${dup(p.title) ? ` · ${esc(p.id.slice(-6))}` : ""}</div>
         <div class="small">${esc((p.notes || "").slice(0, 140))}</div></button>`).join("")
       + (missing.length ? `<details class="cat-missing"><summary class="muted small">${missing.length} more in Crema's guide that aren't on this machine</summary><div class="small muted">Install them in Decaid to use them: ${missing.map((p) => esc(p.title)).join(", ")}.</div></details>` : "");
   }
   $$("[data-p]").forEach((b) => (b.onclick = () => showProfile(b.dataset.p)));
+  drawThumbs($("#catalog"));
 }
-function guideCard(p, key, note = "") {
+function guideCard(p, key, note = "", lp = null) {
   return `<button class="cat-card" data-p="${esc(key)}">
-      <div class="row between"><h3>${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>
+      <div class="row between"><h3 class="clamp2">${esc(p.title)}</h3>${p.installed === false ? '<span class="pill plain">Not installed</span>' : ""}</div>${profileThumb(lp)}
       <div class="roastbar" aria-label="Roasts: ${p.roasts.join(", ")}">${ROASTS.map((r) => `<span class="${p.roasts.includes(r) ? "on" : ""}"></span>`).join("")}</div>
       <div class="muted small">${esc(p.author)} · ${esc(p.style)} · ${p.difficulty}${p.milk === "great" ? " · milk" : ""}${note ? ` · ${esc(note)}` : ""}</div>
       <div class="small">${esc(p.character)}</div></button>`;
@@ -2852,31 +2900,59 @@ const shotCoffee = (s) => s.coffee || S.shelf.find((b) => b.batch && b.batch ===
 async function renderShots(more = false) {
   const list = $("#shotList");
   const scrollTop = list.scrollTop;
-  if (!more) list.innerHTML = `<p class="muted">Loading…</p>`;
+  if (!more) { list.setAttribute("aria-busy", "true"); list.innerHTML = `<p class="visually-hidden">Loading…</p>${[1, 2, 3, 4, 5].map(() => '<div class="sk skeleton-row" aria-hidden="true"></div>').join("")}`; }
   try {
     const page = await S.api.shotPage(more ? S.shots.length : 0, SHOTS_PER_PAGE);
     S.shots = more ? [...S.shots, ...page.items.filter((x) => !S.shots.some((s) => s.id === x.id))] : page.items;
     S.shotsTotal = page.total;
   } catch (e) {
     // A failed load isn't an empty history.
+    list.removeAttribute("aria-busy"); $("#shotFilters").hidden = true;
     list.innerHTML = `<p class="muted">Couldn't load your shots (${esc(e.message)}).</p><button class="btn" id="retryShots">Try again</button>`;
     $("#retryShots").onclick = () => renderShots(); $("#shotDetail").innerHTML = ""; return;
   }
+  list.removeAttribute("aria-busy");
   renderShotList(scrollTop);
+}
+// The coffee the list is narrowed to (a name from shotCoffee), or null for all. It applies to
+// the shots loaded so far; "Show more" still pages through the whole history.
+let shotCoffeeFilter = null;
+function renderShotFilters(names) {
+  const box = $("#shotFilters");
+  box.hidden = names.length < 2;
+  if (box.hidden) return;
+  box.innerHTML = [null, ...names].map((n) => `<button type="button" class="fchip" role="radio" data-sc="${n == null ? "" : esc(n)}" aria-checked="${shotCoffeeFilter === n}" tabindex="${shotCoffeeFilter === n ? 0 : -1}" ${n == null ? "" : `title="${esc(n)}"`}><span class="clip1">${n == null ? "All" : esc(n)}</span></button>`).join("");
+  $$("[data-sc]", box).forEach((btn, i, all) => {
+    btn.onclick = () => { shotCoffeeFilter = btn.dataset.sc || null; renderShotList(0); $(`#shotFilters [aria-checked="true"]`)?.focus({ preventScroll: true }); };
+    btn.onkeydown = (e) => {
+      const to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1 }[e.key];
+      if (to == null) return;
+      e.preventDefault(); all[(to + all.length) % all.length].click();
+    };
+  });
 }
 function renderShotList(scrollTop = $("#shotList").scrollTop) {
   const list = $("#shotList");
-  if (!S.shots.length) { list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
-  if (!S.shots.some((s) => s.id === S.selShot)) S.selShot = S.shots[0].id;
-  list.innerHTML = S.shots.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
-      <input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}>
+  if (!S.shots.length) { $("#shotFilters").hidden = true; list.innerHTML = `<p class="muted">No shots yet.</p>`; $("#shotDetail").innerHTML = ""; return; }
+  const names = [...new Set(S.shots.map(shotCoffee))];
+  if (shotCoffeeFilter != null && !names.includes(shotCoffeeFilter)) shotCoffeeFilter = null;
+  renderShotFilters(names);
+  const visible = shotCoffeeFilter == null ? S.shots : S.shots.filter((x) => shotCoffee(x) === shotCoffeeFilter);
+  if (!visible.some((x) => x.id === S.selShot)) S.selShot = visible[0]?.id ?? null;
+  const olderBtn = S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "";
+  if (!visible.length) {
+    list.innerHTML = `<p class="muted">No loaded shots of ${esc(shotCoffeeFilter)}.${olderBtn ? " Older shots may have some." : ""}</p>${olderBtn}`;
+    const mb = $("#moreShots"); if (mb) mb.onclick = () => { mb.disabled = true; mb.textContent = "Loading…"; renderShots(true); };
+    $("#shotDetail").innerHTML = ""; return;
+  }
+  list.innerHTML = visible.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
       <canvas data-spark="${i}" aria-hidden="true"></canvas>
-      <button class="open" data-open="${esc(s.id)}"><strong>${esc(shotCoffee(s))}</strong>
-        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button></div>`).join("")
-    + (S.shots.length < (S.shotsTotal ?? 0) ? `<button class="btn" id="moreShots">Show more (${S.shotsTotal - S.shots.length} older)</button>` : "");
+      <button class="open" data-open="${esc(s.id)}"><strong class="clip1">${esc(shotCoffee(s))}</strong>
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button>
+      <label class="cmp-label"><input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}><span>Compare</span></label></div>`).join("") + olderBtn;
   list.scrollTop = scrollTop;
   const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
-  requestAnimationFrame(() => S.shots.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
+  requestAnimationFrame(() => visible.forEach((s, i) => drawChart(list.querySelector(`[data-spark="${i}"]`), s.points, { compact: true, maxT: 50, maxW: 60 })));
   $$("[data-open]").forEach((b) => (b.onclick = () => { S.selShot = b.dataset.open; if (S.cmpShot === S.selShot) S.cmpShot = null; renderShotList(); list.querySelector(`[data-open="${CSS.escape(S.selShot)}"]`)?.focus({ preventScroll: true }); }));
   $$("[data-cmp]").forEach((b) => (b.onchange = () => { const id = b.dataset.cmp; S.cmpShot = b.checked ? id : null; renderShotList(); list.querySelector(`[data-cmp="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }); }));
   renderShotDetail();
@@ -3019,6 +3095,11 @@ async function renderSettings() {
     <div class="set-row first"><span>Leave Crema<span class="hint">Closes Crema and shows Decaid's dashboard, for scale pairing, plugins and skins. Not while the machine is running</span></span><button class="btn small" id="exitDash" ${exitBlocked() ? "disabled" : ""}>Open Decaid</button></div>
   </div>` : ""}`;
 
+  // The section index (tablet and desktop): one button per card, scrolling it into view.
+  const cards = $$("#settings > .panel");
+  cards.forEach((c, n) => (c.id = `setcard${n}`));
+  $("#settingsIndex").innerHTML = cards.map((c, n) => `<button type="button" class="fchip" data-goto="setcard${n}">${esc(c.querySelector("h2")?.textContent || "Settings")}</button>`).join("");
+  $$("#settingsIndex [data-goto]").forEach((b) => (b.onclick = () => $(`#${b.dataset.goto}`).scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })));
   // ---- wire up ----
   // A new preference changes what's recommended. The coffee on screen is worked out again now;
   // the others have their saved recipe cleared and get a new one when picked.
@@ -3311,7 +3392,9 @@ function route(scroll = true) {
   if (v === "profiles") renderProfiles();
   if (v === "shots") renderShots();
   if (v === "settings") renderSettings();
-  if (scroll) window.scrollTo(0, 0);
+  // Opening a view at its own address (#settings, #shelf) makes the browser scroll that
+  // element into view, past the heading; start every view at its top.
+  if (scroll) { window.scrollTo(0, 0); const m = $("main"); if (m) m.scrollTop = 0; }
 }
 
 async function boot() {

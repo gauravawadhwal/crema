@@ -164,7 +164,7 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 6 | Value sheet and steppers | M | 3 | Implemented on `ui/ws6-value-sheet`; focused values, tablet fit and targets pass; 5 allowlist entries removed (116 remain). Broader suites left to CI. Not merged or hardware-tested. |
 | 7 | Feedback layer | M | 2 | Not started |
 | 8 | Phone | M | 4 | Not started |
-| 9 | Shelf, Profiles, Shots, Settings | M | 2 | Not started |
+| 9 | Shelf, Profiles, Shots, Settings | M | 2 | PR open (stacked on #56), not merged. Shelf: Brew this plus a More sheet, equal card heights, filter chips, skeletons. Profiles: step thumbnails, AI pick shown once. Shots: coffee filter, labelled Compare, metrics row fixed. Settings: section index (tablet), 44 px controls. 95 allowlist entries removed (93 `ws: 9` + 2 `ws: 6` settings steppers; 41 left); `npm test`, typecheck, `check-targets`, `check-tablet-fit`, `e2e-shot-history` and `e2e-screens` pass. Not run on the tablet; result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | PR open, not merged. `e2e-sleep.cjs` (source and built) covers tap vs hold to wake with machine state asserted, early release, reduced motion, keyboard, persistence and the chime; full suite run; real tablet touch and audio unverified |
 | 11 | Motion and finish | S | all | Not started |
 
