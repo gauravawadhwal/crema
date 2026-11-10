@@ -27,10 +27,12 @@ source findings and untested assumptions; read it before changing behaviour.
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-1. **UI feedback, 10 November:** independent shot-history scrolling is implemented
-   in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), pending review/merge.
-   The bottom favourites carousel below is implemented in this change and ready
-   for review before the next release.
+1. **UI feedback, 10 November:** independent shot-history scrolling is merged
+   in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), alongside the accepted
+   plan in [PR #51](https://github.com/gauravawadhwal/crema/pull/51). The bottom
+   favourites carousel is [PR #53](https://github.com/gauravawadhwal/crema/pull/53),
+   which now includes current `main`, the history integration and the Streamline
+   source audit. Both UI changes remain unreleased.
 2. **Startup edit race, merged and included:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
@@ -144,7 +146,7 @@ and demo assets are refreshed. Physical-tablet acceptance remains unverified.
   and long saved reviews, empty/error states, keyboard access, tablet sizes and
   resizing to/from the phone layout. Record source and built-demo verification.
 
-Implemented in PR #52, pending review/merge and not released. Source and built-demo
+Merged in PR #52 on 10 November 2026, not released. Source and built-demo
 regressions pass at 1340×800, 1005×552, 1600×1000 and 800×1000, with phone resize,
 keyboard, paging, empty/error and scroll-boundary checks. Source/built demo
 click-through, all five Brew tablet-fit sizes, the saved-review simulator checks,
@@ -887,6 +889,14 @@ membership; empty/nonmatching libraries do not produce a fake usable recipe;
 existing profiles are not unexpectedly rewritten.
 
 ### Ratings and shot history
+
+- [x] **UI feedback, 10 November:** independently scrolling shot list and detail
+  panes above the phone breakpoint; status and heading remain visible. Selection,
+  comparison and reference changes retain loaded older rows and list position;
+  a newly selected shot opens at the top of its detail. Phone keeps normal stacked
+  page scrolling. Source/built-demo regression in `e2e-shot-history.cjs` covers
+  wheel boundaries, paging, keyboard access, phone resizing and empty/error states.
+  Implemented in this change; not yet released or checked on the tablet.
 
 - [x] Convert between Crema's five-star UI and Decaid's rating scale at the adapter
   boundary, consistently for detail edits, feedback, reads and AI history inputs.

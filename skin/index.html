@@ -597,6 +597,18 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .field-row { min-height: 34px; padding-top: 3px; gap: 8px; }
   .stepper button { height: 32px; }
 }
+/* History is a master/detail workspace whenever the two panes sit side by side.
+   Phones retain the ordinary, stacked page; neither desktop pane chains to it. */
+@media (min-width: 761px) {
+  body.on-shots .app { height: 100vh; height: 100dvh; min-height: 0; }
+  body.on-shots main { height: 100vh; height: 100dvh; overflow: hidden; }
+  body.on-shots .wrap { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+  body.on-shots #alerts:empty { display: none; }
+  body.on-shots .wrap:has(#alerts:not(:empty)) { grid-template-rows: auto auto minmax(0, 1fr); }
+  #view-shots { min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+  .shots-grid { min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  #shotList, #shotDetail { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; align-content: start; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -731,8 +743,8 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
       <section id="view-shots" class="stack" hidden>
         <div class="row between"><h1>Shots</h1><span class="muted small">Tick a second shot to compare</span></div>
         <div class="shots-grid">
-          <div class="shot-list" id="shotList"></div>
-          <div class="panel stack" id="shotDetail"><p class="muted">Pick a shot to see its curves.</p></div>
+          <div class="shot-list" id="shotList" role="region" aria-label="Shot list" tabindex="0"></div>
+          <div class="panel stack" id="shotDetail" role="region" aria-label="Shot details" tabindex="0"><p class="muted">Pick a shot to see its curves.</p></div>
         </div>
       </section>
 

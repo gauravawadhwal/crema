@@ -63,6 +63,7 @@ UI checks (Playwright is a dev dependency; `npx playwright install chromium` onc
 ```bash
 node scripts/e2e-demo.cjs            # click through the demo at tablet and phone size
 node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
+node scripts/e2e-shot-history.cjs    # independent history panes, paging, keyboard and phone resize (--built too)
 node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
 node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
@@ -137,8 +138,9 @@ Merged on 10 November 2026, not released or tagged, and not run on the tablet: t
 
 This change implements the bottom favourites carousel and shorter graph, including
 adding beyond five recipes, legacy-record preservation and live/built interaction
-checks. No data migration or new storage key. The separate history-pane fix is PR
-#52; the carousel branch includes merged PR #50 and does not depend on #52.
+checks. No data migration or new storage key. The history-pane fix is merged PR
+#52; PR #53 now integrates it with the carousel, current main and the Streamline
+source ownership audit. These UI changes remain unreleased.
 
 Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
 - the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site
