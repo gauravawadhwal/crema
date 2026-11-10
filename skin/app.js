@@ -1803,10 +1803,11 @@ async function renderShelf() {
 let shelfRequest = 0, shelfSync = null;
 async function refreshShelf() {
   const request = ++shelfRequest;
-  // The signal is read first, so a change made while the shelf is read shows up as a
-  // difference at the next poll rather than being lost.
-  const signal = await S.api.shelfSignal().catch(() => null);
-  const rows = await S.api.shelf();
+  // The signal is requested first, so a change made while the shelf is read shows up as a
+  // difference at the next poll rather than being lost. The two reads overlap, so a
+  // Decaid that never answers costs one time limit, not two.
+  const signalRead = S.api.shelfSignal().catch(() => null);
+  const rows = await S.api.shelf(), signal = await signalRead;
   if (request !== shelfRequest) return;
   S.shelf = rows; S.shelfSignal = signal;
   // Keep the selected object current without resetting edits to the next shot.
