@@ -349,6 +349,15 @@ button.readout { border: 0; background: transparent; padding: 0; text-align: lef
 .op-bar { width: 100%; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .op-bar > div { height: 100%; background: var(--accent); transition: width .2s linear; }
 .saver { position: fixed; inset: 0; z-index: 60; background: #000; color: #8d8178; display: grid; place-items: center; cursor: pointer; }
+.saver .stack { gap: 10px; }
+.saver .ring { width: 56px; height: 56px; opacity: 0; transform: rotate(-90deg); }
+.saver .ring circle { fill: none; stroke-width: 3; }
+.saver .ring .bg { stroke: #2a2420; }
+.saver .ring .fg { stroke: #cfc3b8; stroke-dasharray: 106.8; stroke-dashoffset: 106.8; }
+.saver.holding .ring { opacity: 1; }
+.saver.holding .ring .fg { stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+.saver.holding #saverHint { color: #cfc3b8; }
+.saver { touch-action: none; user-select: none; -webkit-user-select: none; }
 .saver .t { font-family: var(--font-mono); font-size: clamp(3rem, 14vw, 9rem); font-variant-numeric: tabular-nums; color: #cfc3b8; }
 .sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.45); display: grid; place-items: end center; padding: 16px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 @media (min-width: 761px) { .sheet-back { place-items: center; } }
@@ -952,7 +961,7 @@ body.pouring #controls { position: relative; z-index: 5; }
 </div>
 
 <div class="overlay" id="opOverlay" hidden><div class="panel op-card" id="opCard"></div></div>
-<div class="saver" id="saver" hidden role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div>Asleep · tap to wake</div></div></div>
+<div class="saver" id="saver" hidden tabindex="0" role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div id="saverDate"></div><div id="saverHint">Asleep · tap to wake</div><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg" cx="20" cy="20" r="17"/></svg></div></div>
 <div class="sheet-back" id="sheetBack" hidden><div class="panel sheet stack" id="sheet" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -3919,7 +3928,7 @@ const S = {
   prefs: {}, favourites: [], presets: null, maint: null,
   appSettings: null, // S.api.settings, once read
   live: [], ghost: null, lastShotId: null, opStart: 0, opKind: null, starting: null,
-  catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true),
+  catalog: null, ranking: null, ghc: local.get("ghc", false), saver: local.get("saver", true), holdWake: local.get("holdWake", false), chime: local.get("chime", false),
   shots: [], selShot: null, cmpShot: null, reviewPending: new Set(), afterViewToken: 0,
 };
 
@@ -5045,7 +5054,7 @@ function onSnapshot(s) {
   const d = E.snapshotDecision({ prevState, state: st, shotAcross: S.shotAcross, heldLoad: S.heldLoad, startingKind: S.starting?.kind });
   S.shotAcross = false;
   if (d.clearStarting) S.starting = null; // the machine has picked up the start
-  if (d.changed) { renderControls(); renderAlerts(); updateSaver(); if (d.shotStart) onShotStart(); opOverlay(); }
+  if (d.changed) { renderControls(); renderAlerts(); updateSaver(); chimeFor(prevState, st, d.endedAway); if (d.shotStart) onShotStart(); opOverlay(); }
   if (st === "espresso") {
     // Decaid's snapshot has no timer; the simulators send one. Ignore a stale
     // value carried over from the previous operation on the first frame.
@@ -5298,9 +5307,56 @@ function updateSaver() {
 }
 function tickSaver() {
   if ($("#saver").hidden) return;
-  $("#saverTime").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const now = new Date();
+  $("#saverTime").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  $("#saverDate").textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+  $("#saverHint").textContent = S.holdWake ? "Asleep · hold to wake" : "Asleep · tap to wake";
   setTimeout(tickSaver, 10000);
 }
+function wakeFromSaver() { $("#saver").hidden = true; cancelSaverHold(); S.api.machine.setState("idle").catch(() => {}); }
+// Hold to wake: a ring fills for 1 s under the finger; letting go early sends nothing.
+let saverHoldTimer = null;
+function cancelSaverHold() { clearTimeout(saverHoldTimer); saverHoldTimer = null; $("#saver").classList.remove("holding"); }
+function wireSaver() {
+  const sv = $("#saver");
+  sv.onclick = () => { if (!S.holdWake) wakeFromSaver(); };
+  sv.addEventListener("pointerdown", (e) => {
+    if (!S.holdWake || saverHoldTimer) return;
+    try { sv.setPointerCapture(e.pointerId); } catch {}
+    sv.classList.add("holding");
+    saverHoldTimer = setTimeout(() => { saverHoldTimer = null; wakeFromSaver(); }, 1000);
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((t) => sv.addEventListener(t, cancelSaverHold));
+  sv.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wakeFromSaver(); } });
+}
+// A quiet two-note chime (Web Audio, no files). Browsers start audio only after a gesture, so the
+// first touch anywhere makes the context; if audio is blocked or missing, nothing happens.
+let chimeCtx = null;
+function chimeUnlock() {
+  try { if (!chimeCtx && AudioCtx) chimeCtx = new AudioCtx(); chimeCtx?.state === "suspended" && chimeCtx.resume().catch(() => {}); } catch {}
+}
+function playChime() {
+  try {
+    chimeUnlock();
+    if (!chimeCtx) return;
+    const t0 = chimeCtx.currentTime + 0.02;
+    [[659.25, 0], [880, 0.16]].forEach(([hz, at]) => {
+      const o = chimeCtx.createOscillator(), g = chimeCtx.createGain();
+      o.type = "sine"; o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t0 + at);
+      g.gain.exponentialRampToValueAtTime(0.08, t0 + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.45);
+      o.connect(g); g.connect(chimeCtx.destination);
+      o.start(t0 + at); o.stop(t0 + at + 0.5);
+    });
+  } catch {}
+}
+// Only for a change this page watched happen: a shot ending, or the machine finishing warming up.
+function chimeFor(prev, st, endedAway) {
+  if (!S.chime || !prev || endedAway) return;
+  if ((prev === "espresso" && st !== "espresso") || (prev === "heating" && st === "idle")) playChime();
+}
+document.addEventListener("pointerdown", () => { if (S.chime) chimeUnlock(); }, { capture: true });
 async function sleepWake() {
   const asleep = S.snap?.state?.state === "sleeping";
   cancelStart();
@@ -6093,6 +6149,7 @@ async function renderSettings() {
   <div class="panel stack"><h2>Sleep and wake</h2>
     ${pres ? `<div class="set-row first"><span>Sleep when idle</span>${sw("sPresence", pres.userPresenceEnabled)}</div>
     <div class="set-row"><span>After<span class="hint">0–240 minutes without use. 0 turns off the idle sleep timer</span></span>${mini("sSleepMin", pres.sleepTimeoutMinutes, 5, "minutes")}</div>` : ""}
+    <div class="set-row ${pres ? "" : "first"}"><span>Hold to wake<span class="hint">Stops a wipe of the screen from waking the machine. Saved on this device</span></span>${sw("sHoldWake", S.holdWake)}</div>
     <span class="label">Wake schedules</span>
     <div class="stack" style="gap:6px" id="scheds">${scheds.map((s) => `<div class="sched"><span class="num">${esc(s.time)}</span><div class="days">${DAYS.map((d, i) => `<button type="button" data-day="${esc(s.id)}:${i + 1}" aria-pressed="${!s.daysOfWeek.length || s.daysOfWeek.includes(i + 1)}">${d}</button>`).join("")}</div>${sw(`en-${s.id}`, s.enabled)}<button class="btn small ghost" data-del="${esc(s.id)}">Remove</button></div>`).join("") || '<p class="muted small">None yet.</p>'}</div>
     <div class="row"><div class="field" style="flex:1"><label class="label" for="newWake">Add a wake time</label><input type="time" id="newWake" value="06:45"></div><button class="btn" id="addWake" style="align-self:end">Add</button></div>
@@ -6104,6 +6161,7 @@ async function renderSettings() {
         <span class="pv" style="background:${k.bg}">${k.pv.map((c) => `<i style="background:${c}"></i>`).join("")}</span><b>${k.name}</b><span>${k.note}</span></button>`).join("")}</div></div>
     <div class="set-row" ${currentSkin() === "crema" ? "" : "hidden"} id="modeRow"><span>Light or dark<span class="hint">For the Crema theme</span></span><div class="seg">${["auto", "light", "dark"].map((t) => `<button type="button" data-theme-set="${t}" aria-pressed="${theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div></div>
     <div class="set-row"><span>Clock when asleep<span class="hint">A dark screen saver while the machine sleeps; tap to wake</span></span>${sw("sSaver", S.saver)}</div>
+    <div class="set-row"><span>Chime<span class="hint">A short sound when a shot ends and when the machine is ready. Saved on this device</span></span>${sw("sChime", S.chime)}</div>
     ${disp?.platformSupported?.brightness ? `<div class="set-row"><span>Tablet brightness</span><input type="range" id="sBright" min="5" max="100" value="${disp.brightness}" aria-label="Brightness" style="accent-color:var(--accent)"></div>` : ""}
   </div>
 
@@ -6207,6 +6265,8 @@ async function renderSettings() {
   const flip = (el) => () => { el.checked = !el.checked; };
   const usb = $("#sUsb"); if (usb) usb.onchange = async (e) => { if (await attempt("save USB charging", () => m.settings.set({ usb: e.target.checked ? "enable" : "disable" }), flip(e.target))) toast("Saved"); };
   const pr = $("#sPresence"); if (pr) pr.onchange = async (e) => { if (await attempt("save sleep when idle", () => m.presence.set({ userPresenceEnabled: e.target.checked }), flip(e.target))) toast("Saved"); };
+  $("#sHoldWake").onchange = (e) => { S.holdWake = e.target.checked; local.set("holdWake", S.holdWake); if (!$("#saver").hidden) tickSaver(); };
+  $("#sChime").onchange = (e) => { S.chime = e.target.checked; local.set("chime", S.chime); if (S.chime) playChime(); };
   $("#sSaver").onchange = (e) => { S.saver = e.target.checked; local.set("saver", S.saver); updateSaver(); };
   $$("#sVoice button").forEach((b) => (b.onclick = () => {
     local.set("voice", b.dataset.v);
@@ -6467,7 +6527,7 @@ async function boot() {
   $("#speakBtn").onclick = () => (listening ? stopListening(true) : startListening());
   $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
-  $("#saver").onclick = () => { $("#saver").hidden = true; S.api.machine.setState("idle").catch(() => {}); };
+  wireSaver();
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 
