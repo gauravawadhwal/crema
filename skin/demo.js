@@ -331,6 +331,7 @@ function makeDemoApi() {
       return { advice: CE.rulesDialIn(fb, { timestamp: s?.timestamp ?? new Date().toISOString(), timeS: s?.timeS ?? 30 }, recipe), source: "rules" };
     },
     prefs: { get: async () => ({ ...prefs }), set: async (p) => { prefs = { ...prefs, ...p }; for (const b of all) { const r = recipeFor(b); b.recipe = r.recipe; b.recipeSource = r.source; } return prefs; } },
+    resetRecipes: async () => {}, // prefs.set above already recomputes every coffee
     favourites: { get: async () => favourites.slice(), set: async (slot, fav) => { favourites[slot] = fav; return favourites.slice(); } },
     presets: { get: async () => clone(presets), set: async (p) => { presets = clone(p); return presets; } },
     maintenance: {

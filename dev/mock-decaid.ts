@@ -256,6 +256,14 @@ const server = createServer(async (req, res) => {
       for (const ws of liveSockets) if (ws.path.startsWith("/ws/v1/machine/")) ws.frozen = true;
       return send(res, 200, { ok: true });
     }
+    // A flaky link: close every machine socket now, and optionally refuse new ones until told
+    // otherwise ({ refuse: false }), so a shot can finish while the app is away.
+    if (m === "POST" && p === "/dev/sockets/drop") {
+      const b = await body(req);
+      if (b.refuse !== undefined) refuseSockets = !!b.refuse;
+      if (b.drop !== false) for (const ws of liveSockets) if (ws.path.startsWith("/ws/v1/machine/")) ws.terminate();
+      return send(res, 200, { ok: true, refusing: refuseSockets });
+    }
     if (m === "GET" && p === "/dev/sockets") {
       const counts: Record<string, number> = {};
       for (const ws of liveSockets) counts[ws.path] = (counts[ws.path] ?? 0) + 1;
@@ -510,12 +518,13 @@ const streams: Record<string, { hz: number; frame: () => unknown }> = {
       : { status: sim.state === "sleeping" ? "not_heating" : "reached", remainingTimeMs: 0 },
   },
 };
+let refuseSockets = false;
 const wss = new WebSocketServer({ noServer: true });
 const liveSockets = new Set<WebSocket & { path: string; frozen?: boolean }>();
 server.on("upgrade", (req, socket, head) => {
   const path = new URL(req.url ?? "/", "http://x").pathname;
   const stream = streams[path];
-  if (!stream) return socket.destroy();
+  if (!stream || (refuseSockets && path.startsWith("/ws/v1/machine/"))) return socket.destroy();
   wss.handleUpgrade(req, socket, head, (raw: WebSocket) => {
     const ws = Object.assign(raw, { path, frozen: false });
     liveSockets.add(ws);
