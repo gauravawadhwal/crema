@@ -308,7 +308,7 @@ function makeDemoApi() {
     async lastShotWith(title, profileShape = null) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).find((s) => s.profileTitle === title && (!profileShape || brewProfileShape(s.profile) === profileShape)) || null; },
     async latestShot() { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null; },
     async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; if (a.extras?.crema) s.taste = { ...(s.taste ?? {}), ...a.extras.crema }; } },
-    async review(shotId, feedback = null) {
+    async review(shotId, feedback = null, bean = null) {
       const s = shots.find((x) => x.id === shotId);
       if (!s) throw new Error("Shot not found");
       if (feedback) { s.taste = { sourBitter: feedback.sourBitter, body: feedback.body }; if (feedback.enjoyment != null) s.enjoyment = feedback.enjoyment; }
@@ -318,7 +318,7 @@ function makeDemoApi() {
       const bag = s.batch ? all.find((b) => b.batch === s.batch) : null;
       const history = s.batch ? shots.filter((x) => x.batch === s.batch && x.id !== s.id && Date.parse(x.timestamp) < Date.parse(s.timestamp)).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 10) : [];
       const input = { points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG: s.targetYieldG ?? s.profile?.target_weight ?? null, targetTimeS: s.targetTimeS ?? null,
-        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: null } : null, notes: s.notes || null, bean: bag?.info ?? null,
+        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: null } : null, notes: s.notes || null, bean: bean ?? bag?.info ?? null,
         installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => ({ timestamp: x.timestamp, profileTitle: x.profileTitle, doseG: x.doseG, yieldG: x.yieldG, enjoyment: x.enjoyment ?? undefined, notes: x.notes || undefined, review: x.review?.review?.summary ?? undefined })) };
       const saved = { version: 1, review: CE.rulesReview(input), source: "rules", createdAt: new Date().toISOString() };
       s.review = saved; saveDemoReview(s); return clone(saved);
@@ -363,7 +363,7 @@ function makeDemoApi() {
         set: async (p) => { for (const k of Object.keys(wf)) if (p[k]) Object.assign(wf[k], p[k]); },
       },
       settings: { get: async () => ({ ...settings }), set: async (p) => { settings = { ...settings, ...p }; } },
-      async waterThreshold(mm) { sim.refill = settingNumber(mm, SETTING_LIMITS.sWaterWarn); snapshot(); },
+      async waterThreshold(mm) { sim.refill = mm; snapshot(); },
       async refill() { sim.water = 58; if (sim.state === "needsWater") sim.state = "idle"; snapshot(); },
       presence: { get: async () => ({ ...presence }), set: async (p) => { presence = { ...presence, ...p }; } },
       schedules: {

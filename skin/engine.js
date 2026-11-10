@@ -27,20 +27,39 @@ var CremaEngine = (() => {
     DEFAULT_PRESETS: () => DEFAULT_PRESETS,
     DEFAULT_SETTINGS: () => DEFAULT_SETTINGS,
     GRIND_STEPS: () => GRIND_STEPS,
+    NOT_READY: () => NOT_READY,
+    adoptPatch: () => adoptPatch,
+    afterStartSent: () => afterStartSent,
     analyzeShot: () => analyzeShot,
+    bagRemaining: () => bagRemaining,
     baseline: () => baseline,
     beanTraits: () => beanTraits,
     findProfile: () => findProfile,
+    gramsUsed: () => gramsUsed,
     inferRoast: () => inferRoast,
+    isStarting: () => isStarting,
+    loadDecision: () => loadDecision,
+    near: () => near,
     outlineProfile: () => outlineProfile,
     planAt: () => planAt,
     profileCurve: () => profileCurve,
     rankProfiles: () => rankProfiles,
+    recipeMatches: () => recipeMatches,
+    reconcileOutcome: () => reconcileOutcome,
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
     rulesReview: () => rulesReview,
+    sameGrind: () => sameGrind,
+    shotAcrossOnLoss: () => shotAcrossOnLoss,
+    shotRunning: () => shotRunning,
     shotSim: () => shotSim,
     simulateShot: () => simulateShot,
+    snapshotDecision: () => snapshotDecision,
+    socketFrame: () => socketFrame,
+    socketLost: () => socketLost,
+    startGate: () => startGate,
+    startSettled: () => startSettled,
+    startSteps: () => startSteps,
     stepDurations: () => stepDurations,
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
@@ -1438,6 +1457,104 @@ var CremaEngine = (() => {
       confidence,
       askTaste: input.feedback == null
     };
+  }
+
+  // server/control/workflow.ts
+  var near = (a, b) => a == null || b == null ? a == b : Math.abs(Number(a) - Number(b)) < 0.05;
+  var sameGrind = (a, b) => {
+    const x = String(a ?? "").trim(), y = String(b ?? "").trim();
+    return x === "" || y === "" || x === y || Number.isFinite(Number(x)) && Number(x) === Number(y);
+  };
+  var recipeMatches = (m, n) => !!(m && n) && m.profileTitle === n.profileTitle && (!n.profileShape || m.profileShape === n.profileShape) && near(m.doseG, n.doseG) && near(m.yieldG, n.yieldG) && near(m.tempC, n.tempC) && sameGrind(m.grind, n.grind);
+  function reconcileOutcome(i) {
+    const m = i.machine;
+    const otherCoffee = i.noBag ? !!(m.batchId || m.coffeeName || m.coffeeRoaster) : !!m.batchId && m.batchId !== i.currentBatch;
+    if (!otherCoffee && recipeMatches(m, i.next)) return { kind: "same", markLoaded: !i.loaded };
+    const unsaved = !i.loaded && !i.boot;
+    if (!i.adopt || unsaved) return { kind: "differs" };
+    const forThisBag = i.noBag ? !otherCoffee && m.profileShape === i.next.profileShape : !!m.batchId && m.batchId === i.currentBatch;
+    if (!forThisBag || !m.profileTitle) return { kind: "other" };
+    return { kind: "adopt", lookupProfile: m.profileShape !== i.next.profileShape };
+  }
+  function adoptPatch(m, next, profileId, savedRecipeTitle) {
+    return {
+      ...m.profileTitle !== savedRecipeTitle ? { targetTimeS: null } : {},
+      fromMachine: true,
+      profileTitle: m.profileTitle,
+      profileId,
+      profileShape: m.profileShape,
+      manual: m.manual,
+      doseG: m.doseG ?? next.doseG,
+      yieldG: m.yieldG ?? next.yieldG,
+      tempC: m.tempC ?? next.tempC,
+      grind: m.grind || next.grind
+    };
+  }
+
+  // server/control/shot.ts
+  var shotRunning = (state, shotAcross) => state === "espresso" || shotAcross;
+  function loadDecision(i) {
+    if (i.shotRunning) return "hold";
+    if (i.queued && i.loaded) return "skip";
+    return "send";
+  }
+  function socketFrame(t, state) {
+    return { finished: (t.prev === "espresso" || t.across) && state !== "espresso", track: { prev: state, across: false } };
+  }
+  function socketLost(t) {
+    return { prev: null, across: t.across || t.prev === "espresso" };
+  }
+  var shotAcrossOnLoss = (lastState, shotAcross) => shotAcross || lastState === "espresso";
+  function snapshotDecision(i) {
+    const changed = i.state !== i.prevState;
+    const resumed = i.shotAcross && i.state === "espresso";
+    const endedAway = i.shotAcross && i.state !== "espresso";
+    return {
+      changed,
+      resumed,
+      endedAway,
+      clearStarting: changed && i.startingKind === i.state,
+      shotStart: changed && i.state === "espresso" && !resumed,
+      sendHeldLoad: (i.prevState === "espresso" || endedAway) && i.state !== "espresso" && i.heldLoad
+    };
+  }
+
+  // server/control/start.ts
+  var isStarting = (starting, now) => !!starting && now < starting.until;
+  var RUNNING_STATES = ["espresso", "steam", "hotWater", "flush"];
+  var NOT_READY = ["sleeping", "needsWater", "error", "booting", "steamRinse", "cleaning", "descaling", "transportMode", "fwUpgrade"];
+  function startGate(i) {
+    if (isStarting(i.starting, i.now)) return { refuse: "starting" };
+    if (i.unlinked) return { refuse: "unlinked" };
+    if (i.state && RUNNING_STATES.includes(i.state)) return { refuse: "running" };
+    if (i.state && NOT_READY.includes(i.state)) return { refuse: "notReady", state: i.state };
+    return null;
+  }
+  function startSteps(kind, loaded) {
+    return {
+      reconcileFirst: kind === "espresso" && loaded,
+      // Only meaningful after the reconcile, which can clear `loaded`: ask again then.
+      loadFirst: kind === "espresso" && !loaded,
+      presets: kind === "steam" ? "steam" : kind === "hotWater" ? "water" : kind === "flush" ? "flush" : null
+    };
+  }
+  var afterStartSent = (stillCurrent) => stillCurrent ? "heartbeat" : "stopAgain";
+  function startSettled(i) {
+    if (!i.stillCurrent) return { update: false };
+    return i.sent ? { update: true, starting: { kind: i.kind, until: i.now + 3e3 }, redrawLater: true } : { update: true, starting: null, redrawLater: false };
+  }
+
+  // server/control/bag.ts
+  var gramsUsed = (shots) => shots ? shots.reduce((sum, s) => sum + (s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight ?? 0), 0) : null;
+  function bagRemaining(i) {
+    let adjust = i.state.adjust ?? 0;
+    let corrected = false;
+    if (i.used != null && i.weight != null && i.weightRemaining != null && i.state.written != null && Math.abs(i.weightRemaining - i.state.written) > 0.5) {
+      adjust = i.weightRemaining - (i.weight - i.used);
+      corrected = true;
+    }
+    const remaining = i.weight != null && i.used != null ? Math.max(0, Math.round(i.weight - i.used + adjust)) : i.used == null ? null : i.weightRemaining ?? null;
+    return { adjust, remaining, corrected };
   }
   return __toCommonJS(engine_exports);
 })();

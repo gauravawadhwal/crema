@@ -12,3 +12,7 @@ export { DEFAULT_MAINTENANCE, DEFAULT_PRESETS, DEFAULT_SETTINGS, GRIND_STEPS } f
 export { outlineProfile, planAt, profileCurve, shotSim, simulateShot, stepDurations } from "./profiles/curve.js";
 export { analyzeShot } from "./profiles/analysis.js";
 export { rulesReview } from "./recommend/review-local.js";
+export {
+  adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, NOT_READY, reconcileOutcome, recipeMatches,
+  sameGrind, shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps,
+} from "./control/index.js";
