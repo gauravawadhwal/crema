@@ -34,6 +34,14 @@ Decaid.
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
    recipe edits". The initial workflow read can overwrite edits made while the read
    is in flight; the shelf refresh is not the cause. The fix preserves those edits.
+   **Separate CI issue observed while checking this UI work:** the live suite's
+   shelf-request timeout scenario stayed at "Loading your coffees" rather than
+   reporting the 15-second timeout. It failed on both the documentation-only
+   [PR #51 run](https://github.com/gauravawadhwal/crema/actions/runs/42778043324)
+   and the [PR #52 run](https://github.com/gauravawadhwal/crema/actions/runs/42777928669).
+   Stop remained available. This predates the history change; whether it is a
+   production timeout defect or the check's clock/interception setup is not yet
+   established. Investigate separately from the startup-edit race before release.
 3. **Package the completed fixes for installation when ready.** The latest release,
    v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
    installable GitHub release. A release runs CI and attaches a new skin ZIP for
