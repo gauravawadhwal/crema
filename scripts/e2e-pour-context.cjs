@@ -112,6 +112,49 @@ const path = require('node:path');
         && document.querySelector('#pourRecipe').textContent === '' && !document.querySelector('#skipBtn')
         && window.__chart.plan === null && !document.querySelector('#stopBtn').disabled;
     });
+    for (const viewport of [{ width: 1340, height: 800 }, { width: 1005, height: 552 }]) {
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => {
+        S.link.connected = true; S.shotAcross = false;
+        S.api.machine.recipe = async () => null;
+        const profile = { title: 'Timed pour', steps: [
+          { name: 'Fill', pump: 'pressure', pressure: 3, seconds: 8, temperature: 93 },
+          { name: 'Pour', pump: 'pressure', pressure: 9, seconds: 30, temperature: 93 },
+          { name: 'Decline', pump: 'pressure', pressure: 6, seconds: 30, temperature: 93 },
+        ] };
+        S.loadedRecipe = { profile, profileTitle: profile.title, doseG: 18, yieldG: 36 };
+        S.snap = { state: { state: 'idle' } }; S.live = [];
+        onSnapshot({ state: { state: 'espresso' }, elapsed: 0, profileFrame: 0 });
+        S.shotTiming = { shape: brewProfileShape(profile), durations: [5, 12, 14.9] };
+        S.ghost = [{ t: 100, p: 9, w: 36 }];
+      });
+      const ranges = [];
+      for (const t of [5, 15, 32, 38.9, 39, 48.9, 49, 48, 119, 140]) {
+        ranges.push(await page.evaluate(t => {
+          S.live = Array.from({ length: 9 }, (_, i) => ({ t: t - 2 + i / 4, frame: 0, w: 4 + i / 2, p: 3, f: 2 }));
+          S.scale = { connected: true, weight: 8, weightFlow: 2 };
+          renderLive(); return window.__chart.maxT;
+        }, t));
+      }
+      assert.deepEqual(ranges, [40, 40, 40, 40, 50, 50, 60, 60, 120, 120], 'elapsed-only axis widens early, never shrinks, and caps at 120');
+      await check('ahead rail and chart use last-shot durations independently of next recipe', () => {
+        const detail = document.querySelector('#pourSteps .step:last-child span').textContent;
+        const step = window.__chart.plan.steps[2];
+        return detail.startsWith('14.9 s') && Math.abs(step.end - step.start - 14.9) < .01;
+      });
+      await check('steady weight flow shows time-to-go', () => /about \d+ s to go/.test(document.querySelector('#pourEta').textContent));
+      await page.evaluate(() => { S.pourMaxT = 40; S.live = [{ t: 5, frame: 0, w: 1, p: 3, f: 2 }]; renderLive(); });
+      if (process.argv.includes('--shots')) {
+        const dir = process.argv[process.argv.indexOf('--shots') + 1]; fs.mkdirSync(dir, { recursive: true });
+        await page.screenshot({ path: path.join(dir, `pour-${viewport.width}.png`) });
+      }
+      await page.evaluate(() => {
+        S.snap = { state: { state: 'idle' } }; S.shotAcross = false;
+        onSnapshot({ state: { state: 'espresso' }, elapsed: 0, profileFrame: 0 });
+      });
+      assert.equal(await page.evaluate(() => window.__chart.maxT), 40, 'new shot resets the axis');
+      console.log('ok  ', `40 s axis, early widening, cap, reset and timing at ${viewport.width}×${viewport.height}`);
+    }
     assert.deepEqual(errors, [], 'no page errors');
   } finally {
     await browser?.close();

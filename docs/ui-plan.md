@@ -28,6 +28,22 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 - Simulator regression checks cover stored Undo, slow duplicate writes, toast timers,
   plain errors and short/long link drops. Final integration verification is recorded
   in the completion handoff below; no hardware or release.
+**11 November 2026 — WS 4.5 implemented**
+
+- Pour axis starts at 40 s, widens at 39/49/59… s, never shrinks within a shot,
+  caps at 120 s and resets on the next shot. Neither plan, reference nor ETA sizes it.
+  Reference and plan lines are clipped; live seconds remain labelled every 10 s.
+- Captured-profile timing survives next-recipe edits and supplies ahead rail/chart
+  durations. Time limits say “up to”; an unreached recorded step says “not reached”.
+  Rails give short steps more room. Peak plan labels, duplicate Flush duration and
+  spare-height control tiles are fixed without moving Stop.
+- Typecheck and all 311 unit tests passed. Source pour regressions cover both tablet
+  sizes, widening thresholds, monotonicity, cap/reset, ahead timing and visible ETA.
+  Tablet fit passes every size/state; targets retain the 15 existing unrelated entries.
+  Source demo and control checks also pass, including Stop containment at all five
+  tablet sizes. Temporary full/compact pour and resting screenshots inspected; the
+  unreached-step label fits without clipping. Final built checks stay with integration.
+- No real tablet, NAS, physical machine, release or tag. WS 8/5/7 and finish follow.
 
 
 **11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
@@ -223,7 +239,7 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 2 | Quick fixes for measured defects | S | 1 | Included via PR #58 in consolidation #61; Brew quick fixes. |
 | 3 | Brew at rest | M | 2 | Included via PR #59 in consolidation #61; Brew controls, idle plan and favourites. |
 | 4 | Pour mode | L | 3 | Implemented and reviewed in #61 with WS 4a (#55); Stop containment, captured shot context, guarded Skip and socket-loss checks pass. |
-| 4.5 | Pour chart axis and Brew polish | S | 4 | **Next.** Not started. A stopped WIP exists on `ui/ws4.5-pour-polish` (reference only, known flaw; see the log) |
+| 4.5 | Pour chart axis and Brew polish | S | 4 | Implemented on `codex/ws45-pour-chart`; elapsed-only axis and Brew polish, with source pour/control/fit/target checks. |
 | 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
 | 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
 | 7 | Feedback layer | M | 2 | Implemented on current main in the UI finish branch; stored Undo, pending actions, delayed banners and plain errors. |

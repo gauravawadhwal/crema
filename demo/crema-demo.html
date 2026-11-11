@@ -729,6 +729,10 @@ button.pending { opacity: .65; cursor: progress; }
   #controls .stop-wrap { margin-top: auto; }
   #controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
   #controls > * { flex-shrink: 0; }
+  /* Share spare height between resting tiles while retaining Stop's fixed anchor. */
+  body:not(.pouring) #controls > .ctl { flex: 1 1 auto; max-height: calc(var(--hit) * 2 + var(--s-12)); }
+  body:not(.pouring) #controls > .espresso-ctl { max-height: calc(var(--hit) * 3 + var(--s-16)); }
+  body:not(.pouring) #controls > .ctl > .ctl-btn, body:not(.pouring) #controls > .ctl > .scale-reading { height: 100%; }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
   #nextShot { gap: var(--s-4); }
@@ -4138,12 +4142,12 @@ function drawChart(canvas, pts, o = {}) {
       if (weightAxis) { ctx.textAlign = "left"; ctx.fillText(String(Math.round((v / 12) * maxW)), W - pad.r + 6, yB(v) + 4); }
     }
     ctx.textAlign = "center";
-    const step = maxT > 60 ? 20 : 10;
+    const step = ahead != null ? 10 : maxT > 60 ? 20 : 10;
     for (let t = 0; t <= maxT; t += step) ctx.fillText(`${t}s`, x(t), H - 5);
   }
   const line = (data, key, color, y, width, { alpha = 1, dash = null } = {}) => {
     if (!data?.length || !data.some((d) => d[key] != null && Number.isFinite(Number(d[key])))) return;
-    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
+    ctx.save(); ctx.beginPath(); ctx.rect(pad.l, pad.t, iw, ih); ctx.clip(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
     if (dash) ctx.setLineDash(dash);
     ctx.beginPath();
     let drawing = false;
@@ -4181,7 +4185,7 @@ function drawChart(canvas, pts, o = {}) {
       const used = [];
       ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
       for (const [key, color, y, title, unit] of [["tp", "--pressure", yB, "pressure ", " bar"], ["tf", "--flow", yB, "flow ", " ml/s"], ["temp", "--temp", yT, "", " °C"]]) {
-        const point = plan.points.find((p) => p[key] != null && p.t > 0 && p.t <= maxT);
+        const point = plan.points.filter((p) => p[key] != null && p.t > 0 && p.t <= maxT).reduce((best, p) => !best || p[key] > best[key] ? p : best, null);
         if (!point) continue;
         const label = `${title}${fmtC(point[key])}${unit}`, width = ctx.measureText(label).width;
         if (width > iw) continue;
@@ -4993,7 +4997,7 @@ function renderControls() {
   const disabled = S.ghc || !S.snap || unlinked() || NOT_READY.includes(st);
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
-  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${esc(preset.label)} · ${detail}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
+  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${String(preset.label).replace(/\s+/g, "").toLowerCase() === detail.replace(/\s+/g, "").toLowerCase() ? esc(detail) : `${esc(preset.label)} · ${detail}`}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
   patchHtml($("#controls"), `
     <div class="ctl espresso-ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.ghc ? "Start at group head" : S.next ? `${fmtC(S.next.doseG)} → ${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
     ${split("Steam", "steam", "steam", steam, steam.seconds ? `${steam.seconds} s` : "until stopped")}
@@ -5115,8 +5119,27 @@ function renderScaleTile() {
 }
 // Shared with pour mode: descriptors are { name, detail, weight, state?, progress? }.
 function stepsRailHtml(steps) {
-  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .08;
+  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .17;
   return steps.map((step) => `<div class="step ${step.state === "now" ? "now" : step.state === "done" ? "done" : ""}" style="flex-grow:${Math.max(minimum, Number(step.weight) || 1)}"><strong>${esc(step.name)}</strong><span>${esc(step.detail)}</span>${step.progress != null ? `<progress max="1" value="${clamp(step.progress, 0, 1)}"></progress>` : ""}</div>`).join("");
+}
+// Keep timing tied to the captured profile, even when the next recipe changes.
+function shotStepDuration(index) {
+  return S.shotTiming?.shape === brewProfileShape(activeProfile()) ? S.shotTiming.durations[index] ?? null : null;
+}
+function refreshShotTiming(context) {
+  const profile = context.profile, shape = brewProfileShape(profile);
+  if (!profile?.steps?.length) { S.shotTiming = null; return; }
+  if (S.plan?.timed === "shot" && brewProfileShape(nextProfile()?.profile) === shape) {
+    S.shotTiming = { shape, durations: S.plan.steps.map(s => Math.max(0, s.end - s.start)) };
+  }
+  const lp = S.library?.find(p => brewProfileShape(p.profile) === shape);
+  if (!lp) return;
+  planTiming(lp).then(timing => {
+    if (timing && S.shotContext === context && brewProfileShape(context.profile) === shape) {
+      S.shotTiming = { shape, durations: timing.durations };
+      if (shotRunning() && !$("#view-brew").hidden) renderLive();
+    }
+  });
 }
 function stepDetailText(step) {
   const tgt = step.target ? `${step.target.smooth ? "ramping to " : "holding "}${fmt1(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : "";
@@ -5130,7 +5153,9 @@ function stepDetailText(step) {
       : `${fmt1(tr.value)} → ${fmt1(tr.goal)} ${tr.kind.startsWith("pressure") ? "bar" : "ml/s"}`;
     return [trTxt, tgt].filter(Boolean).join(" · ");
   }
-  return [step.limitS != null ? `${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
+  const expected = shotStepDuration(step.index);
+  if (expected != null && expected < .05) return "not reached";
+  return [expected != null ? `${fmtC(expected)} s` : step.limitS != null ? `up to ${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
 }
 function renderPour() {
   const ctx = S.shotContext || {};
@@ -5147,7 +5172,7 @@ function renderPour() {
   patchHtml(rail, prog.steps.length ? stepsRailHtml(prog.steps.map((s) => ({
     name: s.name,
     detail: stepDetailText(s),
-    weight: s.state === "now" ? Math.max(s.limitS || 8, 12) : s.state === "done" ? Math.max(s.elapsedS || 2, 3) : Math.max(s.limitS || 4, 4),
+    weight: s.state === "now" ? Math.max(s.limitS || 8, 12) : s.state === "done" ? Math.max(s.elapsedS || 2, 3) : Math.max(shotStepDuration(s.index) ?? s.limitS ?? 4, 4),
     state: s.state,
     progress: s.state === "now" ? (s.tracking?.progress ?? 0) : null,
   }))) : "");
@@ -5209,13 +5234,15 @@ function renderLive() {
     const durs = rawSteps.map((st, idx) => {
       const lim = Math.max(0, Number(st.seconds) || 0);
       if (idx < curIdx) return Math.max(0, (start[idx + 1] ?? curStart) - (start[idx] ?? 0));
-      if (idx === curIdx) return Math.max(lim, nowT - curStart + 2);
-      return lim;
+      if (idx === curIdx) return Math.max(shotStepDuration(idx) ?? lim, nowT - curStart + 2);
+      return shotStepDuration(idx) ?? lim;
     });
     const livePlan = rawSteps.length && curIdx != null ? E.profileCurve(prof, durs) : null;
     const curPlanStep = curIdx != null ? livePlan?.steps[curIdx] : null;
     const shade = curPlanStep ? [curStart, Math.max(nowT, curPlanStep.end)] : null;
-    const maxT = Math.max(40, Math.ceil(nowT / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, livePlan ? Math.ceil(planWindow(livePlan) / 10) * 10 : 0);
+    // Only elapsed time widens the live axis. Plan, reference and ETA never size it.
+    S.pourMaxT = Math.min(120, Math.max(S.pourMaxT || 40, 40 + Math.max(0, Math.floor((nowT - 39) / 10) + 1) * 10));
+    const maxT = S.pourMaxT;
     drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan: livePlan, targets: false, ahead: nowT, shade, endLabels: true });
     return;
   }
@@ -5224,7 +5251,7 @@ function renderLive() {
   const plan = pts.length ? null : S.plan;
   const rail = $("#planSteps");
   rail.hidden = !plan;
-  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: `${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
+  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: plan.timed === "shot" && step.end - step.start < .05 ? "not reached" : `${plan.timed === "shot" ? "" : "up to "}${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
   const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
   drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;
@@ -5288,12 +5315,13 @@ function onSnapshot(s) {
   if (st === "espresso" || st !== prevState) { if (!$("#view-brew").hidden) renderLive(); }
 }
 function onShotStart() {
-  S.live = []; S.opStart = Date.now();
+  S.live = []; S.opStart = Date.now(); S.pourMaxT = 40; S.shotTiming = null;
   // A shot owns its recipe and profile. Subsequent edits and loads belong to the
   // next shot; unavailable machine data must never be filled from that draft.
   const context = JSON.parse(JSON.stringify(S.loadedRecipe || {}));
   S.shotContext = context;
-  S.api.machine.recipe().then((r) => { if (r && S.shotContext === context) { Object.assign(context, JSON.parse(JSON.stringify(r))); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
+  refreshShotTiming(context);
+  S.api.machine.recipe().then((r) => { if (r && S.shotContext === context) { Object.assign(context, JSON.parse(JSON.stringify(r))); refreshShotTiming(context); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
   // Which shot was newest before this one, so the end can tell when Decaid has saved it.
   S.shotBefore = undefined;
   S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});

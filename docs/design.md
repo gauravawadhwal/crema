@@ -122,3 +122,9 @@ Async action buttons ignore repeated taps until the request settles and show a p
 state after 300 ms. Start and Stop retain their control handling. Link-loss banners
 wait 1.5 seconds; controls and active-shot protection react immediately. Technical
 error text is replaced with a plain sentence.
+The live pour chart starts at 40 seconds and widens by 10 seconds when elapsed time
+reaches one second before the edge, up to 120 seconds. It resets for each shot;
+plan, reference and ETA never size it. Plan and reference lines clip at the plot edge.
+Steps ahead use the captured profile's last-shot timing when available, otherwise
+say “up to” their time limit. Unreached steps say “not reached”; pre-shot labels name
+the peak pressure and flow. Resting control tiles share spare height without moving Stop.
