@@ -5,6 +5,9 @@ module.exports = async function checkFavourites(page, check) {
   const live = await page.evaluate(() => !S.api.demo);
   const original = await page.evaluate(() => ({ next: S.next }));
   await page.setViewportSize({ width: 1340, height: 800 });
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(200); // settle phone-to-tablet layout before comparing fixed Stop
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(async () => {
     const base = { ...favouriteRecipe(), name: 'Recipe', profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG,
       tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null };

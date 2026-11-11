@@ -26,7 +26,12 @@ artwork from it. The same applies to Streamline (GPL-3.0).
   when its box changes size, including compact after-shot and review layouts.
 - PR #63 merged first. This implementation stays on a review branch; no release tag,
   tablet, NAS, actual Decaid, physical controls or real AI verification.
-- Final local checks and any remaining limitations are recorded with the PR.
+- Final local checks passed: 349 unit tests/typecheck; syntax and demo freshness;
+  installable skin ZIP; source/built demo, controls, pour context, targets, history
+  and sleep; tablet fit, values, review, phone and secondary screens; complete live
+  simulator and brewing suites; Docker smoke. Source/built target audits have zero
+  failures. Six themes and compact/phone chart sharpness/reduced motion were inspected.
+  See PR #64 for the full command/results matrix; CI is not awaited.
 
 
 **11 November 2026 — WS 7 rebuilt against current main**
