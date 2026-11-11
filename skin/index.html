@@ -520,7 +520,12 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .dev { position: absolute; left: 50%; top: 50%; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 30px 70px rgba(0, 0, 0, .45); transform-origin: 50% 50%; }
 .dev iframe { display: block; border: 0; background: #0e1a15; }
 .dev-note { text-align: center; }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 70; box-shadow: var(--shadow); max-width: calc(100% - 32px); pointer-events: none; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: 76px; display: grid; gap: var(--s-8); z-index: 70; width: max-content; max-width: calc(100% - 32px); pointer-events: none; }
+.toast[hidden] { display: none; }
+.toast-item { display: flex; align-items: center; gap: var(--s-16); background: var(--fg); color: var(--bg); padding: var(--s-8) var(--s-16); border-radius: var(--r); font-weight: 500; box-shadow: var(--shadow); pointer-events: auto; }
+.toast-item span { overflow-wrap: anywhere; }
+.toast-act { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--r); min-height: var(--hit); min-width: var(--hit); padding: var(--s-8); font: inherit; cursor: pointer; }
+button.pending { opacity: .65; cursor: progress; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -559,7 +564,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .cmp-label { grid-column: 1 / -1; justify-self: start; }
   .shot-row canvas { width: 80px; }
   h1 { font-size: 1.4rem; }
-  .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  .toast { top: auto; bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (min-width: 761px) { #phoneSleep { display: none; } }
 

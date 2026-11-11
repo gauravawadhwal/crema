@@ -16,6 +16,20 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**11 November 2026 — WS 7 rebuilt against current main**
+
+- Three independent, deduplicated toasts sit below the tablet status bar and above
+  phone actions. Finished, Freeze/Thaw, favourite clearing and reference removal
+  offer Undo through existing writes; Finished restores the archived batch as well.
+- Async action buttons ignore repeat taps until settlement and show pending after
+  300 ms; patchHtml reapplies the pending style. Start and Stop stay independent.
+- Link banners wait 1.5 s, while control safety still reacts immediately. Technical
+  errors use the shared, unit-tested plainError classifier.
+- Simulator regression checks cover stored Undo, slow duplicate writes, toast timers,
+  plain errors and short/long link drops. Final integration verification is recorded
+  in the completion handoff below; no hardware or release.
+
+
 **11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
 time one second before the edge. See "WS 4.5". This replaces the earlier wording
 that started the axis at the expected shot length.
@@ -212,7 +226,7 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 4.5 | Pour chart axis and Brew polish | S | 4 | **Next.** Not started. A stopped WIP exists on `ui/ws4.5-pour-polish` (reference only, known flaw; see the log) |
 | 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
 | 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
-| 7 | Feedback layer | M | 2 | Stopped WIP branch; not included in consolidation. Resume against consolidated main. |
+| 7 | Feedback layer | M | 2 | Implemented on current main in the UI finish branch; stored Undo, pending actions, delayed banners and plain errors. |
 | 8 | Phone | M | 4 | Not started. Now also owns a regression: on the phone Stop is below the fold while pouring |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Completed commit 4a4123c published in PR #62 and included in #61; Shelf, Profiles, Shots and Settings. Filter regressions fixed during review. Result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | Included via PR #57 in consolidation #61; opt-in hold-to-wake and chime. Real tablet touch/audio unverified. |

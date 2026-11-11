@@ -112,3 +112,13 @@ sizes use the compact layout's bottom-right anchor, with Favourites spanning the
 two left columns while at rest. Socket loss keeps the pour layout and Stop visible.
 Secondary readouts and explanatory copy drop at compact sizes so time, weight and
 Stop remain visible without scrolling. The dedicated phone arrangement is WS 8.
+
+## Action feedback
+
+Toasts stack up to three messages, with independent timers (2.8 seconds normally,
+six with Undo). They sit below the tablet status bar and above the phone action bar.
+Finished, Freeze/Thaw, clearing a favourite and removing a reference offer Undo.
+Async action buttons ignore repeated taps until the request settles and show a pending
+state after 300 ms. Start and Stop retain their control handling. Link-loss banners
+wait 1.5 seconds; controls and active-shot protection react immediately. Technical
+error text is replaced with a plain sentence.

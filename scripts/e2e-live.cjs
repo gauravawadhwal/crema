@@ -316,6 +316,81 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await resetToast();
       await S(() => { Promise.reject(new Error("boom")); });
       check(await sayCant("do that: boom"), "an unhandled failure shows \"Couldn't do that\" instead of nothing", await toastNow());
+      // ---- feedback layer: stack, plain errors, pending taps, Undo ----
+      {
+        const items = () => S(() => [...document.querySelectorAll("#toast .toast-item")].map((x) => x._msg));
+        await resetToast();
+        await S(() => { for (const m of ["stack one", "stack two", "stack three", "stack four", "stack four"]) toast(m); });
+        const stacked = await items();
+        check(stacked.length === 3 && stacked[0] === "stack two" && stacked[2] === "stack four", "three toasts stack, newest last, and an identical one isn't repeated", JSON.stringify(stacked));
+        check(await page.waitForFunction(() => document.querySelector("#toast").hidden && !document.querySelector("#toast").children.length, null, { timeout: 6000 }).then(() => true, () => false), "and they time out on their own");
+
+        await resetToast();
+        await S(() => { Promise.reject(new Error("PUT http://localhost:8080/api/v1/workflow failed with status 500 (claude-cli)")); });
+        await page.waitForFunction(() => /Couldn't do that/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
+        const plain = await toastNow();
+        check(/Decaid couldn't do that\. Try again\./.test(plain) && !/500|http|PUT|claude-cli|workflow/.test(plain), "an error with a status code, address and provider id reaches the screen as a plain sentence", plain);
+
+        // A slow write tapped twice sends one request and shows it is working; Undo restores Decaid's data.
+        await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector("[data-more]", { timeout: 10000 });
+        const bag0 = await S(() => ({ key: S.shelf[0].key, id: S.shelf[0].id, batch: S.shelf[0].batch }));
+        const batchOf = () => fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag0.batch}`).then((r) => r.json());
+        const frozenBefore = !!(await batchOf()).frozen;
+        let puts = 0;
+        const slowPut = async (route) => { if (route.request().method() === "PUT") { puts++; await new Promise((r) => setTimeout(r, 1200)); } await route.continue(); };
+        await page.route(/\/bean-batches\//, slowPut);
+        await page.click(`[data-more="${bag0.key}"]`);
+        const freeze = page.locator('[data-act="freeze"]');
+        await resetToast();
+        await freeze.click(); await freeze.click({ force: true });
+        await page.waitForTimeout(600);
+        check(await freeze.getAttribute("aria-busy") === "true" && /pending/.test(await freeze.getAttribute("class")), "a slow Freeze shows a pending state after 300 ms");
+        await page.waitForFunction(() => /Marked as frozen|Thawed/.test(document.querySelector("#toast").textContent), null, { timeout: 8000 });
+        const done = page.locator(`[data-more="${bag0.key}"]`);
+        check(puts === 1 && (await batchOf()).frozen === !frozenBefore, "tapped twice, it sent exactly one request", `${puts} requests`);
+        check(await done.getAttribute("aria-busy") === null && !/pending/.test(await done.getAttribute("class")), "and the pending state clears afterwards");
+        await page.unroute(/\/bean-batches\//, slowPut);
+        await page.click("#toast .toast-act");
+        await page.waitForTimeout(500);
+        check((await batchOf()).frozen === frozenBefore && await page.evaluate((k) => S.shelf.find((b) => b.key === k).frozen, bag0.key) === frozenBefore, "Undo on Freeze puts the bag back as Decaid held it");
+
+        // Finished, then Undo.
+        await resetToast();
+        await page.click(`[data-more="${bag0.key}"]`); await page.click('[data-act="finish"]'); await page.click("#confirmFinish");
+        await page.waitForFunction((k) => !S.shelf.some((b) => b.key === k), bag0.key, { timeout: 8000 });
+        const gone = (await batchOf()).archived === true;
+        await page.click("#toast .toast-act");
+        await page.waitForFunction((k) => S.shelf.some((b) => b.key === k), bag0.key, { timeout: 8000 }).catch(() => {});
+        const bean = await (await fetch(`http://localhost:${MOCK}/api/v1/beans/${bag0.id}`)).json();
+        check(gone && (await batchOf()).archived === false && bean.archived === false && await page.evaluate((k) => S.shelf.some((b) => b.key === k), bag0.key), "Undo on Finished brings the bag back on the shelf and in Decaid");
+
+        // Clearing a favourite, then Undo.
+        await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForSelector("#addFav", { timeout: 10000 });
+        await page.waitForFunction(() => S.next, null, { timeout: 10000 });
+        await page.click("#addFav");
+        await page.waitForFunction(() => S.favourites.some(Boolean) && !FAV_UI.saving, null, { timeout: 8000 });
+        const slot = await S(() => S.favourites.findIndex(Boolean));
+        const stored = async () => (await (await fetch(`http://localhost:${MOCK}/api/v1/store/crema/favourites`)).json());
+        const favName = (await stored())[slot].name;
+        await resetToast();
+        await page.evaluate((i) => editFav(i), slot);
+        await page.click("#favClear");
+        await page.waitForFunction((i) => !S.favourites[i], slot, { timeout: 8000 });
+        const cleared = !(await stored())[slot];
+        await page.click("#toast .toast-act");
+        await page.waitForFunction((i) => !!S.favourites[i], slot, { timeout: 8000 }).catch(() => {});
+        check(cleared && (await stored())[slot]?.name === favName, "Undo on clearing a favourite writes it back to its slot in Decaid's store");
+
+        // Removing a reference shot, then Undo.
+        await resetToast();
+        await S(() => setReference(S.current, "ref-shot-x"));
+        const refOf = () => S(async () => (await S.api.shelf()).find((b) => b.id === S.current.id).bestShotId);
+        await S(() => setReference(S.current, null));
+        const removed = await refOf() === null;
+        await page.click("#toast .toast-act");
+        await page.waitForTimeout(600);
+        check(removed && await refOf() === "ref-shot-x", "Undo on removing a reference shot restores it in Crema's record");
+      }
     }
 
     // Slow or stuck requests mustn't hold up the machine. Boot subscribes to the
@@ -376,8 +451,21 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await page.goto(`http://localhost:${SKIN}/?full#brew`); await page.waitForFunction(() => S.link.connected === true && S.snap, null, { timeout: 15000 });
     check(true, "the device list says the machine is connected");
     await S(() => { window.__sent = []; const set = S.api.machine.setState; S.api.machine.setState = (st) => { window.__sent.push(st); return set(st); }; });
+    // A drop that recovers within about a second shows no banner (controls are disabled at once);
+    // one that lasts shows it after 1.5 s.
     await dev("machine/disconnect");
     await page.waitForFunction(() => S.link.connected === false, null, { timeout: 5000 });
+    check(await S(() => document.querySelector('[data-run="espresso"]').disabled), "a dropped machine disables start at once, before any banner");
+    await page.waitForTimeout(900);
+    check(!/isn't connected/.test(await page.textContent("#alerts")), "a 1 s drop shows no banner yet");
+    await dev("machine/connect");
+    await page.waitForFunction(() => S.link.connected === true, null, { timeout: 5000 });
+    await page.waitForTimeout(1200);
+    check(!/isn't connected/.test(await page.textContent("#alerts")), "and none appears after a drop that recovered");
+    await dev("machine/disconnect");
+    await page.waitForFunction(() => S.link.connected === false, null, { timeout: 5000 });
+    await page.waitForFunction(() => /isn't connected/.test(document.querySelector("#alerts").textContent), null, { timeout: 4000 });
+    check(true, "a drop that lasts shows the banner");
     const down = await S(() => ({
       banner: document.querySelector("#alerts").textContent,
       status: document.querySelector("#status").textContent,
@@ -438,6 +526,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       await gone.waitForFunction(() => S.snap && S.link.connected, null, { timeout: 15000 });
       stop(mock2);
       await gone.waitForFunction(() => !S.snap, null, { timeout: 10000 }).catch(() => {});
+      await gone.waitForFunction(() => /Can't reach the machine/.test(document.querySelector("#alerts").textContent), null, { timeout: 5000 });
       const lost = await gone.evaluate(() => ({ snap: !!S.snap, banner: document.querySelector("#alerts").textContent, status: document.querySelector("#status").textContent }));
       check(!lost.snap && /Can't reach the machine/.test(lost.banner) && /offline/i.test(lost.status), "when Decaid goes away, readings are dropped and the screen says so", JSON.stringify(lost));
       mock2 = await start("npx", ["tsx", "dev/mock-decaid.ts"], { PORT: String(PORT2) }, "mock-decaid on");
