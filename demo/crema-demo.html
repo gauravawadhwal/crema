@@ -130,6 +130,14 @@ html:root[data-skin="notte"] { /* First shot of the day: true black, dim amber, 
   --shadow: none;
   --r: 14px; color-scheme: dark;
 }
+html:root[data-skin="cobalto"] { /* Napoli bar machine: maritime navy and electric cyan */
+  --bg: #0b121e; --surface: #131d2e; --surface-2: #1b283e; --line: #2a3d5c;
+  --fg: #e2e8f0; --muted: #8499b5; --accent: #38bdf8; --accent-ink: #071324;
+  --pressure: #34d399; --flow: #38bdf8; --weight: #d97706; --temp: #f87171;
+  --good: #34d399; --warn: #fbbf24; --bad: #f87171; --stop: #f87171;
+  --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 8px 24px rgba(0,0,0,.35);
+  --r: 12px; color-scheme: dark;
+}
 .skins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .skin { display: grid; gap: 6px; padding: 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; }
 .skin[aria-pressed="true"] { border-color: var(--accent); }
@@ -3770,6 +3778,7 @@ const SKINS = [
   { id: "acciaio", name: "Acciaio", note: "Industrial black and steel, like the machine.", pv: ["#171a1d", "#e9edf0", "#21252a", "#4fd19a", "#63a9f2", "#c9a27a"], bg: "#0e1012" },
   { id: "nordic", name: "Nordic", note: "Light-roast café: birch, ink and fjord blue.", pv: ["#fbfbf9", "#2f6a8c", "#e2e6e1", "#2a8a64", "#2f6a8c", "#8a6340"], bg: "#eef0ed" },
   { id: "notte", name: "Notte", note: "True black and dim amber for the first shot.", pv: ["#0b0b0b", "#b8742e", "#151515", "#3f9c75", "#4b7fb3", "#9b7856"], bg: "#000000" },
+  { id: "cobalto", name: "Cobalto", note: "Napoli bar machine: maritime navy and electric cyan.", pv: ["#131d2e", "#38bdf8", "#1b283e", "#34d399", "#38bdf8", "#d97706"], bg: "#0b121e" },
 ];
 function currentSkin() { return document.documentElement.getAttribute("data-skin") || "crema"; }
 function applySkin(id, redraw = true, save = false) {
