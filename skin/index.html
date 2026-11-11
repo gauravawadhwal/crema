@@ -883,7 +883,7 @@ body.pouring #controls { position: relative; z-index: 5; }
 /* Phone keeps its primary action above the tabs, independent of page scroll. */
 .phone-status, .demo-short, .phone-away-action { display: none; }
 @media (max-width: 760px) {
-  :root { --phone-tabs: calc(var(--hit) + var(--s-12) + var(--s-4)); --phone-action: calc(var(--hit) + var(--s-12)); }
+  :root { --phone-tabs: calc(var(--hit) + var(--s-12) + var(--s-4)); --phone-action: calc(var(--hit) + var(--s-12)); scroll-padding-bottom: calc(var(--phone-tabs) + var(--phone-action) + var(--s-24) + env(safe-area-inset-bottom, 0px)); }
   main { padding-bottom: calc(var(--phone-tabs) + var(--phone-action) + var(--s-24) + env(safe-area-inset-bottom, 0px)); }
   .rail { height: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
   .topbar { gap: var(--s-4); }
