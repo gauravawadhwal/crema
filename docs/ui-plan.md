@@ -16,6 +16,30 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
+time one second before the edge. See "WS 4.5". This replaces the earlier wording
+that started the axis at the expected shot length.
+
+**11 November 2026 — review of merged `main` (`566b26c`), WS 4.5 defined**
+
+Looked at the merged app in the demo at 1340×800, 1005×552 and 390×844. WS 1, 2, 3, 4,
+6 and 9 match the specification at tablet size (Settings, Profiles, the value sheet and
+the sleep screen were not looked at). Stop now sits in the screen's bottom-right corner
+at rest, not at the bottom of the control column; the user is fine with that. Defects:
+
+- **Phone, pouring: Stop is below the fold** (390×844: Stop at y≈996 on a 1184 px page;
+  at rest it is on screen). Assigned to WS 8, which must treat it as its first item.
+- **Pour chart axis runs to 80 s** for a 32 s shot. Assigned to WS 4.5, with the small
+  Brew defects listed there.
+- Next, in order: **WS 4.5**, then WS 5, WS 8, WS 7 (its WIP branch is now behind
+  `main`), WS 11.
+- `ui/ws4.5-pour-polish` holds one WIP commit from an attempt the user stopped. It is
+  a reference only. It has the last-shot timing for steps ahead, "not reached", the
+  peak label, the duplicate-preset fix and the control-column fill, none verified. Its
+  axis change does **not** work: the early time-to-go estimate is large and noisy, and
+  feeding it into an axis that only grows pushed the axis back to 80 s. The built demo
+  on that branch is stale.
+
 **11 November 2026 — reviewed UI consolidation, PR #61**
 
 - Consolidates PRs #54–#60 and the completed WS 9 commit in PR #62 with WS 4.
@@ -185,10 +209,11 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 2 | Quick fixes for measured defects | S | 1 | Included via PR #58 in consolidation #61; Brew quick fixes. |
 | 3 | Brew at rest | M | 2 | Included via PR #59 in consolidation #61; Brew controls, idle plan and favourites. |
 | 4 | Pour mode | L | 3 | Implemented and reviewed in #61 with WS 4a (#55); Stop containment, captured shot context, guarded Skip and socket-loss checks pass. |
+| 4.5 | Pour chart axis and Brew polish | S | 4 | **Next.** Not started. A stopped WIP exists on `ui/ws4.5-pour-polish` (reference only, known flaw; see the log) |
 | 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
 | 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
 | 7 | Feedback layer | M | 2 | Stopped WIP branch; not included in consolidation. Resume against consolidated main. |
-| 8 | Phone | M | 4 | Not started |
+| 8 | Phone | M | 4 | Not started. Now also owns a regression: on the phone Stop is below the fold while pouring |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Completed commit 4a4123c published in PR #62 and included in #61; Shelf, Profiles, Shots and Settings. Filter regressions fixed during review. Result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | Included via PR #57 in consolidation #61; opt-in hold-to-wake and chime. Real tablet touch/audio unverified. |
 | 11 | Motion and finish | S | all | Not started |
@@ -507,6 +532,52 @@ check starts a shot, asserts hero numbers, the step name and Stop's size, drops 
 socket mid-shot and asserts the layout holds; no workflow write happens mid-shot;
 1005×552 shows time, weight and Stop without scrolling.
 
+### WS 4.5 — Pour chart axis and Brew polish (S)
+
+Found reviewing merged `main` on 11 November 2026. Small, all in `skin/app.js` and
+`skin/index.html`. Do this before WS 5.
+
+**1. Pour chart time axis is dynamic (decided 11 November).** Today the axis is sized
+to the plan with every step still ahead drawn at its time *limit*, so Londonium's
+trailing 30 s "Flow limit" step stretches the axis to 80 s and a 32 s shot uses the
+left quarter of the chart. How the reference skins do it: Streamline v0.2.24 keeps the
+live trace at a fixed fraction of the width and rescales the axis continuously
+(`liveXRange` in its `src/modules/chart.js`: range `[0, time / LIVE_X_DATA_FRACTION]`),
+so drawn lines keep sliding left; Mono starts at 40 s and widens 10 s at a time, a
+second before the edge, so lines hold still between steps. **Crema does it Mono's way** (user's choice,
+11 November 2026):
+
+- The axis shows the first 40 s.
+- A longer shot widens it by 10 s at a time, one second before the trace reaches the
+  edge, so the "now" line never leaves the chart and drawn lines hold still between
+  widenings. It never shrinks within a shot; reset it to 40 s when a new shot starts.
+- Seconds are labelled every 10 s.
+- Nothing else sizes the axis: not the plan's length, not the reference shot, not the
+  time-to-go estimate (`etaS` is large and unstable early in a shot, which is what
+  broke the stopped attempt).
+- Plan and reference-shot lines beyond the right edge are clipped, not squeezed in.
+  Cap the axis at 120 s.
+- Steps still ahead are drawn, on the chart and in the rail, at the last shot's
+  duration when known, not at their limit. The pour rail currently says "Decline 30 s"
+  where the rest rail says 14.9 s; both should agree. Say "up to 30 s" when only the
+  limit is known.
+
+**2. Small defects.**
+- Flush's button reads "5 s · 5 s": when a preset's name is just its value, show it once.
+- At rest, a step the last shot never reached shows "0 s · 2…" clipped in the rail:
+  show "not reached", and give rail segments enough minimum width for their detail.
+- The plan label says "pressure 3 bar" on the soak: label the peak ("pressure 9 bar").
+- At rest there is a gap of about 270 px between the scale tile and Stop at 1340×800:
+  let the tiles share the spare height (with a maximum), without moving Stop.
+- "about N s to go" was not seen during the review at 16 s into a shot; check when it
+  appears and that it does.
+
+Done when: at 1340×800 and 1005×552 the axis reads 40 s for a demo shot that ends
+under 39 s, and 50 s once a shot passes 39 s; the axis value never decreases during a shot (assert in
+`e2e-controls.cjs` or the pour check); the rest and pour rails agree on step
+durations; Stop's rectangle checks in `e2e-controls.cjs` section 12 still pass; tablet
+fit and the target check pass.
+
 ### WS 5 — After the shot (M)
 
 - Result line and pills. Check whether Decaid's shot record carries a stop reason; if
@@ -572,6 +643,10 @@ Done when: `e2e-live.cjs` passes with its failure and timeout cases; new cases c
 Undo, a slow write tapped twice sending one request, and a 1 s drop showing no banner.
 
 ### WS 8 — Phone (M)
+
+**First item, a regression since pour mode merged:** at 390×844 Stop is below the fold
+while pouring (y≈996 on a 1184 px page), so stopping a shot needs a scroll. Fix this
+before anything else here; the sticky action bar below is the intended fix.
 
 As specified, with the same split buttons as the tablet.
 
