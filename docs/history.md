@@ -329,3 +329,15 @@ arrival, preserved unsaved recipe edits, retained inventory on read failure, and
 both “Brew this” buttons. The built demo was regenerated and screenshots reviewed.
 No CSS/layout, upstream API, engine or Docker changes; no real-machine commands or
 live data migration. Real Decaid/tablet validation and release installation pending.
+
+
+## Release history and merged workstreams (10–11 November 2026)
+
+*Preserved from CLAUDE.md status logs during the November 2026 instructions cleanup.*
+
+- **v0.5.0 (11 November 2026)**: UI finish merged in PR #64 (pour polish WS 4.5, after-shot results WS 5, feedback WS 7, phone layout WS 8, motion/assets WS 11), packshots (#65), and deeper shot review (#66). Favourites carousel and shorter graph, including adding beyond five recipes, legacy record preservation, and live/built interaction checks (#53). History pane fix (#52).
+- **v0.4.1 (10 November 2026)**: Shot review fixes for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in review).
+- **v0.4.0 (10 November 2026)**: AI shot review (shot checks with no AI, optional AI review saved on Decaid shot record), shared grind start value and stepper, buttons stabilized during panel redrawing.
+- **v0.3.0 (9 November 2026)**: Bag sync across devices, No Bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs, removable reference shot.
+- **v0.2.0 (9 November 2026)**: First installation on the user's DE1 tablet via GitHub Releases through Decaid's skin installer.
+- **Code review fixes (10 November 2026)**: Server hardening (#42), silent failures with rollback and Speak hidden in Decaid (#43), control decisions under unit tests in `server/control/` (#44), cheaper shelf polling (#45), safer shared-record writes (#46), rest-window table and taste/review controls shared (#48), plan trim (#47), startup-edit race fix (#50).
