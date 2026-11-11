@@ -136,3 +136,15 @@ occupies that bar during any operation, with the bottom safe-area inset respecte
 Stop remains reachable after scrolling, changing views or losing the machine socket
 during a shot. The pouring view uses matching 52 px time and weight readings, yield
 progress, the current step and a compact chart in the first 390×844 viewport.
+## After the shot
+
+The finished-shot header shows the recorded yield and time, ratio, stop reason and
+matching time window. Its chart uses the recorded profile as a dashed plan, at least
+190 px tall on the full tablet and smaller on compact screens. Feedback scrolls
+inside the remaining space. Shot-history rows show the same result pills.
+
+A numeric review suggestion offers one step on the matching next-shot recipe, with
+a button such as “Set grind to 9.75”. Applying marks the field and its previous value;
+Reset restores it. The machine changes only through the existing load/start actions.
+Advice without one numeric adjustment remains text. Taste and body buttons wrap
+labels within equal columns and meet the touch target size.

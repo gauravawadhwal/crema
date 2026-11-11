@@ -57,6 +57,22 @@ artwork from it. The same applies to Streamline (GPL-3.0).
   The built click-through and simulator proxy checks are recorded in the integration
   report. No real phone, tablet or DE1 verification; no release.
 - CI runs `e2e-phone.cjs`; the proxy case now asserts visible Stop after scrolling.
+**11 November 2026 — WS 5 after-shot implementation**
+
+- Brew shows the recorded result, ratio, stop reason and matching timing window above
+  a 190 px chart at 1340×800; its dashed plan comes from the recorded profile. Compact
+  layouts retain the result and a smaller chart while feedback scrolls internally.
+- Numeric review advice offers one step on the next-shot draft, with a changed-field
+  marker and Reset. Apply requires the same coffee and profile, ignores profile
+  switches, and never loads the machine. Non-numeric or multiple changes have no button.
+  Existing review records support grind, yield and temperature; no dose suggestion is
+  invented from prose (the editor handles a numeric dose delta if one exists).
+- Taste/body controls and rating meet touch targets; Shots rows carry result pills.
+  All 14 WS 5 target exceptions removed; only the phone Sleep exception (WS 8) remains.
+- Passed: syntax, typecheck, 311 unit tests, tablet fit at all five sizes, target checks
+  across normal/stress fixtures, and review e2e including Apply/Reset and unchanged
+  machine workflow. Temporary tablet/compact/phone screenshots inspected. No hardware,
+  actual Decaid, real AI, Docker or release validation in this workstream.
 
 
 **11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
@@ -253,7 +269,7 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 3 | Brew at rest | M | 2 | Included via PR #59 in consolidation #61; Brew controls, idle plan and favourites. |
 | 4 | Pour mode | L | 3 | Implemented and reviewed in #61 with WS 4a (#55); Stop containment, captured shot context, guarded Skip and socket-loss checks pass. |
 | 4.5 | Pour chart axis and Brew polish | S | 4 | Implemented on `codex/ws45-pour-chart`; elapsed-only axis and Brew polish, with source pour/control/fit/target checks. |
-| 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
+| 5 | After the shot | M | 4 | Implemented on `codex/ws5-after-shot`: result/stop pills, recorded plan, draft-only numeric Apply/Reset and accessible taste controls; simulator verified. |
 | 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
 | 7 | Feedback layer | M | 2 | Implemented on current main in the UI finish branch; stored Undo, pending actions, delayed banners and plain errors. |
 | 8 | Phone | M | 4 | Implemented: compact expandable status, safe-area fixed Espresso/Stop across scrolling and views, compact pour; simulator and normal/stress phone regressions. |

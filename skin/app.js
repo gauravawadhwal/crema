@@ -323,6 +323,7 @@ function makeLiveApi(conn) {
     return { id: s.id, timestamp: s.timestamp, beanId: null, batch: ctx.beanBatchId, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
       manual: manualKind(s.workflow?.profile), doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null, yieldG: s.annotations?.actualYield ?? (points.length ? points.at(-1).w : null), timeS: points.length ? Math.round(points.at(-1).t) : null,
       enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points,
+      targetYieldG: ctx.targetYield ?? s.workflow?.profile?.target_weight ?? null, targetTimeS: s.annotations?.extras?.crema?.targetTimeS ?? null,
       profile: s.workflow?.profile ?? null, stopReason: s.stopReason ?? s.annotations?.stopReason ?? null,
       review: s.annotations?.extras?.crema?.review ?? null,
       taste: { sourBitter: s.annotations?.extras?.crema?.sourBitter ?? null, body: s.annotations?.extras?.crema?.body ?? null } };
@@ -1104,6 +1105,7 @@ const savedGrind = (beanId) => local.get(`grind:${beanId ?? "bagless"}`, "") || 
 function setNextFromRecipe(bean, recipe) {
   const r = recipe || bean?.recipe;
   S.next = r ? { beanId: bean?.id ?? null, profileTitle: r.profileTitle, profileId: r.profileId ?? null, profileShape: r.profileShape ?? null, direct: r.direct ?? false, manual: r.manual ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.manual ? null : r.targetTimeS, grind: savedGrind(bean?.id) } : null;
+  S.reviewEdit = null;
   S.loaded = false;
   saveBrewChoice();
 }
@@ -1146,12 +1148,18 @@ function renderNextShot() {
     $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1);
   }
   if (!n) return;
+  const edit = S.reviewEdit;
+  if (edit?.recipe === n) {
+    const field = edit.key === "grind" ? $("#grindInput").closest(".field-row") : $(`[data-value="${edit.key}"]`, el);
+    field?.classList.add("review-changed");
+    if (field) { const note = document.createElement("span"); note.className = "review-change-note muted small"; note.textContent = `Changed from ${edit.before}${edit.unit} after the last shot`; field.append(note); }
+  }
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
   $$("[data-value]", el).forEach((btn) => (btn.onclick = () => openValueSheet(btn.dataset.value)));
   $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, () => { renderNextShot(); renderControls(); }));
   $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
-  $("#resetRecipe").onclick = () => n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot());
+  $("#resetRecipe").onclick = () => resetReviewEdit() || (n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot()));
 }
 // One source for recipe editing bounds. Yield may be zero for direct/manual profiles.
 const RECIPE_FIELDS = {
@@ -1981,14 +1989,17 @@ function renderLive() {
   }
   // Before a shot the chart shows what the loaded profile asks for (S.plan); once one
   // starts, the machine's own targets take over.
-  const plan = pts.length ? null : S.plan;
+  const after = !$("#afterShot").hidden ? S.afterShot : null;
+  const trace = after?.points?.length ? after.points : pts;
+  const recordedProfile = after?.shot?.profile ?? after?.context?.profile;
+  const plan = after ? recordedProfile?.steps?.length ? E.profileCurve(recordedProfile, E.stepDurations(trace, recordedProfile.steps.length)) : null : pts.length ? null : S.plan;
   const rail = $("#planSteps");
-  rail.hidden = !plan;
+  rail.hidden = !!after || !plan;
   patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: plan.timed === "shot" && step.end - step.start < .05 ? "not reached" : `${plan.timed === "shot" ? "" : "up to "}${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
   const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
-  drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
+  drawChart($("#liveChart"), trace, { maxT: Math.max(maxT, Math.ceil((trace.at(-1)?.t ?? 0) / 10) * 10), maxW: Math.max(50, target + 10, (after?.shot?.yieldG ?? 0) + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;
-  const about = [plan ? `Dashed: what ${S.next.profileTitle} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
+  const about = [plan ? `Dashed: what ${after?.shot?.profileTitle ?? after?.context?.profileTitle ?? S.next?.profileTitle ?? "the profile"} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
   $("#chartEmpty").hidden = pts.length > 0;
   $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
   patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId, true));
@@ -2135,14 +2146,69 @@ function bindStars(el, v, onChange) {
 function metricsHtml(m) {
   return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
 }
-function reviewHtml(saved) {
+// A review proposes one small numeric edit; applying it never loads the machine.
+function reviewAdjustment(advice) {
+  if (!S.next || !advice || advice.switchProfile) return null;
+  const changes = [];
+  if (advice.grindDelta && advice.grindDelta !== "same") {
+    const dir = /finer$/.test(advice.grindDelta) ? -1 : /coarser$/.test(advice.grindDelta) ? 1 : 0;
+    if (dir && Number.isFinite(Number(S.next.grind))) changes.push({ key: "grind", field: "grind", label: "grind", unit: "", value: String(+(Number(S.next.grind) + dir * grindSettings().step).toFixed(3)) });
+  }
+  for (const [key, delta] of [["yield", advice.yieldDeltaG], ["temp", advice.tempDeltaC], ["dose", advice.doseDeltaG]]) {
+    if (Number.isFinite(delta) && delta !== 0) {
+      const f = RECIPE_FIELDS[key], value = recipeValue(key, S.next[f.field] + Math.sign(delta) * f.step);
+      if (value !== S.next[f.field]) changes.push({ key, field: f.field, label: key === "temp" ? "temperature" : key, unit: ` ${f.unit}`, value });
+    }
+  }
+  return changes.length === 1 ? changes[0] : null;
+}
+function reviewRecipeMatches(shot) {
+  return !!shot && !!S.next && shot.profileTitle === S.next.profileTitle && (shot.batch ? shot.batch === S.current?.batch : !S.current && !shot.beanId);
+}
+function bindReviewAdjustment(box, shot) {
+  const btn = $("[data-apply-review]", box);
+  if (!btn) return;
+  btn.onclick = () => {
+    if (!reviewRecipeMatches(shot) || S.reviewEdit?.shotId === shot.id) return;
+    const edit = reviewAdjustment(shot.review?.review?.nextShot);
+    if (!edit) return;
+    S.reviewEdit = { ...edit, before: S.next[edit.field], shotId: shot.id, recipe: S.next };
+    S.next[edit.field] = edit.value;
+    recipeEdited(); renderNextShot(); renderControls();
+    box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot);
+  };
+}
+function resetReviewEdit() {
+  const edit = S.reviewEdit;
+  if (!edit || edit.recipe !== S.next) return false;
+  S.next[edit.field] = edit.before;
+  S.reviewEdit = null;
+  recipeEdited(); renderNextShot(); renderControls();
+  for (const id of ["reviewBox", "detailReview"]) {
+    const box = $("#" + id), shot = S.shots.find((s) => s.id === edit.shotId);
+    if (box && shot) { box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot); }
+  }
+  return true;
+}
+function shotResultPills(shot, context = {}, points = shot?.points || []) {
+  const dose = shot?.doseG ?? context.doseG, weight = shot?.yieldG ?? points.at(-1)?.w;
+  const reason = E.stopReason({ recorded: shot?.stopReason, finalWeightG: weight, targetYieldG: shot?.targetYieldG ?? shot?.profile?.target_weight ?? context.yieldG, steps: shot?.profile?.steps, points });
+  const label = { weight: "Stopped at weight", volume: "Stopped at volume", user: "Stopped by you", profile: "Profile finished", machine: "Ended by machine", error: "Stopped with an error" }[reason.reason] || (reason.nearTarget ? "Stopped near target" : "Stop reason unknown");
+  const bean = S.shelf.find((b) => shot?.batch && b.batch === shot.batch);
+  const window = shot?.manual || context.manual ? null : shot?.targetTimeS ?? context.targetTimeS ?? (bean?.recipe?.profileTitle === shot?.profileTitle ? bean.recipe.targetTimeS : null);
+  const t = points.at(-1)?.t ?? shot?.timeS;
+  const verdict = window && t != null ? `${t < window[0] ? "Fast" : t > window[1] ? "Slow" : "In window"} · ${window.join("–")} s expected` : null;
+  return `${dose > 0 && weight > 0 ? `<span class="pill">1:${(weight / dose).toFixed(1)}</span>` : ""}<span class="pill ${reason.reason === "error" ? "warn" : ""}">${label}</span>${verdict ? `<span class="pill ${t < window[0] || t > window[1] ? "warn" : "good"}">${esc(verdict)}</span>` : ""}`;
+}
+function reviewHtml(saved, shot = null) {
   if (!saved?.review) return "";
   const review = saved.review;
+  const edit = reviewRecipeMatches(shot) && S.reviewEdit?.shotId !== shot.id ? reviewAdjustment(review.nextShot) : null;
   const source = String(saved.source || "").toLowerCase().includes("rules") ? "From Crema's shot checks" : "Review from the AI";
   return `<div class="advice shot-review"><div class="row between"><span class="label">${source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
     <p>${esc(review.summary)}</p>${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${review.issues?.length ? `<div class="label">To watch</div><ul>${review.issues.map((x) => `<li>${esc(x.what)} <span class="muted">${esc(x.evidence)}</span></li>`).join("")}</ul>` : ""}
-    ${review.nextShot ? `<div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>` : ""}
+    ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review>Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
 /* ===== Taste scales and the Review button, shared by the after-shot panel and the shot detail ===== */
@@ -2194,7 +2260,7 @@ function bindReviewButton(shot, { buttonSel, boxSel, isCurrent, manual }) {
       if (feedback) shot.taste = { sourBitter: feedback.sourBitter, body: feedback.body };
       const listed = S.shots.find((x) => x.id === shot.id);
       if (listed && listed !== shot) { listed.review = saved; if (feedback) listed.taste = shot.taste; }
-      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = reviewHtml(saved);
+      if (isCurrent() && $(boxSel)) { $(boxSel).innerHTML = reviewHtml(saved, shot); bindReviewAdjustment($(boxSel), shot); }
     } catch (err) {
       if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = `<p class="error">${esc(failText(err))}</p>`;
     } finally {
@@ -2213,21 +2279,17 @@ function showAfterShot(shot, pts, context = {}) {
   const unsaved = shot ? "" : `<p class="muted small">Decaid hasn't saved this shot yet, so the rating and advice can't be attached. Rate it from Shots in a moment.</p>`;
   const batch = shot ? shot.batch : context.batchId;
   const bean = batch ? S.shelf.find((b) => b.batch === batch) : null;
-  const r = bean?.recipe;
   const manual = shot?.manual || context.manual;
-  const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
-  // The recommendation's time window belongs to its profile; a different profile
-  // pulled (picked here or set on the machine) isn't judged against it.
-  const window = !manual && (shot?.profileTitle ?? context.profileTitle) === r?.profileTitle ? r?.targetTimeS ?? null : null;
-  const [lo, hi] = window || [0, 0];
-  const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
-  p.innerHTML = `
-    <div class="row between"><h2>How was it?</h2>${timing}</div>${unsaved}
-    ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
+  const recordedPoints = pts.length ? pts : shot?.points || [];
+  S.afterShot = { shot, context, points: recordedPoints };
+  const timeS = recordedPoints.at(-1)?.t ?? shot?.timeS;
+  const weight = shot?.yieldG ?? recordedPoints.at(-1)?.w;
+  $("#afterResult").innerHTML = `<span class="label">Last shot${shot?.timestamp ? ` · ${new Date(shot.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span><div class="result-line num">${weight != null ? `${fmt1(weight)} g` : "Yield unknown"}${timeS != null ? ` in ${fmt1(timeS)} s` : ""}</div><div class="result-pills">${shotResultPills(shot, context, recordedPoints)}</div>`;
+  p.innerHTML = `${unsaved}
     <div id="tasteControls">${tasteScalesHtml(shot?.taste, { sourBitter: "sb", body: "bd" })}</div>
     <div class="row between"><div class="row"><span class="label">Enjoyment</span>${starsHtml(rating, "afterStars")}</div>
       <div class="row"><button class="btn primary" id="reviewShot" ${!shot ? "disabled" : ""}>${shot?.review ? "Review again" : "Review shot"}</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
-    <div id="reviewBox">${reviewHtml(shot?.review)}</div>`;
+    <div id="reviewBox">${reviewHtml(shot?.review, shot)}</div>`;
   if (manual) {
     $("#tasteControls").hidden = true;
     $("#pinShot").hidden = !bean;
@@ -2238,6 +2300,7 @@ function showAfterShot(shot, pts, context = {}) {
     $("#reviewBox").before(notes);
     $("#afterNotes").onchange = (e) => { shot.notes = e.target.value; S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes")); };
   }
+  bindReviewAdjustment($("#reviewBox"), shot);
   bindTasteScales(shot, { sourBitter: "sb", body: "bd" });
   // Closing the review readies the chart for the next shot: the profile again, not this one.
   $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); if (S.snap?.state?.state !== "espresso") S.live = []; renderLive(); };
@@ -3101,7 +3164,7 @@ function renderShotList(scrollTop = $("#shotList").scrollTop) {
   list.innerHTML = visible.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
       <canvas data-spark="${i}" aria-hidden="true"></canvas>
       <button class="open" data-open="${esc(s.id)}"><strong class="clip1">${esc(shotCoffee(s))}</strong>
-        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button>
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span>${shotResultPills(s)}<span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button>
       <label class="cmp-label"><input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}><span>Compare</span></label></div>`).join("") + olderBtn;
   list.scrollTop = scrollTop;
   const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
@@ -3128,7 +3191,7 @@ function renderShotDetail() {
     ${s.manual ? "" : tasteScalesHtml(s.taste, { sourBitter: "detailSb", body: "detailBody" })}
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>
     <div class="row"><button class="btn primary" id="reviewDetail">${s.review ? "Review again" : "Review shot"}</button></div>
-    <div id="detailReview">${reviewHtml(s.review)}</div>`;
+    <div id="detailReview">${reviewHtml(s.review, s)}</div>`;
   detail.scrollTop = changedShot ? 0 : scrollTop;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
   bindStars($("#detailStars"), s.enjoyment, async (n) => {
@@ -3146,6 +3209,7 @@ function renderShotDetail() {
     try { await S.api.annotate(s.id, { espressoNotes: text }); s.notes = text; toast("Notes saved"); }
     catch (err) { s.notes = before; toast(`Couldn't save the notes: ${failText(err)}. They're still in the box`); }
   };
+  bindReviewAdjustment($("#detailReview"), s);
   bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
   bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", manual: s.manual, isCurrent: () => S.selShot === s.id });
   const pin = $("#pinDetail");

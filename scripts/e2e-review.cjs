@@ -181,6 +181,28 @@ const openShot = async (page, id, selector) => {
     await page.dispatchEvent("#shotNotes", "change");
     await page.waitForFunction(() => /Notes saved/.test(document.querySelector("#toast").textContent), null, { timeout: 5000 }).catch(() => {});
     check(/Notes saved/.test(await page.textContent("#toast")), "a notes write that works still says \"Notes saved\"");
+    // A numeric suggestion changes the draft once, never the Decaid workflow.
+    await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#brew`);
+    await page.waitForFunction(() => S.shelfLoaded && S.library);
+    await evalPage(async () => { await selectBean(NO_BAG, { quiet: true }); await chooseInstalledProfile(S.library.find((p) => !manualKind(p.profile)), true); });
+    const beforeApply = await evalPage(async () => {
+      S.next.grind = "10";
+      const fixture = { id: "after-shot-apply", timestamp: new Date().toISOString(), batch: S.current?.batch, beanId: S.current?.id, profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: 41.6, timeS: 26.4, targetYieldG: 42, stopReason: "targetWeight", points: [], review: { source: "rules", review: { summary: "One small change.", nextShot: { change: "Grind finer", grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted sour." } } } };
+      S.shots.unshift(fixture);
+      showAfterShot(fixture, [], {});
+      renderNextShot();
+      return { workflow: await S.api.machine.recipe(), grind: S.next.grind };
+    });
+    await page.click('[data-apply-review]');
+    check(await evalPage(() => S.next.grind === String(+(10 - grindSettings().step).toFixed(3))) && (await page.textContent("#nextShot")).includes("Changed from 10 after the last shot"), "Apply takes one grind step and marks the changed field");
+    check(JSON.stringify(await evalPage(() => S.api.machine.recipe())) === JSON.stringify(beforeApply.workflow), "Apply leaves the machine workflow unchanged");
+    check(await page.locator('[data-apply-review]').count() === 0, "an applied suggestion cannot be applied twice");
+    await page.click('#resetRecipe');
+    check(await evalPage(() => S.next.grind === "10" && !S.reviewEdit), "Reset restores the recipe value before Apply");
+    check((await page.textContent('#afterResult')).includes('41.6 g in 26.4 s') && (await page.textContent('#afterResult')).includes('Stopped at weight'), "result line and recorded stop reason are shown");
+    await page.setViewportSize({ width: 1340, height: 800 });
+    check((await page.locator('#liveChart').boundingBox()).height >= 190, "finished chart is at least 190 px at tablet size");
+    await page.screenshot({ path: "/tmp/crema-ws5-after-shot.png" });
     check(!errors.length, "no browser errors", errors.join("; "));
   } catch (e) {
     console.error(e);
