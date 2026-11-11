@@ -1619,11 +1619,16 @@ var CremaEngine = (() => {
     if (!("recipeSource" in f)) patch.recipeSource = null;
     if (!("bestShotId" in f)) patch.bestShotId = null;
     if (!f.addedAt) patch.addedAt = add.now;
-    if (add.photo) patch.photo = add.photo;
-    else if (!("photo" in f)) patch.photo = null;
     if (add.productImage) patch.productImage = add.productImage;
     else if (!("productImage" in f)) patch.productImage = null;
-    patch.art = add.art || f.art || (add.productImage ? "product" : "photo");
+    if (add.productImage || f.productImage) {
+      patch.art = "product";
+      patch.photo = null;
+    } else {
+      if (add.photo) patch.photo = add.photo;
+      else if (!("photo" in f)) patch.photo = null;
+      patch.art = add.art || f.art || "photo";
+    }
     return patch;
   }
 
