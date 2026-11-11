@@ -1,168 +1,78 @@
 # Crema: notes for agents
 
-Crema is a custom home screen and companion app for the **Decent DE1** espresso
-machine. It is a web "skin" that runs on the DE1's Android tablet through
-**Decaid** (Decent's open-source tablet app, formerly REA / ReaPrime /
-Streamline Bridge), plus an optional, stateless Node server that adds AI:
-identifying coffees and choosing espresso profiles with an LLM. The tablet
-works without the server, using rules that run in the browser. The same web app is the iPhone
-companion (added to the home screen from Safari) and a self-contained demo.
+Crema is a custom home screen and companion app for the **Decent DE1** espresso machine. It is a web "skin" that runs on the DE1's Android tablet through **Decaid** (Decent's open-source tablet app, formerly REA / ReaPrime / Streamline Bridge), plus an optional, stateless Node server that adds AI: identifying coffees and choosing espresso profiles with an LLM. The tablet works without the server, using rules that run in the browser. The same web app is the iPhone companion (added to the home screen from Safari) and a self-contained demo.
 
-Status: software is tested against the repo simulator and desktop Decaid. One
-real brew and its saved workflow/telemetry have been checked (see the implementation
-plan). Broader real-tablet acceptance and physical manual-controller behavior remain
-unverified.
+## Documentation index
 
-Read next, as needed:
-- `docs/implementation-plan.md`: the handoff and current plan. Start with "Where things stand" at its top; the progress table and ticked items say what is implemented, and "Next" lists what to pick up. Dated status updates and superseded lists are in `docs/history.md`.
-- `docs/ui-plan.md`: the UI plan in progress: eleven workstreams, layout specifications, the user's decisions and a status table to update with each PR.
-- `docs/ui-plan-briefs.md`: ready-to-use agent briefs for each remaining UI workstream.
-- `docs/review-2026-11-06.md`: review evidence, reproductions, verification results and limitations behind that plan.
-- `docs/install.md`: how users install it (skin in Decaid, optional server, phones).
-- `docs/architecture.md`: components, connections, where data lives, the app's API contract, Decaid endpoints used.
-- `docs/design.md`: the design system, layouts, themes, copy style.
-- `docs/investigation.md`: research and product decisions (photos vs search, AI providers, how recipes are chosen, why a skin rather than a fork of Streamline).
-- `docs/parity.md`: feature checklist against the stock Decent app and community skins.
-- `docs/shot-review-plan.md`: AI shot review: how other DE1 projects do it, the design and the order of work.
+- `docs/implementation-plan.md`: Current handoff and implementation plan. "Where things stand" and "Next" list active tasks.
+- `docs/history.md`: Historical log of dated status updates, past code reviews, and merged release notes.
+- `docs/architecture.md`: Architecture, data ownership, API contract, and Decaid endpoints.
+- `docs/design.md`: Design system, layouts, themes, and copy guidelines.
+- `docs/install.md`: User-facing install guide (skin in Decaid, optional server, phone companion).
+- `docs/investigation.md`: Background research and product design choices.
+- `docs/parity.md`: Feature checklist and source audit against stock Decent / Streamline.
 
 ## Repo layout
 
 | Path | What |
 |---|---|
 | `server/` | Crema server (TypeScript, Hono), optional and stateless. `main.ts` entry, `app.ts` routes (identify, recommend, dial-in, images, `/decaid/*` proxy) |
-| `server/engine.ts` | Entry for `skin/engine.js`: the catalog, ranking, recipes, dial-in rules and defaults, bundled for the browser |
-| `server/control/` | Pure decisions the app makes about the machine and shared records (reconcile, load-hold, shot and start state, bag weight, new shelf rows, record merges). Bundled into `skin/engine.js`; tested in `test/control.test.ts` and `test/record.test.ts` |
-| `server/shared/defaults.ts` | Defaults for Crema's records in Decaid's key-value store |
-| `server/llm/` | AI provider chain: `claude-cli`, `codex-cli` (subscription CLIs), `anthropic-api`, `gemini-api`, `mock` |
-| `server/profiles/` | `catalog.ts` (31 community profiles), `match.ts` (ranking against a coffee) and `curve.ts` (a profile's steps as a drawable plan, step timings from a shot, and the puck model the simulators share) |
-| `server/recommend/` | `rules.ts` (roast/rest baseline), `local.ts` (rules recipe and dial-in, no AI), `index.ts` (AI choice among candidates, AI dial-in) |
+| `server/engine.ts` | Entry for `skin/engine.js`: catalog, ranking, recipes, dial-in rules, and defaults bundled for browser |
+| `server/control/` | Pure machine decisions and shared record logic (reconcile, load-hold, shot state, bag weight, record merges). Bundled into `skin/engine.js` |
+| `server/shared/defaults.ts` | Defaults for Crema records in Decaid's key-value store |
+| `server/llm/` | AI provider chain: `claude-cli`, `codex-cli`, `anthropic-api`, `gemini-api`, `mock` |
+| `server/profiles/` | `catalog.ts` (31 community profiles), `match.ts` (ranking), `curve.ts` (profile steps and puck simulation) |
+| `server/recommend/` | `rules.ts` (baseline rules), `local.ts` (rules recipe and dial-in), `index.ts` (AI choice and dial-in) |
 | `server/identify.ts`, `images.ts` | Coffee identification and roaster product photos |
-| `server/safe-fetch.ts` | Fetching URLs from models or users: public addresses only, checked after DNS and on every redirect, size and time limits. Use it for any new outbound fetch of such a URL |
-| `skin/` | The web app: `index.html` (markup + all CSS), `app.js` (UI, live API, connections), `demo.js` (in-browser simulated backend), `engine.js` and `demo-data.js` (generated) |
-| `dev/mock-decaid.ts` | Simulated DE1 + scale + Decaid API (including the key-value store) on :8080 |
-| `samples/` | Real ONA and Haven coffees and real AI recipes used by the demo (generated by scripts) |
-| `scripts/` | Builds, checks, screenshots and recordings (see below) |
-| `evals/` | AI eval suite: labelled cases for identify, recommend, dial-in and shot review, fixtures, graders, runner, committed baselines (see `evals/README.md`) |
-| `demo/` | `crema-demo.html` (built single-file demo, embeddable as one HTML file), `walkthrough.html` (story reel) |
-| `docs/` | Docs, `screenshots/`, `media/` (README animation) |
-| `.github/workflows/` | `ci.yml` checks pull requests and `main` (a `verify` job, and a `ui` job running the Playwright checks); `pages.yml` deploys `_site/` to GitHub Pages on push to `main`; `release.yml` attaches the skin ZIP to `v*` releases. Both run `ci.yml` first |
-| `Dockerfile`, `docker-compose.yml`, `.env.example` | Running the optional server |
+| `server/safe-fetch.ts` | Safe outbound URL fetching (public IPs only, DNS/redirect checks, size and time limits) |
+| `skin/` | The web app: `index.html` (markup + CSS), `app.js` (UI & live API), `demo.js` (in-browser mock), `engine.js` & `demo-data.js` (generated) |
+| `dev/mock-decaid.ts` | Simulated DE1 + scale + Decaid API (including KV store) on :8080 |
+| `samples/` | Sample coffee and recipe data for the demo |
+| `scripts/` | Build scripts, Playwright checks, screenshots, and media generators |
+| `evals/` | AI eval suite: test cases for identify, recommend, dial-in, and review (see `evals/README.md`) |
+| `demo/` | Built single-file standalone demo (`crema-demo.html`) and story reel (`walkthrough.html`) |
 
-## Commands
+## Key commands
 
 ```bash
 npm install
-npm test                    # vitest: unit, server flow, and engine.js freshness
-npm run typecheck
-npm run build:engine        # skin/engine.js from server/ (after changing ranking, rules or defaults)
-npm run package:skin && node scripts/check-skin-zip.mjs   # dist/crema-skin.zip, checked as Decaid will see it
-npm run mock:decaid         # simulated machine on :8080
-DECAID_URL=http://localhost:8080 LLM_PROVIDERS=mock npm start   # server on :8787, serves skin/
+npm test                    # vitest: unit tests, server flow, and engine bundle freshness
+npm run typecheck           # TypeScript checks for server/
+npm run build:engine        # Rebuild skin/engine.js after changing server logic, ranking, or defaults
+npm run package:skin && node scripts/check-skin-zip.mjs   # Build and validate dist/crema-skin.zip
+npm run mock:decaid         # Simulated DE1 machine on :8080
+DECAID_URL=http://localhost:8080 LLM_PROVIDERS=mock npm start   # Run Crema server on :8787
 ```
 
-UI checks (Playwright is a dev dependency; `npx playwright install chromium` once for the browser). CI runs all of these on every pull request:
-
-```bash
-node scripts/e2e-demo.cjs            # click through the demo at tablet and phone size
-node scripts/e2e-demo.cjs --built    # same, against the built single-file demo
-node scripts/e2e-shot-history.cjs    # independent history panes, paging, keyboard and phone resize (--built too)
-node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
-node scripts/e2e-sleep.cjs           # sleep screen: date, tap vs hold to wake, chime on a shot ending (--built too)
-node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
-node scripts/check-targets.cjs       # touch targets under 44 px, overlapping controls and clipped text on every view, also with the ?stress fixture; every failure must be fixed (--built too)
-node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
-node scripts/e2e-review.cjs          # saved shot reviews, taste, recorded context, fallback and phone reload
-node scripts/e2e-screens.cjs         # Shelf More sheet and filters, Shots coffee filter and Compare, Settings index
-node scripts/e2e-brewing.cjs         # bagless/manual modes, attribution, favourites, built demo (local simulator only)
-node scripts/e2e-brewing.cjs --favourites-only  # live/built carousel, writes, swipe/tap and held loads
-node scripts/docker-smoke.mjs        # builds the server image and checks it with the mock AI (needs Docker)
-```
-
-AI evals (real model calls cost money; `--provider rules` is free; see the `ai-evals` skill):
-
-```bash
-npm run eval -- --task all --provider claude-cli --model haiku   # identify, recommend, dialin, review
-npm run eval:compare -- evals/baselines/recommend.claude-cli-opus.json evals/results/<run>.json
-```
-
-Generated assets (see the `refresh-demo-assets` skill for order and cost):
-
-```bash
-npx tsx scripts/build-demo-data.ts   # skin/demo-data.js from samples/
-node scripts/build-demo.mjs          # demo/crema-demo.html
-node scripts/screenshots.cjs         # docs/screenshots/*
-node scripts/build-site.mjs          # _site/ (Pages)
-node scripts/record-walkthrough.cjs  # docs/media/walkthrough.{webp,mp4}
-```
-
-Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verify-crema/SKILL.md`). Before and after changing a prompt, provider, model or the recommender, use the `ai-evals` skill.
+### Agent skills & workflows
+- **`verify-crema` skill** (`.claude/skills/verify-crema/SKILL.md`): Full verification checklist before finishing any change (unit tests, Playwright checks, tablet fit, built demo, live simulator mode).
+- **`refresh-demo-assets` skill** (`.claude/skills/refresh-demo-assets/SKILL.md`): Regenerating demo data, screenshots, and walkthrough media.
+- **`ai-evals` skill** (`.claude/skills/ai-evals/SKILL.md`): Running and comparing AI evals (`npm run eval -- --task all --provider ...`).
 
 ## Conventions
 
-- **Server**: TypeScript ESM, Zod for every input that crosses a boundary, Hono routes. A Zod error becomes a 400.
-- **Web app**: plain JS, no framework and no build step. One HTML file holds all CSS. `app.js` and `demo.js` are classic scripts sharing globals, so don't redeclare a top-level name in both.
-- **Two backends, one interface**: `makeLiveApi` (app.js) and `makeDemoApi` (demo.js) implement the same object. Any new capability needs both, and usually `dev/mock-decaid.ts` too. `e2e-live.cjs` fails if a member exists in only one of them.
-- **The server is optional.** Everything except AI must work with no Crema server, with the server down, and with AI switched off (`settings.aiEnabled`). AI calls go through `cremaCall` and every one has a rules fallback. Don't add server routes the app depends on for non-AI features.
-- **Decaid holds all the data**: beans, batches, profiles, workflow and shots, plus Crema's own records and settings in its key-value store (namespace `crema`). The server stores nothing but cached product photos.
-- **Logic shared by server and browser lives in `server/`** and reaches the app through `skin/engine.js`. Don't copy it into app.js; rebuild the bundle.
-- **Copy**: plain, specific, from the user's side ("Load onto machine", "Grind finer"). No emoji in the UI.
-- **Public repo hygiene**: no personal data, emails, hostnames, IPs, tokens or deployment-specific settings in code, docs or sample data. Deployment configuration belongs in environment variables (see the README) and stays out of git.
+- **Server**: TypeScript ESM, Zod for all inputs across boundaries, Hono routes. Zod errors return 400.
+- **Web app**: Plain JS, no framework, no build step. One HTML file holds all CSS. `app.js` and `demo.js` share globals; do not collide top-level identifiers.
+- **Two backends, one interface**: `makeLiveApi` (`app.js`) and `makeDemoApi` (`demo.js`) implement the same interface. Any new feature must update both and usually `dev/mock-decaid.ts`.
+- **The server is optional**: All core brewing features must work with no Crema server, with the server down, and with AI disabled (`settings.aiEnabled`). Non-AI features must never depend on server routes.
+- **Decaid owns all data**: Beans, batches, profiles, workflow, shots, and settings live in Decaid (KV namespace `crema`). The server stores nothing but cached product photos.
+- **Shared logic in `server/`**: Logic shared between server and browser lives in `server/` and compiles to `skin/engine.js`. Never duplicate it in `app.js`.
+- **UI copy**: Plain, lowercase/sentence-case, user-facing ("Load onto machine", "Grind finer"). No emoji in the UI.
+- **Repo hygiene**: No secrets, IPs, tokens, personal data, or deployment-specific URLs in code, docs, or sample data.
 
-## Gotchas learned the hard way
+## Gotchas
 
-- **Claude Code `--json-schema` rejects Zod's `$schema` key.** Use `jsonSchemaFor()` in `server/llm/types.ts`, which strips it.
-- **`String.replace` with a replacement *string* expands `$$`, `$&` and `$'`.** `build-demo.mjs` inlines `app.js` (which uses `$$`), so it must use function replacers, and it verifies the inlined code matches the source byte for byte. This bug once published a blank demo.
-- **Test the built demo, not just the source** (`e2e-demo.cjs --built`). The artifact viewer only ever sees the built file.
-- **Desktop device frame**: opened top-level on a wide window with a mouse, the app shows itself inside a 1340×800 tablet iframe (`showDeviceFrame` in app.js). Scripts that need the bare app add `?full`; the iframe adds `?embed`.
-- **Media queries see the iframe or viewport, not a scaled container.** That's why the device frame uses an iframe, and why the tablet layout is tested at real viewport sizes.
-- **Tablet layout**: the home screen must fit one screen at 1340×800 and the scaled sizes down to 1005×552, before and after a shot. Run `check-tablet-fit.cjs` after any layout or spacing change.
-- **Themes**: theme tokens use `html:root[data-skin=…]` so they outrank the light/dark blocks. Charts read CSS variables at draw time, so call `route(false)` to redraw after a change. Verde is the default (`DEFAULT_SKIN` in app.js, and `data-skin="verde"` on `<html>` in index.html); keep the two in step. See `docs/design.md`.
-- **Ratings are Decaid's 0–10, untouched.** The UI shows them as half stars (one point each); don't convert to or from 1–5 anywhere, including AI prompts and eval data. Decaid rejects values outside 0–10, and `null`.
-- **Temperature**: DE1 profiles set a temperature per step. Apply a recipe temperature by shifting every step (`withTemperature` in `server/recommend/local.ts`); never set only the first step.
-- **Steam, hot water and flush are workflow fields.** Write them with `machine.workflowSettings` (`steamSettings`, `hotWaterData`, `rinseData`), not `POST /machine/shotSettings`, which Decaid doesn't copy back into the workflow. Decaid stores any number, so keep values inside `WF_LIMITS` (integers for temperatures, durations, volumes).
-- **`shotRunning()` is also true while the machine socket is down after a mid-shot drop** (`S.shotAcross`). The DE1 keeps pouring, so loads stay held until a snapshot shows the shot ended. Don't replace it with a plain `state === "espresso"` check.
-- **Shared kv records are written by re-reading and merging, never from a stale copy.** Decaid's store has no revisions; go through `patchRecord` (bean records) or the settings merge, both built on `E.mergeRecord` (`server/control/record.ts`), or one device undoes another's write.
-- **Never write the workflow's profile during a shot.** Decaid sends it to the DE1 at once, even mid-shot, replacing the steps being poured. `loadOntoMachine` holds the load until the shot ends (`S.heldLoad`); any new path that writes `profile` to `/workflow` must go through it.
-- **Before building machine plumbing, check Decaid and Streamline.** Decaid has `/ws/v1/devices` for link state and workflow fields for steam, hot water and flush; Streamline has solved reconnects and outside workflow changes. Streamline is GPL-3.0, so learn from it but don't copy its code into this MIT repo (implementation plan, phase 1).
-- **Crema is a skin that owns the brewing loop, not a Streamline replacement.** Hand machine settings, profile editing and maintenance to Streamline, its settings plugin or Decaid rather than rebuilding them to close a parity gap. Why, and the Decaid-plugin alternative: `docs/investigation.md` section 7.
-- **Recommendations must name a profile the machine has.** The AI chooses only among installed candidates, and the code enforces it.
-- **The engine bundle is committed.** `skin/engine.js` is generated, but the skin has no build step, so it's checked in. `npm test` fails when it's stale.
-- **https pages can't call Decaid** (plain http). `discoverConnections` doesn't probe Decaid from an https page unless an address was saved.
-- **Simulated profiles are Crema's own outlines.** `dev/mock-decaid.ts` and the demo build each catalogue profile from `outlineProfile` (a step shape per style), and their shots run through the shared puck model (`shotSim`). Decaid's bundled profile files are GPL-3.0, so don't copy them in; the live app reads the real ones from Decaid.
-- **The simulators send an `elapsed` field that real Decaid snapshots don't have.** The app falls back to its own clock; keep that fallback.
-- **Sandboxed network**: some sandboxed environments block arbitrary sites (roaster shops, decentespresso.com, github.io). The `claude-cli` provider's web search still works there, while page fetching may not. The `samples/` records were built that way, from search results, so they can be thinner than what a run with full web access produces.
-- **Background processes**: don't `pkill -f` a pattern that also matches your own shell command. Kill by PID.
-- **The model only sees what the prompt says.** The evals caught the dial-in prompt passing taste sliders as bare numbers: Haiku read `sourBitter: 1` as "sour" and advised the wrong direction. Describe every scale and enum in the system prompt; Zod `.describe()` on an *input* type never reaches the model.
-- **Evals call the real pipeline.** `evals/` runs `identify()`, `recommend()` and `dialIn()` from `server/`, so a prompt change is measured as shipped. Recommend and dial-in silently fall back to rules when the model fails; the evals count that as a failure (`modelAnswered`).
-
-## Status and next steps
-
-UI finish (11 November 2026) is implemented on `codex/ui-finish` for review: WS 4.5
-pour polish, WS 5 after-shot results/draft advice, WS 7 feedback, WS 8 phone and WS 11
-motion/assets. The target check has no allowlist. See `docs/ui-plan.md` for verification;
-no release or physical-machine deployment accompanies this work.
-
-Latest release: v0.4.1 (10 November 2026): shot review fixed for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in the review). v0.4.0 (10 November 2026): AI shot review (shot checks with no AI, an optional AI review, saved on the shot in Decaid), a shared grind start value and stepper, and buttons that stay put when panels redraw. v0.3.0 (9 November 2026) added bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier on 9 November, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; the user reports the tablet has since been upgraded in place through v0.4.1 and is in daily use.
-
-Merged on 10 November 2026, not released or tagged, and not run on the tablet: the code review (#41) and its fixes, namely server hardening (#42), silent failures with rollback and Speak hidden inside Decaid (#43), control decisions under unit tests in `server/control/` (#44), a cheaper shelf poll (#45), safer shared-record writes (#46), the rest-window table and taste/review controls shared (#48), the plan trim (#47), and the startup-edit race fix (#50). The race was in the first asynchronous workflow read, not the shelf poll. Checked against the simulator and CI only. Tagging the next release is the user's call; it will be the first in-place upgrade to run this work on the tablet.
-
-This change implements the bottom favourites carousel and shorter graph, including
-adding beyond five recipes, legacy-record preservation and live/built interaction
-checks. No data migration or new storage key. The history-pane fix is merged PR
-#52; PR #53 now integrates it with the carousel, current main and the Streamline
-source ownership audit. These UI changes remain unreleased.
-
-Done in software and tested against the simulator and desktop Decaid 0.9.1 with its simulated machine:
-- the tablet working alone with Decaid, the optional AI server with fallback and an AI switch, identification, the recommender (`claude-cli` verified with real calls; `codex-cli` used in a desktop comparison), the full home screen and day-to-day features, the tablet fit, six themes, skin packaging, the demo, the walkthrough and the Pages site
-- machine-control reliability (plan phase 1): no profile writes mid-shot, link state from `ws/v1/devices`, steam, hot water and flush through the workflow, checking the machine's recipe against the screen, time limits, socket ownership, busy and error states
-- data correctness (plan phase 2): shot history paging and failures, installed Decaid profiles as the library, bags per batch
-- brewing without a bag, manual flow and pressure profiles, and profile graphs timed from past shots (`server/profiles/curve.ts`), with a reference shot you can remove
-- safe image fetching, CI (`verify`, `ui`, `docker`) gating releases and Pages, and the Docker image smoke-tested
-- an AI eval suite (`evals/`) with Opus, Sonnet, Haiku, Codex, Gemini and rules baselines
-
-Not done (details in `docs/implementation-plan.md`):
-- broader real-tablet acceptance, including upgrade/restore and physical controls (plan phase 7; one baseline brew is already verified)
-- Streamline Settings from Crema and the profile-editing hand-off (plan phase 3). The source ownership audit is complete in `docs/parity.md`; plugin compatibility and runtime routes remain pending
-- splitting `skin/app.js` and `tsc --checkJs` for the skin (plan phase 4, after #44; optional)
-- AI shot review real-shot calibration and tablet acceptance: the first software version is implemented (`docs/shot-review-plan.md`)
-- grinder entities and a numeric grind advisor; Home Assistant sensors; order-email ingestion
+- **Claude Code `--json-schema` rejects `$schema`**: Strip `$schema` using `jsonSchemaFor()` in `server/llm/types.ts`.
+- **`String.replace` expands `$$`, `$&`, `$'`**: `build-demo.mjs` inlines `app.js` (which contains `$$`); use replacer functions when injecting code.
+- **Never write workflow profile during a shot**: Decaid immediately sends profiles to the DE1. Always route profile writes through `loadOntoMachine`, which holds loads during an active shot (`S.heldLoad`).
+- **`shotRunning()` during drops**: `shotRunning()` remains true even if machine socket disconnects mid-shot (`S.shotAcross`). Do not replace with a simple `state === "espresso"` check.
+- **Shared KV writes require read-and-merge**: Decaid KV has no concurrency checks. Always use `patchRecord` or `E.mergeRecord` (`server/control/record.ts`); never overwrite from stale state.
+- **Ratings are 0–10**: Decaid ratings are 0–10 (rendered as half-stars). Do not convert to 1–5 in code, prompts, or evals.
+- **Profile temperatures apply across all steps**: DE1 profiles set temperature per step. Adjust temperature by shifting all steps (`withTemperature` in `server/recommend/local.ts`), never just step 1.
+- **Workflow settings for steam/water/flush**: Use `machine.workflowSettings` (`steamSettings`, `hotWaterData`, `rinseData`), not `POST /machine/shotSettings` (which Decaid does not copy into workflow). Constrain to `WF_LIMITS`.
+- **Decaid profile licensing**: Decaid profiles and Streamline code are GPL-3.0. Do not copy their code into this repo. Crema uses its own outline profiles and simulator puck models.
+- **Prompt descriptions**: Models only see prompt text. Describe all numeric scales and enum meanings in system prompts; Zod `.describe()` on input schemas is not seen by the LLM.
+- **Theme token specificity**: Themes use `html:root[data-skin="..."]` to outrank light/dark blocks. Charts read CSS variables at render time; trigger `route(false)` after theme changes.
+- **Tablet viewport sizing**: Home screen must fit 1340×800 down to 1005×552 without scrolling. Run `check-tablet-fit.cjs` after layout changes.
+- **Committed engine bundle**: `skin/engine.js` is generated but checked into git. Run `npm run build:engine` if `test/flow.test.ts` reports it is stale.
+- **HTTPS to Decaid**: Browsers block mixed-content requests from HTTPS pages to Decaid (plain HTTP). `discoverConnections` does not probe local Decaid from HTTPS.
