@@ -11,7 +11,7 @@ const point = (t: number, frame: number | null = 0, substate: string | null = "p
 });
 const input = (overrides: Partial<ReviewInput> = {}): ReviewInput => ({
   points: [point(0), point(10), point(20)], profile: null, doseG: 18, yieldG: 36,
-  targetYieldG: 36, targetTimeS: [25, 35], stopReason: null, feedback: null, bean: null,
+  targetYieldG: 36, targetTimeS: [18, 32], stopReason: null, feedback: null, bean: null,
   installedProfiles: ["Installed profile"], history: [], ...overrides,
 });
 const provider = (answer: unknown | ((prompt: string) => unknown) | Error): ProviderChain => {
@@ -100,6 +100,22 @@ describe("shot review backend", () => {
     const result = await reviewShot(provider(cleanReview({ nextShot: advice })), clean);
     expect(result.source).toBe("rules");
     expect(result.review.nextShot).toBeNull();
+  });
+
+  it("allows finer or coarser grind advice without taste when timing or target shortfall supports it", async () => {
+    const advice = { change: "Grind finer", grindDelta: "much-finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Pressure fell short of target." };
+    const shortfall = input({
+      points: Array.from({ length: 21 }, (_, t) => ({ ...point(t), p: 3.8, tp: 6, f: 2.2, tf: null })),
+      profile: { title: "Installed profile", beverage_type: "espresso", steps: [{ pump: "pressure", pressure: "6", seconds: "30", limiter: { value: "2.2" } }] },
+    });
+    const accepted = await reviewShot(provider(cleanReview({ nextShot: advice })), shortfall);
+    expect(accepted.source).toBe("mock");
+    expect(accepted.review.nextShot?.grindDelta).toBe("much-finer");
+
+    const wrongWay = { ...advice, change: "Grind coarser", grindDelta: "coarser" };
+    const rejected = await reviewShot(provider(cleanReview({ nextShot: wrongWay })), shortfall);
+    expect(rejected.source).toBe("rules");
+    expect(rejected.review.nextShot?.grindDelta).toBe("finer");
   });
 
   it("preserves every selected deterministic finding when the model omits it", async () => {

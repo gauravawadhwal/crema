@@ -263,3 +263,115 @@ specific narrative and nothing is falsely flagged; the 7-sample shot is still
 refused. Released in v0.4.1. Redeploying the server fixes AI reviews even for the v0.4.0
 skin; the temperature check and the better rules summary need the v0.4.1 skin.
 
+## Phase 2 — deeper insight, grind direction and evals (11 November 2026)
+
+Daily use on v0.4.1 showed that while reviews no longer fail with 400s, they still
+feel superficial: they read back the shot details already displayed in the header
+(`34.6 g from 18 g (1:1.9) in 26 s…`) instead of giving real diagnostic insight on:
+
+1. **Whether the shot was slower or faster than expected** (against the recipe/profile
+   time window and recent shots of the same bag).
+2. **Whether pressure and flow hit the profile's target amounts** (or whether low puck
+   resistance / an engaged flow or pressure limiter held them short).
+3. **Direction on the grind setting when the shot is not ideal**, even before the user
+   rates taste.
+
+### Why v0.4.1 stays superficial
+
+- `SYSTEM` in `server/recommend/review.ts` asks the model to start by restating time,
+  yield, ratio and stop reason, and `factsSentence()` in `server/recommend/review-local.ts`
+  does the same—duplicating `#afterResult` directly above the review box.
+- `api.review` in `skin/app.js` does not fall back to the coffee's saved recipe or the
+  catalogue profile's `recipe.timeS` when `targetTimeS` wasn't pre-written into shot
+  annotations, and `analyzeShot()` in `server/profiles/analysis.ts` never compares
+  `durationS` against `targetTimeS`.
+- `analyzeShot()` only emits `choked` or `gushed` on extreme 8-second holds (flow ≤ 0.5
+  or ≥ 3.5 ml/s) and ignores pressure shortfalls when a step has a flow limiter.
+- `validateReview()` in `server/recommend/review.ts` rejects any AI `nextShot` change
+  when taste hasn't been entered unless `rulesReview()` produced the exact same move
+  from `choked` or `gushed`—stripping grind direction on shots that are simply too fast,
+  too slow, or failing to build target pressure.
+
+### Planned work
+
+1. **Resolve and compare expected timing (`skin/app.js`, `server/profiles/analysis.ts`):**
+   - In `api.review` (`skin/app.js` and `skin/demo.js`), resolve `targetTimeS` from the
+     shot's recorded `targetTimeS`, else the coffee's saved recipe for that profile, else
+     the catalogue profile's `recipe.timeS`.
+   - Extend `ShotFacts` in `analysis.ts` with `expectedTimeS: [number, number] | null`,
+     `timeStatus: "fast" | "in_window" | "slow" | null`, and `timeDeltaS: number | null`
+     (seconds below the minimum or above the maximum of `expectedTimeS`).
+   - Emit `fast_shot` / `slow_shot` observations when a shot with a normal weight/volume
+     stop finishes meaningfully outside `expectedTimeS` (never on an early manual stop).
+2. **Step-level pressure and flow attainment (`server/profiles/analysis.ts`):**
+   - Record per-pour-step target vs achieved peak and mean pressure/flow in `ShotFacts`
+     (`pourSteps`: step name, pump, target, actualMean, actualPeak, limiterValue,
+     limiterEngaged).
+   - Detect `pressure_shortfall` when a pressure-controlled pour step stays materially
+     below its pressure target (including when a flow limiter caps the pump because the
+     puck offers too little resistance), and `flow_shortfall` when a flow-controlled pour
+     step stays materially below its flow target (including when a pressure limiter caps
+     the pump because the puck is too restrictive).
+3. **Grind direction in rules and AI validation (`server/recommend/review-local.ts`, `server/recommend/review.ts`):**
+   - In `rulesReview()`, derive `nextShot` grind direction (`finer` / `much-finer` or
+     `coarser` / `much-coarser`) from timing (`fast_shot` / `slow_shot`) and target
+     shortfalls (`pressure_shortfall` / `flow_shortfall` / `gushed` / `choked`) when
+     taste is unset, and combine with taste when taste is set (preserving conflict
+     abstention when curve and taste point in opposite directions, e.g. choked + sour).
+   - In `validateReview()`, allow AI grind adjustments supported by timing or target
+     shortfall evidence even when taste is unset, so the after-shot panel surfaces both
+     the explanation and the one-tap **"Set grind to …"** button.
+4. **Prompt overhaul (`server/recommend/review.ts`):**
+   - Remove the instruction to lead by reading back dose, yield, ratio and stop reason.
+   - Instruct the model to lead with diagnostic insight in plain language:
+     - **Pace:** faster, slower, or inside the expected window (and how it compares with
+       recent shots of this bag when history is present);
+     - **Pressure & flow:** whether the main pour hit its target bar / ml/s or why puck
+       resistance / a limiter held it off target;
+     - **Grind direction:** whether to grind finer, coarser, or keep the current grind,
+       and why.
+5. **Eval dataset and graders (`evals/datasets/review.json`, `evals/lib/review-fixtures.ts`, `evals/lib/review-grader.ts`, `evals/lib/judge.ts`):**
+   - Add synthetic and real-shape cases covering:
+     - `review-fast-time`: hits target weight 7–9 s faster than `targetTimeS` (`finer`);
+     - `review-slow-time`: hits target weight 10–12 s slower than `targetTimeS` (`coarser`);
+     - `review-limited-pressure-shortfall`: flow limiter engages and holds pressure at
+       3.8 bar against a 6 bar target (`finer`, `pressure_shortfall`);
+     - `review-flow-pressure-capped`: pressure limiter caps a flow step well below target
+       (`coarser`, `flow_shortfall`);
+     - `review-history-dialed-in`: earlier shots in `history` were fast and ground finer
+       to land in window (`keep`).
+   - Add deterministic checks in `review-grader.ts`:
+     - `mentionsTiming`: when `targetTimeS` is present, the review states whether timing
+       was fast, slow, or in window;
+     - `mentionsTargetTracking`: when a pour step has a pressure/flow target, the review
+       states whether pressure/flow reached target (or by how much it missed);
+     - `grindDirectionWhenOff`: when timing or pressure/flow is off-target without a
+       taste contradiction, `nextShot.grindDelta` gives the expected direction (`finer`
+       or `coarser`) and `nextShot.change` / `reasoning` explains it.
+   - Update `evals/lib/judge.ts` so the quality check penalizes summaries that merely
+     restate dose/yield/time without comparing against expected timing and pressure/flow
+     targets.
+   - Re-run `rules` and `claude-cli:haiku` (plus reference) baselines after implementation.
+
+### Implemented and verified (11 November 2026)
+
+- `server/profiles/analysis.ts`: `expectedTimeWindow()`, `ShotFacts.expectedTimeS` /
+  `timeStatus` / `timeDeltaS`, `pourSteps: PourStep[]`, and deterministic observations
+  `pressure_shortfall`, `flow_shortfall`, `fast_shot` and `slow_shot`, with measured
+  numbers in `wentWell`.
+- `server/recommend/review-local.ts` & `server/recommend/review.ts`: `paceSentence()`,
+  `trackingSentence()`, updated `SYSTEM` prompt, and curve/timing-backed grind direction
+  (`finer` / `much-finer`, `coarser` / `much-coarser`) before taste is entered while
+  preserving taste-vs-curve conflict abstention.
+- `skin/app.js` & `skin/demo.js`: `api.review` resolves `targetTimeS` from the shot's
+  recorded annotation, else the coffee's saved recipe for that profile, else the catalogue
+  profile's `recipe.timeS`.
+- `evals/`: 4 new review cases (`review-fast-time`, `review-slow-time`,
+  `review-limited-pressure-shortfall`, `review-flow-shortfall`), `insightfulSummary` and
+  `grindDirectionMatchesIssue` checks in `review-grader.ts`, updated `judge.ts` rubric,
+  and refreshed `review.rules` baseline (26/26 passing, 100%, score 1.00).
+- Verified with `npm run typecheck`, `npm test` (16 files, 356 tests),
+  `npm run eval -- --task review --provider rules` (26/26), `e2e-review.cjs`,
+  `e2e-live.cjs`, `e2e-demo.cjs` (source and `--built`), `check-tablet-fit.cjs`, and
+  `check-targets.cjs` (source and `--built`).
+

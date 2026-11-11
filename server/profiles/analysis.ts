@@ -1,4 +1,5 @@
 import type { ProfileLike } from "./curve.js";
+import { findProfile } from "./catalog.js";
 import type { ReviewInput, ReviewIssue } from "../recommend/review-types.js";
 
 export interface ShotAnalysisMetrics {
@@ -31,6 +32,34 @@ export interface ShotFacts {
   pourMeanFlowMlS: number | null;
   /** Scale readings below -5 g (a tare or a cup bump), ignored above. */
   weightGlitches: number;
+  /** The time window this shot was meant to land in: the recorded target, else the catalogue profile's. */
+  expectedTimeS: [number, number] | null;
+  /** How durationS compares with expectedTimeS; null when either is unknown or the shot was stopped early by hand. */
+  timeStatus: "fast" | "in_window" | "slow" | null;
+  /** Seconds below the window's minimum (negative) or above its maximum (positive); 0 inside it. */
+  timeDeltaS: number | null;
+  /** What each pour step targeted and what the shot actually reached. */
+  pourSteps: PourStep[];
+}
+
+export interface PourStep {
+  /** Profile step index. */
+  frame: number;
+  name: string | null;
+  /** The quantity the step controls. */
+  pump: "pressure" | "flow";
+  durationS: number;
+  /** The step's target for the controlled quantity: bar for pressure, ml/s for flow. */
+  target: number;
+  /** Mean of the controlled quantity once the step settled (after its first two seconds). */
+  actualMean: number;
+  actualPeak: number;
+  /** Mean of the other quantity: flow (ml/s) on a pressure step, pressure (bar) on a flow step. */
+  otherMean: number | null;
+  /** The cap on the other quantity, when the step has one. */
+  limiterValue: number | null;
+  /** The limiter held the controlled quantity short of its target. */
+  limiterEngaged: boolean;
 }
 
 export interface ShotAnalysis {
@@ -72,9 +101,37 @@ type Window = {
   target: number;
   actuals: number[];
   flows: (number | null)[];
+  pressures: (number | null)[];
   pump: "pressure" | "flow";
   step: NonNullable<ReturnType<typeof stepAt>>;
 };
+
+const USER_STOPS = new Set(["apistop", "userstop", "manual"]);
+
+/** Whether the shot reached at least 80% of its target yield; null when either is unknown. */
+function reachedYield(input: ReviewInput): boolean | null {
+  if (!finite(input.yieldG) || !finite(input.targetYieldG) || input.targetYieldG <= 0) return null;
+  return input.yieldG >= 0.8 * input.targetYieldG;
+}
+
+/** Stopped by hand or from the app before reaching (or without showing) 80% of the target yield. */
+function stoppedEarly(input: ReviewInput): boolean {
+  return USER_STOPS.has((input.stopReason ?? "").toLowerCase()) && reachedYield(input) !== true;
+}
+
+/**
+ * The time window the shot was meant to land in: the recorded target when it is
+ * a real window, else the catalogue's recipe time for a known espresso profile.
+ */
+export function expectedTimeWindow(input: Pick<ReviewInput, "targetTimeS" | "profile">): [number, number] | null {
+  const t = input.targetTimeS;
+  if (t && finite(t[0]) && finite(t[1]) && t[0] > 0 && t[0] <= t[1] && t[1] <= 300 && !(t[0] === 0 && t[1] === 600)) return [t[0], t[1]];
+  if (input.profile?.title && input.profile.beverage_type !== "manual") {
+    const known = findProfile(input.profile.title)?.recipe.timeS;
+    return known ? [known[0], known[1]] : null;
+  }
+  return null;
+}
 
 function targetAndActual(input: ReviewInput, point: ReviewInput["points"][number]) {
   const step = stepAt(input.profile!, point.frame);
@@ -117,6 +174,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
       target: ts.reduce((a, b) => a + b, 0) / ts.length,
       actuals: settled.map((x) => x.data!.actual),
       flows: settled.map((x) => finite(x.p.f) ? x.p.f : null),
+      pressures: settled.map((x) => finite(x.p.p) ? x.p.p : null),
       pump: first.data.pump, step: first.data.step,
     });
     run = [];
@@ -131,17 +189,28 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
   }
   flush();
 
+  // The newer, milder observations (a target shortfall, a pace outside the
+  // expected window) need a known espresso profile whose targets mean what they
+  // say, and a shot that wasn't cut short by hand.
+  const judged = profile != null && profile.beverage_type !== "manual" && !/turbo|bloom/i.test(profile.title ?? "") && !stoppedEarly(input);
+
   for (const w of windows) {
     const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     const actual = avg(w.actuals);
     const flowValues = w.flows.filter(finite);
     const flowCoverage = flowValues.length / w.flows.length;
     const flow = avg(flowValues);
+    const pressure = avg(w.pressures.filter(finite));
     if (actual == null) continue;
     const ratio = actual / w.target;
+    const limit = number(w.step.limiter?.value);
+    const limiter = limit != null && limit > 0 ? limit : null;
+    // A flow step whose pressure limiter is holding: the puck is too restrictive
+    // for the flow asked of it. Called a flow shortfall, with the cap as the reason.
+    const pressureCapped = judged && w.pump === "flow" && limiter != null && pressure != null && pressure >= 0.85 * limiter;
     let kind: string | null = null;
     let what = "";
-    if (w.pump === "flow" && ratio <= 0.55) {
+    if (w.pump === "flow" && ratio <= 0.55 && !pressureCapped) {
       kind = "choked";
       what = "Flow stayed well below the profile's flow target.";
     } else if (w.pump === "flow" && ratio >= 1.55) {
@@ -158,6 +227,21 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
       issues.push({
         kind, what,
         evidence: `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}: ${w.pump} target ${w.target.toFixed(1)}, measured ${actual.toFixed(1)}${w.pump === "pressure" ? " bar" : " ml/s"}${flow == null ? "" : `, flow ${flow.toFixed(1)} ml/s`}.`,
+        severity: "caution", fromS: w.start, toS: w.end,
+      });
+    }
+    const span = `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}`;
+    if (!kind && judged && w.pump === "pressure" && ratio <= 0.78 && w.target - actual >= 1.2) {
+      const capped = limiter != null && flow != null && flow >= 0.85 * limiter;
+      issues.push({
+        kind: "pressure_shortfall", what: "Pressure stayed below the profile's target during the pour.",
+        evidence: `${span}: target ${w.target.toFixed(1)} bar, measured ${actual.toFixed(1)} bar (peak ${Math.max(...w.actuals).toFixed(1)} bar)${flow == null ? "" : ` with flow at ${flow.toFixed(1)} ml/s`}${capped ? `, held at the ${limiter} ml/s flow limit because the puck gave too little resistance` : ""}.`,
+        severity: "caution", fromS: w.start, toS: w.end,
+      });
+    } else if (!kind && judged && w.pump === "flow" && ratio <= 0.75 && w.target - actual >= 0.4) {
+      issues.push({
+        kind: "flow_shortfall", what: "Flow stayed below the profile's target during the pour.",
+        evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, held at the ${limiter} bar pressure limit because the puck was too restrictive` : ""}.`,
         severity: "caution", fromS: w.start, toS: w.end,
       });
     }
@@ -242,8 +326,41 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
     const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
     return Math.abs(avg / w.target - 1) <= 0.2;
   });
-  const wentWell = well.length ? ["The controlled pressure or flow target stayed close to its recorded target."] : [];
   const facts = shotFacts(input, points);
+
+  const lastT = points.at(-1)?.t ?? 0;
+  const window = facts.expectedTimeS;
+  if (judged && window && facts.durationS != null && facts.timeDeltaS != null) {
+    const ran = Math.round(facts.durationS);
+    const range = { fromS: facts.brewStartS ?? 0, toS: facts.brewEndS ?? lastT };
+    if (facts.timeStatus === "fast" && facts.timeDeltaS <= -4 && reachedYield(input) !== false) {
+      issues.push({
+        kind: "fast_shot", what: "The shot finished faster than the expected time window.",
+        evidence: `Ran in ${ran} s against the ${window[0]}–${window[1]} s window (${Math.abs(Math.round(facts.timeDeltaS))} s fast).`,
+        severity: "caution", ...range,
+      });
+    } else if (facts.timeStatus === "slow" && facts.timeDeltaS >= 5) {
+      issues.push({
+        kind: "slow_shot", what: "The shot ran slower than the expected time window.",
+        evidence: `Ran in ${ran} s against the ${window[0]}–${window[1]} s window (${Math.round(facts.timeDeltaS)} s slow).`,
+        severity: "caution", ...range,
+      });
+    }
+  }
+
+  const wentWell: string[] = [];
+  const faults = issues.some((i) => ["choked", "gushed", "pressure_shortfall", "flow_shortfall"].includes(i.kind));
+  if (facts.timeStatus === "in_window" && window && facts.durationS != null && !faults) {
+    wentWell.push(`Finished in ${Math.round(facts.durationS)} s, inside the ${window[0]}–${window[1]} s window.`);
+  }
+  const praised = new Set<number>();
+  for (const w of well) {
+    if (praised.has(w.frame) || praised.size >= 2) continue;
+    praised.add(w.frame);
+    const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
+    const unit = w.pump === "pressure" ? "bar" : "ml/s";
+    wentWell.push(`Held ${w.pump} at ${avg.toFixed(1)} ${unit} against the ${w.target.toFixed(1)} ${unit} target.`);
+  }
   return {
     issues, wentWell, facts,
     metrics: {
@@ -274,8 +391,18 @@ export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): S
   const pressures = brewing.map((p) => p.p).filter(finite);
   const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
   const yieldG = finite(input.yieldG) && input.yieldG > 0 ? input.yieldG : null;
+  const durationS = round(span(brewing));
+  const expectedTimeS = expectedTimeWindow(input);
+  // Pace is only judged on a recorded shot that ran its course.
+  const hasCurve = points.some((p) => finite(p.p) || finite(p.f));
+  let timeStatus: ShotFacts["timeStatus"] = null, timeDeltaS: number | null = null;
+  if (expectedTimeS && durationS != null && durationS >= 10 && points.length >= 10 && hasCurve && !stoppedEarly(input)) {
+    if (durationS < expectedTimeS[0]) { timeStatus = "fast"; timeDeltaS = round(durationS - expectedTimeS[0]); }
+    else if (durationS > expectedTimeS[1]) { timeStatus = "slow"; timeDeltaS = round(durationS - expectedTimeS[1]); }
+    else { timeStatus = "in_window"; timeDeltaS = 0; }
+  }
   return {
-    brewStartS: round(brewing[0]?.t ?? null), brewEndS: round(brewing.at(-1)?.t ?? null), durationS: round(span(brewing)),
+    brewStartS: round(brewing[0]?.t ?? null), brewEndS: round(brewing.at(-1)?.t ?? null), durationS,
     preinfusionS: round(span(preinfusion)), pourS: round(phased ? span(pour) : null), firstDripsS: round(firstDripsS),
     doseG, yieldG, targetYieldG: finite(input.targetYieldG) && input.targetYieldG > 0 ? input.targetYieldG : null,
     ratio: doseG && yieldG ? round(yieldG / doseG) : null, stopReason: input.stopReason,
@@ -283,5 +410,56 @@ export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): S
     pourMeanPressureBar: round(avg(pour.map((p) => p.p).filter(finite))),
     pourMeanFlowMlS: round(avg(pour.map((p) => p.f).filter(finite))),
     weightGlitches: points.filter((p) => finite(p.w) && p.w < -5).length,
+    expectedTimeS, timeStatus, timeDeltaS,
+    pourSteps: pourSteps(input, points),
   };
+}
+
+/**
+ * For each pour step long enough to compare, what it targeted and what the shot
+ * reached. Preinfusion phases, manual profiles and steps the analysis never grades
+ * (bloom, turbo, high flow targets) are left out.
+ */
+function pourSteps(input: ReviewInput, points: ReviewInput["points"]): PourStep[] {
+  const profile = input.profile;
+  if (!profile || profile.beverage_type === "manual") return [];
+  const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  const byFrame = new Map<number, ReviewInput["points"]>();
+  for (const p of points) {
+    if (p.substate && !/^pour/i.test(p.substate)) continue;
+    if (p.frame == null || !Number.isInteger(p.frame) || p.frame < 0) continue;
+    if (!byFrame.has(p.frame)) byFrame.set(p.frame, []);
+    byFrame.get(p.frame)!.push(p);
+  }
+  const out: PourStep[] = [];
+  for (const [frame, xs] of [...byFrame].sort((a, b) => a[0] - b[0])) {
+    const step = stepAt(profile, frame);
+    if (!step || (step.pump !== "pressure" && step.pump !== "flow")) continue;
+    const pump: "pressure" | "flow" = step.pump;
+    const durationS = xs.at(-1)!.t - xs[0].t;
+    if (xs.length < 3 || durationS < 3) continue;
+    const settledAll = xs.filter((p) => p.t - xs[0].t >= 2);
+    const settled = settledAll.length >= 3 ? settledAll : xs;
+    const controlled = (p: ReviewInput["points"][number]) => pump === "pressure" ? p.p : p.f;
+    const other = (p: ReviewInput["points"][number]) => pump === "pressure" ? p.f : p.p;
+    const recorded = settled.map((p) => pump === "pressure" ? p.tp : p.tf).filter((n): n is number => finite(n) && n > 0);
+    const stepTarget = number(pump === "pressure" ? step.pressure : step.flow);
+    const target = recorded.length ? avg(recorded)! : stepTarget != null && stepTarget > 0 ? stepTarget : null;
+    if (target == null || skippedStep(profile, step, target)) continue;
+    const actuals = settled.map(controlled).filter(finite);
+    const peaks = xs.map(controlled).filter(finite);
+    if (!actuals.length) continue;
+    const actualMean = avg(actuals)!;
+    const otherMean = avg(settled.map(other).filter(finite));
+    const limit = number(step.limiter?.value);
+    const limiterValue = limit != null && limit > 0 ? limit : null;
+    const short = target - actualMean >= (pump === "pressure" ? 0.8 : 0.4);
+    out.push({
+      frame, name: step.name ?? null, pump, durationS: round(durationS)!,
+      target: round(target)!, actualMean: round(actualMean)!, actualPeak: round(Math.max(...peaks))!,
+      otherMean: round(otherMean), limiterValue,
+      limiterEngaged: limiterValue != null && otherMean != null && short && otherMean >= 0.85 * limiterValue,
+    });
+  }
+  return out;
 }

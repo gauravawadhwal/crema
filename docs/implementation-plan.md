@@ -36,7 +36,18 @@ No new release, tablet/NAS deployment, real AI calls or physical-machine testing
 Each item is its own PR, and all of it can be verified with the simulator and desktop
 Decaid.
 
-0. **UI plan, in progress (started 10 November 2026):** eleven workstreams in
+0. **Canonical roaster packshot when searching by bag photo (11 November 2026, [PR #65](https://github.com/gauravawadhwal/crema/pull/65)):**
+   when adding a coffee by photographing the bag, the photo is used to read lot facts
+   (roast date, weight, lot) and identify the coffee, not as the shelf picture when a
+   canonical product photo is available from the roaster/manufacturer. See
+   [User feedback — 11 November 2026](#user-feedback--11-november-2026) below.
+1. **Deeper post-shot analysis, grind direction, prompt and evals (11 November 2026, [PR #66](https://github.com/gauravawadhwal/crema/pull/66)):**
+   replace superficial detail readbacks in `reviewShot()` / `rulesReview()` with
+   explicit timing vs expected window, step-level pressure/flow target attainment, and
+   actionable grind direction when a shot is fast, slow or off-target, backed by
+   expanded review evals. See [User feedback — 11 November 2026](#user-feedback--11-november-2026)
+   and [shot-review-plan.md](shot-review-plan.md#phase-2--deeper-insight-grind-direction-and-evals-11-november-2026).
+2. **UI plan, implemented on `main` (10–11 November 2026):** eleven workstreams in
    [ui-plan.md](ui-plan.md), from a review of `main` at `8834dd7` against Mono and
    the items here. Its status table is the handoff: it says which workstream is
    done, open as a PR, or next. The user accepted its four decisions the same day
@@ -46,13 +57,13 @@ Decaid.
    skip-step (WS 4), stop reason (WS 5), step previews on profile cards (WS 9) and
    preset strips for dose, yield and temperature (WS 6). The user has a private
    page with the renders; the layout specifications in ui-plan.md stand in for it.
-1. **UI feedback, 10 November:** independent shot-history scrolling is merged
+3. **UI feedback, 10 November:** independent shot-history scrolling is merged
    in [PR #52](https://github.com/gauravawadhwal/crema/pull/52), alongside the accepted
    plan in [PR #51](https://github.com/gauravawadhwal/crema/pull/51). The bottom
    favourites carousel is [PR #53](https://github.com/gauravawadhwal/crema/pull/53),
    which now includes current `main`, the history integration and the Streamline
    source audit. Both UI changes remain unreleased.
-2. **Startup edit race, merged and included:**
+4. **Startup edit race, merged and included:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
    recipe edits". The initial workflow read can overwrite edits made while the read
@@ -68,28 +79,120 @@ Decaid.
    established. The complete live suite, including both assertions, passes locally
    on the PR #50 base used here. Preserve the failed runs as evidence; investigate
    further if the timeout assertion recurs on the current base.
-3. **Package the completed fixes for installation when ready.** The latest release,
+5. **Package the completed fixes for installation when ready.** The latest release,
    v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
    installable GitHub release. A release runs CI and attaches a new skin ZIP for
    Decaid to install. It is distribution work, not a separate feature or a reason
    to pause implementation. Tagging remains the user's call.
-4. **Streamline Settings entry and feature access** (phase 3). The source audit is
+6. **Streamline Settings entry and feature access** (phase 3). The source audit is
    complete in [parity.md](parity.md): all 42 Streamline settings sub-pages and the
    daily features, with owners and proposed routes. The integration remains on hold
    until the user is ready with desktop Decaid. Resolve the published plugin's
    version gap and machine-settings restore conflict before adding its link; see
    phase 3's audit findings and proposed order. The user confirms on the tablet in
    normal use; no supervised tablet session is requested.
-5. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
+7. **Optional:** put `skin/app.js` and `skin/demo.js` under `tsc --checkJs` with a
    shared JSDoc type for the API object, which turns the live/demo contract into a type
    check. Splitting the file further is optional after PR #44.
-6. **Held until there is a reason:** shot-review threshold calibration (needs more real
-   shots with taste recorded); grinder entities and a numeric grind advisor; Home
+8. **Held until there is a reason:** grinder entities and a numeric grind advisor; Home
    Assistant sensors; order-email ingestion (see "Deferred product work").
-7. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
+9. **Still unverified on hardware:** the cases listed next. They are kept visible, not a
    request for a tablet session.
 
 Housekeeping (F6) is the user's call.
+
+## User feedback — 11 November 2026
+
+### 1. Canonical manufacturer packshot over the user's bag photo (implemented)
+
+When searching with a photo of the bag, the camera image should only be used as the
+coffee's picture if no canonical product photo is available from the roaster/manufacturer:
+
+- **Promote roaster URLs from `sources` when `productUrl` is missing (`server/identify.ts`, `server/app.ts`):**
+  when given a bag photo, models often fill in `sources` with the roaster's page while
+  leaving `productUrl: null`. `preferRoasterPages()` currently only swaps a retailer
+  `productUrl` when `productUrl` is already non-null, so `findProductImage()` never runs.
+  Set `productUrl` from the first matching roaster product URL in `own` (and try remaining
+  roaster `sources` if the first page has no packshot metadata).
+- **Strengthen packshot discovery and verify before review (`server/images.ts`, `server/app.ts`):**
+  keep Open Graph / JSON-LD `Product.image` / Twitter metadata lookup and drop placeholders;
+  when a canonical image URL is found during `/api/identify`, validate/cache it so the
+  client knows before saving whether a working manufacturer image exists.
+- **Do not keep or use the camera bag photo when a canonical photo is available (`skin/app.js`, `skin/demo.js`, `server/control/record.ts`):**
+  when `productImage` / `info.imageUrl` is present and valid, always use `art: "product"`
+  and drop the user's bag thumbnail (`photo: null`) instead of offering the radio picker or
+  storing the camera photo on the record. Keep the user's bag photo only as a fallback when
+  no canonical photo is available (offline mode, roaster page has no packshot, or download
+  fails). In `saveBeanPatch()` and `artSrc()`, a valid `productImage` always takes
+  precedence over an older `photo`.
+
+### 2. Deeper post-shot analysis, grind direction, prompt and evals (implemented)
+
+Real-tablet use showed that v0.4.1's shot review still reads back the header numbers
+(`"34.6 g from 18 g (1:1.9) in 26 s…"`) without answering the three things that matter
+after a shot: whether it ran faster or slower than expected, whether pressure (and flow)
+reached the profile's target, and which way to move the grind when the shot wasn't ideal.
+
+Root causes in the current code (`server/profiles/analysis.ts`, `server/recommend/review.ts`,
+`server/recommend/review-local.ts`, `skin/app.js`):
+
+1. **The prompt and rules summary repeat the header:** `SYSTEM` in `review.ts` instructs
+   the model to start with *"what happened (time, yield and ratio, how it ended)"*, and
+   `factsSentence()` in `review-local.ts` does the same. Those numbers are already shown
+   in `#afterResult` directly above the review.
+2. **Expected time window is missing or ignored:** `api.review` in `skin/app.js` only reads
+   `targetTimeS` from `annotations.extras.crema.targetTimeS ?? ctx.targetTimeS`, without
+   falling back to the coffee's saved recipe or the catalogue profile's `recipe.timeS` (unlike
+   `shotResultPills`). Even when `targetTimeS` is passed, `analysis.ts` never compares
+   `durationS` against `targetTimeS` or earlier shots of the bag.
+3. **Step pressure/flow attainment is hidden unless a catastrophic choke/gusher fires:**
+   `analyzeShot()` only flags `choked` (flow ≤ 0.5 ml/s or ≤ 55% of flow target over ≥ 8 s)
+   and `gushed` (flow ≥ 3.5 ml/s and pressure ≤ 55% of target over ≥ 8 s), and ignores
+   pressure shortfalls on limited steps (such as *Extractamundo Dos!* or *Gentle and sweet*
+   where a coarse grind rides the flow limiter and never reaches the 6 bar target).
+4. **`validateReview()` blocks AI grind advice without taste:** when the user taps
+   **Review shot** before setting both taste scales, `validateReview()` throws and falls
+   back to rules if the model suggests any `nextShot` change that `rulesReview()` didn't
+   already emit from `choked` or `gushed`. A shot that ran 18 s against a 28–36 s window
+   or peaked at 4.2 bar against a 6 bar target therefore gets `nextShot: null` and no
+   grind direction.
+
+Planned changes (tracked in detail in [shot-review-plan.md](shot-review-plan.md#phase-2--deeper-insight-grind-direction-and-evals-11-november-2026)):
+
+- **Telemetry analysis (`server/profiles/analysis.ts`, `skin/app.js`):**
+  - Always resolve `targetTimeS` in `api.review` (recorded shot → coffee's recipe for that
+    profile → catalogue profile's `recipe.timeS`).
+  - Add timing comparison to `ShotFacts` (`expectedTimeS`, `timeStatus: "fast" | "in_window" | "slow"`,
+    `timeDeltaS`) and compare against recent shots on the same bag/profile.
+  - Add per-step target tracking to `ShotFacts` / `analyzeShot`: for the main pour step(s),
+    record target vs achieved peak/mean pressure and flow, whether a limiter engaged, and
+    emit observations when pressure fails to reach target due to low puck resistance / flow
+    riding the limiter (`pressure_shortfall`) or when flow is capped below target by the
+    pressure limiter (`flow_shortfall`), as well as `fast_shot` / `slow_shot` when brew time
+    is meaningfully outside `targetTimeS`.
+- **Grind direction in rules and AI validation (`server/recommend/review-local.ts`, `server/recommend/review.ts`):**
+  - When a non-manual shot is meaningfully fast or fails to build target pressure, recommend
+    `finer` (or `much-finer` on a gusher / very fast shot); when meaningfully slow or
+    flow-restricted, recommend `coarser` (or `much-coarser` on a hard choke), even before
+    taste scales are tapped (while still deferring to taste when taste is provided and
+    flagging genuine taste-vs-curve conflicts).
+  - Relax `validateReview()` so curve- and timing-backed grind adjustments are supported
+    and surface the one-tap **"Set grind to …"** action on the after-shot panel.
+- **Prompt (`server/recommend/review.ts`):**
+  - Stop repeating dose/yield/ratio/stop-reason prose that duplicates the header pills.
+  - Require the summary to answer directly: (1) whether the shot was faster, slower or in
+    the expected time window (with the numbers), (2) whether pressure and flow hit the
+    profile's targets across the main pour steps (or why a limiter/puck resistance held
+    them back), and (3) clear direction on the grind setting (or confirmation to keep it).
+- **Evals (`evals/datasets/review.json`, `evals/lib/review-fixtures.ts`, `evals/lib/review-grader.ts`, `evals/lib/judge.ts`):**
+  - Add fixtures and cases for: moderately fast shot vs `targetTimeS` (`finer`), moderately
+    slow shot vs `targetTimeS` (`coarser`), pressure falling short on a flow-limited step
+    because grind is too coarse (`finer`), flow falling short on a pressure-limited step
+    because grind is too fine (`coarser`), and multi-shot bag history progression.
+  - Add deterministic grader checks in `review-grader.ts` that verify the review states
+    timing vs expectation (when `targetTimeS` is known), states pressure/flow target
+    attainment, and gives a concrete `grindDelta` direction whenever timing or pressure/flow
+    is off-target. Update the judge rubric to penalize superficial readbacks.
 
 ## UI feedback — 10 November 2026
 

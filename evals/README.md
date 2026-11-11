@@ -9,7 +9,7 @@ whether the result got better or worse, and by how much it costs.
 | `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page, a typed or dictated description, and/or a query | 27 self-contained + 9 live web |
 | `recommend` | `recommend()` in `server/recommend/index.ts` | `Recipe`: one profile among the installed candidates, plus dose, yield, temperature and guidance | 32 |
 | `dialin` | `dialIn()` in `server/recommend/index.ts` | `DialInAdvice`: the one change to make after a shot | 28 |
-| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded observations, narrative and at most one next-shot change | 22 synthetic |
+| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded observations, narrative and at most one next-shot change | 26 synthetic |
 
 The runner calls those real functions, with the real prompts and the real
 post-processing (rules fallback, profile-title matching), and swaps only the
@@ -93,9 +93,16 @@ holdout).
 
 | Run | Pass | Model answered | Grounded ranges / one change / no false alarms |
 |---|---|---|---|
-| Rules, all 22 cases | 22/22 (100%) | n/a | 100% / 100% / 100% |
+| Rules, all 26 cases | 26/26 (100%) | n/a | 100% / 100% / 100% |
 | Haiku, 15 development cases × 3 | 42/45 (93%) | 44/45 (98%) | 100% / 100% / 100% |
 | Haiku, 7 holdout cases × 1 | 7/7 (100%) | 7/7 (100%) | 100% / 100% / 100% |
+
+Four additional cases (11 November 2026) cover expected-window pace (`review-fast-time`,
+`review-slow-time`) and step-level pressure/flow shortfalls under an engaged limiter
+(`review-limited-pressure-shortfall`, `review-flow-shortfall`), along with grader checks
+for diagnostic summary insight (`insightfulSummary`) and explained grind direction
+(`grindDirectionMatchesIssue`). The rules baseline (`review.rules.json` / `.md`) passes
+all 26 cases (100%).
 
 Against the previous development baseline (95%), the shared cases agree on the
 move 93% of the time; the misses are two conservative abstentions (one choke, one

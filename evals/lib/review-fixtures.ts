@@ -1,7 +1,12 @@
 import type { ReviewInput, ReviewPoint } from "../../server/recommend/review-types.js";
 
 /** Synthetic, deterministic observations; labels describe the evidence, not a diagnosis. */
-export const REVIEW_FIXTURES = ["clean", "choke", "gusher", "manual", "bloom", "turbo", "missing-scale", "no-data", "early-stop", "temperature-curve", "sour-choke", "balanced", "unknown-profile", "notes-only", "transient", "missing-flow", "channeling", "temp-offset", "manual-sour", "unknown-sour", "limited-pour", "limited-pour-sour"] as const;
+export const REVIEW_FIXTURES = [
+  "clean", "choke", "gusher", "manual", "bloom", "turbo", "missing-scale", "no-data", "early-stop",
+  "temperature-curve", "sour-choke", "balanced", "unknown-profile", "notes-only", "transient",
+  "missing-flow", "channeling", "temp-offset", "manual-sour", "unknown-sour", "limited-pour",
+  "limited-pour-sour", "fast-time", "slow-time", "limited-pressure-shortfall", "flow-shortfall",
+] as const;
 export type ReviewFixture = typeof REVIEW_FIXTURES[number];
 
 export function reviewFixture(name: ReviewFixture): ReviewInput {
@@ -69,8 +74,63 @@ export function reviewFixture(name: ReviewFixture): ReviewInput {
         ? { frame: 0, substate: "preinfusion", p: Math.min(4, p.t * 0.6), f: 7, tp: 8, tf: 0, w: 0, weightFlow: 0, temp: 86, targetTemp: 94, groupTemp: 70 + p.t * 2, targetGroupTemp: 88 }
         : { frame: 1, substate: "pouring", p: 5.5, f: 1.5 + (p.t - 7) * 0.02, tp: 6, tf: 0, w: (p.t - 7) * 1.7, weightFlow: 1.7, temp: 91, targetTemp: 93, groupTemp: 87.6, targetGroupTemp: 88 });
     });
-    input.yieldG = 39.1; input.targetYieldG = 40; input.doseG = 20;
+    input.yieldG = 39.1; input.targetYieldG = 40; input.doseG = 20; input.targetTimeS = [25, 35];
     if (name === "limited-pour-sour") input.feedback = taste(-2);
+  }
+  if (name === "fast-time") {
+    // Finishes 36 g in 19 s against a 28–34 s window; pressure is 7.8 bar of 9 bar (not a shortfall on its own).
+    input.points = Array.from({ length: 77 }, (_, i) => {
+      const t = i / 4;
+      return {
+        t, p: 7.8, f: 2.3, w: Math.max(0, t - 2) * 2.12, temp: 92, tp: 9, tf: null,
+        targetTemp: 92, frame: 0, substate: "pouring", weightFlow: t > 2 ? 2.12 : 0,
+      };
+    });
+    input.yieldG = 36; input.targetYieldG = 36; input.targetTimeS = [28, 34];
+  }
+  if (name === "slow-time") {
+    // Takes 44 s to reach 36 g against a 28–34 s window at 1.0 ml/s (slow, not choked).
+    input.points = Array.from({ length: 177 }, (_, i) => {
+      const t = i / 4;
+      return {
+        t, p: 8.8, f: 1.0, w: Math.max(0, t - 5) * 0.92, temp: 92, tp: 9, tf: null,
+        targetTemp: 92, frame: 0, substate: "pouring", weightFlow: t > 5 ? 0.92 : 0,
+      };
+    });
+    input.yieldG = 36; input.targetYieldG = 36; input.targetTimeS = [28, 34];
+  }
+  if (name === "limited-pressure-shortfall") {
+    // Real Decaid limited-pour shape where a coarse grind lets flow sit at the 2.2 ml/s
+    // limiter and holds pressure at 3.8 bar against a 6 bar target, finishing in 21 s.
+    input.profile = { title: "Recorded limited pour", beverage_type: "espresso", steps: [
+      { name: "preinfusion", pump: "pressure", pressure: "8", seconds: "20", temperature: "88", sensor: "coffee", exit: { type: "pressure", condition: "over", value: "4" } },
+      { name: "6 bar", pump: "pressure", pressure: "6", seconds: "60", temperature: "88", sensor: "coffee", limiter: { value: "2.2", range: "1" } },
+    ] };
+    input.installedProfiles = ["Recorded limited pour"];
+    input.points = Array.from({ length: 85 }, (_, i) => {
+      const t = i / 4;
+      const pre = t < 5;
+      return pre
+        ? { t, frame: 0, substate: "preinfusion", p: Math.min(3.5, t * 0.7), f: 7, tp: 8, tf: 0, w: 0, weightFlow: 0, temp: 86, targetTemp: 94, groupTemp: 72 + t * 2.5, targetGroupTemp: 88 }
+        : { t, frame: 1, substate: "pouring", p: 3.8, f: 2.2, tp: 6, tf: 0, w: (t - 5) * 2.25, weightFlow: 2.25, temp: 91, targetTemp: 93, groupTemp: 87.7, targetGroupTemp: 88 };
+    });
+    input.doseG = 18; input.yieldG = 36; input.targetYieldG = 36; input.targetTimeS = [26, 34];
+  }
+  if (name === "flow-shortfall") {
+    // Flow-controlled pour targeting 2.2 ml/s with an 8 bar pressure limiter; a restrictive
+    // puck holds pressure near the cap and flow at 1.1 ml/s across 38 s.
+    input.profile = { title: "Recorded flow profile", beverage_type: "espresso", steps: [
+      { name: "Pour", pump: "flow", flow: "2.2", seconds: "45", temperature: "92", limiter: { value: "8", range: "1" } },
+    ] };
+    input.installedProfiles = ["Recorded flow profile"];
+    input.points = Array.from({ length: 153 }, (_, i) => {
+      const t = i / 4;
+      return {
+        t, p: 7.6, f: 1.1, w: Math.max(0, t - 4) * 1.05, temp: 92, tp: null, tf: 2.2,
+        targetTemp: 92, frame: 0, substate: "pouring", weightFlow: t > 4 ? 1.05 : 0,
+      };
+    });
+    input.doseG = 18; input.yieldG = 35.7; input.targetYieldG = 36; input.targetTimeS = [28, 34];
   }
   return input;
 }

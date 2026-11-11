@@ -354,7 +354,8 @@ function makeDemoApi() {
       const points = [...byTime.values()].sort((a, b) => a.t - b.t).slice(-1800);
       const bag = s.batch ? all.find((b) => b.batch === s.batch) : null;
       const history = s.batch ? shots.filter((x) => x.batch === s.batch && x.id !== s.id && Date.parse(x.timestamp) < Date.parse(s.timestamp)).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 10) : [];
-      const input = { points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG: s.targetYieldG ?? s.profile?.target_weight ?? null, targetTimeS: s.targetTimeS ?? null,
+      const targetTimeS = s.targetTimeS ?? (bag?.recipe?.profileTitle === s.profile?.title ? bag.recipe.targetTimeS : null) ?? (s.profile?.title && !manualKind(s.profile) ? CE.findProfile(s.profile.title)?.recipe?.timeS ?? null : null);
+      const input = { points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG: s.targetYieldG ?? s.profile?.target_weight ?? null, targetTimeS: targetTimeS,
         stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: null } : null, notes: s.notes || null, bean: bean ?? bag?.info ?? null,
         installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => ({ timestamp: x.timestamp, profileTitle: x.profileTitle, doseG: x.doseG, yieldG: x.yieldG, enjoyment: x.enjoyment ?? undefined, notes: x.notes || undefined, review: x.review?.review?.summary ?? undefined })) };
       const saved = { version: 1, review: CE.rulesReview(input), source: "rules", createdAt: new Date().toISOString() };
