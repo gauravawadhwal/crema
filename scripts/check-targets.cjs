@@ -3,7 +3,6 @@
 //
 //   node scripts/check-targets.cjs            # the source app (skin/index.html)
 //   node scripts/check-targets.cjs --built    # the built single-file demo (demo/crema-demo.html)
-//   node scripts/check-targets.cjs --all      # also list the failures the allowlist covers
 //   node scripts/check-targets.cjs --shots <dir>   # save a screenshot of each state
 //
 // Each state is checked twice: with the demo's own coffees, and with the `?stress`
@@ -36,13 +35,7 @@
 // Rectangles are cut to what their scrolling or clipping ancestors show. A fixed or
 // sticky bar and the content that scrolls under it are never compared.
 //
-// The allowlist, scripts/check-targets.allow.json, names today's known failures. Each
-// entry has a key ("<tablet|phone> <view> <rule> <selector>", no pixel values), the
-// workstream in docs/ui-plan.md that will fix it, and a reason. A key covers that
-// failure at every size of its device and in both fixtures. The check fails on any
-// failure that is not listed, and on any entry that no longer fails, so a workstream
-// deletes its entries as it fixes them. Elements outside the views (rail, status bar,
-// tab bar) are reported under the view name "chrome".
+// Every measured failure fails the check. Elements outside views use "chrome".
 const { chromium } = require("playwright");
 const fs = require("fs");
 const os = require("os");
@@ -50,10 +43,8 @@ const path = require("path");
 
 const args = process.argv.slice(2);
 const built = args.includes("--built");
-const showAll = args.includes("--all");
 const shotsDir = args.includes("--shots") ? path.resolve(args[args.indexOf("--shots") + 1]) : null;
 if (shotsDir) fs.mkdirSync(shotsDir, { recursive: true });
-const ALLOW_FILE = path.resolve(__dirname, "check-targets.allow.json");
 
 // The tablet sizes are check-tablet-fit.cjs's; keep the two lists in step.
 const SIZES = [
@@ -256,15 +247,7 @@ async function checkSize(b, [w, h, device, min], stress) {
 }
 
 (async () => {
-  const allow = JSON.parse(fs.readFileSync(ALLOW_FILE, "utf8")).entries;
   const problems = [];
-  const keys = new Set();
-  for (const e of allow) {
-    if (!e.key || !e.reason || !Number.isInteger(e.ws)) problems.push(`allowlist entry needs key, ws and reason: ${JSON.stringify(e)}`);
-    if (keys.has(e.key)) problems.push(`allowlist lists "${e.key}" twice`);
-    keys.add(e.key);
-  }
-
   const b = await chromium.launch();
   const runs = SIZES.flatMap((size) => [false, true].map((stress) => [size, stress]));
   const results = await Promise.all(runs.map(([size, stress]) => checkSize(b, size, stress)));
@@ -276,29 +259,17 @@ async function checkSize(b, [w, h, device, min], stress) {
   // One line per element and size, with the states it failed in when not all of them.
   const line = (f) => `${f.view.padEnd(8)} ${f.size.padEnd(9)} ${f.rule.padEnd(11)} ${f.sel}${f.rule === "small" && f.label ? ` "${f.label}"` : ""}: ${f.detail}`;
   const stateOf = (f) => `${f.state}${f.stress ? ", stress" : ""}`;
-  const seen = new Set(failures.map((f) => f.key));
-  const fresh = failures.filter((f) => !keys.has(f.key));
-  const stale = allow.filter((e) => !seen.has(e.key));
   const dedupe = (list) => {
     const states = new Map();
     for (const f of list) states.set(line(f), (states.get(line(f)) ?? new Set()).add(stateOf(f)));
     return [...states].sort(([x], [y]) => x.localeCompare(y)).map(([l, st]) => `${l} [${st.size > 3 ? `${st.size} states` : [...st].join("; ")}]`);
   };
-  if (showAll) {
-    const known = dedupe(failures.filter((f) => keys.has(f.key)));
-    console.log(`Allowed (${known.length} lines, ${seen.size - new Set(fresh.map((f) => f.key)).size} keys):\n  ` + known.join("\n  ") + "\n");
-  }
-  if (fresh.length) {
-    const freshKeys = [...new Set(fresh.map((f) => f.key))].sort();
-    problems.push(`${freshKeys.length} failure(s) not in the allowlist:`, ...dedupe(fresh).map((l) => "  " + l), "keys:", ...freshKeys.map((k) => "  " + k));
-  }
-  for (const e of stale) problems.push(`stale allowlist entry (it no longer fails; delete it): ${e.key}`);
-
-  console.log(`${failures.length} failure(s) measured across ${runs.length} runs (${SIZES.length} sizes, demo and stress fixture, ${built ? "built demo" : "source app"}); ${seen.size} distinct, ${allow.length} allowed.`);
+  if (failures.length) problems.push(...dedupe(failures).map((l) => "  " + l));
+  console.log(`${failures.length} failure(s) across ${runs.length} runs (${SIZES.length} sizes, demo and stress fixture, ${built ? "built demo" : "source app"}).`);
   if (shotsDir) console.log(`Screenshots in ${shotsDir}`);
   if (problems.length) {
     console.error("\nFAIL\n  " + problems.join("\n  "));
     process.exit(1);
   }
-  console.log("OK: nothing outside the allowlist, and every allowlist entry still fails.");
+  console.log("OK: all touch targets, overlaps and text bounds pass.");
 })();

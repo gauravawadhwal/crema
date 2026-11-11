@@ -148,3 +148,10 @@ a button such as “Set grind to 9.75”. Applying marks the field and its previ
 Reset restores it. The machine changes only through the existing load/start actions.
 Advice without one numeric adjustment remains text. Taste and body buttons wrap
 labels within equal columns and meet the touch target size.
+
+The type scale is 11, 12.5, 14, 16 and 20 px, with 84 px pour heroes (52 px on
+phone). Primary actions occupy the bottom-right of screens and sheets; phone brewing
+actions stay above the tabs. Freeform text uses one smaller size when needed, then
+a line limit and ellipsis within fixed bounds. Panels, sheets and toasts use 160 ms
+ease-out entry and exit; readings never interpolate, and reduced motion disables
+transitions. The target audit permits no exceptions.

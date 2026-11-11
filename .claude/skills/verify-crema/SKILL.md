@@ -40,7 +40,7 @@ Run what applies, in this order. Each command exits non-zero on failure.
    ```bash
    node scripts/check-targets.cjs --shots /tmp/crema-targets && node scripts/check-targets.cjs --built
    ```
-   Known failures are listed in `scripts/check-targets.allow.json`, each with the UI-plan workstream that fixes it. The check fails on a failure that isn't listed and on an entry that no longer fails, so delete entries as you fix them and don't add new ones. `--all` prints the listed failures with their sizes.
+   The check has no exceptions: every target, overlap and clipped-text failure must be fixed. The UI workstreams removed the historical allowlist.
 
 5. **Built demo**: needed whenever the demo or its build changes.
    ```bash

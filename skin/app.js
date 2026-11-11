@@ -451,7 +451,7 @@ function makeLiveApi(conn) {
             info: { ...info, ...(batch?.roastDate ? { roastDate: { value: batch.roastDate.slice(0, 10), source: info.roastDate?.source ?? "bag" } } : {}), weightGrams: weight },
             recipe: rec?.recipe ?? null, recipeSource: rec?.recipeSource ?? (rec?.recipe ? "saved" : null),
             photo: rec?.photo ?? null, productImage: rec?.productImage ?? info.imageUrl ?? null, art: rec?.art,
-            weight, remaining: use.remaining, frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: use.shots ? use.shots.length : null,
+            weight, remaining: use.remaining, frozen: batch?.frozen ?? false, freezeDate: batch?.freezeDate ?? null, bestShotId: rec?.bestShotId ?? null, shots: use.shots ? use.shots.length : null,
           };
         }));
       }));
@@ -526,7 +526,7 @@ function makeLiveApi(conn) {
     // the shelf; the coffee itself is archived only when its last open bag is finished.
     async setBeanState(id, patch, batchId = null) {
       const { batch } = await coffee(id, batchId);
-      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen, freezeDate: patch.frozen ? new Date().toISOString() : null });
+      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen, freezeDate: Object.hasOwn(patch, "freezeDate") ? patch.freezeDate : patch.frozen ? new Date().toISOString() : null });
       if (patch.finished === true) {
         if (batch) await put(D(`/bean-batches/${batch.id}`), { archived: true });
         const others = (await j(D(`/beans/${id}/batches?includeArchived=false`)).catch(() => [])).filter((x) => x.id !== batch?.id && !x.archived);
@@ -2152,7 +2152,7 @@ function reviewAdjustment(advice) {
   const changes = [];
   if (advice.grindDelta && advice.grindDelta !== "same") {
     const dir = /finer$/.test(advice.grindDelta) ? -1 : /coarser$/.test(advice.grindDelta) ? 1 : 0;
-    if (dir && Number.isFinite(Number(S.next.grind))) changes.push({ key: "grind", field: "grind", label: "grind", unit: "", value: String(+(Number(S.next.grind) + dir * grindSettings().step).toFixed(3)) });
+    if (dir && String(S.next.grind).trim() && Number.isFinite(Number(S.next.grind))) changes.push({ key: "grind", field: "grind", label: "grind", unit: "", value: String(+(Number(S.next.grind) + dir * grindSettings().step).toFixed(3)) });
   }
   for (const [key, delta] of [["yield", advice.yieldDeltaG], ["temp", advice.tempDeltaC], ["dose", advice.doseDeltaG]]) {
     if (Number.isFinite(delta) && delta !== 0) {
@@ -2168,10 +2168,17 @@ function reviewRecipeMatches(shot) {
 function bindReviewAdjustment(box, shot) {
   const btn = $("[data-apply-review]", box);
   if (!btn) return;
+  // The label and this payload describe the same rendered draft. Never recompute a
+  // different target on tap after an edit elsewhere in the next-shot panel.
+  const rendered = JSON.parse(btn.dataset.applyReview);
   btn.onclick = () => {
-    if (!reviewRecipeMatches(shot) || S.reviewEdit?.shotId === shot.id) return;
-    const edit = reviewAdjustment(shot.review?.review?.nextShot);
-    if (!edit) return;
+    if (S.reviewEdit?.shotId === shot.id) return;
+    if (!reviewRecipeMatches(shot) || JSON.stringify(S.next) !== rendered.draft) {
+      box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot);
+      toast("The next-shot recipe changed. Check the updated suggestion.");
+      return;
+    }
+    const { draft, ...edit } = rendered;
     S.reviewEdit = { ...edit, before: S.next[edit.field], shotId: shot.id, recipe: S.next };
     S.next[edit.field] = edit.value;
     recipeEdited(); renderNextShot(); renderControls();
@@ -2195,7 +2202,7 @@ function shotResultPills(shot, context = {}, points = shot?.points || []) {
   const reason = E.stopReason({ recorded: shot?.stopReason, finalWeightG: weight, targetYieldG: shot?.targetYieldG ?? shot?.profile?.target_weight ?? context.yieldG, steps: shot?.profile?.steps, points });
   const label = { weight: "Stopped at weight", volume: "Stopped at volume", user: "Stopped by you", profile: "Profile finished", machine: "Ended by machine", error: "Stopped with an error" }[reason.reason] || (reason.nearTarget ? "Stopped near target" : "Stop reason unknown");
   const bean = S.shelf.find((b) => shot?.batch && b.batch === shot.batch);
-  const window = shot?.manual || context.manual ? null : shot?.targetTimeS ?? context.targetTimeS ?? (bean?.recipe?.profileTitle === shot?.profileTitle ? bean.recipe.targetTimeS : null);
+  const window = shot?.manual || context.manual ? null : shot?.targetTimeS ?? context.targetTimeS ?? (bean?.recipe && bean.recipe.profileTitle === shot?.profileTitle ? bean.recipe.targetTimeS : null);
   const t = points.at(-1)?.t ?? shot?.timeS;
   const verdict = window && t != null ? `${t < window[0] ? "Fast" : t > window[1] ? "Slow" : "In window"} · ${window.join("–")} s expected` : null;
   return `${dose > 0 && weight > 0 ? `<span class="pill">1:${(weight / dose).toFixed(1)}</span>` : ""}<span class="pill ${reason.reason === "error" ? "warn" : ""}">${label}</span>${verdict ? `<span class="pill ${t < window[0] || t > window[1] ? "warn" : "good"}">${esc(verdict)}</span>` : ""}`;
@@ -2208,7 +2215,7 @@ function reviewHtml(saved, shot = null) {
   return `<div class="advice shot-review"><div class="row between"><span class="label">${source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
     <p>${esc(review.summary)}</p>${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${review.issues?.length ? `<div class="label">To watch</div><ul>${review.issues.map((x) => `<li>${esc(x.what)} <span class="muted">${esc(x.evidence)}</span></li>`).join("")}</ul>` : ""}
-    ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review>Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
+    ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
 /* ===== Taste scales and the Review button, shared by the after-shot panel and the shot detail ===== */
@@ -2463,11 +2470,11 @@ async function renderShelf() {
   // The actions behind More. Each does what its button on the card used to do.
   const actions = {
     freeze: async (b) => {
-      if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) { closeSheet(); return; }
-      const was = b.frozen;
-      closeSheet(); b.frozen = !was; renderShelf();
-      toast(b.frozen ? "Marked as frozen" : "Thawed", { action: { label: "Undo", run: async () => {
-        await S.api.setBeanState(b.id, { frozen: was }, b.batch);
+      const was = b.frozen, freezeDate = b.freezeDate ?? null;
+      if (!(await attempt(was ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !was }, b.batch)))) { closeSheet(); return; }
+      closeSheet(); await refreshShelf(); renderShelf();
+      toast(!was ? "Marked as frozen" : "Thawed", { action: { label: "Undo", run: async () => {
+        await S.api.setBeanState(b.id, { frozen: was, freezeDate }, b.batch);
         await refreshShelf(); renderShelf();
       } } });
     },
@@ -3691,6 +3698,7 @@ async function boot() {
   window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());
   window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });
+  new ResizeObserver(() => { if (!$("#view-brew").hidden) renderLive(); }).observe($("#liveChart").parentElement);
   renderStatus(); renderAlerts();
   route();
 }

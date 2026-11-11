@@ -522,9 +522,9 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .dev-note { text-align: center; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); top: 76px; display: grid; gap: var(--s-8); z-index: 70; width: max-content; max-width: calc(100% - 32px); pointer-events: none; }
 .toast[hidden] { display: none; }
-.toast-item { display: flex; align-items: center; gap: var(--s-16); background: var(--fg); color: var(--bg); padding: var(--s-8) var(--s-16); border-radius: var(--r); font-weight: 500; box-shadow: var(--shadow); pointer-events: auto; }
+.toast-item { display: flex; align-items: center; gap: var(--s-16); background: var(--fg); color: var(--bg); padding: var(--s-8) var(--s-16); border-radius: var(--r); font-weight: 500; box-shadow: var(--shadow); pointer-events: none; }
 .toast-item span { overflow-wrap: anywhere; }
-.toast-act { background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--r); min-height: var(--hit); min-width: var(--hit); padding: var(--s-8); font: inherit; cursor: pointer; }
+.toast-act { pointer-events: auto; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--r); min-height: var(--hit); min-width: var(--hit); padding: var(--s-8); font: inherit; cursor: pointer; }
 button.pending { opacity: .65; cursor: progress; }
 
 /* ---------- responsive ---------- */

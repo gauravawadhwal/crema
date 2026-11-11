@@ -243,7 +243,7 @@ function makeDemoApi() {
   const shelfItem = (b) => ({
     key: b.batch, id: b.id, batch: b.batch, info: b.info, recipe: b.recipe, recipeSource: b.recipeSource, photo: b.photo || null,
     productImage: b.productImage, art: b.art, weight: b.weight, remaining: Math.max(0, b.weight - b.used),
-    frozen: b.frozen, bestShotId: b.bestShotId, shots: shots.filter((s) => (s.batch ? s.batch === b.batch : s.beanId === b.id)).length,
+    frozen: b.frozen, freezeDate: b.freezeDate ?? null, bestShotId: b.bestShotId, shots: shots.filter((s) => (s.batch ? s.batch === b.batch : s.beanId === b.id)).length,
     bags: shelf().filter((x) => x.id === b.id).length, bagNo: shelf().filter((x) => x.id === b.id).indexOf(b) + 1,
   });
   let bagSeq = 0;
@@ -305,7 +305,11 @@ function makeDemoApi() {
       Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo, art: art || "product", used: 0 });
       return { id: b.id, batch: b.batch, key: b.batch };
     },
-    async setBeanState(id, patch, batch = null) { Object.assign(byBag(id, batch), patch); },
+    async setBeanState(id, patch, batch = null) {
+      const b = byBag(id, batch);
+      Object.assign(b, patch);
+      if (patch.frozen !== undefined) b.freezeDate = Object.hasOwn(patch, "freezeDate") ? patch.freezeDate : patch.frozen ? new Date().toISOString() : null;
+    },
     async addBag(id, opts = {}) { const n = newBag(byId(id), opts); return { id: n.id, batch: n.batch, key: n.batch }; },
     async syncRemaining(id, batch) { const b = byBag(id, batch); return Math.max(0, b.weight - b.used); },
     async pinBest(id, shotId) { sameCoffee(id).forEach((b) => (b.bestShotId = shotId)); },

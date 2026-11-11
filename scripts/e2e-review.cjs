@@ -199,6 +199,16 @@ const openShot = async (page, id, selector) => {
     check(await page.locator('[data-apply-review]').count() === 0, "an applied suggestion cannot be applied twice");
     await page.click('#resetRecipe');
     check(await evalPage(() => S.next.grind === "10" && !S.reviewEdit), "Reset restores the recipe value before Apply");
+    // The review can stay visible while its recipe is edited in another panel.
+    // A stale label must never apply a freshly recomputed, differently named value.
+    await evalPage(() => { S.next.grind = "11"; recipeEdited(); renderNextShot(); });
+    await page.click('[data-apply-review]');
+    check(await evalPage(() => S.next.grind === "11" && !S.reviewEdit), "stale Apply leaves the edited recipe unchanged");
+    check(await evalPage(() => document.querySelector('[data-apply-review]').textContent.includes(String(+(11 - grindSettings().step).toFixed(3)))), "stale Apply refreshes its label to the new target");
+    await page.click('[data-apply-review]');
+    check(await evalPage(() => S.next.grind === String(+(11 - grindSettings().step).toFixed(3))), "fresh Apply uses the exact displayed target");
+    await page.click('#resetRecipe');
+    check(await evalPage(() => S.next.grind === "11"), "Reset after refreshed Apply preserves the user's prior edit");
     check((await page.textContent('#afterResult')).includes('41.6 g in 26.4 s') && (await page.textContent('#afterResult')).includes('Stopped at weight'), "result line and recorded stop reason are shown");
     await page.setViewportSize({ width: 1340, height: 800 });
     check((await page.locator('#liveChart').boundingBox()).height >= 190, "finished chart is at least 190 px at tablet size");

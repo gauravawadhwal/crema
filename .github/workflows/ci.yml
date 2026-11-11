@@ -112,7 +112,7 @@ jobs:
       - name: Home screen fits the tablet
         if: matrix.group == 'brewing'
         run: node scripts/check-tablet-fit.cjs ui-shots/fit
-      # Fails on anything outside scripts/check-targets.allow.json, and on stale entries in it.
+      # Every touch-target, overlap and clipped-text failure fails CI.
       - name: Touch targets, overlaps and clipped text, source and built demo
         if: matrix.group == 'brewing'
         run: node scripts/check-targets.cjs --shots ui-shots/targets && node scripts/check-targets.cjs --built

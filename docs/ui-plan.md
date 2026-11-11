@@ -16,6 +16,19 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**11 November 2026 — integrated UI finish**
+
+- WS 4.5, 5, 7 and 8 are integrated on `codex/ui-finish`; WS 11 supplies consistent
+  160 ms panel motion, six-theme review and refreshed demo/screenshots/walkthrough.
+- All target exceptions are resolved; the allowlist and its handling are removed.
+  Draft review actions keep the exact displayed value and refresh safely after a
+  recipe edit. Freeze Undo preserves the original freeze date. The live chart redraws
+  when its box changes size, including compact after-shot and review layouts.
+- PR #63 merged first. This implementation stays on a review branch; no release tag,
+  tablet, NAS, actual Decaid, physical controls or real AI verification.
+- Final local checks and any remaining limitations are recorded with the PR.
+
+
 **11 November 2026 — WS 7 rebuilt against current main**
 
 - Three independent, deduplicated toasts sit below the tablet status bar and above
@@ -275,7 +288,7 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 8 | Phone | M | 4 | Implemented: compact expandable status, safe-area fixed Espresso/Stop across scrolling and views, compact pour; simulator and normal/stress phone regressions. |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Completed commit 4a4123c published in PR #62 and included in #61; Shelf, Profiles, Shots and Settings. Filter regressions fixed during review. Result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | Included via PR #57 in consolidation #61; opt-in hold-to-wake and chime. Real tablet touch/audio unverified. |
-| 11 | Motion and finish | S | all | Not started |
+| 11 | Motion and finish | S | all | Implemented: 160 ms motion with reduced-motion support, six-theme review, refreshed assets and zero target exceptions; integrated checks below. |
 
 Order: 1, then 2, then 3 with 7, then 4 with 9, then 5 with 6, then 8 with 10, then 11.
 Nearly everything lands in `skin/app.js` and `skin/index.html`, so run at most two
