@@ -344,6 +344,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         await resetToast();
         await freeze.click(); await freeze.click({ force: true });
         await page.waitForTimeout(600);
+        await S(() => patchHtml(document.querySelector("#sheet"), document.querySelector("#sheet").innerHTML));
         check(await freeze.getAttribute("aria-busy") === "true" && /pending/.test(await freeze.getAttribute("class")), "a slow Freeze shows a pending state after 300 ms");
         await page.waitForFunction(() => /Marked as frozen|Thawed/.test(document.querySelector("#toast").textContent), null, { timeout: 8000 });
         const done = page.locator(`[data-more="${bag0.key}"]`);
