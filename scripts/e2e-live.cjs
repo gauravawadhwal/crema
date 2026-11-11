@@ -335,6 +335,7 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         await page.goto(`http://localhost:${SKIN}/?full#shelf`); await page.waitForSelector("[data-more]", { timeout: 10000 });
         const bag0 = await S(() => ({ key: S.shelf[0].key, id: S.shelf[0].id, batch: S.shelf[0].batch }));
         const batchOf = () => fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag0.batch}`).then((r) => r.json());
+        const originalBatch = await batchOf();
         const freezeDateBefore = "2026-01-15T08:00:00.000Z";
         await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag0.batch}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: true, freezeDate: freezeDateBefore }) });
         await S(async () => { await refreshShelf(); renderShelf(); });
@@ -357,6 +358,8 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         await page.click("#toast .toast-act");
         await page.waitForTimeout(500);
         check((await batchOf()).freezeDate === freezeDateBefore && (await batchOf()).frozen === frozenBefore && await page.evaluate((k) => S.shelf.find((b) => b.key === k).frozen, bag0.key) === frozenBefore, "Undo on Freeze puts the bag back as Decaid held it");
+        await fetch(`http://localhost:${MOCK}/api/v1/bean-batches/${bag0.batch}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ frozen: originalBatch.frozen, freezeDate: originalBatch.freezeDate ?? null }) });
+        await S(async () => { await refreshShelf(); renderShelf(); });
 
         // Finished, then Undo.
         await resetToast();
