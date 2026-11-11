@@ -12,13 +12,20 @@ const boxes = {};
 async function mark(p, name, selector) {
   const vp = p.viewportSize();
   const r = await p.locator(selector).first().boundingBox();
-  if (r) boxes[name] = { x: (r.x / vp.width) * 100, y: (r.y / vp.height) * 100, w: (r.width / vp.width) * 100, h: (r.height / vp.height) * 100 };
+  if (r) {
+    const x = Math.max(0, r.x), y = Math.max(0, r.y);
+    boxes[name] = { x: x / vp.width * 100, y: y / vp.height * 100, w: Math.max(0, Math.min(vp.width, r.x + r.width) - x) / vp.width * 100, h: Math.max(0, Math.min(vp.height, r.y + r.height) - y) / vp.height * 100 };
+  }
 }
 
 (async () => {
+  fs.mkdirSync(out, { recursive: true });
   const b = await chromium.launch();
   const tablet = await b.newPage({ viewport: { width: 1340, height: 800 }, colorScheme: "dark" });
-  const shot = (p, name, full = false) => p.screenshot({ path: `${out}/${name}.png`, fullPage: full });
+  const shot = async (p, name, full = false) => {
+    await p.evaluate(() => document.fonts.ready);
+    return p.screenshot({ path: `${out}/${name}.png`, fullPage: full });
+  };
 
   await tablet.goto(url + "#brew"); await tablet.waitForTimeout(1200);
   await shot(tablet, "tablet-home"); await mark(tablet, "tablet-home", "#nextShot");
@@ -28,7 +35,7 @@ async function mark(p, name, selector) {
   await tablet.click('#sb [data-v="-1"]'); await tablet.click('#bd [data-v="0"]'); await tablet.locator('#afterStars > span:not(.stars-fill) i[data-n="4"]').click({ position: { x: 24, y: 14 } }); await tablet.click("#reviewShot");
   await tablet.waitForTimeout(800);
   await shot(tablet, "tablet-after-shot"); await mark(tablet, "tablet-after-shot", "#afterShot");
-  await tablet.click('[data-preset="steam:2"]'); await tablet.click('[data-run="steam"]'); await tablet.waitForTimeout(6200);
+  await tablet.click('[data-presets="steam"]'); await tablet.click('[data-preset="steam:2"]'); await tablet.click('[data-run="steam"]'); await tablet.waitForTimeout(6200);
   await shot(tablet, "tablet-steam"); await mark(tablet, "tablet-steam", "#opCard");
   await tablet.click("#opStop"); await tablet.waitForTimeout(500);
   for (const v of ["profiles", "shelf", "settings"]) {
@@ -47,6 +54,10 @@ async function mark(p, name, selector) {
   const phone = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, colorScheme: "light", isMobile: true, hasTouch: true });
   await phone.goto(url + "#brew"); await phone.waitForTimeout(1200);
   await shot(phone, "phone-home");
+  await phone.click('[data-run="espresso"]'); await phone.waitForTimeout(3000);
+  await shot(phone, "phone-pulling");
+  await phone.waitForSelector("#afterShot:not([hidden])", { timeout: 30000 });
+  await shot(phone, "phone-after-shot");
   await phone.goto(url + "#shelf"); await phone.waitForTimeout(900);
   await shot(phone, "phone-shelf");
   await phone.goto(url + "#profiles"); await phone.waitForTimeout(1200);

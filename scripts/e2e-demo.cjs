@@ -42,7 +42,7 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 });
   });
   // Ratings are Decaid's 0–10, shown as half stars: the left part of a star is a half.
-  const starAt = async (sel, n, frac) => { await p.locator(sel).scrollIntoViewIfNeeded(); const b = await p.locator(`${sel} > span:not(.stars-fill) i[data-n="${n}"]`).boundingBox(); return [b.x + b.width * frac, b.y + b.height / 2]; };
+  const starAt = async (sel, n, frac) => { await p.locator(sel).evaluate(el => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" })); const b = await p.locator(`${sel} > span:not(.stars-fill) i[data-n="${n}"]`).boundingBox(); return [b.x + b.width * frac, b.y + b.height / 2]; };
   const rating = (sel) => p.getAttribute(sel, "aria-valuenow");
   const expectRating = async (sel, v, how) => { const got = await rating(sel); if (got !== v) throw new Error(`${how}: rating ${got}, expected ${v}`); };
   await step("rate by tap and drag", async () => {
