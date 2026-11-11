@@ -122,6 +122,19 @@ describe("the roaster's own site comes first", () => {
     ]);
   });
 
+  it("promotes the roaster's product page to productUrl when the model left it null", () => {
+    const info = {
+      ...mockBean("light"),
+      roaster: { value: "ONA Coffee", source: "bag" as const },
+      productUrl: null,
+      sources: ["https://someblog.example/review", "https://onacoffee.com.au/blogs/brewguides/la-fincona", "https://onacoffee.com.au/product/la-fincona/"],
+    };
+    expect(preferRoasterPages(info).productUrl).toBe("https://onacoffee.com.au/product/la-fincona/");
+    const noProductPath = { ...info, sources: ["https://onacoffee.com.au/blogs/brewguides/la-fincona"] };
+    expect(preferRoasterPages(noProductPath).productUrl).toBe("https://onacoffee.com.au/blogs/brewguides/la-fincona");
+    expect(preferRoasterPages({ ...info, sources: ["https://someblog.example/review"] }).productUrl).toBeNull();
+  });
+
   it("keeps a retailer when the roaster has no page, and up to four sources", () => {
     const sources = ["https://a.example/1", "https://b.example/2", "https://c.example/3", "https://d.example/4", "https://e.example/5"];
     const info = { ...mockBean("light"), roaster: { value: "Tiny Roasters", source: "bag" as const }, productUrl: sources[0], sources };

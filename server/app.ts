@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { z, ZodError } from "zod";
-import { identifyWithProvider } from "./identify.js";
+import { identifyWithProvider, isRoasterSite } from "./identify.js";
 import { cacheImage, findProductImage, isPlaceholderImage, isSafeUrl, readCachedImage } from "./images.js";
 import type { ProviderChain } from "./llm/index.js";
 import type { AudioInput, ImageInput } from "./llm/types.js";
@@ -168,9 +168,14 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null;
     const { info, provider } = await identifyWithProvider(llm, { images, ...text, offline: str("offline") === "true" });
     // The roaster's own packshot: prefer what the page's metadata says over a URL the model may have guessed.
     if (info.imageUrl && (!isSafeUrl(info.imageUrl) || isPlaceholderImage(info.imageUrl))) info.imageUrl = null;
-    if (info.productUrl && str("offline") !== "true") {
-      const found = await findProductImage(info.productUrl);
-      info.imageUrl = (found && !isPlaceholderImage(found) ? found : null) ?? info.imageUrl;
+    if (str("offline") !== "true") {
+      // The product page first, then the roaster's other cited pages if it has no usable packshot.
+      const pages = [info.productUrl, ...info.sources.filter((u) => isRoasterSite(u, info.roaster.value))]
+        .filter((u, i, all): u is string => !!u && all.indexOf(u) === i);
+      for (const page of pages) {
+        const found = await findProductImage(page);
+        if (found && !isPlaceholderImage(found)) { info.imageUrl = found; break; }
+      }
     }
     return c.json({ info, provider });
   });

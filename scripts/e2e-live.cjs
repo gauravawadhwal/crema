@@ -961,6 +961,29 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     });
     check(!noPhoto.productImage && !noPhoto.imageUrl, `a photo the server couldn't fetch isn't saved with the coffee (${JSON.stringify(noPhoto)})`);
     check(noPhoto.tile === "Z", "a picture that fails to load falls back to the initial tile");
+    // A working manufacturer photo replaces the bag photo; a broken one leaves the bag photo as the picture.
+    const bagPhoto = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    const cacheStub = (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ path: "/api/images/packshot.png" }) });
+    await page.route(/\/api\/images\/cache$/, cacheStub);
+    const withPack = await page.evaluate(async (photo) => {
+      const info = JSON.parse(JSON.stringify(S.current.info));
+      info.name = { value: "Packshot Wins", source: "bag" }; info.imageUrl = "https://roaster.example/packshot.jpg";
+      const { id } = await S.api.saveBean(info, photo, "photo");
+      const b = (await S.api.shelf()).find((x) => x.id === id);
+      await S.api.setBeanState(id, { finished: true });
+      return { productImage: b?.productImage ?? null, photo: b?.photo ?? null, art: b?.art ?? null };
+    }, bagPhoto);
+    await page.unroute(/\/api\/images\/cache$/, cacheStub);
+    check(!!withPack.productImage && withPack.photo === null && withPack.art === "product", `a working product photo replaces the bag photo (${JSON.stringify(withPack).slice(0, 160)})`);
+    const photoOnly = await page.evaluate(async (photo) => {
+      const info = JSON.parse(JSON.stringify(S.current.info));
+      info.name = { value: "Photo Fallback", source: "bag" }; info.imageUrl = "https://127.0.0.1/placeholder.jpg";
+      const { id } = await S.api.saveBean(info, photo, "product");
+      const b = (await S.api.shelf()).find((x) => x.id === id);
+      await S.api.setBeanState(id, { finished: true });
+      return { productImage: b?.productImage ?? null, photo: b?.photo ?? null, art: b?.art ?? null };
+    }, bagPhoto);
+    check(!photoOnly.productImage && photoOnly.photo === bagPhoto && photoOnly.art === "photo", "a product photo that can't be fetched falls back to the bag photo");
     // Boot starts on the coffee the machine holds, not the one last viewed here.
     const onMachine = await S(() => S.current.id);
     await S(() => loadOntoMachine(true));

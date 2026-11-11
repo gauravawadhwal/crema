@@ -194,9 +194,9 @@ export function preferRoasterPages(info: BeanInfo): BeanInfo {
   const own = info.sources.filter((u) => isRoasterSite(u, roaster));
   const other = info.sources.filter((u) => !isRoasterSite(u, roaster));
   let productUrl = info.productUrl;
-  if (productUrl && !isRoasterSite(productUrl, roaster)) {
-    const ownProduct = own.find((u) => PRODUCT_PATH.test(new URL(u).pathname + "/"));
-    if (ownProduct) productUrl = ownProduct;
+  // A bag photo often yields the roaster's page in sources but no productUrl, so promote it then too.
+  if (!productUrl || !isRoasterSite(productUrl, roaster)) {
+    productUrl = own.find((u) => PRODUCT_PATH.test(new URL(u).pathname + "/")) ?? own[0] ?? productUrl;
   }
   if (productUrl && isRoasterSite(productUrl, roaster) && !own.includes(productUrl)) own.unshift(productUrl);
   return { ...info, productUrl, sources: [...own, ...other.slice(0, own.length ? 2 : 4)] };

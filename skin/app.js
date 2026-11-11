@@ -498,6 +498,8 @@ function makeLiveApi(conn) {
         catch { productImage = null; info = { ...info, imageUrl: null }; if (art === "product") art = photo ? "photo" : null; }
       }
       // Re-read and merge: a reference shot or recipe another device wrote meanwhile stays.
+      // A working manufacturer photo replaces the bag photo, which is kept only when there is none.
+      if (productImage) { photo = null; art = "product"; } else art = photo ? "photo" : null;
       await patchRecord(bean.id, (fresh) => E.saveBeanPatch(fresh, { info, photo: photo || null, productImage, art: art || null, batchId: batch.id, now: new Date().toISOString() }));
       return { id: bean.id, batch: batch.id, key: batch.id, anotherBag: !!prev };
     },
@@ -979,7 +981,7 @@ function legendHtml(withGhost, withPlan = false, removable = false, brief = fals
 /* ================= bag art + rest ================= */
 function artSrc(b) {
   const product = b.productImage || b.info?.imageUrl;
-  return b.art === "photo" ? b.photo || product : product || b.photo;
+  return product || b.photo;
 }
 function bagArt(b, size = "") {
   const src = artSrc(b), initial = esc((b.info?.name?.value || "?").trim()[0]);
@@ -2856,11 +2858,9 @@ function factRows(info) {
   }).join("");
 }
 function artPicker(info, photo) {
-  const product = info.imageUrl;
-  if (!product && !photo) return "";
-  if (!product) return `<div class="muted small">No product photo on the roaster's page. Your photo will be used.</div>`;
-  const opt = (val, src, text, checked) => `<label><input type="radio" name="art" value="${val}" ${checked ? "checked" : ""}><img src="${esc(src)}" alt="">${text}</label>`;
-  return `<div class="stack" style="gap:8px"><span class="label">Picture on your shelf</span><div class="art-pick">${opt("product", product, "Roaster's photo", true)}${photo ? opt("photo", photo, "Your photo", false) : ""}</div></div>`;
+  // The roaster's photo, when there is one, is the picture; the preview above already shows it.
+  if (info.imageUrl || !photo) return "";
+  return `<div class="muted small">No product photo on the roaster's page. Your photo will be used.</div>`;
 }
 function renderReview(info, photo) {
   pending = { info, photo };
@@ -2877,7 +2877,7 @@ function renderReview(info, photo) {
     const d = $("#roastDateInput").value;
     if (d) { pending.info.roastDate = { value: d, source: "bag" }; pending.info.needsConfirmation = (pending.info.needsConfirmation || []).filter((k) => k !== "roastDate"); }
     try {
-      const art = document.querySelector('input[name="art"]:checked')?.value ?? (pending.info.imageUrl ? "product" : "photo");
+      const art = pending.info.imageUrl ? "product" : "photo";
       const saved = await S.api.saveBean(pending.info, pending.photo, art);
       files = []; $("#thumbs").innerHTML = ""; pending = null; $("#reviewPanel").innerHTML = introFor(addMode);
       $("#addForm").reset();

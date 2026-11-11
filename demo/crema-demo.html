@@ -2761,11 +2761,16 @@ var CremaEngine = (() => {
     if (!("recipeSource" in f)) patch.recipeSource = null;
     if (!("bestShotId" in f)) patch.bestShotId = null;
     if (!f.addedAt) patch.addedAt = add.now;
-    if (add.photo) patch.photo = add.photo;
-    else if (!("photo" in f)) patch.photo = null;
     if (add.productImage) patch.productImage = add.productImage;
     else if (!("productImage" in f)) patch.productImage = null;
-    patch.art = add.art || f.art || (add.productImage ? "product" : "photo");
+    if (add.productImage || f.productImage) {
+      patch.art = "product";
+      patch.photo = null;
+    } else {
+      if (add.photo) patch.photo = add.photo;
+      else if (!("photo" in f)) patch.photo = null;
+      patch.art = add.art || f.art || "photo";
+    }
     return patch;
   }
 
@@ -3265,7 +3270,9 @@ function makeDemoApi() {
       delete info.__demoId;
       // A coffee already on the shelf: this is another bag; its recipe and reference stay.
       if (b.shelf && !b.finished) { const n = newBag(b, { roastDate: info.roastDate?.value, weight: info.weightGrams }); return { id: n.id, batch: n.batch, key: n.batch, anotherBag: true }; }
-      Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo, art: art || "product", used: 0 });
+      // The roaster's packshot replaces the bag photo; the photo stands in only when there is none.
+      const hasProduct = !!(b.productImage || b.info?.imageUrl || info.imageUrl);
+      Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo: hasProduct ? null : photo || null, art: hasProduct ? "product" : photo ? "photo" : art || "product", used: 0 });
       return { id: b.id, batch: b.batch, key: b.batch };
     },
     async setBeanState(id, patch, batch = null) {
@@ -3884,6 +3891,8 @@ function makeLiveApi(conn) {
         catch { productImage = null; info = { ...info, imageUrl: null }; if (art === "product") art = photo ? "photo" : null; }
       }
       // Re-read and merge: a reference shot or recipe another device wrote meanwhile stays.
+      // A working manufacturer photo replaces the bag photo, which is kept only when there is none.
+      if (productImage) { photo = null; art = "product"; } else art = photo ? "photo" : null;
       await patchRecord(bean.id, (fresh) => E.saveBeanPatch(fresh, { info, photo: photo || null, productImage, art: art || null, batchId: batch.id, now: new Date().toISOString() }));
       return { id: bean.id, batch: batch.id, key: batch.id, anotherBag: !!prev };
     },
@@ -4365,7 +4374,7 @@ function legendHtml(withGhost, withPlan = false, removable = false, brief = fals
 /* ================= bag art + rest ================= */
 function artSrc(b) {
   const product = b.productImage || b.info?.imageUrl;
-  return b.art === "photo" ? b.photo || product : product || b.photo;
+  return product || b.photo;
 }
 function bagArt(b, size = "") {
   const src = artSrc(b), initial = esc((b.info?.name?.value || "?").trim()[0]);
@@ -6242,11 +6251,9 @@ function factRows(info) {
   }).join("");
 }
 function artPicker(info, photo) {
-  const product = info.imageUrl;
-  if (!product && !photo) return "";
-  if (!product) return `<div class="muted small">No product photo on the roaster's page. Your photo will be used.</div>`;
-  const opt = (val, src, text, checked) => `<label><input type="radio" name="art" value="${val}" ${checked ? "checked" : ""}><img src="${esc(src)}" alt="">${text}</label>`;
-  return `<div class="stack" style="gap:8px"><span class="label">Picture on your shelf</span><div class="art-pick">${opt("product", product, "Roaster's photo", true)}${photo ? opt("photo", photo, "Your photo", false) : ""}</div></div>`;
+  // The roaster's photo, when there is one, is the picture; the preview above already shows it.
+  if (info.imageUrl || !photo) return "";
+  return `<div class="muted small">No product photo on the roaster's page. Your photo will be used.</div>`;
 }
 function renderReview(info, photo) {
   pending = { info, photo };
@@ -6263,7 +6270,7 @@ function renderReview(info, photo) {
     const d = $("#roastDateInput").value;
     if (d) { pending.info.roastDate = { value: d, source: "bag" }; pending.info.needsConfirmation = (pending.info.needsConfirmation || []).filter((k) => k !== "roastDate"); }
     try {
-      const art = document.querySelector('input[name="art"]:checked')?.value ?? (pending.info.imageUrl ? "product" : "photo");
+      const art = pending.info.imageUrl ? "product" : "photo";
       const saved = await S.api.saveBean(pending.info, pending.photo, art);
       files = []; $("#thumbs").innerHTML = ""; pending = null; $("#reviewPanel").innerHTML = introFor(addMode);
       $("#addForm").reset();

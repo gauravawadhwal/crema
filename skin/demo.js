@@ -302,7 +302,9 @@ function makeDemoApi() {
       delete info.__demoId;
       // A coffee already on the shelf: this is another bag; its recipe and reference stay.
       if (b.shelf && !b.finished) { const n = newBag(b, { roastDate: info.roastDate?.value, weight: info.weightGrams }); return { id: n.id, batch: n.batch, key: n.batch, anotherBag: true }; }
-      Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo, art: art || "product", used: 0 });
+      // The roaster's packshot replaces the bag photo; the photo stands in only when there is none.
+      const hasProduct = !!(b.productImage || b.info?.imageUrl || info.imageUrl);
+      Object.assign(b, { info: { ...b.info, ...info, imageUrl: b.info.imageUrl }, shelf: true, finished: false, photo: hasProduct ? null : photo || null, art: hasProduct ? "product" : photo ? "photo" : art || "product", used: 0 });
       return { id: b.id, batch: b.batch, key: b.batch };
     },
     async setBeanState(id, patch, batch = null) {

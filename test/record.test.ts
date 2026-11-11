@@ -34,7 +34,8 @@ describe("shared record merges", () => {
   it("saveBeanPatch for a known coffee keeps its recipe, pin, photos and first-added time", () => {
     const fresh = { recipe: { p: 1 }, recipeSource: "ai", bestShotId: "pin", photo: "data:x", productImage: "/img", art: "product", addedAt: "2026-01-01", finished: true, batchId: "b1" };
     const out = mergeRecord(fresh, saveBeanPatch(fresh, add));
-    expect(out).toMatchObject({ ...fresh, info: add.info, finished: false, batchId: "b2" });
+    // the manufacturer photo outranks the camera photo, which is dropped
+    expect(out).toMatchObject({ ...fresh, photo: null, info: add.info, finished: false, batchId: "b2" });
   });
   it("saveBeanPatch for a new coffee starts with empty fields and a default art", () => {
     expect(mergeRecord(null, saveBeanPatch(null, add))).toEqual({
@@ -43,8 +44,17 @@ describe("shared record merges", () => {
     expect(saveBeanPatch(null, { ...add, productImage: "/p" }).art).toBe("product");
   });
   it("saveBeanPatch takes a new photo and art when given, else keeps the record's", () => {
-    const fresh = { photo: "old", art: "photo", productImage: "/old" };
+    const fresh = { photo: "old", art: "photo" };
     expect(saveBeanPatch(fresh, { ...add, photo: "new", art: "product" })).toMatchObject({ photo: "new", art: "product" });
     expect(saveBeanPatch(fresh, add).photo).toBeUndefined();
+  });
+  it("saveBeanPatch drops the bag photo and uses the product art when a manufacturer photo is present", () => {
+    expect(saveBeanPatch(null, { ...add, photo: "data:bag", productImage: "/api/images/x", art: "photo" })).toMatchObject({ photo: null, productImage: "/api/images/x", art: "product" });
+    const fresh = { photo: "old", art: "photo", productImage: "/old" };
+    expect(saveBeanPatch(fresh, { ...add, photo: "new" })).toMatchObject({ photo: null, art: "product" });
+  });
+  it("saveBeanPatch keeps the bag photo when there is no manufacturer photo", () => {
+    expect(saveBeanPatch(null, { ...add, photo: "data:bag", art: "photo" })).toMatchObject({ photo: "data:bag", art: "photo" });
+    expect(saveBeanPatch(null, { ...add, photo: "data:bag" })).toMatchObject({ photo: "data:bag", art: "photo", productImage: null });
   });
 });
