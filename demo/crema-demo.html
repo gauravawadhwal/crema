@@ -691,6 +691,16 @@ button.pending { opacity: .65; cursor: progress; }
   #shotDetail .scale-row { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
   #shotDetail .seg.tap button { font-size: var(--t-xs); padding-inline: 2px; overflow-wrap: anywhere; }
 }
+/* One panel motion; readings themselves never interpolate. Display remains immediate
+   on browsers without discrete transitions, preserving all control hit areas. */
+#sheetBack, #pourTop, #pourLeft, .toast-item {
+  transition: opacity 160ms ease-out, display 160ms ease-out allow-discrete;
+  opacity: 1;
+}
+#sheetBack[hidden], #pourTop[hidden], #pourLeft[hidden], .toast-item.leaving { opacity: 0; }
+@starting-style {
+  #sheetBack, #pourTop, #pourLeft, .toast-item { opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 /* WS 3: fixed operation column and shared plan rail. */
 #controls { gap: var(--s-8); }
@@ -3416,7 +3426,11 @@ function toast(msg, opts = {}) {
   box.append(item);
   while (box.children.length > TOAST_MAX) { clearTimeout(box.firstChild._timer); box.firstChild.remove(); }
   box.hidden = false;
-  item._timer = setTimeout(() => { item.remove(); syncToasts(); }, ms);
+  item._timer = setTimeout(() => {
+    item.classList.add("leaving");
+    const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160;
+    item._timer = setTimeout(() => { item.remove(); syncToasts(); }, delay);
+  }, ms);
 }
 const syncToasts = () => { const box = $("#toast"); if (box) box.hidden = !box.children.length; };
 

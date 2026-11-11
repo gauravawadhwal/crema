@@ -82,7 +82,11 @@ function toast(msg, opts = {}) {
   box.append(item);
   while (box.children.length > TOAST_MAX) { clearTimeout(box.firstChild._timer); box.firstChild.remove(); }
   box.hidden = false;
-  item._timer = setTimeout(() => { item.remove(); syncToasts(); }, ms);
+  item._timer = setTimeout(() => {
+    item.classList.add("leaving");
+    const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160;
+    item._timer = setTimeout(() => { item.remove(); syncToasts(); }, delay);
+  }, ms);
 }
 const syncToasts = () => { const box = $("#toast"); if (box) box.hidden = !box.children.length; };
 
