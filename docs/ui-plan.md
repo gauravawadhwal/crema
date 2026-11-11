@@ -44,6 +44,19 @@ artwork from it. The same applies to Streamline (GPL-3.0).
   tablet sizes. Temporary full/compact pour and resting screenshots inspected; the
   unreached-step label fits without clipping. Final built checks stay with integration.
 - No real tablet, NAS, physical machine, release or tag. WS 8/5/7 and finish follow.
+**11 November 2026 — WS 8 phone completed**
+
+- Collapsed status summary expands to full readings and Sleep/Wake; demo uses a Demo
+  chip. Espresso and Stop stay fixed above the tabs with safe-area spacing, including
+  during a shot after scrolling or changing views. Other-operation Stop uses the same
+  bottom position. Existing start/stop handlers remain in use.
+- Time and weight sit side by side above yield, current-step progress and a compact
+  chart; all fit 390×844 without scrolling in normal and stress demos.
+- Focused phone regression, source click-through, touch targets and tablet fit passed.
+  The only removed target exception is `#phoneSleep` (14 WS 5 exceptions remain).
+  The built click-through and simulator proxy checks are recorded in the integration
+  report. No real phone, tablet or DE1 verification; no release.
+- CI runs `e2e-phone.cjs`; the proxy case now asserts visible Stop after scrolling.
 
 
 **11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
@@ -243,7 +256,7 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
 | 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
 | 7 | Feedback layer | M | 2 | Implemented on current main in the UI finish branch; stored Undo, pending actions, delayed banners and plain errors. |
-| 8 | Phone | M | 4 | Not started. Now also owns a regression: on the phone Stop is below the fold while pouring |
+| 8 | Phone | M | 4 | Implemented: compact expandable status, safe-area fixed Espresso/Stop across scrolling and views, compact pour; simulator and normal/stress phone regressions. |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Completed commit 4a4123c published in PR #62 and included in #61; Shelf, Profiles, Shots and Settings. Filter regressions fixed during review. Result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | Included via PR #57 in consolidation #61; opt-in hold-to-wake and chime. Real tablet touch/audio unverified. |
 | 11 | Motion and finish | S | all | Not started |

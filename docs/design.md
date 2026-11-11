@@ -54,7 +54,7 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 | Tablet landscape (`min-width 900`, `max-height 860`, landscape) | Fixed-height, no page scroll on Brew | Rail · next shot · shorter live chart · controls, with a favourites carousel across the bottom. After a shot, the rating strip replaces the readouts |
 | Tighter tablet heights (`max-height 640`, `580`) | Progressive compaction | Hides the legend and after-shot metrics, shrinks steppers and carousel cards; controls keep their full height so Stop remains visible. The feedback panel scrolls inside its own bounds |
 | Desktop / wide | `max-width 1180` breakpoint | Controls wrap under the chart |
-| Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, next shot and favourites carousel |
+| Phone (`max-width 760`) | Scrolling single column | Expandable status line and Demo chip; fixed Espresso/Stop above the bottom tabs, including while visiting another view; side-by-side time and weight, yield, current step and chart fit the pouring viewport |
 | Shots (`min-width 761`) | Fixed-height workspace | Status and heading stay visible; the shot list and detail panel scroll independently. Selecting a shot preserves the list position and starts its detail at the top; phone keeps stacked page scrolling |
 | Shelf | Cards of equal height | Each card has one primary action, "Brew this" (or "Brewing"), and a square More button that opens a sheet with Freeze or Thaw, Finished, Another bag, Set what's left and the roaster's page. Origin and recipe lines clamp to two lines and the tasting notes to one row. Chips above the grid filter by All, In its window, Resting and Running low (this device only) |
 | Shots, list | Filter and compare | Chips above the list narrow the loaded shots to one coffee (they scroll sideways; "Show more" still pages the whole history). Each row has a labelled Compare control at full touch size |
@@ -128,3 +128,11 @@ plan, reference and ETA never size it. Plan and reference lines clip at the plot
 Steps ahead use the captured profile's last-shot timing when available, otherwise
 say “up to” their time limit. Unreached steps say “not reached”; pre-shot labels name
 the peak pressure and flow. Resting control tiles share spare height without moving Stop.
+### Phone actions (WS 8)
+
+The phone summary shows state, group temperature and water. Tap it to reveal the
+other status readings and Sleep/Wake. Espresso stays above the tabs at rest; Stop
+occupies that bar during any operation, with the bottom safe-area inset respected.
+Stop remains reachable after scrolling, changing views or losing the machine socket
+during a shot. The pouring view uses matching 52 px time and weight readings, yield
+progress, the current step and a compact chart in the first 390×844 viewport.

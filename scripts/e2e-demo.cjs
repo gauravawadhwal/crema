@@ -97,6 +97,7 @@ async function clickThrough(b, url, [name, vp, scheme]) {
   });
   await step("sleep", async () => {
     await p.goto(url + "#brew"); await p.waitForTimeout(600);
+    if (name === "phone") await p.click("#phoneStatusToggle");
     await p.click(name === "phone" ? "#phoneSleep" : "#railSleep");
     await p.waitForSelector("#saver:not([hidden])", { timeout: 8000 }); await snap("9-saver");
   });

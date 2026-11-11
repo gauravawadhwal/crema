@@ -858,6 +858,59 @@ body.pouring #controls { position: relative; z-index: 5; }
   #nextShot .stepper { grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); }
   #nextShot .stepper button, #grindInput { min-height: var(--hit); }
 }
+
+/* Phone keeps its primary action above the tabs, independent of page scroll. */
+.phone-status, .demo-short, .phone-away-action { display: none; }
+@media (max-width: 760px) {
+  :root { --phone-tabs: calc(var(--hit) + var(--s-12) + var(--s-4)); --phone-action: calc(var(--hit) + var(--s-12)); }
+  main { padding-bottom: calc(var(--phone-tabs) + var(--phone-action) + var(--s-24) + env(safe-area-inset-bottom, 0px)); }
+  .rail { height: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
+  .topbar { gap: var(--s-4); }
+  .phone-status { display: flex; align-items: center; justify-content: space-between; gap: var(--s-8); flex: 1; min-width: 0; min-height: var(--hit); padding: var(--s-8); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); font-size: var(--t-s); }
+  #phoneStatusText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status, #phoneSleep { display: none; }
+  .topbar.expanded #status { display: flex; width: 100%; order: 3; }
+  .topbar.expanded #phoneSleep { display: inline-flex; }
+  #phoneSleep { min-height: var(--hit); }
+  #phoneStatusTools { gap: var(--s-4); }
+  .demo-long { display: none; }
+  .demo-short { display: inline; }
+  .demo-banner { padding: var(--s-8); border-style: solid; font-size: var(--t-xs); }
+  body.on-brew #controls .espresso-ctl,
+  body.phone-busy.on-brew #controls .stop-wrap {
+    position: fixed; z-index: 30; left: 0; right: 0;
+    bottom: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--phone-action) + var(--s-16)); padding: var(--s-8) var(--s-16);
+    background: var(--bg); border-top: 1px solid var(--line); display: flex; gap: var(--s-8); margin: 0;
+  }
+  body.on-brew #controls .espresso-ctl .ctl-btn { width: 100%; min-height: var(--phone-action); }
+  body.on-brew #controls .stop-wrap { display: none; }
+  body.phone-busy.on-brew #controls .espresso-ctl { display: none; }
+  body.phone-busy.on-brew #controls .stop-btn,
+  body.phone-busy.on-brew #controls .skip-btn { min-height: var(--phone-action); height: var(--phone-action); }
+  body.phone-busy.on-brew #controls .stop-btn { flex: 1; }
+  body:not(.on-brew) .phone-away-action { display: flex; position: fixed; z-index: 30; left: 0; right: 0; bottom: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px)); padding: var(--s-8) var(--s-16); background: var(--bg); border-top: 1px solid var(--line); }
+  #phoneAwayAction { width: 100%; min-height: var(--phone-action); }
+  #opStop { position: fixed; left: var(--s-16); width: calc(100% - var(--s-16) * 2); bottom: calc(var(--phone-tabs) + var(--s-8) + env(safe-area-inset-bottom, 0px)); min-height: var(--phone-action); }
+  body.pouring .wrap { gap: var(--s-8); }
+  body.pouring #view-brew { gap: var(--s-8); }
+  body.pouring #view-brew .pour-top { order: 2; padding: var(--s-8); gap: var(--s-4); }
+  body.pouring .pour-title { display: none; }
+  body.pouring #pourStepCount { font-size: var(--t-s); }
+  body.pouring #pourSteps .step:not(.now) { display: none; }
+  body.pouring #pourSteps .step.now { min-width: 0; padding: var(--s-8); }
+  body.pouring #view-brew .pour-left { order: 1; padding: var(--s-12); }
+  body.pouring .pour-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.pouring .hero-val { font-size: calc(var(--t-hero) - var(--t-xl) - var(--t-s)); }
+  body.pouring .hero-val small { font-size: var(--t-l); }
+  body.pouring .pour-yield { grid-column: 1 / -1; }
+  body.pouring .pour-sub, body.pouring .pour-note { display: none; }
+  body.pouring #view-brew .live-col { order: 3; }
+  body.pouring #view-brew .live-col > .panel { padding: var(--s-8); }
+  body.pouring #view-brew .chart-box { aspect-ratio: auto; height: clamp(140px, 25dvh, 220px); }
+  body.pouring #view-brew .controls-col { order: 4; }
+}
+
 </style>
 <div class="app">
   <nav class="rail" aria-label="Sections">
@@ -873,10 +926,11 @@ body.pouring #controls { position: relative; z-index: 5; }
 
   <main>
     <div class="wrap">
-      <header class="topbar">
+      <header class="topbar" id="topbar">
+        <button type="button" class="phone-status" id="phoneStatusToggle" aria-expanded="false" aria-controls="status phoneStatusTools"><span id="phoneStatusText">Connecting…</span><span aria-hidden="true">⌄</span></button>
         <div class="status" id="status" aria-live="polite"></div>
-        <div class="row">
-          <div class="demo-banner" id="demoBanner" hidden>Demo: simulated DE1 and scale · coffees identified from ONA and Haven</div>
+        <div class="row" id="phoneStatusTools">
+          <div class="demo-banner" id="demoBanner" hidden><span class="demo-long">Demo: simulated DE1 and scale · coffees identified from ONA and Haven</span><span class="demo-short">Demo</span></div>
           <button class="chip" type="button" id="phoneSleep"><svg class="icon" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg><span id="phoneSleepLabel">Sleep</span></button>
         </div>
       </header>
@@ -1028,6 +1082,7 @@ body.pouring #controls { position: relative; z-index: 5; }
   </main>
 </div>
 
+<div class="phone-away-action"><button class="ctl-btn go" id="phoneAwayAction" type="button">Espresso</button></div>
 <div class="overlay" id="opOverlay" hidden><div class="panel op-card" id="opCard"></div></div>
 <div class="saver" id="saver" hidden tabindex="0" role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div id="saverDate"></div><div id="saverHint">Asleep · tap to wake</div><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg" cx="20" cy="20" r="17"/></svg></div></div>
 <div class="sheet-back" id="sheetBack" hidden><div class="panel sheet stack" id="sheet" role="dialog" aria-modal="true"></div></div>
@@ -4325,6 +4380,7 @@ function renderStatus() {
     ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
     ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`);
 
+  $("#phoneStatusText").textContent = `${stateTxt} · ${fmt1(s?.groupTemperature ?? s?.mixTemperature)}° · ${S.water ? low ? "Water low" : `Water ${Math.round(tank)}%` : "Water –"}`;
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
 }
@@ -4967,6 +5023,13 @@ function renderControls() {
   $("#pourTop").hidden = !pouring;
   $("#pourLeft").hidden = !pouring;
   const p = S.presets, st = S.snap?.state?.state;
+  document.body.classList.toggle("phone-busy", shotRunning() || ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting());
+  const phoneBusy = shotRunning() || ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
+  const phoneAction = $("#phoneAwayAction");
+  phoneAction.textContent = phoneBusy ? "STOP" : S.ghc ? "Start at group head" : "Espresso";
+  phoneAction.className = phoneBusy ? "stop-btn active" : "ctl-btn go";
+  phoneAction.disabled = phoneBusy ? false : S.ghc || !S.snap || unlinked() || NOT_READY.includes(st) || !S.next;
+  phoneAction.onclick = phoneBusy ? stopMachine : () => startOp("espresso");
   if (pouring) {
     const ctx = S.shotContext || {};
     const target = ctx.yieldG;
@@ -6847,7 +6910,7 @@ async function boot() {
   $("#demoBanner").hidden = !S.api.demo;
   // Offer to connect when this page could reach a machine (not the hosted demos).
   if (S.api.demo && !forceDemo && location.protocol === "http:") {
-    $("#demoBanner").innerHTML = `Demo mode: no machine connected. <button class="btn small" id="connectBtn" type="button">Connect</button>`;
+    $("#demoBanner").innerHTML = `<span class="demo-long">Demo mode: no machine connected. </span><span class="demo-short">Demo </span><button class="btn small" id="connectBtn" type="button">Connect</button>`;
     $("#connectBtn").onclick = () => connectSheet();
     if (conn?.decaidError) setTimeout(() => connectSheet(`Couldn't reach the machine at ${conn.decaidError}, so this is the demo.`), 300);
   }
@@ -6863,6 +6926,10 @@ async function boot() {
   $("#addForm").addEventListener("submit", onIdentify);
   $("#speakBtn").onclick = () => (listening ? stopListening(true) : startListening());
   $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
+  $("#phoneStatusToggle").onclick = () => {
+    const expanded = $("#topbar").classList.toggle("expanded");
+    $("#phoneStatusToggle").setAttribute("aria-expanded", String(expanded));
+  };
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
   wireSaver();
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };

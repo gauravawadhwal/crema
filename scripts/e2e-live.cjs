@@ -1076,6 +1076,17 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     const ph = await phone.evaluate(() => ({ live: !!S.api && !S.api.demo, decaid: S.api.info.decaidUrl, shelf: S.shelf.length, ai: S.api.ai.enabled }));
     check(ph.live && ph.decaid === `http://localhost:${MOCK}`, "phone app runs live through the server's proxy");
     check(ph.shelf >= 2 && ph.ai === false, "phone sees the tablet's coffees and settings (shared through Decaid)");
+    await phone.waitForFunction(() => S.next && S.presets && S.snap);
+    await phone.click('[data-run="espresso"]');
+    await phone.waitForFunction(() => shotRunning());
+    await phone.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    const phoneStop = await phone.evaluate(() => {
+      const r = document.querySelector('#stopBtn').getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight - 60 && !document.querySelector('#stopBtn').disabled;
+    });
+    check(phoneStop, "phone proxy keeps Stop visible and enabled after scrolling during a shot");
+    await phone.click('#stopBtn');
+    await phone.waitForFunction(() => !shotRunning());
   } catch (e) {
     check(false, e.message.split("\n")[0]);
   }

@@ -75,6 +75,9 @@ jobs:
       - name: Click-through, built single-file demo
         if: matrix.group == 'demo'
         run: node scripts/e2e-demo.cjs --built
+      - name: Phone action bar and compact pour
+        if: matrix.group == 'demo'
+        run: node scripts/e2e-phone.cjs
       - name: Independent shot-history panes, source and built demo
         if: matrix.group == 'demo'
         run: node scripts/e2e-shot-history.cjs && node scripts/e2e-shot-history.cjs --built

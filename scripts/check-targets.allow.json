@@ -14,7 +14,6 @@
     {"key": "tablet brew small #closeAfter", "ws": 5, "reason": "After-shot button (40 x 38 px at 1340 x 800). WS 5 lays out the after-shot panel."},
     {"key": "tablet brew small #pinShot", "ws": 5, "reason": "After-shot button (127.1 x 38 px at 1340 x 800). WS 5 lays out the after-shot panel."},
     {"key": "tablet brew small #reviewShot", "ws": 5, "reason": "After-shot button (101.6 x 38 px at 1340 x 800). WS 5 lays out the after-shot panel."},
-    {"key": "tablet brew small #sb button[data-v]", "ws": 5, "reason": "Taste and body scale buttons after a shot (112.4 x 34 px at 1340 x 800). WS 5 lays out the after-shot panel."},
-    {"key": "phone chrome small #phoneSleep", "ws": 8, "reason": "Phone sleep button (79.4 x 32 px at 390 x 844). WS 8 rebuilds the phone status line."}
+    {"key": "tablet brew small #sb button[data-v]", "ws": 5, "reason": "Taste and body scale buttons after a shot (112.4 x 34 px at 1340 x 800). WS 5 lays out the after-shot panel."}
   ]
 }

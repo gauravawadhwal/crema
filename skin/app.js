@@ -1046,6 +1046,7 @@ function renderStatus() {
     ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
     ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`);
 
+  $("#phoneStatusText").textContent = `${stateTxt} · ${fmt1(s?.groupTemperature ?? s?.mixTemperature)}° · ${S.water ? low ? "Water low" : `Water ${Math.round(tank)}%` : "Water –"}`;
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
 }
@@ -1688,6 +1689,13 @@ function renderControls() {
   $("#pourTop").hidden = !pouring;
   $("#pourLeft").hidden = !pouring;
   const p = S.presets, st = S.snap?.state?.state;
+  document.body.classList.toggle("phone-busy", shotRunning() || ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting());
+  const phoneBusy = shotRunning() || ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
+  const phoneAction = $("#phoneAwayAction");
+  phoneAction.textContent = phoneBusy ? "STOP" : S.ghc ? "Start at group head" : "Espresso";
+  phoneAction.className = phoneBusy ? "stop-btn active" : "ctl-btn go";
+  phoneAction.disabled = phoneBusy ? false : S.ghc || !S.snap || unlinked() || NOT_READY.includes(st) || !S.next;
+  phoneAction.onclick = phoneBusy ? stopMachine : () => startOp("espresso");
   if (pouring) {
     const ctx = S.shotContext || {};
     const target = ctx.yieldG;
@@ -3568,7 +3576,7 @@ async function boot() {
   $("#demoBanner").hidden = !S.api.demo;
   // Offer to connect when this page could reach a machine (not the hosted demos).
   if (S.api.demo && !forceDemo && location.protocol === "http:") {
-    $("#demoBanner").innerHTML = `Demo mode: no machine connected. <button class="btn small" id="connectBtn" type="button">Connect</button>`;
+    $("#demoBanner").innerHTML = `<span class="demo-long">Demo mode: no machine connected. </span><span class="demo-short">Demo </span><button class="btn small" id="connectBtn" type="button">Connect</button>`;
     $("#connectBtn").onclick = () => connectSheet();
     if (conn?.decaidError) setTimeout(() => connectSheet(`Couldn't reach the machine at ${conn.decaidError}, so this is the demo.`), 300);
   }
@@ -3584,6 +3592,10 @@ async function boot() {
   $("#addForm").addEventListener("submit", onIdentify);
   $("#speakBtn").onclick = () => (listening ? stopListening(true) : startListening());
   $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
+  $("#phoneStatusToggle").onclick = () => {
+    const expanded = $("#topbar").classList.toggle("expanded");
+    $("#phoneStatusToggle").setAttribute("aria-expanded", String(expanded));
+  };
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
   wireSaver();
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
