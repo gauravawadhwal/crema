@@ -39,6 +39,7 @@ You get the exact input the assistant received and its answer. Judge only the an
 - Flavour opinions and general espresso knowledge ("finer grinding slows the shot", "levers suit milk") belong in neither list; an expert is allowed opinions.
 - Before you answer, re-check every entry: if it isn't clearly wrong, delete it. An entry you would describe as "fine", "minor" or "consistent" must not be listed.
 - specificity, actionable, plainLanguage: integers 1–5 as described in the schema. Reserve 5 for answers you couldn't easily improve.
+- For a shot review, the UI header already displays dose, yield, ratio, time and stop reason above the review. Penalize specificity and actionable (score ≤ 2) when a review summary merely repeats those header numbers without comparing pace against the expected time window, comparing pressure or flow against the profile's step targets (or explaining an engaged limiter), and giving clear grind direction when the shot was off target.
 
 Do not reward length. Do not judge whether the chosen profile or move is right; other checks cover that.`;
 

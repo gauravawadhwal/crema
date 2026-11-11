@@ -1184,6 +1184,23 @@ var CremaEngine = (() => {
     if ((step.pump === "flow" || step.pump === "Flow") && target > 3) return true;
     return false;
   }
+  var USER_STOPS = /* @__PURE__ */ new Set(["apistop", "userstop", "manual"]);
+  function reachedYield(input) {
+    if (!finite(input.yieldG) || !finite(input.targetYieldG) || input.targetYieldG <= 0) return null;
+    return input.yieldG >= 0.8 * input.targetYieldG;
+  }
+  function stoppedEarly(input) {
+    return USER_STOPS.has((input.stopReason ?? "").toLowerCase()) && reachedYield(input) !== true;
+  }
+  function expectedTimeWindow(input) {
+    const t = input.targetTimeS;
+    if (t && finite(t[0]) && finite(t[1]) && t[0] > 0 && t[0] <= t[1] && t[1] <= 300 && !(t[0] === 0 && t[1] === 600)) return [t[0], t[1]];
+    if (input.profile?.title && input.profile.beverage_type !== "manual") {
+      const known = findProfile(input.profile.title)?.recipe.timeS;
+      return known ? [known[0], known[1]] : null;
+    }
+    return null;
+  }
   function targetAndActual(input, point) {
     const step = stepAt(input.profile, point.frame);
     if (!step || point.frame == null) return null;
@@ -1229,6 +1246,7 @@ var CremaEngine = (() => {
         target: ts.reduce((a, b) => a + b, 0) / ts.length,
         actuals: settled.map((x) => x.data.actual),
         flows: settled.map((x) => finite(x.p.f) ? x.p.f : null),
+        pressures: settled.map((x) => finite(x.p.p) ? x.p.p : null),
         pump: first.data.pump,
         step: first.data.step
       });
@@ -1242,17 +1260,22 @@ var CremaEngine = (() => {
       if (current) run.push(entry);
     }
     flush();
+    const judged = profile != null && profile.beverage_type !== "manual" && !/turbo|bloom/i.test(profile.title ?? "") && !stoppedEarly(input);
     for (const w of windows) {
       const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
       const actual = avg(w.actuals);
       const flowValues = w.flows.filter(finite);
       const flowCoverage = flowValues.length / w.flows.length;
       const flow = avg(flowValues);
+      const pressure = avg(w.pressures.filter(finite));
       if (actual == null) continue;
       const ratio = actual / w.target;
+      const limit = number(w.step.limiter?.value);
+      const limiter = limit != null && limit > 0 ? limit : null;
+      const pressureCapped = judged && w.pump === "flow" && limiter != null && pressure != null && pressure >= 0.85 * limiter;
       let kind = null;
       let what = "";
-      if (w.pump === "flow" && ratio <= 0.55) {
+      if (w.pump === "flow" && ratio <= 0.55 && !pressureCapped) {
         kind = "choked";
         what = "Flow stayed well below the profile's flow target.";
       } else if (w.pump === "flow" && ratio >= 1.55) {
@@ -1270,6 +1293,27 @@ var CremaEngine = (() => {
           kind,
           what,
           evidence: `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}: ${w.pump} target ${w.target.toFixed(1)}, measured ${actual.toFixed(1)}${w.pump === "pressure" ? " bar" : " ml/s"}${flow == null ? "" : `, flow ${flow.toFixed(1)} ml/s`}.`,
+          severity: "caution",
+          fromS: w.start,
+          toS: w.end
+        });
+      }
+      const span = `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}`;
+      if (!kind && judged && w.pump === "pressure" && ratio <= 0.78 && w.target - actual >= 1.2) {
+        const capped = limiter != null && flow != null && flow >= 0.85 * limiter;
+        issues.push({
+          kind: "pressure_shortfall",
+          what: "Pressure stayed below the profile's target during the pour.",
+          evidence: `${span}: target ${w.target.toFixed(1)} bar, measured ${actual.toFixed(1)} bar (peak ${Math.max(...w.actuals).toFixed(1)} bar)${flow == null ? "" : ` with flow at ${flow.toFixed(1)} ml/s`}${capped ? `, held at the ${limiter} ml/s flow limit because the puck gave too little resistance` : ""}.`,
+          severity: "caution",
+          fromS: w.start,
+          toS: w.end
+        });
+      } else if (!kind && judged && w.pump === "flow" && ratio <= 0.75 && w.target - actual >= 0.4) {
+        issues.push({
+          kind: "flow_shortfall",
+          what: "Flow stayed below the profile's target during the pour.",
+          evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, held at the ${limiter} bar pressure limit because the puck was too restrictive` : ""}.`,
           severity: "caution",
           fromS: w.start,
           toS: w.end
@@ -1341,8 +1385,43 @@ var CremaEngine = (() => {
       const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
       return Math.abs(avg / w.target - 1) <= 0.2;
     });
-    const wentWell = well.length ? ["The controlled pressure or flow target stayed close to its recorded target."] : [];
     const facts = shotFacts(input, points);
+    const lastT = points.at(-1)?.t ?? 0;
+    const window = facts.expectedTimeS;
+    if (judged && window && facts.durationS != null && facts.timeDeltaS != null) {
+      const ran = Math.round(facts.durationS);
+      const range = { fromS: facts.brewStartS ?? 0, toS: facts.brewEndS ?? lastT };
+      if (facts.timeStatus === "fast" && facts.timeDeltaS <= -4 && reachedYield(input) !== false) {
+        issues.push({
+          kind: "fast_shot",
+          what: "The shot finished faster than the expected time window.",
+          evidence: `Ran in ${ran} s against the ${window[0]}\u2013${window[1]} s window (${Math.abs(Math.round(facts.timeDeltaS))} s fast).`,
+          severity: "caution",
+          ...range
+        });
+      } else if (facts.timeStatus === "slow" && facts.timeDeltaS >= 5) {
+        issues.push({
+          kind: "slow_shot",
+          what: "The shot ran slower than the expected time window.",
+          evidence: `Ran in ${ran} s against the ${window[0]}\u2013${window[1]} s window (${Math.round(facts.timeDeltaS)} s slow).`,
+          severity: "caution",
+          ...range
+        });
+      }
+    }
+    const wentWell = [];
+    const faults = issues.some((i) => ["choked", "gushed", "pressure_shortfall", "flow_shortfall"].includes(i.kind));
+    if (facts.timeStatus === "in_window" && window && facts.durationS != null && !faults) {
+      wentWell.push(`Finished in ${Math.round(facts.durationS)} s, inside the ${window[0]}\u2013${window[1]} s window.`);
+    }
+    const praised = /* @__PURE__ */ new Set();
+    for (const w of well) {
+      if (praised.has(w.frame) || praised.size >= 2) continue;
+      praised.add(w.frame);
+      const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
+      const unit = w.pump === "pressure" ? "bar" : "ml/s";
+      wentWell.push(`Held ${w.pump} at ${avg.toFixed(1)} ${unit} against the ${w.target.toFixed(1)} ${unit} target.`);
+    }
     return {
       issues,
       wentWell,
@@ -1376,10 +1455,26 @@ var CremaEngine = (() => {
     const pressures = brewing.map((p) => p.p).filter(finite);
     const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
     const yieldG = finite(input.yieldG) && input.yieldG > 0 ? input.yieldG : null;
+    const durationS = round2(span(brewing));
+    const expectedTimeS = expectedTimeWindow(input);
+    const hasCurve = points.some((p) => finite(p.p) || finite(p.f));
+    let timeStatus = null, timeDeltaS = null;
+    if (expectedTimeS && durationS != null && durationS >= 10 && points.length >= 10 && hasCurve && !stoppedEarly(input)) {
+      if (durationS < expectedTimeS[0]) {
+        timeStatus = "fast";
+        timeDeltaS = round2(durationS - expectedTimeS[0]);
+      } else if (durationS > expectedTimeS[1]) {
+        timeStatus = "slow";
+        timeDeltaS = round2(durationS - expectedTimeS[1]);
+      } else {
+        timeStatus = "in_window";
+        timeDeltaS = 0;
+      }
+    }
     return {
       brewStartS: round2(brewing[0]?.t ?? null),
       brewEndS: round2(brewing.at(-1)?.t ?? null),
-      durationS: round2(span(brewing)),
+      durationS,
       preinfusionS: round2(span(preinfusion)),
       pourS: round2(phased ? span(pour) : null),
       firstDripsS: round2(firstDripsS),
@@ -1391,8 +1486,61 @@ var CremaEngine = (() => {
       peakPressureBar: round2(pressures.length ? Math.max(...pressures) : null),
       pourMeanPressureBar: round2(avg(pour.map((p) => p.p).filter(finite))),
       pourMeanFlowMlS: round2(avg(pour.map((p) => p.f).filter(finite))),
-      weightGlitches: points.filter((p) => finite(p.w) && p.w < -5).length
+      weightGlitches: points.filter((p) => finite(p.w) && p.w < -5).length,
+      expectedTimeS,
+      timeStatus,
+      timeDeltaS,
+      pourSteps: pourSteps(input, points)
     };
+  }
+  function pourSteps(input, points) {
+    const profile = input.profile;
+    if (!profile || profile.beverage_type === "manual") return [];
+    const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+    const byFrame = /* @__PURE__ */ new Map();
+    for (const p of points) {
+      if (p.substate && !/^pour/i.test(p.substate)) continue;
+      if (p.frame == null || !Number.isInteger(p.frame) || p.frame < 0) continue;
+      if (!byFrame.has(p.frame)) byFrame.set(p.frame, []);
+      byFrame.get(p.frame).push(p);
+    }
+    const out = [];
+    for (const [frame, xs] of [...byFrame].sort((a, b) => a[0] - b[0])) {
+      const step = stepAt(profile, frame);
+      if (!step || step.pump !== "pressure" && step.pump !== "flow") continue;
+      const pump = step.pump;
+      const durationS = xs.at(-1).t - xs[0].t;
+      if (xs.length < 3 || durationS < 3) continue;
+      const settledAll = xs.filter((p) => p.t - xs[0].t >= 2);
+      const settled = settledAll.length >= 3 ? settledAll : xs;
+      const controlled = (p) => pump === "pressure" ? p.p : p.f;
+      const other = (p) => pump === "pressure" ? p.f : p.p;
+      const recorded = settled.map((p) => pump === "pressure" ? p.tp : p.tf).filter((n) => finite(n) && n > 0);
+      const stepTarget = number(pump === "pressure" ? step.pressure : step.flow);
+      const target = recorded.length ? avg(recorded) : stepTarget != null && stepTarget > 0 ? stepTarget : null;
+      if (target == null || skippedStep(profile, step, target)) continue;
+      const actuals = settled.map(controlled).filter(finite);
+      const peaks = xs.map(controlled).filter(finite);
+      if (!actuals.length) continue;
+      const actualMean = avg(actuals);
+      const otherMean = avg(settled.map(other).filter(finite));
+      const limit = number(step.limiter?.value);
+      const limiterValue = limit != null && limit > 0 ? limit : null;
+      const short = target - actualMean >= (pump === "pressure" ? 0.8 : 0.4);
+      out.push({
+        frame,
+        name: step.name ?? null,
+        pump,
+        durationS: round2(durationS),
+        target: round2(target),
+        actualMean: round2(actualMean),
+        actualPeak: round2(Math.max(...peaks)),
+        otherMean: round2(otherMean),
+        limiterValue,
+        limiterEngaged: limiterValue != null && otherMean != null && short && otherMean >= 0.85 * limiterValue
+      });
+    }
+    return out;
   }
 
   // server/recommend/review-local.ts
@@ -1437,40 +1585,98 @@ var CremaEngine = (() => {
     const sentence = parts.join(" ") + (stop ? `, ${stop}` : "");
     return sentence[0].toUpperCase() + sentence.slice(1) + ".";
   }
-  function rulesSummary(a) {
-    const curveIssue = a.issues.some((i) => i.kind !== "off_target_temp");
+  function rulesSummary(a, direction = null) {
+    const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
     const temp = a.issues.find((i) => i.kind === "off_target_temp");
-    const lines = [factsSentence(a.facts)];
+    const lines = [paceSentence(a.facts) ?? factsSentence(a.facts)];
+    const tracking = trackingSentence(a.facts);
     if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) lines.push("There is not enough telemetry to draw a conclusion from this shot.");
+    else if (tracking) lines.push(tracking);
     else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
     else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
     else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
     else lines.push("No step held a steady target long enough to compare, so this describes the shot rather than grading it.");
+    if (a.issues.some((i) => i.kind === "channeling")) lines.push("Flow rose steadily through the pour, which can mean the water found a channel.");
     if (temp && a.metrics.meanTemperatureOffsetC != null) {
       const d = a.metrics.meanTemperatureOffsetC;
       lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} \xB0C ${d > 0 ? "above" : "below"} its target.`);
     }
+    if (direction === "finer") lines.push("Grind finer to add resistance, slow the shot and build pressure.");
+    if (direction === "coarser") lines.push("Grind coarser to open up flow and speed the shot up.");
     return lines.filter(Boolean).join(" ");
   }
+  var grams = (n) => `${Number.isInteger(n) ? n : n.toFixed(1)} g`;
+  function paceSentence(f) {
+    if (!f.expectedTimeS || f.durationS == null || f.timeStatus == null || f.timeDeltaS == null) return null;
+    const [lo, hi] = f.expectedTimeS;
+    const ran = Math.round(f.durationS);
+    const off = Math.abs(Math.round(f.timeDeltaS));
+    const detail = f.yieldG != null ? `${ran} s to ${grams(f.yieldG)}` : `${ran} s`;
+    if (f.timeStatus === "in_window" || off < 1) return `Finished in ${ran} s, ${f.timeStatus === "in_window" ? "right in" : "at the edge of"} the ${lo}\u2013${hi} s target window.`;
+    return `Ran ${off} s ${f.timeStatus === "fast" ? "faster" : "slower"} than the ${lo}\u2013${hi} s target window (${detail}).`;
+  }
+  function trackingSentence(f) {
+    const main = [...f.pourSteps].sort((a, b) => b.durationS - a.durationS)[0];
+    if (!main) return null;
+    const pressure = main.pump === "pressure";
+    const unit = pressure ? "bar" : "ml/s";
+    const otherUnit = pressure ? "ml/s" : "bar";
+    const n = (x) => x.toFixed(1);
+    const at = main.otherMean != null ? ` at ${n(main.otherMean)} ${otherUnit}` : "";
+    const ratio = main.actualMean / main.target;
+    const gap = main.target - main.actualMean;
+    const short = pressure ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
+    const name = pressure ? "pressure" : "flow";
+    const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
+    if (short || main.limiterEngaged) {
+      const why = main.limiterEngaged ? pressure ? `, held back by the ${main.limiterValue} ml/s flow limit: the puck gave too little resistance` : `, held back by the ${main.limiterValue} bar pressure limit: the puck was too restrictive` : "";
+      return `Pour ${name} only reached ${n(main.actualMean)} ${unit} of the ${n(main.target)} ${unit} target${at}${why}.`;
+    }
+    if (Math.abs(ratio - 1) <= 0.1) return `${pressure ? "Pressure" : "Flow"} held ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
+    const limitNote = atLimit && gap > 0 ? `, with ${pressure ? "flow" : "pressure"} at its ${main.limiterValue} ${otherUnit} limit as the profile allows` : "";
+    return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}${limitNote}.`;
+  }
+  var FAST = ["gushed", "pressure_shortfall", "fast_shot"];
+  var SLOW = ["choked", "flow_shortfall", "slow_shot"];
+  function fastReason(kinds) {
+    const why = [
+      kinds.includes("fast_shot") && "the shot ran faster than its expected window",
+      kinds.includes("pressure_shortfall") && "pressure fell short of the profile's target",
+      kinds.includes("gushed") && "flow gushed well above its target"
+    ].filter(Boolean);
+    return `${capitalize(joinAnd(why))}, so the puck gave too little resistance; a small finer step should slow it and build pressure.`;
+  }
+  function slowReason(kinds) {
+    const why = [
+      kinds.includes("slow_shot") && "the shot ran slower than its expected window",
+      kinds.includes("flow_shortfall") && "flow fell short of the profile's target",
+      kinds.includes("choked") && "flow stayed very low against high pressure"
+    ].filter(Boolean);
+    return `${capitalize(joinAnd(why))}, so the puck was too restrictive; a small coarser step should open up flow and speed it up.`;
+  }
+  var capitalize = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+  var joinAnd = (xs) => xs.length <= 1 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
   function rulesReview(input) {
     const analysis = analyzeShot(input);
     const issues = analysis.issues;
-    const hasChoke = issues.some((i) => i.kind === "choked");
-    const hasGush = issues.some((i) => i.kind === "gushed");
+    const kinds = issues.map((i) => i.kind);
+    const hasFast = kinds.some((k) => FAST.includes(k));
+    const hasSlow = kinds.some((k) => SLOW.includes(k));
     const manual = input.profile?.beverage_type === "manual";
     let nextShot = null;
     let conflict = false;
     if (input.feedback) {
       const tasted = tasteAdvice(input);
-      conflict = hasChoke && input.feedback.sourBitter <= -1 || hasGush && input.feedback.sourBitter >= 1;
+      conflict = hasSlow && input.feedback.sourBitter <= -1 || hasFast && input.feedback.sourBitter >= 1;
       const explicitBalance = input.feedback.sourBitter === 0 && input.feedback.body === 0;
       if (!conflict && (explicitBalance || !manual && input.profile != null)) nextShot = tasted;
-    } else if (!manual && hasChoke && !hasGush) {
-      nextShot = grindAdvice("coarser", "Flow was persistently very low during a steady pressure hold; a small coarser step may reduce resistance.");
-    } else if (!manual && hasGush && !hasChoke) {
-      nextShot = grindAdvice("finer", "Flow or pressure was far from the profile target for a sustained window; a small finer step may add resistance.");
+    } else if (!manual && input.profile != null && hasFast && !hasSlow) {
+      nextShot = grindAdvice("finer", fastReason(kinds));
+    } else if (!manual && input.profile != null && hasSlow && !hasFast) {
+      nextShot = grindAdvice("coarser", slowReason(kinds));
     }
-    const summary = rulesSummary(analysis);
+    const direction = nextShot?.grindDelta.endsWith("finer") ? "finer" : nextShot?.grindDelta.endsWith("coarser") ? "coarser" : null;
+    const summary = rulesSummary(analysis, input.feedback ? null : direction);
     let confidence = "low";
     if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
     if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";

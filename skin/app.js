@@ -654,7 +654,12 @@ function makeLiveApi(conn) {
         return { timestamp: s.timestamp, profileTitle: s.workflow?.profile?.title, doseG: s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight, yieldG: s.annotations?.actualYield, enjoyment: s.annotations?.enjoyment, notes: s.annotations?.espressoNotes?.slice(0, 500), review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) };
       }).slice(0, 10) : [];
       const targetYieldG = optionalNumber(ctx.targetYield ?? profile?.target_weight);
-      const targetTimeS = full.annotations?.extras?.crema?.targetTimeS ?? ctx.targetTimeS ?? null;
+      // The expected time window: the shot's own, else the coffee's saved recipe for this profile, else the catalogue's.
+      const savedRec = profile?.title && profile.beverage_type !== "manual" && (ctx.beanId || batchId)
+        ? await (ctx.beanId ? recordOf(ctx.beanId) : j(D(`/bean-batches/${batchId}`)).then((bt) => recordOf(bt.beanId))).catch(() => null) : null;
+      const recipeTimeS = (savedRec?.recipe?.profileTitle === profile?.title ? savedRec?.recipe?.targetTimeS : null)
+        ?? (profile?.title && profile.beverage_type !== "manual" ? E.findProfile(profile.title)?.recipe?.timeS ?? null : null);
+      const targetTimeS = full.annotations?.extras?.crema?.targetTimeS ?? ctx.targetTimeS ?? recipeTimeS ?? null;
       const input = {
         points, profile, doseG: full.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null,
         yieldG: full.annotations?.actualYield ?? (points.at(-1)?.w ?? null), targetYieldG,

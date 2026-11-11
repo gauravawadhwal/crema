@@ -542,6 +542,119 @@
         "noFaults": true,
         "askTaste": false
       }
+    },
+    {
+      "id": "review-fast-time",
+      "split": "dev",
+      "tags": [
+        "fast-time",
+        "pace",
+        "synthetic"
+      ],
+      "why": "Reaching the 36 g target in 19 s against a 28–34 s expected window shows too little puck resistance; advise a finer grind even before taste is entered.",
+      "input": {
+        "fixture": "fast-time"
+      },
+      "expect": {
+        "accept": [
+          "finer"
+        ],
+        "requiredIssues": [
+          "fast_shot"
+        ],
+        "forbiddenIssues": [
+          "puck_failed",
+          "choked",
+          "slow_shot"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-slow-time",
+      "split": "dev",
+      "tags": [
+        "slow-time",
+        "pace",
+        "synthetic"
+      ],
+      "why": "Taking 44 s to reach 36 g against a 28–34 s expected window at 1.0 ml/s shows too much puck resistance; advise a coarser grind even before taste is entered.",
+      "input": {
+        "fixture": "slow-time"
+      },
+      "expect": {
+        "accept": [
+          "coarser"
+        ],
+        "requiredIssues": [
+          "slow_shot"
+        ],
+        "forbiddenIssues": [
+          "puck_failed",
+          "gushed",
+          "fast_shot"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-limited-pressure-shortfall",
+      "split": "dev",
+      "tags": [
+        "limiter",
+        "real-shape",
+        "shortfall",
+        "synthetic"
+      ],
+      "why": "On a 6 bar pour step with a 2.2 ml/s flow limiter, coarse grind lets flow sit at the limiter while pressure only reaches 3.8 bar in 21 s; diagnose the pressure shortfall and advise grinding finer.",
+      "input": {
+        "fixture": "limited-pressure-shortfall"
+      },
+      "expect": {
+        "accept": [
+          "finer"
+        ],
+        "requiredIssues": [
+          "pressure_shortfall"
+        ],
+        "forbiddenIssues": [
+          "puck_failed",
+          "choked",
+          "off_target_temp"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
+    },
+    {
+      "id": "review-flow-shortfall",
+      "split": "holdout",
+      "tags": [
+        "limiter",
+        "shortfall",
+        "synthetic"
+      ],
+      "why": "On a 2.2 ml/s flow step with an 8 bar pressure cap, a restrictive puck holds flow at 1.1 ml/s across 38 s; diagnose the flow shortfall and advise grinding coarser.",
+      "input": {
+        "fixture": "flow-shortfall"
+      },
+      "expect": {
+        "accept": [
+          "coarser"
+        ],
+        "requiredIssues": [
+          "flow_shortfall"
+        ],
+        "forbiddenIssues": [
+          "puck_failed",
+          "gushed",
+          "off_target_temp"
+        ],
+        "noFaults": false,
+        "askTaste": true
+      }
     }
   ]
 }

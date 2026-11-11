@@ -23,7 +23,7 @@ function points(count: number, values: Partial<ReviewPoint> = {}): ReviewPoint[]
 function input(overrides: Partial<ReviewInput> = {}): ReviewInput {
   return {
     points: points(21), profile: pressureProfile,
-    doseG: 18, yieldG: 36, targetYieldG: 36, targetTimeS: [25, 35],
+    doseG: 18, yieldG: 36, targetYieldG: 36, targetTimeS: [18, 28],
     stopReason: null, feedback: null, bean: null, installedProfiles: [], history: [],
     ...overrides,
   };
@@ -140,13 +140,16 @@ describe("real Decaid shot shapes", () => {
         : { t, p: 2, f: 7, w: 0, temp: 85, tp: 0, tf: 8, targetTemp: 94, groupTemp: 68, targetGroupTemp: 88, frame: 0, substate: phase, weightFlow: 0 };
       return { ...base, ...overrides(base) };
     });
-  const real = (points: ReviewPoint[], profile: ProfileLike = limited("4")) => input({ points, profile, doseG: 18, yieldG: 34.6, targetYieldG: 36, stopReason: "targetWeight" });
+  const real = (points: ReviewPoint[], profile: ProfileLike = limited("4")) => input({ points, profile, doseG: 18, yieldG: 34.6, targetYieldG: 36, targetTimeS: [25, 35], stopReason: "targetWeight" });
 
   it("grades a main pour whose flow limiter never engaged", () => {
     const result = analyzeShot(real(shot()));
     expect(result.metrics.observedWindows).toBe(1);
     expect(result.issues).toEqual([]);
-    expect(result.wentWell.length).toBe(1);
+    expect(result.wentWell).toEqual([
+      "Finished in 28 s, inside the 25–35 s window.",
+      "Held pressure at 6.0 bar against the 6.0 bar target.",
+    ]);
   });
 
   it("grades an engaged limiter without calling the shortfall a fault", () => {
@@ -195,9 +198,59 @@ describe("real Decaid shot shapes", () => {
   });
 
   it("says what the shot did in the rules summary, and admits when there is too little", () => {
-    expect(rulesReview(real(shot())).summary).toMatch(/^34\.6 g from 18 g \(1:1\.9\) in 28 s, 6 s of it preinfusion, stopped at the target weight\. /);
+    expect(rulesReview(real(shot())).summary).toBe(
+      "Finished in 28 s, right in the 25–35 s target window. Pressure held 6.0 bar against the 6.0 bar target at 1.6 ml/s."
+    );
+    expect(rulesReview({ ...real(shot()), targetTimeS: null }).summary).toMatch(
+      /^34\.6 g from 18 g \(1:1\.9\) in 28 s, 6 s of it preinfusion, stopped at the target weight\. Pressure held 6\.0 bar against the 6\.0 bar target at 1\.6 ml\/s\./
+    );
     const thin = rulesReview(input({ points: shot().slice(0, 7), profile: limited("4"), yieldG: null }));
     expect(thin.summary).toBe("There is not enough telemetry to draw a conclusion from this shot.");
+  });
+
+  it("flags a pressure shortfall when a flow limiter caps pressure well below target", () => {
+    const review = rulesReview(real(shot({ p: 3.8, f: 2.2 }), limited("2.2")));
+    expect(review.issues.map((x) => x.kind)).toContain("pressure_shortfall");
+    expect(review.issues[0].evidence).toContain("2.2 ml/s flow limit");
+    expect(review.nextShot).toMatchObject({ change: "Grind finer", grindDelta: "finer" });
+    expect(review.nextShot?.reasoning).toMatch(/pressure fell short/i);
+    expect(review.summary).toContain("Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s");
+    expect(review.summary).toContain("Grind finer");
+    const step = analyzeShot(real(shot({ p: 3.8, f: 2.2 }), limited("2.2"))).facts.pourSteps[0];
+    expect(step).toMatchObject({ frame: 1, pump: "pressure", target: 6, actualMean: 3.8, limiterValue: 2.2, limiterEngaged: true });
+  });
+
+  it("flags a flow shortfall when puck resistance holds a flow step below target", () => {
+    const flowLimited: ProfileLike = {
+      title: "Flow with cap", beverage_type: "espresso",
+      steps: [{ name: "Pour", pump: "flow", flow: "2.2", seconds: "40", temperature: "92", limiter: { value: "8" } }],
+    };
+    const pts = points(26, { p: 7.4, f: 1.1, tp: null, tf: 2.2 });
+    const review = rulesReview(input({ profile: flowLimited, points: pts }));
+    expect(review.issues.map((x) => x.kind)).toContain("flow_shortfall");
+    expect(review.issues[0].evidence).toContain("8 bar pressure limit");
+    expect(review.nextShot).toMatchObject({ change: "Grind coarser", grindDelta: "coarser" });
+    expect(review.summary).toContain("Pour flow only reached 1.1 ml/s of the 2.2 ml/s target");
+  });
+
+  it("flags shots outside the expected time window and falls back to the catalogue window", () => {
+    const fast = rulesReview(input({ points: points(19), targetTimeS: [28, 34], stopReason: "targetWeight" }));
+    expect(fast.issues.map((x) => x.kind)).toContain("fast_shot");
+    expect(fast.nextShot?.grindDelta).toBe("finer");
+    expect(fast.summary).toMatch(/^Ran 10 s faster than the 28–34 s target window/);
+
+    const slow = rulesReview(input({ points: points(43, { f: 1.1 }), targetTimeS: [28, 34], stopReason: "targetWeight" }));
+    expect(slow.issues.map((x) => x.kind)).toContain("slow_shot");
+    expect(slow.nextShot?.grindDelta).toBe("coarser");
+    expect(slow.summary).toMatch(/^Ran 8 s slower than the 28–34 s target window/);
+
+    const fromCatalog = analyzeShot(input({
+      profile: { title: "Extractamundo Dos!", beverage_type: "espresso", steps: pressureProfile.steps },
+      points: points(17), targetTimeS: null, stopReason: "targetWeight",
+    }));
+    expect(fromCatalog.facts.expectedTimeS).toEqual([25, 35]);
+    expect(fromCatalog.facts.timeStatus).toBe("fast");
+    expect(fromCatalog.issues.map((x) => x.kind)).toContain("fast_shot");
   });
 });
 
