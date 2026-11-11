@@ -520,7 +520,12 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
 .dev { position: absolute; left: 50%; top: 50%; background: #0a0807; box-shadow: 0 0 0 1px #2a211a, 0 30px 70px rgba(0, 0, 0, .45); transform-origin: 50% 50%; }
 .dev iframe { display: block; border: 0; background: #0e1a15; }
 .dev-note { text-align: center; }
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 500; z-index: 70; box-shadow: var(--shadow); max-width: calc(100% - 32px); pointer-events: none; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: 76px; display: grid; gap: var(--s-8); z-index: 70; width: max-content; max-width: calc(100% - 32px); pointer-events: none; }
+.toast[hidden] { display: none; }
+.toast-item { display: flex; align-items: center; gap: var(--s-16); background: var(--fg); color: var(--bg); padding: var(--s-8) var(--s-16); border-radius: var(--r); font-weight: 500; box-shadow: var(--shadow); pointer-events: none; }
+.toast-item span { overflow-wrap: anywhere; }
+.toast-act { pointer-events: auto; background: transparent; color: inherit; border: 1px solid currentColor; border-radius: var(--r); min-height: var(--hit); min-width: var(--hit); padding: var(--s-8); font: inherit; cursor: pointer; }
+button.pending { opacity: .65; cursor: progress; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1180px) {
@@ -559,7 +564,7 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   .cmp-label { grid-column: 1 / -1; justify-self: start; }
   .shot-row canvas { width: 80px; }
   h1 { font-size: 1.4rem; }
-  .toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+  .toast { top: auto; bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (min-width: 761px) { #phoneSleep { display: none; } }
 
@@ -697,6 +702,16 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   #shotDetail .scale-row { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
   #shotDetail .seg.tap button { font-size: var(--t-xs); padding-inline: 2px; overflow-wrap: anywhere; }
 }
+/* One panel motion; readings themselves never interpolate. Display remains immediate
+   on browsers without discrete transitions, preserving all control hit areas. */
+#sheetBack, #pourTop, #pourLeft, .toast-item {
+  transition: opacity 160ms ease-out, display 160ms ease-out allow-discrete;
+  opacity: 1;
+}
+#sheetBack[hidden], #pourTop[hidden], #pourLeft[hidden], .toast-item.leaving { opacity: 0; }
+@starting-style {
+  #sheetBack, #pourTop, #pourLeft, .toast-item { opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 /* WS 3: fixed operation column and shared plan rail. */
 #controls { gap: var(--s-8); }
@@ -735,6 +750,10 @@ textarea.describe { width: 100%; resize: vertical; min-height: 84px; padding: 11
   #controls .stop-wrap { margin-top: auto; }
   #controls .ctl-btn { min-height: calc(var(--hit-tight) + var(--s-24)); }
   #controls > * { flex-shrink: 0; }
+  /* Share spare height between resting tiles while retaining Stop's fixed anchor. */
+  body:not(.pouring) #controls > .ctl { flex: 1 1 auto; max-height: calc(var(--hit) * 2 + var(--s-12)); }
+  body:not(.pouring) #controls > .espresso-ctl { max-height: calc(var(--hit) * 3 + var(--s-16)); }
+  body:not(.pouring) #controls > .ctl > .ctl-btn, body:not(.pouring) #controls > .ctl > .scale-reading { height: 100%; }
 }
 @media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
   #nextShot { gap: var(--s-4); }
@@ -860,6 +879,96 @@ body.pouring #controls { position: relative; z-index: 5; }
   #nextShot .stepper { grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); }
   #nextShot .stepper button, #grindInput { min-height: var(--hit); }
 }
+
+/* Phone keeps its primary action above the tabs, independent of page scroll. */
+.phone-status, .demo-short, .phone-away-action { display: none; }
+@media (max-width: 760px) {
+  :root { --phone-tabs: calc(var(--hit) + var(--s-12) + var(--s-4)); --phone-action: calc(var(--hit) + var(--s-12)); scroll-padding-bottom: calc(var(--phone-tabs) + var(--phone-action) + var(--s-24) + env(safe-area-inset-bottom, 0px)); }
+  main { padding-bottom: calc(var(--phone-tabs) + var(--phone-action) + var(--s-24) + env(safe-area-inset-bottom, 0px)); }
+  .rail { height: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px)); box-sizing: border-box; }
+  .topbar { gap: var(--s-4); }
+  .phone-status { display: flex; align-items: center; justify-content: space-between; gap: var(--s-8); flex: 1; min-width: 0; min-height: var(--hit); padding: var(--s-8); border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); font-size: var(--t-s); }
+  #phoneStatusText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #status, #phoneSleep { display: none; }
+  .topbar.expanded #status { display: flex; width: 100%; order: 3; }
+  .topbar.expanded #phoneSleep { display: inline-flex; }
+  #phoneSleep { min-height: var(--hit); }
+  #phoneStatusTools { gap: var(--s-4); }
+  .demo-long { display: none; }
+  .demo-short { display: inline; }
+  .demo-banner { padding: var(--s-8); border-style: solid; font-size: var(--t-xs); }
+  body.on-brew #controls .espresso-ctl,
+  body.phone-busy.on-brew #controls .stop-wrap {
+    position: fixed; z-index: 30; left: 0; right: 0;
+    bottom: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px));
+    height: calc(var(--phone-action) + var(--s-16)); padding: var(--s-8) var(--s-16);
+    background: var(--bg); border-top: 1px solid var(--line); display: flex; gap: var(--s-8); margin: 0;
+  }
+  body.on-brew #controls .espresso-ctl .ctl-btn { width: 100%; min-height: var(--phone-action); }
+  body.on-brew #controls .stop-wrap { display: none; }
+  body.phone-busy.on-brew #controls .espresso-ctl { display: none; }
+  body.phone-busy.on-brew #controls .stop-btn,
+  body.phone-busy.on-brew #controls .skip-btn { min-height: var(--phone-action); height: var(--phone-action); }
+  body.phone-busy.on-brew #controls .stop-btn { flex: 1; }
+  body:not(.on-brew) .phone-away-action { display: flex; position: fixed; z-index: 30; left: 0; right: 0; bottom: calc(var(--phone-tabs) + env(safe-area-inset-bottom, 0px)); padding: var(--s-8) var(--s-16); background: var(--bg); border-top: 1px solid var(--line); }
+  #phoneAwayAction { width: 100%; min-height: var(--phone-action); }
+  #opStop { position: fixed; left: var(--s-16); width: calc(100% - var(--s-16) * 2); bottom: calc(var(--phone-tabs) + var(--s-8) + env(safe-area-inset-bottom, 0px)); min-height: var(--phone-action); }
+  body.pouring .wrap { gap: var(--s-8); }
+  body.pouring #view-brew { gap: var(--s-8); }
+  body.pouring #view-brew .pour-top { order: 2; padding: var(--s-8); gap: var(--s-4); }
+  body.pouring .pour-title { display: none; }
+  body.pouring #pourStepCount { font-size: var(--t-s); }
+  body.pouring #pourSteps .step:not(.now) { display: none; }
+  body.pouring #pourSteps .step.now { min-width: 0; padding: var(--s-8); }
+  body.pouring #view-brew .pour-left { order: 1; padding: var(--s-12); }
+  body.pouring .pour-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.pouring .hero-val { font-size: calc(var(--t-hero) - var(--t-xl) - var(--t-s)); }
+  body.pouring .hero-val small { font-size: var(--t-l); }
+  body.pouring .pour-yield { grid-column: 1 / -1; }
+  body.pouring .pour-sub, body.pouring .pour-note { display: none; }
+  body.pouring #view-brew .live-col { order: 3; }
+  body.pouring #view-brew .live-col > .panel { padding: var(--s-8); }
+  body.pouring #view-brew .chart-box { aspect-ratio: auto; height: clamp(140px, 25dvh, 220px); }
+  body.pouring #view-brew .controls-col { order: 4; }
+}
+
+/* Finished shot: the result and chart stay visible while feedback scrolls. */
+.after-result { display: none; }
+.live-col.has-after .after-result { display: grid; gap: var(--s-4); }
+.live-col.has-after .live-head, .live-col.has-after #chartEmpty, .live-col.has-after #planSteps, .live-col.has-after .readouts { display: none; }
+.result-line { font-size: calc(var(--t-xl) * 1.3); }
+.shot-row .open, .shot-meta { max-width: 100%; min-width: 0; }
+.shot-meta > span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-pills { display: flex; flex-wrap: wrap; gap: var(--s-4); }
+.next-change { display: grid; gap: var(--s-8); margin-top: var(--s-12); }
+.next-change .btn { justify-self: end; }
+.review-changed { border: 1px solid var(--accent); border-radius: var(--r); }
+.review-change-note { display: block; white-space: normal; overflow-wrap: anywhere; }
+.field-row .review-change-note { grid-column: 1 / -1; }
+.recipe-tile .review-change-note { font-size: var(--t-xs); }
+.seg.tap button { min-height: var(--hit); min-width: 0; font-size: var(--t-s); white-space: normal; overflow-wrap: anywhere; }
+.stars:not(.static) { min-height: var(--hit); align-items: center; }
+.stars:not(.static) .stars-fill { top: 50%; bottom: auto; transform: translateY(-50%); }
+#afterShot .btn { min-height: var(--hit); }
+#afterShot .icon-only { min-width: var(--hit); }
+@media (max-width: 760px) {
+  .scale-row { grid-template-columns: 1fr; gap: var(--s-4); }
+  .seg.tap button { padding-inline: 2px; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 860px) {
+  #view-brew .live-col.has-after > .panel:first-child { flex: 0 0 auto; }
+  #view-brew .live-col.has-after .chart-box { flex: none; height: 190px; min-height: 190px; }
+  #view-brew .live-col.has-after #afterShot { flex: 1 1 auto; min-height: 0; max-height: none; }
+  #afterShot .scale-row { grid-template-columns: 1fr; gap: var(--s-4); }
+  #afterShot .seg.tap button { min-height: var(--hit); }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 752px) {
+  #view-brew .live-col.has-after .chart-box { height: 140px; min-height: 140px; }
+}
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 640px) {
+  #view-brew .live-col.has-after .chart-box { height: 80px; min-height: 80px; }
+  .result-line { font-size: var(--t-xl); }
+}
 </style>
 </head>
 <body>
@@ -877,10 +986,11 @@ body.pouring #controls { position: relative; z-index: 5; }
 
   <main>
     <div class="wrap">
-      <header class="topbar">
+      <header class="topbar" id="topbar">
+        <button type="button" class="phone-status" id="phoneStatusToggle" aria-expanded="false" aria-controls="status phoneStatusTools"><span id="phoneStatusText">Connecting…</span><span aria-hidden="true">⌄</span></button>
         <div class="status" id="status" aria-live="polite"></div>
-        <div class="row">
-          <div class="demo-banner" id="demoBanner" hidden>Demo: simulated DE1 and scale · coffees identified from ONA and Haven</div>
+        <div class="row" id="phoneStatusTools">
+          <div class="demo-banner" id="demoBanner" hidden><span class="demo-long">Demo: simulated DE1 and scale · coffees identified from ONA and Haven</span><span class="demo-short">Demo</span></div>
           <button class="chip" type="button" id="phoneSleep"><svg class="icon" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg><span id="phoneSleepLabel">Sleep</span></button>
         </div>
       </header>
@@ -911,6 +1021,7 @@ body.pouring #controls { position: relative; z-index: 5; }
         </div>
         <div class="stack live-col">
           <div class="panel stack">
+            <div id="afterResult" class="after-result"></div>
             <div class="row between live-head">
               <div class="row" style="gap:10px"><span class="phase" id="phase">Ready</span><span class="muted small" id="phaseSub"></span></div>
               <span class="clock" id="shotClock">0.0</span>
@@ -1032,6 +1143,7 @@ body.pouring #controls { position: relative; z-index: 5; }
   </main>
 </div>
 
+<div class="phone-away-action"><button class="ctl-btn go" id="phoneAwayAction" type="button">Espresso</button></div>
 <div class="overlay" id="opOverlay" hidden><div class="panel op-card" id="opCard"></div></div>
 <div class="saver" id="saver" hidden tabindex="0" role="button" aria-label="Wake the machine"><div class="stack" style="justify-items:center"><div class="t" id="saverTime"></div><div id="saverDate"></div><div id="saverHint">Asleep · tap to wake</div><svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg" cx="20" cy="20" r="17"/></svg></div></div>
 <div class="sheet-back" id="sheetBack" hidden><div class="panel sheet stack" id="sheet" role="dialog" aria-modal="true"></div></div>

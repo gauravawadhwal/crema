@@ -15,5 +15,5 @@ export { rulesReview } from "./recommend/review-local.js";
 export {
   adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, NOT_READY, reconcileOutcome, recipeMatches,
   mergeRecord, recommendPatch, saveBeanPatch, pruneNewRows, sameGrind, shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps, trackNewRows, waitingForRecipe,
-  steadyWeightFlow, stepProgress, stepTimes, stopReason,
+  plainError, steadyWeightFlow, stepProgress, stepTimes, stopReason,
 } from "./control/index.js";

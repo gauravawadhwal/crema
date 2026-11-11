@@ -54,7 +54,7 @@ Theme names are Italian or coffee-world words. Don't use a real company's name, 
 | Tablet landscape (`min-width 900`, `max-height 860`, landscape) | Fixed-height, no page scroll on Brew | Rail · next shot · shorter live chart · controls, with a favourites carousel across the bottom. After a shot, the rating strip replaces the readouts |
 | Tighter tablet heights (`max-height 640`, `580`) | Progressive compaction | Hides the legend and after-shot metrics, shrinks steppers and carousel cards; controls keep their full height so Stop remains visible. The feedback panel scrolls inside its own bounds |
 | Desktop / wide | `max-width 1180` breakpoint | Controls wrap under the chart |
-| Phone (`max-width 760`) | Scrolling single column | Bottom tab bar; controls first, then the live chart, next shot and favourites carousel |
+| Phone (`max-width 760`) | Scrolling single column | Expandable status line and Demo chip; fixed Espresso/Stop above the bottom tabs, including while visiting another view; side-by-side time and weight, yield, current step and chart fit the pouring viewport |
 | Shots (`min-width 761`) | Fixed-height workspace | Status and heading stay visible; the shot list and detail panel scroll independently. Selecting a shot preserves the list position and starts its detail at the top; phone keeps stacked page scrolling |
 | Shelf | Cards of equal height | Each card has one primary action, "Brew this" (or "Brewing"), and a square More button that opens a sheet with Freeze or Thaw, Finished, Another bag, Set what's left and the roaster's page. Origin and recipe lines clamp to two lines and the tasting notes to one row. Chips above the grid filter by All, In its window, Resting and Running low (this device only) |
 | Shots, list | Filter and compare | Chips above the list narrow the loaded shots to one coffee (they scroll sideways; "Show more" still pages the whole history). Each row has a labelled Compare control at full touch size |
@@ -112,3 +112,46 @@ sizes use the compact layout's bottom-right anchor, with Favourites spanning the
 two left columns while at rest. Socket loss keeps the pour layout and Stop visible.
 Secondary readouts and explanatory copy drop at compact sizes so time, weight and
 Stop remain visible without scrolling. The dedicated phone arrangement is WS 8.
+
+## Action feedback
+
+Toasts stack up to three messages, with independent timers (2.8 seconds normally,
+six with Undo). They sit below the tablet status bar and above the phone action bar.
+Finished, Freeze/Thaw, clearing a favourite and removing a reference offer Undo.
+Async action buttons ignore repeated taps until the request settles and show a pending
+state after 300 ms. Start and Stop retain their control handling. Link-loss banners
+wait 1.5 seconds; controls and active-shot protection react immediately. Technical
+error text is replaced with a plain sentence.
+The live pour chart starts at 40 seconds and widens by 10 seconds when elapsed time
+reaches one second before the edge, up to 120 seconds. It resets for each shot;
+plan, reference and ETA never size it. Plan and reference lines clip at the plot edge.
+Steps ahead use the captured profile's last-shot timing when available, otherwise
+say “up to” their time limit. Unreached steps say “not reached”; pre-shot labels name
+the peak pressure and flow. Resting control tiles share spare height without moving Stop.
+### Phone actions (WS 8)
+
+The phone summary shows state, group temperature and water. Tap it to reveal the
+other status readings and Sleep/Wake. Espresso stays above the tabs at rest; Stop
+occupies that bar during any operation, with the bottom safe-area inset respected.
+Stop remains reachable after scrolling, changing views or losing the machine socket
+during a shot. The pouring view uses matching 52 px time and weight readings, yield
+progress, the current step and a compact chart in the first 390×844 viewport.
+## After the shot
+
+The finished-shot header shows the recorded yield and time, ratio, stop reason and
+matching time window. Its chart uses the recorded profile as a dashed plan, at least
+190 px tall on the full tablet and smaller on compact screens. Feedback scrolls
+inside the remaining space. Shot-history rows show the same result pills.
+
+A numeric review suggestion offers one step on the matching next-shot recipe, with
+a button such as “Set grind to 9.75”. Applying marks the field and its previous value;
+Reset restores it. The machine changes only through the existing load/start actions.
+Advice without one numeric adjustment remains text. Taste and body buttons wrap
+labels within equal columns and meet the touch target size.
+
+The type scale is 11, 12.5, 14, 16 and 20 px, with 84 px pour heroes (52 px on
+phone). Primary actions occupy the bottom-right of screens and sheets; phone brewing
+actions stay above the tabs. Freeform text uses one smaller size when needed, then
+a line limit and ellipsis within fixed bounds. Panels, sheets and toasts use 160 ms
+ease-out entry and exit; readings never interpolate, and reduced motion disables
+transitions. The target audit permits no exceptions.

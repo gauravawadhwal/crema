@@ -16,6 +16,83 @@ artwork from it. The same applies to Streamline (GPL-3.0).
 
 ## Handoff log
 
+**11 November 2026 — integrated UI finish**
+
+- WS 4.5, 5, 7 and 8 are integrated on `codex/ui-finish`; WS 11 supplies consistent
+  160 ms panel motion, six-theme review and refreshed demo/screenshots/walkthrough.
+- All target exceptions are resolved; the allowlist and its handling are removed.
+  Draft review actions keep the exact displayed value and refresh safely after a
+  recipe edit. Freeze Undo preserves the original freeze date. The live chart redraws
+  when its box changes size, including compact after-shot and review layouts.
+- PR #63 merged first. This implementation stays on a review branch; no release tag,
+  tablet, NAS, actual Decaid, physical controls or real AI verification.
+- Final local checks passed: 349 unit tests/typecheck; syntax and demo freshness;
+  installable skin ZIP; source/built demo, controls, pour context, targets, history
+  and sleep; tablet fit, values, review, phone and secondary screens; complete live
+  simulator and brewing suites; Docker smoke. Source/built target audits have zero
+  failures. Six themes and compact/phone chart sharpness/reduced motion were inspected.
+  See PR #64 for the full command/results matrix; CI is not awaited.
+
+
+**11 November 2026 — WS 7 rebuilt against current main**
+
+- Three independent, deduplicated toasts sit below the tablet status bar and above
+  phone actions. Finished, Freeze/Thaw, favourite clearing and reference removal
+  offer Undo through existing writes; Finished restores the archived batch as well.
+- Async action buttons ignore repeat taps until settlement and show pending after
+  300 ms; patchHtml reapplies the pending style. Start and Stop stay independent.
+- Link banners wait 1.5 s, while control safety still reacts immediately. Technical
+  errors use the shared, unit-tested plainError classifier.
+- Simulator regression checks cover stored Undo, slow duplicate writes, toast timers,
+  plain errors and short/long link drops. Final integration verification is recorded
+  in the completion handoff below; no hardware or release.
+**11 November 2026 — WS 4.5 implemented**
+
+- Pour axis starts at 40 s, widens at 39/49/59… s, never shrinks within a shot,
+  caps at 120 s and resets on the next shot. Neither plan, reference nor ETA sizes it.
+  Reference and plan lines are clipped; live seconds remain labelled every 10 s.
+- Captured-profile timing survives next-recipe edits and supplies ahead rail/chart
+  durations. Time limits say “up to”; an unreached recorded step says “not reached”.
+  Rails give short steps more room. Peak plan labels, duplicate Flush duration and
+  spare-height control tiles are fixed without moving Stop.
+- Typecheck and all 311 unit tests passed. Source pour regressions cover both tablet
+  sizes, widening thresholds, monotonicity, cap/reset, ahead timing and visible ETA.
+  Tablet fit passes every size/state; targets retain the 15 existing unrelated entries.
+  Source demo and control checks also pass, including Stop containment at all five
+  tablet sizes. Temporary full/compact pour and resting screenshots inspected; the
+  unreached-step label fits without clipping. Final built checks stay with integration.
+- No real tablet, NAS, physical machine, release or tag. WS 8/5/7 and finish follow.
+**11 November 2026 — WS 8 phone completed**
+
+- Collapsed status summary expands to full readings and Sleep/Wake; demo uses a Demo
+  chip. Espresso and Stop stay fixed above the tabs with safe-area spacing, including
+  during a shot after scrolling or changing views. Other-operation Stop uses the same
+  bottom position. Existing start/stop handlers remain in use.
+- Time and weight sit side by side above yield, current-step progress and a compact
+  chart; all fit 390×844 without scrolling in normal and stress demos.
+- Focused phone regression, source click-through, touch targets and tablet fit passed.
+  The only removed target exception is `#phoneSleep` (14 WS 5 exceptions remain).
+  The built click-through and simulator proxy checks are recorded in the integration
+  report. No real phone, tablet or DE1 verification; no release.
+- CI runs `e2e-phone.cjs`; the proxy case now asserts visible Stop after scrolling.
+**11 November 2026 — WS 5 after-shot implementation**
+
+- Brew shows the recorded result, ratio, stop reason and matching timing window above
+  a 190 px chart at 1340×800; its dashed plan comes from the recorded profile. Compact
+  layouts retain the result and a smaller chart while feedback scrolls internally.
+- Numeric review advice offers one step on the next-shot draft, with a changed-field
+  marker and Reset. Apply requires the same coffee and profile, ignores profile
+  switches, and never loads the machine. Non-numeric or multiple changes have no button.
+  Existing review records support grind, yield and temperature; no dose suggestion is
+  invented from prose (the editor handles a numeric dose delta if one exists).
+- Taste/body controls and rating meet touch targets; Shots rows carry result pills.
+  All 14 WS 5 target exceptions removed; only the phone Sleep exception (WS 8) remains.
+- Passed: syntax, typecheck, 311 unit tests, tablet fit at all five sizes, target checks
+  across normal/stress fixtures, and review e2e including Apply/Reset and unchanged
+  machine workflow. Temporary tablet/compact/phone screenshots inspected. No hardware,
+  actual Decaid, real AI, Docker or release validation in this workstream.
+
+
 **11 November 2026 — pour chart axis decided:** Mono's rule. 40 s, widening 10 s at a
 time one second before the edge. See "WS 4.5". This replaces the earlier wording
 that started the axis at the expected shot length.
@@ -209,14 +286,14 @@ and "Rules for every workstream", do the work, run the checks, open a PR against
 | 2 | Quick fixes for measured defects | S | 1 | Included via PR #58 in consolidation #61; Brew quick fixes. |
 | 3 | Brew at rest | M | 2 | Included via PR #59 in consolidation #61; Brew controls, idle plan and favourites. |
 | 4 | Pour mode | L | 3 | Implemented and reviewed in #61 with WS 4a (#55); Stop containment, captured shot context, guarded Skip and socket-loss checks pass. |
-| 4.5 | Pour chart axis and Brew polish | S | 4 | **Next.** Not started. A stopped WIP exists on `ui/ws4.5-pour-polish` (reference only, known flaw; see the log) |
-| 5 | After the shot | M | 4 | WS 4a stop-reason logic integrated; layout on hold |
+| 4.5 | Pour chart axis and Brew polish | S | 4 | Implemented on `codex/ws45-pour-chart`; elapsed-only axis and Brew polish, with source pour/control/fit/target checks. |
+| 5 | After the shot | M | 4 | Implemented on `codex/ws5-after-shot`: result/stop pills, recorded plan, draft-only numeric Apply/Reset and accessible taste controls; simulator verified. |
 | 6 | Value sheet and steppers | M | 3 | Included via PR #60 in consolidation #61; value sheets and hold controls; focused integration checks pass. |
-| 7 | Feedback layer | M | 2 | Stopped WIP branch; not included in consolidation. Resume against consolidated main. |
-| 8 | Phone | M | 4 | Not started. Now also owns a regression: on the phone Stop is below the fold while pouring |
+| 7 | Feedback layer | M | 2 | Implemented on current main in the UI finish branch; stored Undo, pending actions, delayed banners and plain errors. |
+| 8 | Phone | M | 4 | Implemented: compact expandable status, safe-area fixed Espresso/Stop across scrolling and views, compact pour; simulator and normal/stress phone regressions. |
 | 9 | Shelf, Profiles, Shots, Settings | M | 2 | Completed commit 4a4123c published in PR #62 and included in #61; Shelf, Profiles, Shots and Settings. Filter regressions fixed during review. Result pills wait for WS 5. |
 | 10 | Sleep screen and sound | S | 2 | Included via PR #57 in consolidation #61; opt-in hold-to-wake and chime. Real tablet touch/audio unverified. |
-| 11 | Motion and finish | S | all | Not started |
+| 11 | Motion and finish | S | all | Implemented: 160 ms motion with reduced-motion support, six-theme review, refreshed assets and zero target exceptions; integrated checks below. |
 
 Order: 1, then 2, then 3 with 7, then 4 with 9, then 5 with 6, then 8 with 10, then 11.
 Nearly everything lands in `skin/app.js` and `skin/index.html`, so run at most two

@@ -1,6 +1,6 @@
 # Crema implementation handoff
 
-Created: 6 November 2026. Status: **in progress** (last updated 10 November 2026). The
+Created: 6 November 2026. Status: **in progress** (last updated 11 November 2026). The
 progress table and the ticked items say what is done; everything else is still planned.
 Dated status updates and superseded orderings are in [history.md](history.md).
 
@@ -21,6 +21,15 @@ not merge; tagging a release is the user's call. Software checks use
 `dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
 simulated machine. The [review record](review-2026-11-06.md) separates reproductions,
 source findings and untested assumptions; read it before changing behaviour.
+
+## UI finish (11 November 2026)
+
+WS 4.5, 5, 7, 8 and 11 are implemented together on `codex/ui-finish` for review.
+This completes the planned UI work in software: stable pour axes, after-shot results
+and draft-only numeric advice, viewport-pinned phone controls, action feedback and
+consistent motion. The target audit has zero exceptions. Screenshots, walkthrough and
+built demo are refreshed. Verification and limitations are recorded in `docs/ui-plan.md`.
+No new release, tablet/NAS deployment, real AI calls or physical-machine testing.
 
 ## Next
 

@@ -69,7 +69,7 @@ node scripts/e2e-shot-history.cjs    # independent history panes, paging, keyboa
 node scripts/e2e-controls.cjs        # Stop/start races in the demo (--built, or --url for desktop Decaid on localhost)
 node scripts/e2e-sleep.cjs           # sleep screen: date, tap vs hold to wake, chime on a shot ending (--built too)
 node scripts/check-tablet-fit.cjs    # fails if the home screen doesn't fit the DE1 tablet without scrolling
-node scripts/check-targets.cjs       # touch targets under 44 px, overlapping controls and clipped text on every view, also with the ?stress fixture; known failures are in check-targets.allow.json (--built too)
+node scripts/check-targets.cjs       # touch targets under 44 px, overlapping controls and clipped text on every view, also with the ?stress fixture; every failure must be fixed (--built too)
 node scripts/e2e-live.cjs            # live mode vs the simulator: no server, server, server stops, AI off, phone via proxy
 node scripts/e2e-review.cjs          # saved shot reviews, taste, recorded context, fallback and phone reload
 node scripts/e2e-screens.cjs         # Shelf More sheet and filters, Shots coffee filter and Compare, Settings index
@@ -136,6 +136,11 @@ Before calling UI work done, use the `verify-crema` skill (`.claude/skills/verif
 - **Evals call the real pipeline.** `evals/` runs `identify()`, `recommend()` and `dialIn()` from `server/`, so a prompt change is measured as shipped. Recommend and dial-in silently fall back to rules when the model fails; the evals count that as a failure (`modelAnswered`).
 
 ## Status and next steps
+
+UI finish (11 November 2026) is implemented on `codex/ui-finish` for review: WS 4.5
+pour polish, WS 5 after-shot results/draft advice, WS 7 feedback, WS 8 phone and WS 11
+motion/assets. The target check has no allowlist. See `docs/ui-plan.md` for verification;
+no release or physical-machine deployment accompanies this work.
 
 Latest release: v0.4.1 (10 November 2026): shot review fixed for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in the review). v0.4.0 (10 November 2026): AI shot review (shot checks with no AI, an optional AI review, saved on the shot in Decaid), a shared grind start value and stepper, and buttons that stay put when panels redraw. v0.3.0 (9 November 2026) added bags kept in sync across devices, No bag and manual (GHC) brewing, favourites editing, settings fixes, profile graphs and a removable reference shot. v0.2.0, earlier on 9 November, was the first install on the user's DE1 tablet, from GitHub Releases through Decaid's skin installer; the user reports the tablet has since been upgraded in place through v0.4.1 and is in daily use.
 

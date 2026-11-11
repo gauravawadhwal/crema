@@ -26,6 +26,7 @@ function patchHtml(el, html) {
   const t = document.createElement("template");
   t.innerHTML = html;
   patchChildren(el, t.content);
+  reapplyPending();
 }
 function patchChildren(el, from) {
   const want = [...from.childNodes];
@@ -55,22 +56,99 @@ const fmt1 = (n) => (n == null || Number.isNaN(n) ? "–" : Number(n).toFixed(1)
 const fmtC = (n) => (n == null || Number.isNaN(n) ? "–" : Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(1));
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
-function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg; t.hidden = false;
-  clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2800);
+// Up to three toasts at once, newest at the bottom, each timing out on its own. A message
+// already showing is refreshed, not repeated. `opts.action` ({ label, run }) adds a button
+// (Undo) and keeps the toast longer; `opts.duration` overrides the time in ms.
+const TOAST_MAX = 3;
+function toast(msg, opts = {}) {
+  const box = $("#toast");
+  if (!box) return;
+  const text = String(msg ?? "");
+  const ms = opts.duration ?? (opts.action ? 6000 : 2800);
+  let item = [...box.children].find((c) => c._msg === text);
+  if (item) item.remove();
+  else item = document.createElement("div");
+  clearTimeout(item._timer);
+  item._msg = text;
+  item.className = "toast-item";
+  item.textContent = "";
+  const span = document.createElement("span"); span.textContent = text; item.append(span);
+  if (opts.action) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "toast-act"; b.textContent = opts.action.label;
+    b.onclick = () => { clearTimeout(item._timer); item.remove(); syncToasts(); Promise.resolve().then(opts.action.run).catch((e) => toast(`Couldn't ${opts.action.label.toLowerCase()}: ${failText(e)}`)); };
+    item.append(b);
+  }
+  box.append(item);
+  while (box.children.length > TOAST_MAX) { clearTimeout(box.firstChild._timer); box.firstChild.remove(); }
+  box.hidden = false;
+  item._timer = setTimeout(() => {
+    item.classList.add("leaving");
+    const delay = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 160;
+    item._timer = setTimeout(() => { item.remove(); syncToasts(); }, delay);
+  }, ms);
 }
+const syncToasts = () => { const box = $("#toast"); if (box) box.hidden = !box.children.length; };
 
-// A failed request in plain words. The browser's own text for an unreachable address is not.
-const failText = (e) => {
+// A failed request in plain words. The browser's own text for an unreachable address is not,
+// and neither are status codes, paths, exception names, JSON or provider ids (E.plainError).
+// `fallback` is the sentence for the action when the message isn't fit to show.
+const failText = (e, fallback = "Decaid couldn't do that. Try again.") => {
   const m = String(e?.message ?? e ?? "").trim();
-  return !m || /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(m) ? "Decaid didn't answer" : m;
+  return !m || /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(m) ? "Decaid didn't answer" : E.plainError(m, fallback);
 };
 // Runs a write that has a button behind it. On failure it says so, runs `undo` to put the
 // screen back, and returns `undefined`; a success returns the write's own value (or true).
 async function attempt(what, write, undo) {
   try { return (await write()) ?? true; }
   catch (e) { try { undo?.(); } catch {} toast(`Couldn't ${what}: ${failText(e)}`); return undefined; }
+}
+// Wraps a button's click handler for a write that hits the network. While the handler's
+// promise is unsettled further taps do nothing; after 300 ms the button shows it is working
+// (.pending, aria-busy). The state is kept by selector, so a panel that redraws the button
+// (patchHtml) gets it back, and clears when the request settles.
+// Delegation includes buttons rebuilt with innerHTML as well as patchHtml.
+document.addEventListener("click", (ev) => {
+  const btn = ev.target.closest?.("button");
+  if (!btn || !pendingButton(btn)) return;
+  if (PENDING.has(pendingSelector(btn))) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+  if (btn.onclick && !btn.onclick._pending) {
+    btn.onclick = pendingTap(btn.onclick); btn.onclick._pending = true;
+  }
+}, true);
+function pendingButton(btn) {
+  return btn.matches('#loadBtn, #confirmFinish, #confirmBag, #confirmLeft, #saveBean, #useProfile, #askAgain, #reviewShot, #reviewDetail, #pinShot, #pinDetail, #clearRef, #favClear, #favSave, #favUpdate, #savePresets, #addWake, #doneBackflush, #doneDescale, [data-act], [data-brew], [data-use], [data-del]') || !!btn.closest('#view-settings');
+}
+const PENDING = new Map();
+let pendingSeq = 0;
+function pendingSelector(btn) {
+  if (btn.id) return `#${CSS.escape(btn.id)}`;
+  const a = [...btn.attributes].find((x) => x.name.startsWith("data-") && x.name !== "data-pend");
+  if (a) return `${btn.localName}[${a.name}="${a.value.replace(/["\\]/g, "\\$&")}"]`;
+  if (!btn.dataset.pend) btn.dataset.pend = String(++pendingSeq);
+  return `[data-pend="${btn.dataset.pend}"]`;
+}
+function markPending(sel, on) {
+  document.querySelectorAll(sel).forEach((b) => { b.classList.toggle("pending", on); if (on) b.setAttribute("aria-busy", "true"); else b.removeAttribute("aria-busy"); });
+}
+function reapplyPending() { for (const [sel, slot] of PENDING) if (slot.shown) markPending(sel, true); }
+function pendingTap(fn) {
+  const wrapped = function (ev) {
+    const btn = ev?.currentTarget;
+    if (!btn || btn.nodeType !== 1) return fn.apply(this, arguments);
+    const sel = pendingSelector(btn);
+    if (PENDING.has(sel)) return undefined;
+    const slot = { shown: false };
+    const done = () => { clearTimeout(slot.show); if (PENDING.get(sel) === slot) PENDING.delete(sel); markPending(sel, false); };
+    slot.show = setTimeout(() => { slot.shown = true; markPending(sel, true); }, 300);
+    PENDING.set(sel, slot);
+    let r;
+    try { r = fn.apply(this, arguments); } catch (e) { done(); throw e; }
+    Promise.resolve(r).then(done, done);
+    return r;
+  };
+  wrapped._pending = true;
+  return wrapped;
 }
 // Anything that still fails without anyone catching it (a button nobody wrote handling for)
 // shows up instead of doing nothing.
@@ -245,6 +323,7 @@ function makeLiveApi(conn) {
     return { id: s.id, timestamp: s.timestamp, beanId: null, batch: ctx.beanBatchId, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
       manual: manualKind(s.workflow?.profile), doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null, yieldG: s.annotations?.actualYield ?? (points.length ? points.at(-1).w : null), timeS: points.length ? Math.round(points.at(-1).t) : null,
       enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points,
+      targetYieldG: ctx.targetYield ?? s.workflow?.profile?.target_weight ?? null, targetTimeS: s.annotations?.extras?.crema?.targetTimeS ?? null,
       profile: s.workflow?.profile ?? null, stopReason: s.stopReason ?? s.annotations?.stopReason ?? null,
       review: s.annotations?.extras?.crema?.review ?? null,
       taste: { sourBitter: s.annotations?.extras?.crema?.sourBitter ?? null, body: s.annotations?.extras?.crema?.body ?? null } };
@@ -372,7 +451,7 @@ function makeLiveApi(conn) {
             info: { ...info, ...(batch?.roastDate ? { roastDate: { value: batch.roastDate.slice(0, 10), source: info.roastDate?.source ?? "bag" } } : {}), weightGrams: weight },
             recipe: rec?.recipe ?? null, recipeSource: rec?.recipeSource ?? (rec?.recipe ? "saved" : null),
             photo: rec?.photo ?? null, productImage: rec?.productImage ?? info.imageUrl ?? null, art: rec?.art,
-            weight, remaining: use.remaining, frozen: batch?.frozen ?? false, bestShotId: rec?.bestShotId ?? null, shots: use.shots ? use.shots.length : null,
+            weight, remaining: use.remaining, frozen: batch?.frozen ?? false, freezeDate: batch?.freezeDate ?? null, bestShotId: rec?.bestShotId ?? null, shots: use.shots ? use.shots.length : null,
           };
         }));
       }));
@@ -447,13 +526,17 @@ function makeLiveApi(conn) {
     // the shelf; the coffee itself is archived only when its last open bag is finished.
     async setBeanState(id, patch, batchId = null) {
       const { batch } = await coffee(id, batchId);
-      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen, freezeDate: patch.frozen ? new Date().toISOString() : null });
+      if (patch.frozen !== undefined && batch) await put(D(`/bean-batches/${batch.id}`), { frozen: patch.frozen, freezeDate: Object.hasOwn(patch, "freezeDate") ? patch.freezeDate : patch.frozen ? new Date().toISOString() : null });
       if (patch.finished === true) {
         if (batch) await put(D(`/bean-batches/${batch.id}`), { archived: true });
         const others = (await j(D(`/beans/${id}/batches?includeArchived=false`)).catch(() => [])).filter((x) => x.id !== batch?.id && !x.archived);
         if (!others.length) { await put(D(`/beans/${id}`), { archived: true }); await patchRecord(id, { finished: true }); }
       }
-      if (patch.finished === false) { await put(D(`/beans/${id}`), { archived: false }); await patchRecord(id, { finished: false }); }
+      if (patch.finished === false) {
+        await put(D(`/beans/${id}`), { archived: false });
+        if (batchId) await put(D(`/bean-batches/${batchId}`), { archived: false });
+        await patchRecord(id, { finished: false });
+      }
     },
     pinBest: (id, shotId) => patchRecord(id, { bestShotId: shotId }),
 
@@ -785,12 +868,12 @@ function drawChart(canvas, pts, o = {}) {
       if (weightAxis) { ctx.textAlign = "left"; ctx.fillText(String(Math.round((v / 12) * maxW)), W - pad.r + 6, yB(v) + 4); }
     }
     ctx.textAlign = "center";
-    const step = maxT > 60 ? 20 : 10;
+    const step = ahead != null ? 10 : maxT > 60 ? 20 : 10;
     for (let t = 0; t <= maxT; t += step) ctx.fillText(`${t}s`, x(t), H - 5);
   }
   const line = (data, key, color, y, width, { alpha = 1, dash = null } = {}) => {
     if (!data?.length || !data.some((d) => d[key] != null && Number.isFinite(Number(d[key])))) return;
-    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
+    ctx.save(); ctx.beginPath(); ctx.rect(pad.l, pad.t, iw, ih); ctx.clip(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
     if (dash) ctx.setLineDash(dash);
     ctx.beginPath();
     let drawing = false;
@@ -828,7 +911,7 @@ function drawChart(canvas, pts, o = {}) {
       const used = [];
       ctx.font = `${css("--t-xs")} ${css("--font-mono")}`; ctx.textAlign = "left";
       for (const [key, color, y, title, unit] of [["tp", "--pressure", yB, "pressure ", " bar"], ["tf", "--flow", yB, "flow ", " ml/s"], ["temp", "--temp", yT, "", " °C"]]) {
-        const point = plan.points.find((p) => p[key] != null && p.t > 0 && p.t <= maxT);
+        const point = plan.points.filter((p) => p[key] != null && p.t > 0 && p.t <= maxT).reduce((best, p) => !best || p[key] > best[key] ? p : best, null);
         if (!point) continue;
         const label = `${title}${fmtC(point[key])}${unit}`, width = ctx.measureText(label).width;
         if (width > iw) continue;
@@ -941,7 +1024,7 @@ function onDevices(payload) {
   if (payload && !Array.isArray(payload) && payload.connectionStatus) {
     const err = payload.connectionStatus.error ?? null;
     // Scale problems are a passing note, once per event; the rest stay as banners.
-    if (err && /^scale/.test(err.kind) && err.timestamp !== S.link.error?.timestamp) toast(err.suggestion ? `${err.message} ${err.suggestion}` : err.message);
+    if (err && /^scale/.test(err.kind) && err.timestamp !== S.link.error?.timestamp) toast(err.suggestion ? `${failText(err)} ${err.suggestion}` : err.message);
     S.link.error = err;
   }
   if (was === true && now === false) S.loaded = false; // what the machine holds is unknown until it's back
@@ -968,11 +1051,23 @@ function renderStatus() {
     ${aiDown() ? '<a class="chip warn" href="#settings" title="Using the rules until the Crema server answers">AI offline</a>' : ""}
     ${S.maint && (S.maint.backflushDue || S.maint.descaleDue) ? `<a class="chip warn" href="#settings">${S.maint.backflushDue ? "Backflush due" : "Descale due"}</a>` : ""}`);
 
+  $("#phoneStatusText").textContent = `${stateTxt} · ${fmt1(s?.groupTemperature ?? s?.mixTemperature)}° · ${S.water ? low ? "Water low" : `Water ${Math.round(tank)}%` : "Water –"}`;
   const asleep = st === "sleeping";
   $("#railSleepLabel").textContent = $("#phoneSleepLabel").textContent = asleep ? "Wake" : "Sleep";
 }
 // AI is switched on but the Crema server can't be reached: the rules are standing in.
 const aiDown = () => !!(S.api && !S.api.demo && S.api.ai.enabled && (S.api.info.serverError || (S.api.ai.available && !S.api.ai.healthy)));
+const LINK_BANNER_DELAY = 1500;
+let linkLostAt = null, linkBannerTimer = null;
+function linkLossLasted(down) {
+  if (!down) { linkLostAt = null; clearTimeout(linkBannerTimer); linkBannerTimer = null; return false; }
+  if (linkLostAt == null) linkLostAt = Date.now();
+  const left = LINK_BANNER_DELAY - (Date.now() - linkLostAt);
+  if (left <= 0) return true;
+  clearTimeout(linkBannerTimer);
+  linkBannerTimer = setTimeout(renderAlerts, left + 20);
+  return false;
+}
 function renderAlerts() {
   const st = S.snap?.state?.state;
   const a = [];
@@ -980,17 +1075,18 @@ function renderAlerts() {
   if (st === "needsWater") a.push(`<div class="banner bad"><span><b>Refill the water tank.</b> The machine stops until it has water.</span>${S.api.demo ? '<button class="btn small" id="refillBtn">Refill (demo)</button>' : ""}</div>`);
   const err = S.link.error;
   const exit = S.api.host?.canExit ? '<button class="btn small" data-exit-dash>Open Decaid</button>' : "";
-  if (unlinked()) {
+  const showLinkBanner = linkLossLasted(unlinked() || (!S.snap && !S.api.demo));
+  if (showLinkBanner && unlinked()) {
     a.push(`<div class="banner bad"><span><b>The machine isn't connected.</b> Decaid is running but can't reach the DE1. Check it's switched on, or reconnect it in Decaid.</span>${exit}</div>`);
-  } else if (!S.snap && !S.api.demo) a.push(`<div class="banner bad"><span><b>Can't reach the machine.</b> Check that Decaid is running on the tablet and on the same network.</span></div>`);
+  } else if (showLinkBanner && !S.snap && !S.api.demo) a.push(`<div class="banner bad"><span><b>Can't reach the machine.</b> Check that Decaid is running on the tablet and on the same network.</span></div>`);
   if (err?.kind === "profileUploadFailed") a.push(`<div class="banner warn"><span><b>The recipe hasn't reached the machine yet.</b> Decaid is trying again. Wait before pulling a shot.</span></div>`);
-  else if (err && !/^(scale|machine)/.test(err.kind) && err.severity === "error") a.push(`<div class="banner bad"><span><b>${esc(err.message)}</b>${err.suggestion ? ` ${esc(err.suggestion)}` : ""}</span>${exit}</div>`);
+  else if (err && !/^(scale|machine)/.test(err.kind) && err.severity === "error") a.push(`<div class="banner bad"><span><b>${esc(failText(err))}</b>${err.suggestion ? ` ${esc(err.suggestion)}` : ""}</span>${exit}</div>`);
   $("#alerts").innerHTML = a.join("");
   $$("[data-exit-dash]").forEach((b) => (b.onclick = exitToDashboard));
   const r = $("#refillBtn"); if (r) r.onclick = () => S.api.machine.refill();
 }
 async function tare() {
-  try { await S.api.machine.tare(); toast("Scale tared"); } catch (e) { toast(`Couldn't tare: ${e.message}`); }
+  try { await S.api.machine.tare(); toast("Scale tared"); } catch (e) { toast(`Couldn't tare: ${failText(e)}`); }
 }
 
 /* ================= next shot (brew home, left) ================= */
@@ -1009,6 +1105,7 @@ const savedGrind = (beanId) => local.get(`grind:${beanId ?? "bagless"}`, "") || 
 function setNextFromRecipe(bean, recipe) {
   const r = recipe || bean?.recipe;
   S.next = r ? { beanId: bean?.id ?? null, profileTitle: r.profileTitle, profileId: r.profileId ?? null, profileShape: r.profileShape ?? null, direct: r.direct ?? false, manual: r.manual ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.manual ? null : r.targetTimeS, grind: savedGrind(bean?.id) } : null;
+  S.reviewEdit = null;
   S.loaded = false;
   saveBrewChoice();
 }
@@ -1051,12 +1148,18 @@ function renderNextShot() {
     $("#prevBean").onclick = () => go(-1); $("#nextBean").onclick = () => go(1);
   }
   if (!n) return;
+  const edit = S.reviewEdit;
+  if (edit?.recipe === n) {
+    const field = edit.key === "grind" ? $("#grindInput").closest(".field-row") : $(`[data-value="${edit.key}"]`, el);
+    field?.classList.add("review-changed");
+    if (field) { const note = document.createElement("span"); note.className = "review-change-note muted small"; note.textContent = `Changed from ${edit.before}${edit.unit} after the last shot`; field.append(note); }
+  }
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
   $$("[data-value]", el).forEach((btn) => (btn.onclick = () => openValueSheet(btn.dataset.value)));
   $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, () => { renderNextShot(); renderControls(); }));
   $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
-  $("#resetRecipe").onclick = () => n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot());
+  $("#resetRecipe").onclick = () => resetReviewEdit() || (n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot()));
 }
 // One source for recipe editing bounds. Yield may be zero for direct/manual profiles.
 const RECIPE_FIELDS = {
@@ -1237,7 +1340,7 @@ async function loadNow(silent, queued) {
     renderNextShot();
     if (!silent) toast(`Loaded ${n.profileTitle}: ${n.doseG} g → ${n.yieldG} g at ${n.tempC} °C`);
     return S.loaded;
-  } catch (e) { toast(`Couldn't load the recipe: ${e.message}`); return false; }
+  } catch (e) { toast(`Couldn't load the recipe: ${failText(e)}`); return false; }
 }
 /* ================= the machine's recipe vs the screen ================= */
 // Decaid publishes no workflow stream and no revision, so a change made elsewhere
@@ -1323,7 +1426,7 @@ async function selectBean(key, opts = {}) {
       const row = fresh();
       if (row?.recipe) sameCoffee(b.id, (x) => { x.recipe = row.recipe; x.recipeSource = row.recipeSource; });
       else if (row) { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); }
-    } catch (e) { toast(`Couldn't get a recipe: ${e.message}`); }
+    } catch (e) { toast(`Couldn't get a recipe: ${failText(e)}`); }
     finally { if (S.recommending === b.id) S.recommending = null; }
     // Profiles may have been drawn while waiting (Add sends you there first).
     if (!$("#view-profiles").hidden && S.current === b) renderProfiles();
@@ -1342,13 +1445,22 @@ async function loadGhost() {
   S.ghost = (S.shots.find((s) => s.id === b.bestShotId) || (await S.api.shot(b.bestShotId).catch(() => null)))?.points || null;
 }
 // A coffee's reference shot (shared by its bags) is optional: `shotId` null removes it.
-async function setReference(bean, shotId, points = null) {
+async function setReference(bean, shotId, points = null, opts = {}) {
   if (!bean) return;
-  try { await S.api.pinBest(bean.id, shotId); } catch (e) { toast(`Couldn't save the reference: ${e.message}`); return false; }
+  const previous = bean.bestShotId ?? null;
+  try { await S.api.pinBest(bean.id, shotId); } catch (e) { toast(`Couldn't save the reference: ${failText(e)}`); return false; }
   sameCoffee(bean.id, (x) => (x.bestShotId = shotId));
   if (S.current?.id === bean.id) { if (points && shotId) S.ghost = points; else await loadGhost(); }
   renderLive();
-  toast(shotId ? "Set as the reference shot for this coffee" : "Reference shot removed");
+  if (shotId) toast("Set as the reference shot for this coffee");
+  else if (opts.quiet) toast("Reference shot back");
+  else toast("Reference shot removed", previous ? { action: { label: "Undo", run: async () => {
+    // Put it back through the same write, unless another reference has been set since.
+    const now = (await S.api.shelf()).find((x) => x.id === bean.id);
+    if (!now) return toast("This coffee is no longer on the shelf");
+    if (now.bestShotId) return toast("Another reference shot is set now");
+    await setReference(now, previous, null, { quiet: true });
+  } } } : {});
   return true;
 }
 
@@ -1550,12 +1662,22 @@ function editFav(i) {
     if (saved) { S.favourites = saved; closeSheet(); renderFavs(); }
     return !!saved;
   };
+  // Undo puts the favourite back in its slot through the same write (a fresh read, then that slot),
+  // unless the slot has been filled since.
+  const restoreFav = async () => {
+    const now = await S.api.favourites.get();
+    if (now[i]) return toast("That slot has a favourite in it now");
+    const saved = await writeFavourite(i, f, "bring the favourite back");
+    if (saved) { S.favourites = saved; renderFavs(); }
+  };
   $("#favSave").onclick = () => writeFav("save the name", { ...f, name: $("#favName").value.trim() || f.name });
   $("#favUpdate").onclick = async () => {
     if (!S.next) return;
     if (await writeFav("update the favourite", { ...f, ...favouriteRecipe(), profileTitle: S.next.profileTitle, doseG: S.next.doseG, yieldG: S.next.yieldG, tempC: S.next.tempC, beanId: S.current?.id ?? null, grinderSetting: S.next.grind || null })) toast("Favourite updated");
   };
-  $("#favClear").onclick = () => writeFav("clear the slot", null);
+  $("#favClear").onclick = pendingTap(async () => {
+    if (await writeFav("clear the slot", null)) toast(`Cleared "${f.name}"`, { action: { label: "Undo", run: restoreFav } });
+  });
 }
 
 /* ================= machine controls (brew home, right) ================= */
@@ -1569,7 +1691,7 @@ async function skipStep() {
   if (!shotRunning() || skippingStep || unlinked() || !S.snap || S.shotAcross || ctx.manual || prog.index == null || prog.index >= steps.length - 1) return;
   skippingStep = true; renderControls();
   try { await S.api.machine.skipStep(); }
-  catch (e) { toast(`Couldn't skip the step: ${e.message}`); }
+  catch (e) { toast(`Couldn't skip the step: ${failText(e)}`); }
   finally { skippingStep = false; renderControls(); }
 }
 function renderControls() {
@@ -1579,6 +1701,13 @@ function renderControls() {
   $("#pourTop").hidden = !pouring;
   $("#pourLeft").hidden = !pouring;
   const p = S.presets, st = S.snap?.state?.state;
+  document.body.classList.toggle("phone-busy", shotRunning() || ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting());
+  const phoneBusy = shotRunning() || ["espresso", "steam", "hotWater", "flush"].includes(st) || isStarting();
+  const phoneAction = $("#phoneAwayAction");
+  phoneAction.textContent = phoneBusy ? "STOP" : S.ghc ? "Start at group head" : "Espresso";
+  phoneAction.className = phoneBusy ? "stop-btn active" : "ctl-btn go";
+  phoneAction.disabled = phoneBusy ? false : S.ghc || !S.snap || unlinked() || NOT_READY.includes(st) || !S.next;
+  phoneAction.onclick = phoneBusy ? stopMachine : () => startOp("espresso");
   if (pouring) {
     const ctx = S.shotContext || {};
     const target = ctx.yieldG;
@@ -1609,7 +1738,7 @@ function renderControls() {
   const disabled = S.ghc || !S.snap || unlinked() || NOT_READY.includes(st);
   const sel = p.selected;
   const steam = p.steam[sel.steam] || p.steam[0], water = p.water[sel.water] || p.water[0], flush = p.flush[sel.flush] || p.flush[0];
-  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${esc(preset.label)} · ${detail}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
+  const split = (name, run, kind, preset, detail) => `<div class="ctl split-ctl"><button class="ctl-btn two-line" data-run="${run}" ${disabled || busy ? "disabled" : ""}>${name}<span class="sub">${String(preset.label).replace(/\s+/g, "").toLowerCase() === detail.replace(/\s+/g, "").toLowerCase() ? esc(detail) : `${esc(preset.label)} · ${detail}`}</span></button><button class="preset-open" data-presets="${kind}" aria-label="Choose ${name.toLowerCase()} preset" ${busy ? "disabled" : ""}>⌄</button></div>`;
   patchHtml($("#controls"), `
     <div class="ctl espresso-ctl"><button class="ctl-btn two-line ${st === "espresso" ? "" : "go"}" data-run="espresso" ${disabled || busy || !S.next ? "disabled" : ""}>Espresso<span class="sub">${S.ghc ? "Start at group head" : S.next ? `${fmtC(S.next.doseG)} → ${S.next.yieldG > 0 ? `${fmtC(S.next.yieldG)} g` : "manual stop"}${S.loaded ? "" : " · loads first"}` : "Choose a profile"}</span></button></div>
     ${split("Steam", "steam", "steam", steam, steam.seconds ? `${steam.seconds} s` : "until stopped")}
@@ -1630,7 +1759,7 @@ function openPresetSheet(kind) {
     const [k, idx] = b.dataset.preset.split(":");
     S.presets.selected[k] = Number(idx); closeSheet(); renderControls();
     await S.api.presets.set(S.presets).catch(() => {});
-    await pushPresetSettings(k).catch((e) => toast(`Couldn't update the machine: ${e.message}`));
+    await pushPresetSettings(k).catch((e) => toast(`Couldn't update the machine: ${failText(e)}`));
   }));
 }
 // Ranges for the workflow's steam, hot water and flush fields. Decaid accepts any
@@ -1693,7 +1822,7 @@ async function startOp(kind) {
     if (E.afterStartSent(current()) === "stopAgain") { S.api.machine.setState("idle").catch(() => {}); return; }
     S.api.machine.heartbeat();
   } catch (e) {
-    if (current()) toast(`Couldn't start: ${e.message}`);
+    if (current()) toast(`Couldn't start: ${failText(e)}`);
   } finally {
     const settled = E.startSettled({ stillCurrent: current(), sent, kind, now: Date.now() });
     if (settled.update) {
@@ -1719,7 +1848,7 @@ function exitToDashboard() {
 function stopMachine() {
   cancelStart();
   renderControls();
-  return S.api.machine.setState("idle").catch((e) => toast(`Couldn't stop: ${e.message}`));
+  return S.api.machine.setState("idle").catch((e) => toast(`Couldn't stop: ${failText(e)}`));
 }
 
 /* ================= live panel + running overlay ================= */
@@ -1731,8 +1860,27 @@ function renderScaleTile() {
 }
 // Shared with pour mode: descriptors are { name, detail, weight, state?, progress? }.
 function stepsRailHtml(steps) {
-  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .08;
+  const minimum = steps.reduce((n, step) => n + (Number(step.weight) || 1), 0) * .17;
   return steps.map((step) => `<div class="step ${step.state === "now" ? "now" : step.state === "done" ? "done" : ""}" style="flex-grow:${Math.max(minimum, Number(step.weight) || 1)}"><strong>${esc(step.name)}</strong><span>${esc(step.detail)}</span>${step.progress != null ? `<progress max="1" value="${clamp(step.progress, 0, 1)}"></progress>` : ""}</div>`).join("");
+}
+// Keep timing tied to the captured profile, even when the next recipe changes.
+function shotStepDuration(index) {
+  return S.shotTiming?.shape === brewProfileShape(activeProfile()) ? S.shotTiming.durations[index] ?? null : null;
+}
+function refreshShotTiming(context) {
+  const profile = context.profile, shape = brewProfileShape(profile);
+  if (!profile?.steps?.length) { S.shotTiming = null; return; }
+  if (S.plan?.timed === "shot" && brewProfileShape(nextProfile()?.profile) === shape) {
+    S.shotTiming = { shape, durations: S.plan.steps.map(s => Math.max(0, s.end - s.start)) };
+  }
+  const lp = S.library?.find(p => brewProfileShape(p.profile) === shape);
+  if (!lp) return;
+  planTiming(lp).then(timing => {
+    if (timing && S.shotContext === context && brewProfileShape(context.profile) === shape) {
+      S.shotTiming = { shape, durations: timing.durations };
+      if (shotRunning() && !$("#view-brew").hidden) renderLive();
+    }
+  });
 }
 function stepDetailText(step) {
   const tgt = step.target ? `${step.target.smooth ? "ramping to " : "holding "}${fmt1(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : "";
@@ -1746,7 +1894,9 @@ function stepDetailText(step) {
       : `${fmt1(tr.value)} → ${fmt1(tr.goal)} ${tr.kind.startsWith("pressure") ? "bar" : "ml/s"}`;
     return [trTxt, tgt].filter(Boolean).join(" · ");
   }
-  return [step.limitS != null ? `${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
+  const expected = shotStepDuration(step.index);
+  if (expected != null && expected < .05) return "not reached";
+  return [expected != null ? `${fmtC(expected)} s` : step.limitS != null ? `up to ${fmtC(step.limitS)} s` : "", step.target ? `${fmtC(step.target.value)} ${step.target.kind === "flow" ? "ml/s" : "bar"}` : ""].filter(Boolean).join(" · ");
 }
 function renderPour() {
   const ctx = S.shotContext || {};
@@ -1763,7 +1913,7 @@ function renderPour() {
   patchHtml(rail, prog.steps.length ? stepsRailHtml(prog.steps.map((s) => ({
     name: s.name,
     detail: stepDetailText(s),
-    weight: s.state === "now" ? Math.max(s.limitS || 8, 12) : s.state === "done" ? Math.max(s.elapsedS || 2, 3) : Math.max(s.limitS || 4, 4),
+    weight: s.state === "now" ? Math.max(s.limitS || 8, 12) : s.state === "done" ? Math.max(s.elapsedS || 2, 3) : Math.max(shotStepDuration(s.index) ?? s.limitS ?? 4, 4),
     state: s.state,
     progress: s.state === "now" ? (s.tracking?.progress ?? 0) : null,
   }))) : "");
@@ -1825,26 +1975,31 @@ function renderLive() {
     const durs = rawSteps.map((st, idx) => {
       const lim = Math.max(0, Number(st.seconds) || 0);
       if (idx < curIdx) return Math.max(0, (start[idx + 1] ?? curStart) - (start[idx] ?? 0));
-      if (idx === curIdx) return Math.max(lim, nowT - curStart + 2);
-      return lim;
+      if (idx === curIdx) return Math.max(shotStepDuration(idx) ?? lim, nowT - curStart + 2);
+      return shotStepDuration(idx) ?? lim;
     });
     const livePlan = rawSteps.length && curIdx != null ? E.profileCurve(prof, durs) : null;
     const curPlanStep = curIdx != null ? livePlan?.steps[curIdx] : null;
     const shade = curPlanStep ? [curStart, Math.max(nowT, curPlanStep.end)] : null;
-    const maxT = Math.max(40, Math.ceil(nowT / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, livePlan ? Math.ceil(planWindow(livePlan) / 10) * 10 : 0);
+    // Only elapsed time widens the live axis. Plan, reference and ETA never size it.
+    S.pourMaxT = Math.min(120, Math.max(S.pourMaxT || 40, 40 + Math.max(0, Math.floor((nowT - 39) / 10) + 1) * 10));
+    const maxT = S.pourMaxT;
     drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan: livePlan, targets: false, ahead: nowT, shade, endLabels: true });
     return;
   }
   // Before a shot the chart shows what the loaded profile asks for (S.plan); once one
   // starts, the machine's own targets take over.
-  const plan = pts.length ? null : S.plan;
+  const after = !$("#afterShot").hidden ? S.afterShot : null;
+  const trace = after?.points?.length ? after.points : pts;
+  const recordedProfile = after?.shot?.profile ?? after?.context?.profile;
+  const plan = after ? recordedProfile?.steps?.length ? E.profileCurve(recordedProfile, E.stepDurations(trace, recordedProfile.steps.length)) : null : pts.length ? null : S.plan;
   const rail = $("#planSteps");
-  rail.hidden = !plan;
-  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: `${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
+  rail.hidden = !!after || !plan;
+  patchHtml(rail, plan ? stepsRailHtml(plan.steps.map((step) => ({ name: step.name, detail: plan.timed === "shot" && step.end - step.start < .05 ? "not reached" : `${plan.timed === "shot" ? "" : "up to "}${fmtC(step.end - step.start)} s · ${fmtC(step.target)} ${step.pump === "flow" ? "ml/s" : "bar"}`, weight: step.end - step.start }))) : "");
   const maxT = Math.max(40, Math.ceil((pts.at(-1)?.t ?? 0) / 10) * 10, S.ghost ? Math.ceil(S.ghost.at(-1).t / 10) * 10 : 0, plan ? Math.ceil(planWindow(plan) / 10) * 10 : 0);
-  drawChart($("#liveChart"), pts, { maxT, maxW: Math.max(50, target + 10), ghost: S.ghost, plan });
+  drawChart($("#liveChart"), trace, { maxT: Math.max(maxT, Math.ceil((trace.at(-1)?.t ?? 0) / 10) * 10), maxW: Math.max(50, target + 10, (after?.shot?.yieldG ?? 0) + 10), ghost: S.ghost, plan });
   const st = S.snap?.state?.state;
-  const about = [plan ? `Dashed: what ${S.next.profileTitle} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
+  const about = [plan ? `Dashed: what ${after?.shot?.profileTitle ?? after?.context?.profileTitle ?? S.next?.profileTitle ?? "the profile"} asks for, ${plan.timed === "shot" ? "timed from your last shot with it" : "each step at its time limit (most end sooner)"}.` : "", S.ghost ? "Faint: your reference shot for this coffee." : ""].filter(Boolean).join(" ");
   $("#chartEmpty").hidden = pts.length > 0;
   $("#chartEmpty").textContent = !S.snap || unlinked() ? "Waiting for the machine…" : `${S.ghc ? "Press the espresso button on the group head." : "Tap Espresso to pull a shot."}${about ? ` ${about}` : ""}`;
   patchHtml($("#legend"), legendHtml(!!S.ghost, !!plan, !!S.current?.bestShotId, true));
@@ -1904,12 +2059,13 @@ function onSnapshot(s) {
   if (st === "espresso" || st !== prevState) { if (!$("#view-brew").hidden) renderLive(); }
 }
 function onShotStart() {
-  S.live = []; S.opStart = Date.now();
+  S.live = []; S.opStart = Date.now(); S.pourMaxT = 40; S.shotTiming = null;
   // A shot owns its recipe and profile. Subsequent edits and loads belong to the
   // next shot; unavailable machine data must never be filled from that draft.
   const context = JSON.parse(JSON.stringify(S.loadedRecipe || {}));
   S.shotContext = context;
-  S.api.machine.recipe().then((r) => { if (r && S.shotContext === context) { Object.assign(context, JSON.parse(JSON.stringify(r))); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
+  refreshShotTiming(context);
+  S.api.machine.recipe().then((r) => { if (r && S.shotContext === context) { Object.assign(context, JSON.parse(JSON.stringify(r))); refreshShotTiming(context); if (shotRunning() && !$("#view-brew").hidden) renderLive(); } }, () => {});
   // Which shot was newest before this one, so the end can tell when Decaid has saved it.
   S.shotBefore = undefined;
   S.api.latestShot().then((s) => { S.shotBefore = s?.id ?? null; }, () => {});
@@ -1990,14 +2146,76 @@ function bindStars(el, v, onChange) {
 function metricsHtml(m) {
   return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
 }
-function reviewHtml(saved) {
+// A review proposes one small numeric edit; applying it never loads the machine.
+function reviewAdjustment(advice) {
+  if (!S.next || !advice || advice.switchProfile) return null;
+  const changes = [];
+  if (advice.grindDelta && advice.grindDelta !== "same") {
+    const dir = /finer$/.test(advice.grindDelta) ? -1 : /coarser$/.test(advice.grindDelta) ? 1 : 0;
+    if (dir && String(S.next.grind).trim() && Number.isFinite(Number(S.next.grind))) changes.push({ key: "grind", field: "grind", label: "grind", unit: "", value: String(+(Number(S.next.grind) + dir * grindSettings().step).toFixed(3)) });
+  }
+  for (const [key, delta] of [["yield", advice.yieldDeltaG], ["temp", advice.tempDeltaC], ["dose", advice.doseDeltaG]]) {
+    if (Number.isFinite(delta) && delta !== 0) {
+      const f = RECIPE_FIELDS[key], value = recipeValue(key, S.next[f.field] + Math.sign(delta) * f.step);
+      if (value !== S.next[f.field]) changes.push({ key, field: f.field, label: key === "temp" ? "temperature" : key, unit: ` ${f.unit}`, value });
+    }
+  }
+  return changes.length === 1 ? changes[0] : null;
+}
+function reviewRecipeMatches(shot) {
+  return !!shot && !!S.next && shot.profileTitle === S.next.profileTitle && (shot.batch ? shot.batch === S.current?.batch : !S.current && !shot.beanId);
+}
+function bindReviewAdjustment(box, shot) {
+  const btn = $("[data-apply-review]", box);
+  if (!btn) return;
+  // The label and this payload describe the same rendered draft. Never recompute a
+  // different target on tap after an edit elsewhere in the next-shot panel.
+  const rendered = JSON.parse(btn.dataset.applyReview);
+  btn.onclick = () => {
+    if (S.reviewEdit?.shotId === shot.id) return;
+    if (!reviewRecipeMatches(shot) || JSON.stringify(S.next) !== rendered.draft) {
+      box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot);
+      toast("The next-shot recipe changed. Check the updated suggestion.");
+      return;
+    }
+    const { draft, ...edit } = rendered;
+    S.reviewEdit = { ...edit, before: S.next[edit.field], shotId: shot.id, recipe: S.next };
+    S.next[edit.field] = edit.value;
+    recipeEdited(); renderNextShot(); renderControls();
+    box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot);
+  };
+}
+function resetReviewEdit() {
+  const edit = S.reviewEdit;
+  if (!edit || edit.recipe !== S.next) return false;
+  S.next[edit.field] = edit.before;
+  S.reviewEdit = null;
+  recipeEdited(); renderNextShot(); renderControls();
+  for (const id of ["reviewBox", "detailReview"]) {
+    const box = $("#" + id), shot = S.shots.find((s) => s.id === edit.shotId);
+    if (box && shot) { box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot); }
+  }
+  return true;
+}
+function shotResultPills(shot, context = {}, points = shot?.points || []) {
+  const dose = shot?.doseG ?? context.doseG, weight = shot?.yieldG ?? points.at(-1)?.w;
+  const reason = E.stopReason({ recorded: shot?.stopReason, finalWeightG: weight, targetYieldG: shot?.targetYieldG ?? shot?.profile?.target_weight ?? context.yieldG, steps: shot?.profile?.steps, points });
+  const label = { weight: "Stopped at weight", volume: "Stopped at volume", user: "Stopped by you", profile: "Profile finished", machine: "Ended by machine", error: "Stopped with an error" }[reason.reason] || (reason.nearTarget ? "Stopped near target" : "Stop reason unknown");
+  const bean = S.shelf.find((b) => shot?.batch && b.batch === shot.batch);
+  const window = shot?.manual || context.manual ? null : shot?.targetTimeS ?? context.targetTimeS ?? (bean?.recipe && bean.recipe.profileTitle === shot?.profileTitle ? bean.recipe.targetTimeS : null);
+  const t = points.at(-1)?.t ?? shot?.timeS;
+  const verdict = window && t != null ? `${t < window[0] ? "Fast" : t > window[1] ? "Slow" : "In window"} · ${window.join("–")} s expected` : null;
+  return `${dose > 0 && weight > 0 ? `<span class="pill">1:${(weight / dose).toFixed(1)}</span>` : ""}<span class="pill ${reason.reason === "error" ? "warn" : ""}">${label}</span>${verdict ? `<span class="pill ${t < window[0] || t > window[1] ? "warn" : "good"}">${esc(verdict)}</span>` : ""}`;
+}
+function reviewHtml(saved, shot = null) {
   if (!saved?.review) return "";
   const review = saved.review;
+  const edit = reviewRecipeMatches(shot) && S.reviewEdit?.shotId !== shot.id ? reviewAdjustment(review.nextShot) : null;
   const source = String(saved.source || "").toLowerCase().includes("rules") ? "From Crema's shot checks" : "Review from the AI";
   return `<div class="advice shot-review"><div class="row between"><span class="label">${source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
     <p>${esc(review.summary)}</p>${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${review.issues?.length ? `<div class="label">To watch</div><ul>${review.issues.map((x) => `<li>${esc(x.what)} <span class="muted">${esc(x.evidence)}</span></li>`).join("")}</ul>` : ""}
-    ${review.nextShot ? `<div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>` : ""}
+    ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
 /* ===== Taste scales and the Review button, shared by the after-shot panel and the shot detail ===== */
@@ -2049,9 +2267,9 @@ function bindReviewButton(shot, { buttonSel, boxSel, isCurrent, manual }) {
       if (feedback) shot.taste = { sourBitter: feedback.sourBitter, body: feedback.body };
       const listed = S.shots.find((x) => x.id === shot.id);
       if (listed && listed !== shot) { listed.review = saved; if (feedback) listed.taste = shot.taste; }
-      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = reviewHtml(saved);
+      if (isCurrent() && $(boxSel)) { $(boxSel).innerHTML = reviewHtml(saved, shot); bindReviewAdjustment($(boxSel), shot); }
     } catch (err) {
-      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      if (isCurrent() && $(boxSel)) $(boxSel).innerHTML = `<p class="error">${esc(failText(err))}</p>`;
     } finally {
       S.reviewPending.delete(shot.id);
       const now = isCurrent() && $(buttonSel);
@@ -2068,21 +2286,17 @@ function showAfterShot(shot, pts, context = {}) {
   const unsaved = shot ? "" : `<p class="muted small">Decaid hasn't saved this shot yet, so the rating and advice can't be attached. Rate it from Shots in a moment.</p>`;
   const batch = shot ? shot.batch : context.batchId;
   const bean = batch ? S.shelf.find((b) => b.batch === batch) : null;
-  const r = bean?.recipe;
   const manual = shot?.manual || context.manual;
-  const timeS = pts.at(-1)?.t ?? shot?.timeS ?? null;
-  // The recommendation's time window belongs to its profile; a different profile
-  // pulled (picked here or set on the machine) isn't judged against it.
-  const window = !manual && (shot?.profileTitle ?? context.profileTitle) === r?.profileTitle ? r?.targetTimeS ?? null : null;
-  const [lo, hi] = window || [0, 0];
-  const timing = timeS == null || !window ? "" : timeS < lo ? `<span class="pill warn">Fast for this profile (${lo}–${hi} s)</span>` : timeS > hi ? `<span class="pill warn">Slow for this profile (${lo}–${hi} s)</span>` : `<span class="pill good">In the target window</span>`;
-  p.innerHTML = `
-    <div class="row between"><h2>How was it?</h2>${timing}</div>${unsaved}
-    ${metricsHtml(shotMetrics(pts.length ? pts : shot?.points || [], shot))}
+  const recordedPoints = pts.length ? pts : shot?.points || [];
+  S.afterShot = { shot, context, points: recordedPoints };
+  const timeS = recordedPoints.at(-1)?.t ?? shot?.timeS;
+  const weight = shot?.yieldG ?? recordedPoints.at(-1)?.w;
+  $("#afterResult").innerHTML = `<span class="label">Last shot${shot?.timestamp ? ` · ${new Date(shot.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span><div class="result-line num">${weight != null ? `${fmt1(weight)} g` : "Yield unknown"}${timeS != null ? ` in ${fmt1(timeS)} s` : ""}</div><div class="result-pills">${shotResultPills(shot, context, recordedPoints)}</div>`;
+  p.innerHTML = `${unsaved}
     <div id="tasteControls">${tasteScalesHtml(shot?.taste, { sourBitter: "sb", body: "bd" })}</div>
     <div class="row between"><div class="row"><span class="label">Enjoyment</span>${starsHtml(rating, "afterStars")}</div>
       <div class="row"><button class="btn primary" id="reviewShot" ${!shot ? "disabled" : ""}>${shot?.review ? "Review again" : "Review shot"}</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
-    <div id="reviewBox">${reviewHtml(shot?.review)}</div>`;
+    <div id="reviewBox">${reviewHtml(shot?.review, shot)}</div>`;
   if (manual) {
     $("#tasteControls").hidden = true;
     $("#pinShot").hidden = !bean;
@@ -2093,6 +2307,7 @@ function showAfterShot(shot, pts, context = {}) {
     $("#reviewBox").before(notes);
     $("#afterNotes").onchange = (e) => { shot.notes = e.target.value; S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes")); };
   }
+  bindReviewAdjustment($("#reviewBox"), shot);
   bindTasteScales(shot, { sourBitter: "sb", body: "bd" });
   // Closing the review readies the chart for the next shot: the profile again, not this one.
   $("#closeAfter").onclick = () => { p.hidden = true; $(".live-col").classList.remove("has-after"); if (S.snap?.state?.state !== "espresso") S.live = []; renderLive(); };
@@ -2192,7 +2407,7 @@ document.addEventListener("pointerdown", () => { if (S.chime) chimeUnlock(); }, 
 async function sleepWake() {
   const asleep = S.snap?.state?.state === "sleeping";
   cancelStart();
-  try { await S.api.machine.setState(asleep ? "idle" : "sleeping"); toast(asleep ? "Waking up" : "Going to sleep"); } catch (e) { toast(e.message); }
+  try { await S.api.machine.setState(asleep ? "idle" : "sleeping"); toast(asleep ? "Waking up" : "Going to sleep"); } catch (e) { toast(failText(e)); }
 }
 
 /* ================= sheet ================= */
@@ -2255,9 +2470,13 @@ async function renderShelf() {
   // The actions behind More. Each does what its button on the card used to do.
   const actions = {
     freeze: async (b) => {
-      closeSheet();
-      if (!(await attempt(b.frozen ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !b.frozen }, b.batch)))) return;
-      b.frozen = !b.frozen; renderShelf(); toast(b.frozen ? "Marked as frozen" : "Thawed");
+      const was = b.frozen, freezeDate = b.freezeDate ?? null;
+      if (!(await attempt(was ? "thaw the bag" : "freeze the bag", () => S.api.setBeanState(b.id, { frozen: !was }, b.batch)))) { closeSheet(); return; }
+      closeSheet(); await refreshShelf(); renderShelf();
+      toast(!was ? "Marked as frozen" : "Thawed", { action: { label: "Undo", run: async () => {
+        await S.api.setBeanState(b.id, { frozen: was, freezeDate }, b.batch);
+        await refreshShelf(); renderShelf();
+      } } });
     },
     finish: (b) => {
       const others = S.shelf.filter((x) => x.id === b.id && x.key !== b.key).length;
@@ -2266,7 +2485,10 @@ async function renderShelf() {
         if (!(await attempt("mark the bag finished", () => S.api.setBeanState(b.id, { finished: true }, b.batch)))) return;
         closeSheet(); await refreshShelf();
         if (S.current?.key === b.key) await selectBean(S.shelf.find((x) => x.id === b.id)?.key || S.shelf[0]?.key, { quiet: true });
-        renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf");
+        renderShelf(); toast(others ? "Bag finished" : "Moved off the shelf", { action: { label: "Undo", run: async () => {
+          await S.api.setBeanState(b.id, { finished: false }, b.batch);
+          await refreshShelf(); renderShelf();
+        } } });
       };
     },
     addbag: (b) => {
@@ -2280,7 +2502,7 @@ async function renderShelf() {
           const added = await S.api.addBag(b.id, { roastDate: $("#bagRoast").value || null, weight: Number.isFinite(w) && w > 0 ? w : null });
           closeSheet(); await refreshShelf(); renderShelf(); toast("Bag added");
           if (!S.current) await selectBean(added.key, { quiet: true });
-        } catch (e) { toast(`Couldn't add the bag: ${e.message}`); }
+        } catch (e) { toast(`Couldn't add the bag: ${failText(e)}`); }
       };
     },
     left: (b) => {
@@ -2290,7 +2512,7 @@ async function renderShelf() {
       $("#confirmLeft").onclick = async () => {
         const g = parseFloat($("#leftG").value);
         if (!Number.isFinite(g) || g < 0) return toast("Enter the grams left");
-        try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${e.message}`); }
+        try { b.remaining = await S.api.syncRemaining(b.id, b.batch, g); closeSheet(); renderShelf(); toast("Saved"); } catch (e) { toast(`Couldn't save: ${failText(e)}`); }
       };
     },
   };
@@ -2455,7 +2677,7 @@ async function startRecording() {
   } catch (err) {
     if (listening === me) listening = null;
     renderSpeak();
-    toast(`Couldn't write that down: ${err.message}. Type it instead.`);
+    toast(`Couldn't write that down: ${failText(err)}. Type it instead.`);
   }
 }
 
@@ -2670,7 +2892,7 @@ function renderReview(info, photo) {
         location.hash = "#profiles";
         await selectBean(saved.key);
       }
-    } catch (err) { toast(`Couldn't save: ${err.message}`); e.target.disabled = false; }
+    } catch (err) { toast(`Couldn't save: ${failText(err)}`); e.target.disabled = false; }
   };
   $("#discardBean").onclick = () => { pending = null; $("#reviewPanel").innerHTML = introFor(addMode); };
 }
@@ -2694,7 +2916,7 @@ async function onIdentify(e) {
     const info = await S.api.identify({ ...input, offline }, draw);
     renderReview(info, files[0] ? await thumbnail(files[0]) : null);
   } catch (err) {
-    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(err.message)}</p><p class="muted">Try a photo with the label in focus, or describe it again with the roaster's name first.</p>`;
+    panel.innerHTML = `<h2>Couldn't identify it</h2><p class="error">${esc(failText(err))}</p><p class="muted">Try a photo with the label in focus, or describe it again with the roaster's name first.</p>`;
   }
   btn.disabled = false;
 }
@@ -2739,9 +2961,9 @@ async function renderProfiles() {
       const again = $("#askAgain");
       if (again) again.onclick = async () => {
         again.disabled = true; again.textContent = "Asking…";
-        try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(e.message); again.disabled = false; }
+        try { const out = await S.api.recommend(b.id, { batchId: b.batch }); sameCoffee(b.id, (x) => { x.recipe = out.recipe; x.recipeSource = out.source; }); setNextFromRecipe(b); renderProfiles(); } catch (e) { toast(failText(e)); again.disabled = false; }
       };
-    } catch (e) { rec.innerHTML = `<p class="error">${esc(e.message)}</p>`; }
+    } catch (e) { rec.innerHTML = `<p class="error">${esc(failText(e))}</p>`; }
   } else rec.innerHTML = "";
   if (!S.catalog) S.catalog = await S.api.catalog().catch(() => []);
   [S.library, S.machineInfo] = await Promise.all([S.api.library().catch(() => null), S.api.machine.info().catch(() => null)]);
@@ -2908,7 +3130,7 @@ async function renderShots(more = false) {
   } catch (e) {
     // A failed load isn't an empty history.
     list.removeAttribute("aria-busy"); $("#shotFilters").hidden = true;
-    list.innerHTML = `<p class="muted">Couldn't load your shots (${esc(e.message)}).</p><button class="btn" id="retryShots">Try again</button>`;
+    list.innerHTML = `<p class="muted">Couldn't load your shots (${esc(failText(e))}).</p><button class="btn" id="retryShots">Try again</button>`;
     $("#retryShots").onclick = () => renderShots(); $("#shotDetail").innerHTML = ""; return;
   }
   list.removeAttribute("aria-busy");
@@ -2949,7 +3171,7 @@ function renderShotList(scrollTop = $("#shotList").scrollTop) {
   list.innerHTML = visible.map((s, i) => `<div class="shot-row ${s.id === S.selShot ? "sel" : ""} ${s.id === S.cmpShot ? "cmp" : ""}">
       <canvas data-spark="${i}" aria-hidden="true"></canvas>
       <button class="open" data-open="${esc(s.id)}"><strong class="clip1">${esc(shotCoffee(s))}</strong>
-        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span><span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button>
+        <span class="shot-meta"><span>${new Date(s.timestamp).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><span class="num">${fmt1(s.doseG)}→${fmt1(s.yieldG)} g</span><span class="num">${s.timeS ?? "–"} s</span>${shotResultPills(s)}<span data-rating="${esc(s.id)}">${ratingPoints(s.enjoyment) ? starsHtml(s.enjoyment) : "Not rated"}</span>${S.shelf.some((b) => b.bestShotId === s.id) ? '<span class="pill accent">Reference</span>' : ""}</span></button>
       <label class="cmp-label"><input type="checkbox" data-cmp="${esc(s.id)}" ${s.id === S.cmpShot ? "checked" : ""} aria-label="Compare with this shot" ${s.id === S.selShot ? "disabled" : ""}><span>Compare</span></label></div>`).join("") + olderBtn;
   list.scrollTop = scrollTop;
   const moreBtn = $("#moreShots"); if (moreBtn) moreBtn.onclick = () => { moreBtn.disabled = true; moreBtn.textContent = "Loading…"; renderShots(true); };
@@ -2976,7 +3198,7 @@ function renderShotDetail() {
     ${s.manual ? "" : tasteScalesHtml(s.taste, { sourBitter: "detailSb", body: "detailBody" })}
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>
     <div class="row"><button class="btn primary" id="reviewDetail">${s.review ? "Review again" : "Review shot"}</button></div>
-    <div id="detailReview">${reviewHtml(s.review)}</div>`;
+    <div id="detailReview">${reviewHtml(s.review, s)}</div>`;
   detail.scrollTop = changedShot ? 0 : scrollTop;
   requestAnimationFrame(() => drawChart($("#detailChart"), s.points, { maxT: Math.max(40, Math.ceil(Math.max(s.timeS || 0, c?.timeS || 0) / 10) * 10), maxW: Math.max(50, (s.yieldG || 36) + 10), ghost: c?.points }));
   bindStars($("#detailStars"), s.enjoyment, async (n) => {
@@ -2994,6 +3216,7 @@ function renderShotDetail() {
     try { await S.api.annotate(s.id, { espressoNotes: text }); s.notes = text; toast("Notes saved"); }
     catch (err) { s.notes = before; toast(`Couldn't save the notes: ${failText(err)}. They're still in the box`); }
   };
+  bindReviewAdjustment($("#detailReview"), s);
   bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
   bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", manual: s.manual, isCurrent: () => S.selShot === s.id });
   const pin = $("#pinDetail");
@@ -3153,7 +3376,7 @@ async function renderSettings() {
         }
         saved = input.value;
         if (!id.startsWith("p")) toast("Saved");
-      } catch (e) { input.value = saved; toast(`Couldn't save: ${e.message}`); }
+      } catch (e) { input.value = saved; toast(`Couldn't save: ${failText(e)}`); }
       finally { saving = false; input.disabled = false; buttons.forEach((b) => (b.disabled = false)); }
     };
     let saveTimer;
@@ -3174,7 +3397,7 @@ async function renderSettings() {
       $$('[data-mini^="gStart:"]').forEach((x) => (x.dataset.mini = `gStart:${x.dataset.mini.includes("-") ? -v : v}`));
       $("#gStart").step = String(v);
       toast("Saved");
-    } catch (e) { toast(`Couldn't save: ${e.message}`); renderSettings(); }
+    } catch (e) { toast(`Couldn't save: ${failText(e)}`); renderSettings(); }
   }));
   $("#sGhc").onchange = (e) => { S.ghc = e.target.checked; local.set("ghc", S.ghc); renderControls(); };
   // A switch that can't be saved goes back to where it was.
@@ -3244,7 +3467,7 @@ function editPresets() {
   $("#savePresets").onclick = async () => {
     $$("[data-pl]").forEach((i) => { const [k, n] = i.dataset.pl.split(":"); p[k][n].label = i.value.trim() || p[k][n].label; });
     $$("[data-pv]").forEach((i) => { const [k, n, key] = i.dataset.pv.split(":"); const v = parseFloat(i.value); if (Number.isFinite(v)) p[k][n][key] = v; });
-    try { S.presets = await S.api.presets.set(p); closeSheet(); renderControls(); toast("Presets saved"); } catch (e) { toast(e.message); }
+    try { S.presets = await S.api.presets.set(p); closeSheet(); renderControls(); toast("Presets saved"); } catch (e) { toast(failText(e)); }
   };
 }
 
@@ -3428,7 +3651,7 @@ async function boot() {
   $("#demoBanner").hidden = !S.api.demo;
   // Offer to connect when this page could reach a machine (not the hosted demos).
   if (S.api.demo && !forceDemo && location.protocol === "http:") {
-    $("#demoBanner").innerHTML = `Demo mode: no machine connected. <button class="btn small" id="connectBtn" type="button">Connect</button>`;
+    $("#demoBanner").innerHTML = `<span class="demo-long">Demo mode: no machine connected. </span><span class="demo-short">Demo </span><button class="btn small" id="connectBtn" type="button">Connect</button>`;
     $("#connectBtn").onclick = () => connectSheet();
     if (conn?.decaidError) setTimeout(() => connectSheet(`Couldn't reach the machine at ${conn.decaidError}, so this is the demo.`), 300);
   }
@@ -3444,6 +3667,10 @@ async function boot() {
   $("#addForm").addEventListener("submit", onIdentify);
   $("#speakBtn").onclick = () => (listening ? stopListening(true) : startListening());
   $("#describeInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#identifyBtn").click(); } });
+  $("#phoneStatusToggle").onclick = () => {
+    const expanded = $("#topbar").classList.toggle("expanded");
+    $("#phoneStatusToggle").setAttribute("aria-expanded", String(expanded));
+  };
   $("#railSleep").onclick = $("#phoneSleep").onclick = sleepWake;
   wireSaver();
   $("#sheetBack").onclick = (e) => { if (e.target === $("#sheetBack")) closeSheet(); };
@@ -3471,6 +3698,7 @@ async function boot() {
   window.addEventListener("hashchange", () => { if (location.hash !== "#add") stopListening(false); route(); });
   window.addEventListener("crema:ai", () => renderStatus());
   window.addEventListener("resize", () => { if (!$("#view-brew").hidden) renderLive(); });
+  new ResizeObserver(() => { if (!$("#view-brew").hidden) renderLive(); }).observe($("#liveChart").parentElement);
   renderStatus(); renderAlerts();
   route();
 }

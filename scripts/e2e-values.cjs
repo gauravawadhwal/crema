@@ -34,7 +34,7 @@ const fs = require('node:fs');
       if (close === 'escape') await page.keyboard.press('Escape');
       if (close === 'swipe') { const h = await page.locator('.value-handle').boundingBox(); await page.mouse.move(h.x + 10, h.y + 10); await page.mouse.down(); await page.mouse.move(h.x + 10, h.y + 75); await page.mouse.up(); }
       assert.equal(await recipe(), before, close + ' leaves recipe unchanged');
-      assert.equal(await page.locator('#sheetBack').isVisible(), false);
+      await page.locator('#sheetBack').waitFor({ state: 'hidden' });
     }
     await open('dose');
     await page.waitForSelector('[data-recent]');

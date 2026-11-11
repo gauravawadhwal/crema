@@ -75,6 +75,9 @@ jobs:
       - name: Click-through, built single-file demo
         if: matrix.group == 'demo'
         run: node scripts/e2e-demo.cjs --built
+      - name: Phone action bar and compact pour
+        if: matrix.group == 'demo'
+        run: node scripts/e2e-phone.cjs
       - name: Independent shot-history panes, source and built demo
         if: matrix.group == 'demo'
         run: node scripts/e2e-shot-history.cjs && node scripts/e2e-shot-history.cjs --built
@@ -109,7 +112,7 @@ jobs:
       - name: Home screen fits the tablet
         if: matrix.group == 'brewing'
         run: node scripts/check-tablet-fit.cjs ui-shots/fit
-      # Fails on anything outside scripts/check-targets.allow.json, and on stale entries in it.
+      # Every touch-target, overlap and clipped-text failure fails CI.
       - name: Touch targets, overlaps and clipped text, source and built demo
         if: matrix.group == 'brewing'
         run: node scripts/check-targets.cjs --shots ui-shots/targets && node scripts/check-targets.cjs --built

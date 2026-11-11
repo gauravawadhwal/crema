@@ -6,3 +6,4 @@ export * from "./shelf.js";
 export * from "./record.js";
 export * from "./steps.js";
 export * from "./stop.js";
+export * from "./plain-error.js";
