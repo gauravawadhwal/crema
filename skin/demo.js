@@ -114,13 +114,14 @@ function makeDemoApi() {
   const history = [[0, 2, 1.0, 8], [0, 26, 0.9, 7], [1, 5, 1.0, 9], [1, 29, 1.08, 10], [4, 50, 0.97, 8], [4, 52, 1.04, 6], [2, 74, 0.94, 7], [5, 98, 1.0, 8], [3, 120, 1.06, 9], [5, 140, 1.15, 4]];
   history.forEach(([bi, hoursAgo, resistance, rating], i) => {
     const b = onShelf[bi % onShelf.length], r = b.recipe;
-    const points = CE.simulateShot(CE.withTemperature(clone(profileTitled(r.profileTitle)), r.tempC), r.yieldG, { resistance }).map((x) => ({ ...x, temp: x.temp ?? r.tempC }));
+    const recordedProfile = CE.withTemperature(clone(profileTitled(r.profileTitle)), r.tempC);
+    const points = CE.simulateShot(recordedProfile, r.yieldG, { resistance }).map((x) => ({ ...x, temp: x.temp ?? r.tempC }));
     const secs = Math.round(points.at(-1).t);
     const generated = {
       id: `s${i}`, timestamp: new Date(Date.now() - hoursAgo * 36e5).toISOString(), beanId: b.id, batch: b.batch,
       coffee: b.info.name.value, roaster: b.info.roaster.value, profileTitle: r.profileTitle, doseG: r.doseG,
       yieldG: r.yieldG - 0.4 + (i % 3) * 0.3, targetYieldG: r.yieldG, targetTimeS: r.targetTimeS ?? null, timeS: secs, enjoyment: rating, notes: "", taste: {},
-      profile: clone(profileTitled(r.profileTitle)), stopReason: null, review: savedReviewOf(`s${i}`), points,
+      profile: recordedProfile, stopReason: null, review: savedReviewOf(`s${i}`), points,
     };
     shots.push(savedReviews[`s${i}`]?.shot ? clone(savedReviews[`s${i}`].shot) : generated);
   });
@@ -164,7 +165,7 @@ function makeDemoApi() {
       const b = all.find((x) => x.batch === workflow.context.beanBatchId);
       const last = sim.samples.at(-1);
       const id = nextShotId();
-      const shot = { id, timestamp: new Date().toISOString(), beanId: b?.id ?? null, batch: b?.batch ?? null, coffee: b?.info.name.value ?? null, roaster: b?.info.roaster.value ?? null, manual: manualKind(workflow.profile), profileTitle: workflow.profile.title, doseG: workflow.context.targetDoseWeight, yieldG: Math.round(last.w * 10) / 10, targetYieldG: workflow.context.targetYield ?? workflow.profile.target_weight ?? null, targetTimeS: null, timeS: Math.round(last.t), enjoyment: null, notes: "", taste: {}, profile: clone(workflow.profile), stopReason, review: savedReviewOf(id), points: sim.samples.slice() };
+      const shot = { id, timestamp: new Date().toISOString(), beanId: b?.id ?? null, batch: b?.batch ?? null, coffee: b?.info.name.value ?? null, roaster: b?.info.roaster.value ?? null, manual: manualKind(workflow.profile), profileTitle: workflow.profile.title, doseG: workflow.context.targetDoseWeight, yieldG: Math.round(last.w * 10) / 10, targetYieldG: workflow.context.targetYield ?? workflow.profile.target_weight ?? null, targetTimeS: null, timeS: Math.round(last.t), grinderSetting: workflow.context.grinderSetting ?? null, enjoyment: null, notes: "", taste: {}, profile: clone(workflow.profile), stopReason, review: savedReviewOf(id), points: sim.samples.slice() };
       shots.push(shot);
       if (b) b.used += workflow.context.targetDoseWeight;
     }
@@ -354,10 +355,15 @@ function makeDemoApi() {
       const points = [...byTime.values()].sort((a, b) => a.t - b.t).slice(-1800);
       const bag = s.batch ? all.find((b) => b.batch === s.batch) : null;
       const history = s.batch ? shots.filter((x) => x.batch === s.batch && x.id !== s.id && Date.parse(x.timestamp) < Date.parse(s.timestamp)).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 10) : [];
-      const targetTimeS = s.targetTimeS ?? (bag?.recipe?.profileTitle === s.profile?.title ? bag.recipe.targetTimeS : null) ?? (s.profile?.title && !manualKind(s.profile) ? CE.findProfile(s.profile.title)?.recipe?.timeS ?? null : null);
-      const input = { points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG: s.targetYieldG ?? s.profile?.target_weight ?? null, targetTimeS: targetTimeS,
+      const { durationS: _durationS, ...recordedContext } = recordedReviewContext(s.profile ?? null, points, s.grinderSetting);
+      const targetYieldG = recordedReviewNumber(s.targetYieldG ?? s.profile?.target_weight, 0, 500);
+      const timeContext = reviewTimeContext(s.profile ?? null, { ...recordedContext, doseG: s.doseG, yieldG: s.yieldG, targetYieldG, windows: [s.targetTimeS] }, bag?.recipe);
+      const input = { timestamp: s.timestamp ?? null, ...recordedContext, points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG, ...timeContext,
         stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: null } : null, notes: s.notes || null, bean: bean ?? bag?.info ?? null,
-        installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => ({ timestamp: x.timestamp, profileTitle: x.profileTitle, doseG: x.doseG, yieldG: x.yieldG, enjoyment: x.enjoyment ?? undefined, notes: x.notes || undefined, review: x.review?.review?.summary ?? undefined })) };
+        installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => ({ timestamp: x.timestamp, profileTitle: x.profileTitle,
+          ...recordedReviewContext(x.profile ?? null, x.points ?? [], x.grinderSetting), doseG: recordedReviewNumber(x.doseG, 0, 60), yieldG: recordedReviewNumber(x.yieldG, 0, 500),
+          targetYieldG: recordedReviewNumber(x.targetYieldG ?? x.profile?.target_weight, 0, 500), stopReason: x.stopReason ?? null,
+          enjoyment: x.enjoyment ?? null, notes: x.notes?.slice(0, 500) || null, review: x.review?.review?.summary?.slice(0, 1000) ?? null })) };
       const saved = { version: 1, review: CE.rulesReview(input), source: "rules", createdAt: new Date().toISOString() };
       s.review = saved; saveDemoReview(s); return clone(saved);
     },

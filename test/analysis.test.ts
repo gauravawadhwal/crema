@@ -198,14 +198,15 @@ describe("real Decaid shot shapes", () => {
   });
 
   it("says what the shot did in the rules summary, and admits when there is too little", () => {
-    expect(rulesReview(real(shot())).summary).toBe(
-      "Finished in 28 s, right in the 25–35 s target window. Pressure held 6.0 bar against the 6.0 bar target at 1.6 ml/s."
-    );
-    expect(rulesReview({ ...real(shot()), targetTimeS: null }).summary).toMatch(
-      /^34\.6 g from 18 g \(1:1\.9\) in 28 s, 6 s of it preinfusion, stopped at the target weight\. Pressure held 6\.0 bar against the 6\.0 bar target at 1\.6 ml\/s\./
-    );
+    const clean = rulesReview(real(shot())).summary;
+    expect(clean).toContain("right in the 25–35 s target window");
+    expect(clean).toContain("6.0 bar");
+    expect(clean).toMatch(/repeat.*taste/);
+    const withoutWindow = rulesReview({ ...real(shot()), targetTimeS: null }).summary;
+    expect(withoutWindow).toMatch(/^Pressure held 6\.0 bar against the 6\.0 bar target/);
+    expect(withoutWindow).not.toContain("34.6 g from 18 g");
     const thin = rulesReview(input({ points: shot().slice(0, 7), profile: limited("4"), yieldG: null }));
-    expect(thin.summary).toBe("There is not enough telemetry to draw a conclusion from this shot.");
+    expect(thin.summary).toMatch(/too short or sparse.*Repeat with recording/);
   });
 
   it("flags a pressure shortfall when a flow limiter caps pressure well below target", () => {
@@ -215,7 +216,7 @@ describe("real Decaid shot shapes", () => {
     expect(review.nextShot).toMatchObject({ change: "Grind finer", grindDelta: "finer" });
     expect(review.nextShot?.reasoning).toMatch(/pressure fell short/i);
     expect(review.summary).toContain("Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s");
-    expect(review.summary).toContain("Grind finer");
+    expect(review.summary).toContain("finer grind step");
     const step = analyzeShot(real(shot({ p: 3.8, f: 2.2 }), limited("2.2"))).facts.pourSteps[0];
     expect(step).toMatchObject({ frame: 1, pump: "pressure", target: 6, actualMean: 3.8, limiterValue: 2.2, limiterEngaged: true });
   });
@@ -246,11 +247,40 @@ describe("real Decaid shot shapes", () => {
 
     const fromCatalog = analyzeShot(input({
       profile: { title: "Extractamundo Dos!", beverage_type: "espresso", steps: pressureProfile.steps },
-      points: points(17), targetTimeS: null, stopReason: "targetWeight",
+      points: points(17), targetTimeS: null, targetYieldG: 40, yieldG: 40, stopReason: "targetWeight",
     }));
     expect(fromCatalog.facts.expectedTimeS).toEqual([25, 35]);
     expect(fromCatalog.facts.timeStatus).toBe("fast");
     expect(fromCatalog.issues.map((x) => x.kind)).toContain("fast_shot");
+  });
+
+  it("explains contradictory mechanical evidence without inventing a taste report", () => {
+    const review = rulesReview(input({ points: points(19, { f: 0.25 }), targetTimeS: [28, 34], stopReason: "targetWeight" }));
+    expect(review.issues.map(i => i.kind)).toEqual(expect.arrayContaining(["choked", "fast_shot"]));
+    expect(review.nextShot).toBeNull();
+    expect(review.summary).toMatch(/mechanical signals.*opposite/);
+    expect(review.summary).not.toMatch(/Taste and curve/);
+  });
+
+  it("does not turn an intentional ramp or an unrecorded target into a pressure hold diagnosis", () => {
+    for (const measuredTarget of [true, false]) {
+      const curve = points(31).map(p => ({ ...p, p: p.t * 0.3, tp: measuredTarget ? p.t * 0.3 : null }));
+      const shot = input({ points: curve, targetTimeS: [25, 35] });
+      expect(analyzeShot(shot).metrics.observedWindows).toBe(0);
+      expect(analyzeShot(shot).facts.pourSteps[0].steadyTarget).toBe(false);
+      expect(rulesReview(shot).summary).not.toMatch(/Pressure held|Pour pressure only reached|low puck resistance/);
+      expect(rulesReview(shot).nextShot).toBeNull();
+    }
+  });
+
+  it("keeps a catalogue window descriptive when an intentional longer ratio differs from its recipe", () => {
+    const shot = input({ profile: { ...pressureProfile, title: "Gentle and sweet", steps: [{ pump: "pressure", pressure: "6", seconds: "60" }] }, points: points(51, { p: 6, tp: 6 }), doseG: 18, yieldG: 72, targetYieldG: 72, targetTimeS: null, stopReason: "targetWeight" });
+    const analysis = analyzeShot(shot);
+    expect(analysis.facts).toMatchObject({ expectedTimeSource: "guide", timeStatus: "slow", timeTargetComparable: false });
+    expect(analysis.issues.map(i => i.kind)).not.toContain("slow_shot");
+    const review = rulesReview(shot);
+    expect(review.nextShot).toBeNull();
+    expect(review.summary).toContain("guide window");
   });
 });
 

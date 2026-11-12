@@ -68,7 +68,7 @@ const mockAnswers: Record<string, (prompt: string) => unknown> = {
     const findings = JSON.parse(section("DETERMINISTIC OBSERVATIONS") || "[]");
     const feedback = JSON.parse(section("TASTE (null") || "null");
     return { summary: "(mock) Review of the recorded shot. Taste it before deciding what to change.", wentWell: [], issues: findings,
-      nextShot: null, confidence: "low", askTaste: feedback == null };
+      nextShot: null, confidence: "low", askTaste: feedback == null, notesEvidence: null, notesTaste: null };
   },
   // Picks the top-ranked candidate from the prompt, like a model that agrees with the rules.
   Recipe: (prompt) => {

@@ -9,7 +9,7 @@ whether the result got better or worse, and by how much it costs.
 | `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page, a typed or dictated description, and/or a query | 27 self-contained + 9 live web |
 | `recommend` | `recommend()` in `server/recommend/index.ts` | `Recipe`: one profile among the installed candidates, plus dose, yield, temperature and guidance | 32 |
 | `dialin` | `dialIn()` in `server/recommend/index.ts` | `DialInAdvice`: the one change to make after a shot | 28 |
-| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded observations, narrative and at most one next-shot change | 26 synthetic |
+| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded interpretation, recorded history and one next decision | 39 synthetic |
 
 The runner calls those real functions, with the real prompts and the real
 post-processing (rules fallback, profile-title matching), and swaps only the
@@ -48,6 +48,60 @@ Any provider in `server/llm/` works: `claude-cli`, `codex-cli`,
 `anthropic-api`, `gemini-api` (e.g. `--provider gemini-api --model
 gemini-2.5-flash-lite`), and `mock`. `--provider rules` runs Crema's
 deterministic fallback in place of a model.
+
+## Shot-review quality — 12 November 2026
+
+The current review suite has **39 cases: 28 dev and 11 holdout**. It tests
+recorded-history comparisons and confounds, timing/target interpretation, useful
+abstention, notes-driven advice, negation and embedded instructions. The design,
+comparison tolerances and limitations are in
+[shot-review-quality.md](../docs/shot-review-quality.md).
+
+Factual/decision checks are independent authored expectations. With `--judge`,
+review contradictions, invented figures and specificity/actionability/plain-language
+scores are independent gates. The score average cannot compensate for an unusable
+next step. The lexical explanation/experiment checks remain diagnostics; they are
+not a substitute for semantic judging. Reports without a judge establish the code
+checks only. Missing judge replies are reported as failures, never as successful
+quality validation.
+
+The judge receives the system instructions and case input the subject actually saw,
+including computed comparisons, and rejudging uses saved historical prompt text.
+Illustrative prompt examples are not measurements. Grader tests include known good
+paraphrases and intentionally wrong answers, not just the rules output.
+
+For controlled Codex evals, use an explicit model and the eval-only wrapper to avoid
+loading desktop integrations. Production provider defaults are unchanged:
+
+```bash
+CODEX_BIN="$PWD/scripts/codex-eval-isolated.cjs" CODEX_REASONING_EFFORT=medium npm run eval -- --task review --provider codex-cli --model gpt-6.1-terra --split dev --repeat 3 --judge codex-cli:gpt-6.1-sol
+CODEX_BIN="$PWD/scripts/codex-eval-isolated.cjs" CODEX_REASONING_EFFORT=medium npm run eval -- --task review --provider codex-cli --model gpt-6.1-terra --split holdout --judge codex-cli:gpt-6.1-sol
+```
+
+Use development outputs for iteration, then run holdout once without using its
+outputs to tune the prompt or labels. A holdout that has already been inspected is
+no longer fresh. Do not compare headline pass rates from different datasets,
+providers or judge/gate versions as if they measured only a prompt change.
+
+Measured baselines (Terra subject, Sol judge; isolated, medium reasoning):
+
+| Baseline | Result |
+|---|---|
+| `review.rules.json` | 36/39; conservatively abstains on semantic notes cases |
+| `review.codex-cli-gpt-6.1-terra-dev.json` | 84/84 dev trials; all model/judge calls answered |
+| `review.codex-cli-gpt-6.1-terra-initial-holdout.json` | First holdout: 9/11; two factual-check coverage errors |
+| `review.codex-cli-gpt-6.1-terra-holdout.json` | Same saved outputs rescored 11/11 after grader corrections; **not fresh** |
+
+The original holdout and corrected rescore are both committed. The corrections
+recognize correctly assigned numeric comparisons and recorded setting labels,
+without changing the prompt or intended decisions. The 32 quota-failed dev trials
+were retried with exact system/input guards; the initial 52 completed trials were
+preserved. See the quality record for provenance, confidence limits and diagnostic
+heuristic rates. These synthetic results do not establish physical diagnostic accuracy.
+
+Claude Haiku/Opus revalidation is deferred after a subscription-limit failure.
+Interrupted reference runs and a stale-desktop-MCP Codex run are not promoted as
+complete quality baselines. The older Haiku results below measure earlier prompts.
 
 ## Shot review baseline — 10 November 2026
 

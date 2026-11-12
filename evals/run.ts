@@ -113,10 +113,11 @@ if (args.regrade) {
     const j = parseSubject(args.judge);
     if (j.subject.kind !== "llm") throw new Error("--judge needs a model provider");
     const provider = j.subject.provider;
-    await pool(records, Number(args.concurrency), (r) => rejudge(file.meta.task, r, provider));
+    await pool(records, Number(args.concurrency), (r) => rejudge(file.meta.task, r, provider, file.meta.prompts));
     file.meta.judge = j.name;
   }
   for (const r of records) r.grade = gradeRecord(file.meta.task, cases.get(r.caseId), r);
+  for (const r of records) for (const call of [...r.calls, ...(r.judgeCalls ?? [])]) if (SYSTEM_PROMPTS.has(call.systemHash)) file.meta.prompts[call.systemHash] = SYSTEM_PROMPTS.get(call.systemHash)!;
   const regraded: ResultsFile = { ...file, summary: summarize(file.meta.task, records), records, inputs: undefined };
   const dir = path.dirname(path.resolve(args.regrade));
   const stem = path.basename(args.regrade, ".json");
@@ -162,7 +163,7 @@ for (const task of tasks) {
   records.sort((a, b) => a.caseId.localeCompare(b.caseId) || a.repeat - b.repeat);
 
   const prompts: ResultsFile["meta"]["prompts"] = {};
-  for (const r of records) for (const call of r.calls) if (SYSTEM_PROMPTS.has(call.systemHash)) prompts[call.systemHash] = SYSTEM_PROMPTS.get(call.systemHash)!;
+  for (const r of records) for (const call of [...r.calls, ...(r.judgeCalls ?? [])]) if (SYSTEM_PROMPTS.has(call.systemHash)) prompts[call.systemHash] = SYSTEM_PROMPTS.get(call.systemHash)!;
   const file: ResultsFile = {
     meta: { task, subject: name, provider, model, judge: judge?.name ?? null, startedAt: today.toISOString(), git: git(), repeats, filter: args.filter ?? args.split ?? null, prompts, label: args.label },
     summary: summarize(task, records),
