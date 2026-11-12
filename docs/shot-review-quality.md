@@ -92,7 +92,38 @@ usefulness under the rubric, not physical diagnostic accuracy or the owner's tas
 
 ## Validation record
 
-Final model measurements are recorded below after the development and held-out runs.
+| Run | Strict checks + quality gates | Model / judge answered |
+|---|---|---|
+| Rules, all 39 cases | 36/39 (92%) | no model or judge |
+| Codex Terra, 28 dev cases × 3, Sol judge | 84/84 (100%), after grader correction | 84/84 each |
+| Codex Terra, 11 holdout cases × 1, original checks | 9/11 (82%) | 11/11 each |
+| Same saved holdout outputs, corrected grader | 11/11 (100%), **not a fresh holdout** | no new model calls |
+
+The final Codex subject is `gpt-6.1-terra`, with independent `gpt-6.1-sol` judging,
+medium reasoning and the isolated eval wrapper. Model/judge contradictions, invented
+figures and minimum quality dimensions all pass on the final development and holdout
+answers. The noncritical lexical experiment heuristic reports 83% dev and 50%
+holdout; it misses some valid wording that the semantic judge accepts.
+
+The original holdout failures were grader coverage errors: a correct 1.1 vs 2.2 ml/s
+comparison did not say "below", and a correct E-3 → E-4 comparison did not repeat
+"grind". Their original outputs and scores are preserved in
+`review.codex-cli-gpt-6.1-terra-initial-holdout.*`; the rescore is separately named.
+No model prompt or intended holdout verdict was tuned from those outputs. Development
+checks also learned ordinary valid inflections ("conflicts", "lacks", "unsuitable").
+These corrections are regression-tested, but the rescored holdout is no longer fresh.
+
+The final development run first completed 52/84 trials before a provider limit.
+The 32 unavailable trials were retried after access returned. Every retry checked
+that both system hash and full case input matched the original before making a call;
+completed trials were retained. All 84 final trials and judges answered. This is
+complete coverage of the planned repeats, not a claim that the interrupted attempt
+had no availability failures.
+
+The three rules misses are notes-only cases: two require semantic taste-led advice,
+and one requires explaining a taste/curve conflict. The fallback safely abstains;
+it does not pretend to understand notes. Recommend/dial-in rules remain identical
+to their existing baselines (100% agreement).
 Claude's subscription limit interrupted the Haiku/Opus reference reruns. Those
 partial failures remain local availability evidence, not promoted quality baselines.
 A non-isolated Codex run also encountered a stale desktop MCP endpoint and is not
@@ -105,3 +136,12 @@ integrations or changing production provider configuration. Reproduction command
 and measured baselines are in [the eval guide](../evals/README.md).
 
 No release, NAS/tablet deployment or physical-machine test accompanies this change.
+
+
+Software validation: 17 unit/server test files, typecheck, JavaScript syntax,
+source/built demo, live simulator, brewing/favourites, saved-review live/demo,
+all five tablet-fit sizes, source/built normal/stress target checks and installable
+skin ZIP. Source/built screenshots were inspected. An initial built target run had
+navigation timeouts; the isolated rerun passed all 12 runs with zero target failures.
+Independent code review found the intended-yield and guide-ratio comparison issues;
+both were reproduced, fixed and covered by regressions.

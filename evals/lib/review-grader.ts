@@ -43,11 +43,17 @@ function targetCorrect(text: string, label: NonNullable<NonNullable<ReviewCase["
     const quantity = label.pump === "pressure" ? /\b(pressure|bar)\b/ : /\bflow\b|ml\s*\/\s*s/;
     const verdict = label.status === "shortfall" ? /\b(short|shortfall|below|under|only|missed|miss|held back|never reached|low puck resistance)\b/
       : label.status === "above" ? /\b(above|over|exceeded|twice|double)\b/ : /\b(held|met|near|followed|reached|tracked|on target|matches|matched|slight(?:ly)?|modest|small|within)\b|\bon\s+(?:the\s+)?\d[^.!?]*\btarget\b/;
-    if (!(quantity.test(s) && comparison.test(s) && verdict.test(s) && hasValue(s, label.actual) && hasValue(s, label.target))) return false;
+    if (!(quantity.test(s) && comparison.test(s) && hasValue(s, label.actual) && hasValue(s, label.target))) return false;
     // Verify common explicit measured/target roles, not just the presence of
     // both numbers. More complex wording still needs the independent judge.
     const actualClaims = [...s.matchAll(/\b(?:measured|averag(?:ed|ing)|held|reach(?:ed|ing)|pressure (?:was|sat|stayed)|flow (?:was|sat|stayed))\s+(?:(?:only|just|at|near|about|around|to)\s+)*(\d+(?:\.\d+)?)/g)].map(m => Number(m[1]));
     const targetClaims = [...s.matchAll(/\btarget\s+(?:(?:of|was|is|at)\s+)*(\d+(?:\.\d+)?)|\b(\d+(?:\.\d+)?)\s*(?:bar|ml\s*\/\s*s)?\s+target\b/g)].map(m => Number(m[1] ?? m[2]));
+    const explicitNumbers = actualClaims.some(n => Math.abs(n - label.actual) <= 0.15) && targetClaims.some(n => Math.abs(n - label.target) <= 0.15);
+    const positive = s.replace(/\b(?:not|never|didn't|did not)\s+(?:meet|met|match|matched|reach|reached)\b/g, "");
+    if (label.status !== "met" && /\b(?:met|matched|reached)\s+(?:(?:its|the)\s+)?(?:\d+(?:\.\d+)?\s*(?:bar|ml\s*\/\s*s)\s+)?target\b/.test(positive)) return false;
+    // Correctly assigned measured/target numbers state the comparison without
+    // needing an extra adjective such as "below" or "shortfall".
+    if (!verdict.test(s) && !explicitNumbers) return false;
     return (!actualClaims.length || actualClaims.some(n => Math.abs(n - label.actual) <= 0.15)) &&
       (!targetClaims.length || targetClaims.some(n => Math.abs(n - label.target) <= 0.15));
   });
@@ -57,17 +63,18 @@ function historyCorrect(text: string, label: NonNullable<NonNullable<ReviewCase[
   const s = text.toLowerCase();
   const history = /\b(previous|earlier|prior|last|history|compared|before|from|comparable|same recipe)\b/.test(s);
   if (!history) return false;
-  if (label.kind === "confounded") return /\b(dose|yield|profile|temperature|recipe)\b/.test(s) && (/\b(confound\w*|cannot|can't|not comparable|isolate|separate|multiple|unreliable|not a (?:fair|controlled|clean)|not directly)\b/.test(s) || /\bdifferent\b/.test(s) && /\b(nothing supports|no basis|not enough|before (?:adjusting|changing))\b/.test(s));
-  if (label.kind === "insufficient") return /\b(missing|unknown|unrecorded|not recorded|no|without|lack|unavailable)\b/.test(s) && /\b(time|timing|duration|grind|recipe|history|compar\w*)\b/.test(s);
+  if (label.kind === "confounded") return /\b(dose|yield|profile|temperature|recipe)\b/.test(s) && (/\b(confound\w*|cannot|can't|not comparable|isolate|separate|multiple|unreliable|unsuitable|not a (?:fair|controlled|clean)|not directly)\b/.test(s) || /\bdifferent\b/.test(s) && /\b(nothing supports|no basis|not enough|before (?:adjusting|changing))\b/.test(s));
+  if (label.kind === "insufficient") return /\b(missing|unknown|unrecorded|not recorded|no|without|lack\w*|unavailable)\b/.test(s) && /\b(time|timing|duration|grind|recipe|history|compar\w*)\b/.test(s);
   const measured = (label.previousS == null || hasValue(s, label.previousS, 1)) && (label.currentS == null || hasValue(s, label.currentS, 1));
+  const namedSettings = label.previousSetting != null && label.currentSetting != null && s.includes(label.previousSetting.toLowerCase()) && s.includes(label.currentSetting.toLowerCase());
   const grind = label.kind === "same_grind" ? /\b(same|unchanged|identical)\b/.test(s) && /\b(grind|setting)\b/.test(s)
-    : !label.changedGrind || /\b(grind|setting)\b/.test(s);
+    : !label.changedGrind || /\b(grind|setting)\b/.test(s) || namedSettings;
   return measured && grind;
 }
 
 function usefulAbstention(text: string, kind: NonNullable<NonNullable<ReviewCase["expect"]["narrative"]>["abstention"]>): boolean {
   const s = text.toLowerCase();
-  const reason = kind === "conflict" ? /\b(conflict|oppos\w*|contradic\w*|despite|but|yet|while|different directions|does not fit|doesn't fit|mismatch|disagree)\b/.test(s)
+  const reason = kind === "conflict" ? /\b(conflict\w*|oppos\w*|contradic\w*|despite|but|yet|while|different directions|does not fit|doesn't fit|mismatch|disagree)\b/.test(s)
     : kind === "profile" ? /\b(profile|manual|controller|target)\b/.test(s)
       : kind === "telemetry" ? /\b(telemetry|measurements|samples|recording|data|curve)\b/.test(s) : /\b(taste|tasted|flavou?r)\b/.test(s);
   return reason && /\b(taste|repeat|record|check|keep|hold|verify|confirm|try|retest)\b/.test(s);

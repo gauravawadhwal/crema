@@ -767,7 +767,9 @@
             "kind": "progress",
             "previousS": 22,
             "currentS": 30,
-            "changedGrind": true
+            "changedGrind": true,
+            "previousSetting": "10",
+            "currentSetting": "9.75"
           }
         }
       }
@@ -932,7 +934,9 @@
             "kind": "progress",
             "previousS": 25,
             "currentS": 32,
-            "changedGrind": true
+            "changedGrind": true,
+            "previousSetting": "E-3",
+            "currentSetting": "E-4"
           }
         }
       }

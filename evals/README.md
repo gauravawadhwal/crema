@@ -83,6 +83,22 @@ outputs to tune the prompt or labels. A holdout that has already been inspected 
 no longer fresh. Do not compare headline pass rates from different datasets,
 providers or judge/gate versions as if they measured only a prompt change.
 
+Measured baselines (Terra subject, Sol judge; isolated, medium reasoning):
+
+| Baseline | Result |
+|---|---|
+| `review.rules.json` | 36/39; conservatively abstains on semantic notes cases |
+| `review.codex-cli-gpt-6.1-terra-dev.json` | 84/84 dev trials; all model/judge calls answered |
+| `review.codex-cli-gpt-6.1-terra-initial-holdout.json` | First holdout: 9/11; two factual-check coverage errors |
+| `review.codex-cli-gpt-6.1-terra-holdout.json` | Same saved outputs rescored 11/11 after grader corrections; **not fresh** |
+
+The original holdout and corrected rescore are both committed. The corrections
+recognize correctly assigned numeric comparisons and recorded setting labels,
+without changing the prompt or intended decisions. The 32 quota-failed dev trials
+were retried with exact system/input guards; the initial 52 completed trials were
+preserved. See the quality record for provenance, confidence limits and diagnostic
+heuristic rates. These synthetic results do not establish physical diagnostic accuracy.
+
 Claude Haiku/Opus revalidation is deferred after a subscription-limit failure.
 Interrupted reference runs and a stale-desktop-MCP Codex run are not promoted as
 complete quality baselines. The older Haiku results below measure earlier prompts.

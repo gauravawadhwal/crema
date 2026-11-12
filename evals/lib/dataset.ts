@@ -317,7 +317,7 @@ export const ReviewCase = z.object({
     narrative: z.object({
       pace: z.object({ status: z.enum(["fast", "slow", "in_window"]), actualS: z.number(), windowS: z.tuple([z.number(), z.number()]) }).strict().optional(),
       target: z.object({ pump: z.enum(["pressure", "flow"]), actual: z.number(), target: z.number(), status: z.enum(["met", "shortfall", "above"]) }).strict().optional(),
-      history: z.object({ kind: z.enum(["progress", "same_grind", "confounded", "insufficient"]), previousS: z.number().optional(), currentS: z.number().optional(), changedGrind: z.boolean().optional() }).strict().optional(),
+      history: z.object({ kind: z.enum(["progress", "same_grind", "confounded", "insufficient"]), previousS: z.number().optional(), currentS: z.number().optional(), changedGrind: z.boolean().optional(), previousSetting: z.string().optional(), currentSetting: z.string().optional() }).strict().optional(),
       abstention: z.enum(["taste", "profile", "telemetry", "conflict"]).optional(),
       actionEvidence: z.enum(["taste", "curve"]).optional(),
       controlMismatch: z.object({ actualFlow: z.number(), targetFlow: z.number(), actualYieldG: z.number(), targetYieldG: z.number() }).optional(),

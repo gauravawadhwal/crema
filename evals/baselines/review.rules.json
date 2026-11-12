@@ -5,9 +5,9 @@
   "provider": "rules",
   "model": null,
   "judge": null,
-  "startedAt": "2026-11-11T05:43:38.711Z",
+  "startedAt": "2026-11-11T13:50:01.350Z",
   "git": {
-   "commit": "f188694c7d99ee9b9c69c7fcacee7f910a6a927d",
+   "commit": "d9ab180c3fdcff5611242df3b954cd45b7ad4e96",
    "dirty": true
   },
   "repeats": 1,
@@ -15,63 +15,95 @@
   "prompts": {}
  },
  "summary": {
-  "cases": 26,
-  "runs": 26,
+  "cases": 39,
+  "runs": 39,
   "errors": 0,
-  "passRate": 1,
+  "passRate": 0.923,
   "passCI": [
-   0.871,
-   1
+   0.797,
+   0.973
   ],
-  "passAllRepeats": 1,
-  "meanScore": 1,
+  "passAllRepeats": 0.923,
+  "meanScore": 0.992,
   "headline": {
    "model answered": 1,
-   "appropriate next move": 1,
+   "appropriate next move": 0.949,
    "required observations": 1,
    "no false alarms": 1,
    "one change": 1,
-   "grounded ranges": 1
+   "grounded ranges": 1,
+   "judge answered": null,
+   "judge: specific interpretation": null,
+   "judge: useful next step": null,
+   "judge: plain language": null,
+   "grounded pace comparison": 1,
+   "grounded target comparison": 1,
+   "grounded history comparison": 1,
+   "useful abstention": 0.833,
+   "useful experiment": 1,
+   "judge: no contradictions": null,
+   "judge: no invented figures": null,
+   "judge: diagnostic quality": null
   },
   "checks": {
    "modelAnswered": {
-    "pass": 26,
-    "n": 26
+    "pass": 39,
+    "n": 39
    },
    "acceptableMove": {
-    "pass": 26,
-    "n": 26
+    "pass": 37,
+    "n": 39
    },
    "requiredIssues": {
-    "pass": 26,
-    "n": 26
+    "pass": 39,
+    "n": 39
    },
    "noFalseAlarms": {
-    "pass": 26,
-    "n": 26
+    "pass": 39,
+    "n": 39
    },
    "oneChange": {
-    "pass": 26,
-    "n": 26
+    "pass": 39,
+    "n": 39
    },
    "validSwitch": {
-    "pass": 26,
-    "n": 26
+    "pass": 39,
+    "n": 39
    },
    "groundedRanges": {
-    "pass": 26,
-    "n": 26
+    "pass": 39,
+    "n": 39
    },
    "askTaste": {
-    "pass": 25,
-    "n": 25
+    "pass": 38,
+    "n": 38
    },
-   "insightfulSummary": {
-    "pass": 24,
-    "n": 24
+   "directionConsistent": {
+    "pass": 39,
+    "n": 39
    },
    "grindDirectionMatchesIssue": {
     "pass": 6,
+    "n": 6
+   },
+   "usefulExperiment": {
+    "pass": 7,
+    "n": 7
+   },
+   "targetComparison": {
+    "pass": 4,
+    "n": 4
+   },
+   "paceComparison": {
+    "pass": 3,
+    "n": 3
+   },
+   "historyComparison": {
+    "pass": 7,
+    "n": 7
+   },
+   "usefulAbstention": {
+    "pass": 5,
     "n": 6
    }
   },
@@ -81,8 +113,8 @@
     "n": 1
    },
    "synthetic": {
-    "pass": 26,
-    "n": 26
+    "pass": 33,
+    "n": 33
    },
    "bloom": {
     "pass": 1,
@@ -124,13 +156,21 @@
     "pass": 1,
     "n": 1
    },
+   "history": {
+    "pass": 7,
+    "n": 7
+   },
+   "quality-v2": {
+    "pass": 10,
+    "n": 13
+   },
    "real-shape": {
     "pass": 3,
     "n": 3
    },
    "taste": {
-    "pass": 1,
-    "n": 1
+    "pass": 3,
+    "n": 6
    },
    "manual": {
     "pass": 1,
@@ -152,9 +192,25 @@
     "pass": 1,
     "n": 1
    },
+   "notes": {
+    "pass": 2,
+    "n": 5
+   },
+   "injection": {
+    "pass": 1,
+    "n": 2
+   },
+   "negation": {
+    "pass": 1,
+    "n": 1
+   },
    "notes-only": {
     "pass": 1,
     "n": 1
+   },
+   "conflict": {
+    "pass": 1,
+    "n": 2
    },
    "slow-time": {
     "pass": 1,
@@ -191,18 +247,18 @@
   },
   "splits": {
    "holdout": {
-    "pass": 8,
-    "n": 8
+    "pass": 11,
+    "n": 11
    },
    "dev": {
-    "pass": 18,
-    "n": 18
+    "pass": 25,
+    "n": 28
    }
   },
   "latencyMs": {
    "p50": 1,
-   "p95": 3,
-   "max": 3
+   "p95": 4,
+   "max": 4
   },
   "cost": {
    "usdTotal": null,
@@ -224,7 +280,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -289,9 +345,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": "keep it as it is you marked the taste and body as balanced."
      }
     ],
     "score": 1,
@@ -312,7 +369,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "25.2 g from 18 g (1:1.4) in 30 s, 12 s of it preinfusion, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -370,9 +427,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "25.2 g from 18 g (1:1.4) in 30 s, 12 s of it preinfusion, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -393,7 +451,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 1.9 ml/s. Flow rose steadily through the pour, which can mean the water found a channel.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 1.9 ml/s. Flow rose steadily through the pour, which can mean the water found a channel.",
     "wentWell": [],
     "issues": [
      {
@@ -458,9 +516,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 1.9 ml/s. Flow rose steadily through the pour, which can mean the water found a channel."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -479,9 +538,9 @@
     "choke",
     "synthetic"
    ],
-   "ms": 2,
+   "ms": 3,
    "output": {
-    "summary": "5.4 g from 18 g (1:0.3) in 30 s, ended by the machine. Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. Grind coarser to open up flow and speed the shot up.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste.",
     "wentWell": [],
     "issues": [
      {
@@ -499,7 +558,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "Flow stayed very low against high pressure, so the puck was too restrictive; a small coarser step should open up flow and speed it up."
+     "reasoning": "Flow stayed very low against high pressure, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
     },
     "confidence": "medium",
     "askTaste": true
@@ -553,15 +612,20 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "5.4 g from 18 g (1:0.3) in 30 s, ended by the machine. Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. Grind coarser to open up flow and speed the shot up."
+      "critical": true,
+      "detail": "grind coarser flow stayed very low against high pressure, consistent with a restrictive puck. try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
      },
      {
       "name": "grindDirectionMatchesIssue",
       "pass": true,
-      "critical": true,
-      "detail": "Flow stayed very low against high pressure, so the puck was too restrictive; a small coarser step should open up flow and speed it up."
+      "detail": "Flow stayed very low against high pressure, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "Flow stayed very low against high pressure, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
      }
     ],
     "score": 1,
@@ -582,7 +646,7 @@
    ],
    "ms": 3,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -640,9 +704,16 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "targetComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing. "
      }
     ],
     "score": 1,
@@ -663,7 +734,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "4.2 g from 18 g (1:0.2) in 6 s, stopped from the app. There is not enough telemetry to draw a conclusion from this shot.",
+    "summary": "This shot was stopped early, so its short recording cannot establish a grind problem. Keep the recipe for a full repeat when ready, then compare taste before adjusting.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -717,6 +788,12 @@
       "name": "askTaste",
       "pass": true,
       "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -738,7 +815,7 @@
    ],
    "ms": 2,
    "output": {
-    "summary": "Ran 9 s faster than the 28–34 s target window (19 s to 36 g). Pour pressure averaged 7.8 bar against the 9.0 bar target at 2.3 ml/s. Grind finer to add resistance, slow the shot and build pressure.",
+    "summary": "Ran 9 s faster than the 28–34 s target window (19 s to 36 g). Pour pressure averaged 7.8 bar against the 9.0 bar target at 2.3 ml/s. Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste.",
     "wentWell": [
      "Held pressure at 7.8 bar against the 9.0 bar target."
     ],
@@ -758,7 +835,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "The shot ran faster than its expected window, so the puck gave too little resistance; a small finer step should slow it and build pressure."
+     "reasoning": "The shot ran faster than its expected window, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
     },
     "confidence": "medium",
     "askTaste": true
@@ -812,15 +889,26 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Ran 9 s faster than the 28–34 s target window (19 s to 36 g). Pour pressure averaged 7.8 bar against the 9.0 bar target at 2.3 ml/s. Grind finer to add resistance, slow the shot and build pressure."
+      "critical": true,
+      "detail": "grind finer the shot ran faster than its expected window, consistent with low puck resistance. try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
+     },
+     {
+      "name": "paceComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Ran 9 s faster than the 28–34 s target window (19 s to 36 g). Pour pressure averaged 7.8 bar against the 9.0 bar target at 2.3 ml/s. Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste."
      },
      {
       "name": "grindDirectionMatchesIssue",
       "pass": true,
-      "critical": true,
-      "detail": "The shot ran faster than its expected window, so the puck gave too little resistance; a small finer step should slow it and build pressure."
+      "detail": "The shot ran faster than its expected window, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "The shot ran faster than its expected window, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
      }
     ],
     "score": 1,
@@ -840,15 +928,15 @@
     "shortfall",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 2,
    "output": {
-    "summary": "Ran 4 s slower than the 28–34 s target window (38 s to 35.7 g). Pour flow only reached 1.1 ml/s of the 2.2 ml/s target at 7.6 bar, held back by the 8 bar pressure limit: the puck was too restrictive. Grind coarser to open up flow and speed the shot up.",
+    "summary": "Ran 4 s slower than the 28–34 s target window (38 s to 35.7 g). Pour flow only reached 1.1 ml/s of the 2.2 ml/s target at 7.6 bar at the 8 bar pressure limit, consistent with a restrictive puck. Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste.",
     "wentWell": [],
     "issues": [
      {
       "kind": "flow_shortfall",
       "what": "Flow stayed below the profile's target during the pour.",
-      "evidence": "36.0s in frame 1: target 2.2 ml/s, measured 1.1 ml/s with pressure at 7.6 bar, held at the 8 bar pressure limit because the puck was too restrictive.",
+      "evidence": "36.0s in frame 1: target 2.2 ml/s, measured 1.1 ml/s with pressure at 7.6 bar, near the 8 bar pressure limit, consistent with a restrictive puck.",
       "severity": "caution",
       "fromS": 2,
       "toS": 38
@@ -860,7 +948,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "Flow fell short of the profile's target, so the puck was too restrictive; a small coarser step should open up flow and speed it up."
+     "reasoning": "Flow fell short of the profile's target, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
     },
     "confidence": "medium",
     "askTaste": true
@@ -914,15 +1002,26 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Ran 4 s slower than the 28–34 s target window (38 s to 35.7 g). Pour flow only reached 1.1 ml/s of the 2.2 ml/s target at 7.6 bar, held back by the 8 bar pressure limit: the puck was too restrictive. Grind coarser to open up flow and speed the shot up."
+      "critical": true,
+      "detail": "grind coarser flow fell short of the profile's target, consistent with a restrictive puck. try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
+     },
+     {
+      "name": "targetComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Ran 4 s slower than the 28–34 s target window (38 s to 35.7 g). Pour flow only reached 1.1 ml/s of the 2.2 ml/s target at 7.6 bar at the 8 bar pressure limit, consistent with a restrictive puck. Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste. Flow fell short of the profile's target, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
      },
      {
       "name": "grindDirectionMatchesIssue",
       "pass": true,
-      "critical": true,
-      "detail": "Flow fell short of the profile's target, so the puck was too restrictive; a small coarser step should open up flow and speed it up."
+      "detail": "Flow fell short of the profile's target, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "Flow fell short of the profile's target, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
      }
     ],
     "score": 1,
@@ -943,7 +1042,7 @@
    ],
    "ms": 2,
    "output": {
-    "summary": "81 g from 18 g (1:4.5) in 30 s, ended by the machine. Pour flow averaged 4.0 ml/s against the 2.0 ml/s target at 9.0 bar. Grind finer to add resistance, slow the shot and build pressure.",
+    "summary": "Pour flow averaged 4.0 ml/s against the 2.0 ml/s target at 9.0 bar. Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste.",
     "wentWell": [],
     "issues": [
      {
@@ -961,7 +1060,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "Flow gushed well above its target, so the puck gave too little resistance; a small finer step should slow it and build pressure."
+     "reasoning": "Flow gushed well above its target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
     },
     "confidence": "medium",
     "askTaste": true
@@ -981,7 +1080,7 @@
       "name": "acceptableMove",
       "pass": true,
       "critical": true,
-      "detail": "move finer; accept finer"
+      "detail": "move finer; accept finer, none"
      },
      {
       "name": "requiredIssues",
@@ -1015,15 +1114,20 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "81 g from 18 g (1:4.5) in 30 s, ended by the machine. Pour flow averaged 4.0 ml/s against the 2.0 ml/s target at 9.0 bar. Grind finer to add resistance, slow the shot and build pressure."
+      "critical": true,
+      "detail": "grind finer flow gushed well above its target, consistent with low puck resistance. try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
      },
      {
       "name": "grindDirectionMatchesIssue",
       "pass": true,
-      "critical": true,
-      "detail": "Flow gushed well above its target, so the puck gave too little resistance; a small finer step should slow it and build pressure."
+      "detail": "Flow gushed well above its target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "Flow gushed well above its target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
      }
     ],
     "score": 1,
@@ -1031,6 +1135,636 @@
     "labels": {
      "move": "finer",
      "findings": "gushed"
+    }
+   }
+  },
+  {
+   "caseId": "review-history-confounded",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 2,
+   "output": {
+    "summary": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The earlier recipe or profile changed, so history cannot isolate a grind effect; repeat this recipe before drawing a trend.",
+    "wentWell": [
+     "Finished in 30 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The earlier recipe or profile changed, so history cannot isolate a grind effect; repeat this recipe before drawing a trend. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-history-grind-progress",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 22 to 30 s with grind 10 → 9.75; repeat before attributing a cause.",
+    "wentWell": [
+     "Finished in 30 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 22 to 30 s with grind 10 → 9.75; repeat before attributing a cause. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-history-grind-slower",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Finished in 32 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 25 to 32 s with grind E-3 → E-4; repeat before attributing a cause.",
+    "wentWell": [
+     "Finished in 32 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 32 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 25 to 32 s with grind E-3 → E-4; repeat before attributing a cause. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-history-incomplete",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Recorded timing or recipe details are missing, so history cannot establish a grind trend; repeat with the setting noted.",
+    "wentWell": [
+     "Finished in 30 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Recorded timing or recipe details are missing, so history cannot establish a grind trend; repeat with the setting noted. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-history-missing-grind",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 2,
+   "output": {
+    "summary": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 21 to 30 s with grind history unknown; repeat before attributing a cause.",
+    "wentWell": [
+     "Finished in 30 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 21 to 30 s with grind history unknown; repeat before attributing a cause. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-history-profile-change",
+   "repeat": 0,
+   "split": "holdout",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The earlier recipe or profile changed, so history cannot isolate a grind effect; repeat this recipe before drawing a trend.",
+    "wentWell": [
+     "Finished in 30 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The earlier recipe or profile changed, so history cannot isolate a grind effect; repeat this recipe before drawing a trend. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-history-same-grind-drift",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "history",
+    "synthetic",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 24 to 30 s at the same recorded setting; repeat before attributing a cause.",
+    "wentWell": [
+     "Finished in 30 s, inside the 28–34 s window.",
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none, keep"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "historyComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 28–34 s target window. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. On the same recipe, time went from 24 to 30 s at the same recorded setting; repeat before attributing a cause. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
     }
    }
   },
@@ -1043,9 +1777,9 @@
     "real-shape",
     "synthetic"
    ],
-   "ms": 2,
+   "ms": 4,
    "output": {
-    "summary": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s.",
+    "summary": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Finished in 30 s, inside the 25–35 s window.",
      "Held pressure at 5.5 bar against the 6.0 bar target."
@@ -1104,9 +1838,16 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s."
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "targetComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing. "
      }
     ],
     "score": 1,
@@ -1127,9 +1868,9 @@
     "taste",
     "synthetic"
    ],
-   "ms": 2,
+   "ms": 4,
    "output": {
-    "summary": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s.",
+    "summary": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Finished in 30 s, inside the 25–35 s window.",
      "Held pressure at 5.5 bar against the 6.0 bar target."
@@ -1141,7 +1882,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "The shot tasted sour; finer grinding is a small extraction adjustment."
+     "reasoning": "You reported sourness. Try one small finer step with dose and yield fixed; taste whether the sharpness softens before changing again."
     },
     "confidence": "medium",
     "askTaste": false
@@ -1195,9 +1936,15 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Finished in 30 s, right in the 25–35 s target window. Pressure held 5.5 bar against the 6.0 bar target at 1.8 ml/s."
+      "critical": true,
+      "detail": "grind finer you reported sourness. try one small finer step with dose and yield fixed; taste whether the sharpness softens before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "You reported sourness. Try one small finer step with dose and yield fixed; taste whether the sharpness softens before changing again."
      }
     ],
     "score": 1,
@@ -1218,15 +1965,15 @@
     "shortfall",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 2,
    "output": {
-    "summary": "Ran 5 s faster than the 26–34 s target window (21 s to 36 g). Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s, held back by the 2.2 ml/s flow limit: the puck gave too little resistance. Grind finer to add resistance, slow the shot and build pressure.",
+    "summary": "Ran 5 s faster than the 26–34 s target window (21 s to 36 g). Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s at the 2.2 ml/s flow limit, consistent with low puck resistance. Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste.",
     "wentWell": [],
     "issues": [
      {
       "kind": "pressure_shortfall",
       "what": "Pressure stayed below the profile's target during the pour.",
-      "evidence": "14.0s in frame 2: target 6.0 bar, measured 3.8 bar (peak 3.8 bar) with flow at 2.2 ml/s, held at the 2.2 ml/s flow limit because the puck gave too little resistance.",
+      "evidence": "14.0s in frame 2: target 6.0 bar, measured 3.8 bar (peak 3.8 bar) with flow at 2.2 ml/s, near the 2.2 ml/s flow limit, consistent with low puck resistance.",
       "severity": "caution",
       "fromS": 7,
       "toS": 21
@@ -1246,7 +1993,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "The shot ran faster than its expected window and pressure fell short of the profile's target, so the puck gave too little resistance; a small finer step should slow it and build pressure."
+     "reasoning": "The shot ran faster than its expected window and pressure fell short of the profile's target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
     },
     "confidence": "medium",
     "askTaste": true
@@ -1300,15 +2047,32 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Ran 5 s faster than the 26–34 s target window (21 s to 36 g). Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s, held back by the 2.2 ml/s flow limit: the puck gave too little resistance. Grind finer to add resistance, slow the shot and build pressure."
+      "critical": true,
+      "detail": "grind finer the shot ran faster than its expected window and pressure fell short of the profile's target, consistent with low puck resistance. try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
+     },
+     {
+      "name": "paceComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Ran 5 s faster than the 26–34 s target window (21 s to 36 g). Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s at the 2.2 ml/s flow limit, consistent with low puck resistance. Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste."
+     },
+     {
+      "name": "targetComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Ran 5 s faster than the 26–34 s target window (21 s to 36 g). Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s at the 2.2 ml/s flow limit, consistent with low puck resistance. Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste. The shot ran faster than its expected window and pressure fell short of the profile's target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
      },
      {
       "name": "grindDirectionMatchesIssue",
       "pass": true,
-      "critical": true,
-      "detail": "The shot ran faster than its expected window and pressure fell short of the profile's target, so the puck gave too little resistance; a small finer step should slow it and build pressure."
+      "detail": "The shot ran faster than its expected window and pressure fell short of the profile's target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "The shot ran faster than its expected window and pressure fell short of the profile's target, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again."
      }
     ],
     "score": 1,
@@ -1327,9 +2091,9 @@
     "manual",
     "synthetic"
    ],
-   "ms": 3,
+   "ms": 2,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped from the app. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
+    "summary": "Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -1385,9 +2149,16 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped from the app. No step held a steady target long enough to compare, so this describes the shot rather than grading it."
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "usefulAbstention",
+      "pass": true,
+      "critical": true,
+      "detail": "Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare. "
      }
     ],
     "score": 1,
@@ -1406,9 +2177,9 @@
     "manual-sour",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 0,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped from the app. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
+    "summary": "Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -1464,9 +2235,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped from the app. No step held a steady target long enough to compare, so this describes the shot rather than grading it."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -1485,9 +2257,9 @@
     "missing-flow",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 0,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -1545,9 +2317,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -1568,7 +2341,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "Ran for 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -1626,9 +2399,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Ran for 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -1647,9 +2421,9 @@
     "no-data",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 0,
    "output": {
-    "summary": "There is not enough telemetry to draw a conclusion from this shot.",
+    "summary": "No shot curve was recorded. Check that Decaid is recording, then repeat the recipe and taste it before changing grind from telemetry.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -1703,6 +2477,185 @@
       "name": "askTaste",
       "pass": true,
       "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "usefulAbstention",
+      "pass": true,
+      "critical": true,
+      "detail": "No shot curve was recorded. Check that Decaid is recording, then repeat the recipe and taste it before changing grind from telemetry. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-notes-injection",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "notes",
+    "injection",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.",
+    "wentWell": [
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-notes-negation",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "notes",
+    "taste",
+    "negation",
+    "quality-v2"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.",
+    "wentWell": [
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept coarser, yield-down, temp-down, none"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -1723,7 +2676,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -1783,15 +2736,280 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": "keep it as it is you marked the taste and body as balanced."
      }
     ],
     "score": 1,
     "pass": true,
     "labels": {
      "move": "keep",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-notes-sour",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "notes",
+    "taste",
+    "quality-v2"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.",
+    "wentWell": [
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": false,
+      "critical": true,
+      "detail": "move none; accept finer"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     }
+    ],
+    "score": 0.889,
+    "pass": false,
+    "labels": {
+     "move": "none",
+     "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-notes-sour-choke",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "notes",
+    "taste",
+    "conflict",
+    "quality-v2"
+   ],
+   "ms": 0,
+   "output": {
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.",
+    "wentWell": [],
+    "issues": [
+     {
+      "kind": "choked",
+      "what": "Flow stayed very low while pressure remained high.",
+      "evidence": "28.0s in frame 1: pressure target 9.0, measured 9.0 bar, flow 0.3 ml/s.",
+      "severity": "caution",
+      "fromS": 2,
+      "toS": 30
+     }
+    ],
+    "nextShot": null,
+    "confidence": "medium",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed choked"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "usefulAbstention",
+      "pass": false,
+      "critical": true,
+      "detail": "Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone. "
+     }
+    ],
+    "score": 0.9,
+    "pass": false,
+    "labels": {
+     "move": "none",
+     "findings": "choked"
+    }
+   }
+  },
+  {
+   "caseId": "review-notes-sour-injection",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "notes",
+    "taste",
+    "quality-v2",
+    "injection"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.",
+    "wentWell": [
+     "Held pressure at 9.0 bar against the 9.0 bar target."
+    ],
+    "issues": [],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": true
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": false,
+      "critical": true,
+      "detail": "move none; accept finer"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed "
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     }
+    ],
+    "score": 0.889,
+    "pass": false,
+    "labels": {
+     "move": "none",
      "findings": ""
     }
    }
@@ -1805,9 +3023,9 @@
     "pace",
     "synthetic"
    ],
-   "ms": 2,
+   "ms": 3,
    "output": {
-    "summary": "Ran 10 s slower than the 28–34 s target window (44 s to 36 g). Pressure held 8.8 bar against the 9.0 bar target at 1.0 ml/s. Grind coarser to open up flow and speed the shot up.",
+    "summary": "Ran 10 s slower than the 28–34 s target window (44 s to 36 g). Pressure held 8.8 bar against the 9.0 bar target at 1.0 ml/s. Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste.",
     "wentWell": [
      "Held pressure at 8.8 bar against the 9.0 bar target."
     ],
@@ -1827,7 +3045,7 @@
      "yieldDeltaG": 0,
      "tempDeltaC": 0,
      "switchProfile": null,
-     "reasoning": "The shot ran slower than its expected window, so the puck was too restrictive; a small coarser step should open up flow and speed it up."
+     "reasoning": "The shot ran slower than its expected window, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
     },
     "confidence": "medium",
     "askTaste": true
@@ -1881,15 +3099,26 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "Ran 10 s slower than the 28–34 s target window (44 s to 36 g). Pressure held 8.8 bar against the 9.0 bar target at 1.0 ml/s. Grind coarser to open up flow and speed the shot up."
+      "critical": true,
+      "detail": "grind coarser the shot ran slower than its expected window, consistent with a restrictive puck. try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
+     },
+     {
+      "name": "paceComparison",
+      "pass": true,
+      "critical": true,
+      "detail": "Ran 10 s slower than the 28–34 s target window (44 s to 36 g). Pressure held 8.8 bar against the 9.0 bar target at 1.0 ml/s. Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste."
      },
      {
       "name": "grindDirectionMatchesIssue",
       "pass": true,
-      "critical": true,
-      "detail": "The shot ran slower than its expected window, so the puck was too restrictive; a small coarser step should open up flow and speed it up."
+      "detail": "The shot ran slower than its expected window, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
+     },
+     {
+      "name": "usefulExperiment",
+      "pass": true,
+      "detail": "The shot ran slower than its expected window, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again."
      }
     ],
     "score": 1,
@@ -1910,7 +3139,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "5.4 g from 18 g (1:0.3) in 30 s, ended by the machine. Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind.",
     "wentWell": [],
     "issues": [
      {
@@ -1975,9 +3204,16 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "5.4 g from 18 g (1:0.3) in 30 s, ended by the machine. Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s."
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "usefulAbstention",
+      "pass": true,
+      "critical": true,
+      "detail": "Pressure held 9.0 bar against the 9.0 bar target at 0.3 ml/s. Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind. "
      }
     ],
     "score": 1,
@@ -1998,7 +3234,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Temperature averaged 3.0 °C below its target.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Temperature averaged 3.0 °C below its target.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -2065,9 +3301,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Temperature averaged 3.0 °C below its target."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -2088,7 +3325,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target.",
      "Held pressure at 9.0 bar against the 9.0 bar target."
@@ -2147,9 +3384,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -2157,6 +3395,104 @@
     "labels": {
      "move": "none",
      "findings": ""
+    }
+   }
+  },
+  {
+   "caseId": "review-time-taste-conflict",
+   "repeat": 0,
+   "split": "dev",
+   "tags": [
+    "taste",
+    "conflict",
+    "quality-v2"
+   ],
+   "ms": 1,
+   "output": {
+    "summary": "Ran 9 s faster than the 28–34 s target window (19 s to 36 g). Pour pressure averaged 7.8 bar against the 9.0 bar target at 2.3 ml/s. Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind.",
+    "wentWell": [
+     "Held pressure at 7.8 bar against the 9.0 bar target."
+    ],
+    "issues": [
+     {
+      "kind": "fast_shot",
+      "what": "The shot finished faster than the expected time window.",
+      "evidence": "Ran in 19 s against the 28–34 s window (9 s fast).",
+      "severity": "caution",
+      "fromS": 0,
+      "toS": 19
+     }
+    ],
+    "nextShot": null,
+    "confidence": "low",
+    "askTaste": false
+   },
+   "context": {
+    "fellBack": false
+   },
+   "calls": [],
+   "grade": {
+    "checks": [
+     {
+      "name": "modelAnswered",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "acceptableMove",
+      "pass": true,
+      "critical": true,
+      "detail": "move none; accept none"
+     },
+     {
+      "name": "requiredIssues",
+      "pass": true,
+      "critical": true,
+      "detail": "observed fast_shot"
+     },
+     {
+      "name": "noFalseAlarms",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "oneChange",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "validSwitch",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "groundedRanges",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "askTaste",
+      "pass": true,
+      "critical": true
+     },
+     {
+      "name": "directionConsistent",
+      "pass": true,
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "usefulAbstention",
+      "pass": true,
+      "critical": true,
+      "detail": "Ran 9 s faster than the 28–34 s target window (19 s to 36 g). Pour pressure averaged 7.8 bar against the 9.0 bar target at 2.3 ml/s. Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind. "
+     }
+    ],
+    "score": 1,
+    "pass": true,
+    "labels": {
+     "move": "none",
+     "findings": "fast_shot"
     }
    }
   },
@@ -2170,7 +3506,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s.",
+    "summary": "Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [
      "Held pressure at 9.0 bar against the 9.0 bar target."
     ],
@@ -2228,9 +3564,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. Pressure held 9.0 bar against the 9.0 bar target at 2.0 ml/s."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -2251,7 +3588,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
+    "summary": "No step held a steady target long enough to compare; repeat the recipe before treating the curve as a grind diagnosis. Keep this recipe for a repeat; taste decides whether it needs changing.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -2307,9 +3644,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,
@@ -2330,7 +3668,7 @@
    ],
    "ms": 1,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
+    "summary": "The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -2386,9 +3724,16 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it."
+      "critical": true,
+      "detail": " "
+     },
+     {
+      "name": "usefulAbstention",
+      "pass": true,
+      "critical": true,
+      "detail": "The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind. "
      }
     ],
     "score": 1,
@@ -2407,9 +3752,9 @@
     "unknown-sour",
     "synthetic"
    ],
-   "ms": 1,
+   "ms": 0,
    "output": {
-    "summary": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it.",
+    "summary": "The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind.",
     "wentWell": [],
     "issues": [],
     "nextShot": null,
@@ -2465,9 +3810,10 @@
       "critical": true
      },
      {
-      "name": "insightfulSummary",
+      "name": "directionConsistent",
       "pass": true,
-      "detail": "37.8 g from 18 g (1:2.1) in 30 s, stopped at the target weight. No step held a steady target long enough to compare, so this describes the shot rather than grading it."
+      "critical": true,
+      "detail": " "
      }
     ],
     "score": 1,

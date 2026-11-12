@@ -218,6 +218,39 @@ describe("harness", () => {
     expect(gradeReview(c, padding).checks.find(x => x.name === "grindDirectionMatchesIssue")?.pass).toBe(false);
   });
 
+  it("recognizes a correctly assigned numeric shortfall without demanding a particular adjective", () => {
+    const c = structuredClone(loadCases("review").find(x => x.id === "review-limited-pressure-shortfall")!);
+    c.expect.narrative!.target = { pump: "pressure", actual: 4, target: 7, status: "shortfall" };
+    const out = rulesReview(reviewFixture("limited-pressure-shortfall"));
+    out.summary = "Pressure averaged 4 bar against a 7 bar target, suggesting low resistance.";
+    out.nextShot = null;
+    expect(gradeReview(c, out).checks.find(x => x.name === "targetComparison")?.pass).toBe(true);
+    out.summary = "Pressure met the 7 bar target, averaging 4 bar.";
+    expect(gradeReview(c, out).checks.find(x => x.name === "targetComparison")?.pass).toBe(false);
+  });
+
+  it("recognizes named recorded setting labels without requiring the word grind", () => {
+    const c = structuredClone(loadCases("review").find(x => x.id === "review-history-grind-progress")!);
+    c.expect.narrative!.history = { kind: "progress", previousS: 22, currentS: 30, changedGrind: true, previousSetting: "Ring-A", currentSetting: "Ring-B" };
+    const out = rulesReview(reviewFixture("history-grind-progress"));
+    out.summary = "The change from Ring-A to Ring-B coincided with 22 to 30 seconds, so repeat before adjusting again.";
+    expect(gradeReview(c, out).checks.find(x => x.name === "historyComparison")?.pass).toBe(true);
+    out.summary = "The change was useful; the previous 22 s shot became 30 s.";
+    expect(gradeReview(c, out).checks.find(x => x.name === "historyComparison")?.pass).toBe(false);
+  });
+
+  it("accepts ordinary inflections when the limitation and next check are explicit", () => {
+    for (const [id, summary, check] of [
+      ["review-history-confounded", "The earlier shot used a different dose, making it unsuitable for judging this grind change. Repeat this recipe to establish a baseline.", "historyComparison"],
+      ["review-history-incomplete", "The earlier shot lacks enough recorded details for a comparison; repeat this recipe before changing it.", "historyComparison"],
+      ["review-time-taste-conflict", "The bitter taste conflicts with the fast pour. Repeat the recipe and check whether the pace and bitterness recur.", "usefulAbstention"],
+    ]) {
+      const c = loadCases("review").find(x => x.id === id)!;
+      const out = rulesReview(reviewFixture(c.input.fixture));
+      expect(gradeReview(c, { ...out, summary }).checks.find(x => x.name === check)?.pass).toBe(true);
+    }
+  });
+
   it("requires recorded history comparisons and useful abstention instead of empty caution", () => {
     const c = loadCases("review").find(x => x.id === "review-history-grind-progress")!;
     const base = rulesReview(reviewFixture("history-grind-progress"));
