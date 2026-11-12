@@ -1,6 +1,7 @@
-import { analyzeShot, type ShotAnalysis, type ShotFacts } from "../profiles/analysis.js";
+import { analyzeShot, stoppedEarly, type ShotAnalysis, type ShotAnalysisMetrics, type ShotFacts } from "../profiles/analysis.js";
 import type { ReviewInput, ShotReviewData } from "./review-types.js";
 import type { DialInAdvice } from "../schema.js";
+import { compareReviewHistory, historySentence } from "./review-history.js";
 
 function grindAdvice(direction: "finer" | "coarser", reason: string): DialInAdvice {
   const finer = direction === "finer";
@@ -14,8 +15,8 @@ function grindAdvice(direction: "finer" | "coarser", reason: string): DialInAdvi
 function tasteAdvice(input: ReviewInput): DialInAdvice | null {
   const f = input.feedback;
   if (!f) return null;
-  if (f.sourBitter <= -1) return grindAdvice("finer", "The shot tasted sour; finer grinding is a small extraction adjustment.");
-  if (f.sourBitter >= 1) return grindAdvice("coarser", "The shot tasted bitter; coarser grinding is a small extraction adjustment.");
+  if (f.sourBitter <= -1) return grindAdvice("finer", "You reported sourness. Try one small finer step with dose and yield fixed; taste whether the sharpness softens before changing again.");
+  if (f.sourBitter >= 1) return grindAdvice("coarser", "You reported bitterness. Try one small coarser step with dose and yield fixed; taste whether the bitter finish softens before changing again.");
   if (f.body <= -1) return { change: "Shorten the yield by 3 g for more body", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted thin; a slightly shorter yield may add body." };
   if (f.body >= 2) return { change: "Lengthen the yield by 3 g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted heavy; a slightly longer yield may add clarity." };
   if (f.sourBitter === 0 && f.body === 0) return { change: "Keep it as it is", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "You marked the taste and body as balanced." };
@@ -42,24 +43,39 @@ export function factsSentence(f: ShotFacts): string | null {
   return sentence[0].toUpperCase() + sentence.slice(1) + ".";
 }
 
-function rulesSummary(a: ShotAnalysis, direction: "finer" | "coarser" | null = null): string {
+export function recordingLimitSummary(input: ReviewInput, metrics: ShotAnalysisMetrics): string {
+  if (metrics.recordedPoints === 0) return "No shot curve was recorded. Check that Decaid is recording, then repeat the recipe and taste it before changing grind from telemetry.";
+  if (stoppedEarly(input)) return "This shot was stopped early, so its short recording cannot establish a grind problem. Keep the recipe for a full repeat when ready, then compare taste before adjusting.";
+  return "This recording is too short or sparse for a reliable curve assessment. Repeat with recording active; any immediate adjustment should rest on reported taste, not this curve.";
+}
+
+function rulesSummary(a: ShotAnalysis, input: ReviewInput, direction: "finer" | "coarser" | null, conflict: boolean): string {
   const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
   const temp = a.issues.find((i) => i.kind === "off_target_temp");
-  const lines = [paceSentence(a.facts) ?? factsSentence(a.facts)];
-  const tracking = trackingSentence(a.facts);
-  if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) lines.push("There is not enough telemetry to draw a conclusion from this shot.");
-  else if (tracking) lines.push(tracking);
+  if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) return recordingLimitSummary(input, a.metrics);
+  const lines = [paceSentence(a.facts)];
+  const tracking = a.metrics.observedWindows ? trackingSentence(a.facts) : null;
+  if (tracking) lines.push(tracking);
   else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
   else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
   else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
-  else lines.push("No step held a steady target long enough to compare, so this describes the shot rather than grading it.");
+  else if (input.profile?.beverage_type === "manual") lines.push("Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare.");
+  else if (!input.profile) lines.push("The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind.");
+  else lines.push("No step held a steady target long enough to compare; repeat the recipe before treating the curve as a grind diagnosis.");
   if (a.issues.some((i) => i.kind === "channeling")) lines.push("Flow rose steadily through the pour, which can mean the water found a channel.");
   if (temp && a.metrics.meanTemperatureOffsetC != null) {
     const d = a.metrics.meanTemperatureOffsetC;
     lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} °C ${d > 0 ? "above" : "below"} its target.`);
   }
-  if (direction === "finer") lines.push("Grind finer to add resistance, slow the shot and build pressure.");
-  if (direction === "coarser") lines.push("Grind coarser to open up flow and speed the shot up.");
+  const history = historySentence(compareReviewHistory(input, a.facts));
+  if (history) lines.push(history);
+  if (!input.feedback && input.notes?.trim()) lines.push("The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.");
+  else if (conflict) lines.push(input.feedback
+    ? "Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind."
+    : "The mechanical signals point toward opposite changes; repeat this recipe and check puck prep before changing grind.");
+  else if (direction === "finer") lines.push("Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste.");
+  else if (direction === "coarser") lines.push("Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste.");
+  else if (input.profile && input.profile.beverage_type !== "manual" && !curveIssue && !temp && !history) lines.push("Keep this recipe for a repeat; taste decides whether it needs changing.");
   return lines.filter(Boolean).join(" ");
 }
 
@@ -69,16 +85,17 @@ const grams = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} g`;
 export function paceSentence(f: ShotFacts): string | null {
   if (!f.expectedTimeS || f.durationS == null || f.timeStatus == null || f.timeDeltaS == null) return null;
   const [lo, hi] = f.expectedTimeS;
+  const basis = f.expectedTimeSource === "guide" ? "guide" : "target";
   const ran = Math.round(f.durationS);
   const off = Math.abs(Math.round(f.timeDeltaS));
   const detail = f.yieldG != null ? `${ran} s to ${grams(f.yieldG)}` : `${ran} s`;
-  if (f.timeStatus === "in_window" || off < 1) return `Finished in ${ran} s, ${f.timeStatus === "in_window" ? "right in" : "at the edge of"} the ${lo}–${hi} s target window.`;
-  return `Ran ${off} s ${f.timeStatus === "fast" ? "faster" : "slower"} than the ${lo}–${hi} s target window (${detail}).`;
+  if (f.timeStatus === "in_window" || off < 1) return `Finished in ${ran} s, ${f.timeStatus === "in_window" ? "right in" : "at the edge of"} the ${lo}–${hi} s ${basis} window.`;
+  return `Ran ${off} s ${f.timeStatus === "fast" ? "faster" : "slower"} than the ${lo}–${hi} s ${basis} window (${detail}).`;
 }
 
 /** Whether the main pour step reached its pressure or flow target, in numbers. */
 export function trackingSentence(f: ShotFacts): string | null {
-  const main = [...f.pourSteps].sort((a, b) => b.durationS - a.durationS)[0];
+  const main = f.pourSteps.filter(s => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
   if (!main) return null;
   const pressure = main.pump === "pressure";
   const unit = pressure ? "bar" : "ml/s";
@@ -92,7 +109,7 @@ export function trackingSentence(f: ShotFacts): string | null {
   const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
   if (short || main.limiterEngaged) {
     const why = main.limiterEngaged
-      ? pressure ? `, held back by the ${main.limiterValue} ml/s flow limit: the puck gave too little resistance` : `, held back by the ${main.limiterValue} bar pressure limit: the puck was too restrictive`
+      ? pressure ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck`
       : "";
     return `Pour ${name} only reached ${n(main.actualMean)} ${unit} of the ${n(main.target)} ${unit} target${at}${why}.`;
   }
@@ -110,7 +127,7 @@ function fastReason(kinds: string[]): string {
     kinds.includes("pressure_shortfall") && "pressure fell short of the profile's target",
     kinds.includes("gushed") && "flow gushed well above its target",
   ].filter(Boolean) as string[];
-  return `${capitalize(joinAnd(why))}, so the puck gave too little resistance; a small finer step should slow it and build pressure.`;
+  return `${capitalize(joinAnd(why))}, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again.`;
 }
 
 function slowReason(kinds: string[]): string {
@@ -119,7 +136,7 @@ function slowReason(kinds: string[]): string {
     kinds.includes("flow_shortfall") && "flow fell short of the profile's target",
     kinds.includes("choked") && "flow stayed very low against high pressure",
   ].filter(Boolean) as string[];
-  return `${capitalize(joinAnd(why))}, so the puck was too restrictive; a small coarser step should open up flow and speed it up.`;
+  return `${capitalize(joinAnd(why))}, consistent with a restrictive puck. Try one small coarser step with dose and yield fixed; look for freer flow or a shorter pour, then taste before changing again.`;
 }
 
 const capitalize = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s;
@@ -144,14 +161,14 @@ export function rulesReview(input: ReviewInput): ShotReviewData {
     conflict = (hasSlow && input.feedback.sourBitter <= -1) || (hasFast && input.feedback.sourBitter >= 1);
     const explicitBalance = input.feedback.sourBitter === 0 && input.feedback.body === 0;
     if (!conflict && (explicitBalance || (!manual && input.profile != null))) nextShot = tasted;
-  } else if (!manual && input.profile != null && hasFast && !hasSlow) {
+  } else if (!input.notes?.trim() && !manual && input.profile != null && hasFast && !hasSlow) {
     nextShot = grindAdvice("finer", fastReason(kinds));
-  } else if (!manual && input.profile != null && hasSlow && !hasFast) {
+  } else if (!input.notes?.trim() && !manual && input.profile != null && hasSlow && !hasFast) {
     nextShot = grindAdvice("coarser", slowReason(kinds));
   }
 
   const direction = nextShot?.grindDelta.endsWith("finer") ? "finer" : nextShot?.grindDelta.endsWith("coarser") ? "coarser" : null;
-  const summary = rulesSummary(analysis, input.feedback ? null : direction);
+  const summary = rulesSummary(analysis, input, input.feedback ? null : direction, conflict || (hasFast && hasSlow));
   let confidence: ShotReviewData["confidence"] = "low";
   if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
   if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";

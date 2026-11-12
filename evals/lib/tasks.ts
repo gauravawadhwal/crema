@@ -31,7 +31,7 @@ import {
 } from "./dataset.js";
 import { errorGrade, finalize, gradeDialIn, gradeIdentify, gradeRecommend, type Grade, type RecommendContext } from "./graders.js";
 import { judge, judgeChecks, type JudgeVerdict } from "./judge.js";
-import { RecordingProvider, type CallRecord } from "./recorder.js";
+import { RecordingProvider, SYSTEM_PROMPTS, type CallRecord } from "./recorder.js";
 
 /** What is being evaluated: a model behind a provider, or Crema's rules with no model. */
 export type Subject = { kind: "llm"; provider: LlmProvider } | { kind: "rules" };
@@ -93,6 +93,13 @@ function hasFallback(r: RunRecord) {
   return r.calls.some((c) => c.error) || (r.context as { source?: string } | undefined)?.source?.startsWith("rules (") === true || (r.context as { fellBack?: boolean } | undefined)?.fellBack === true;
 }
 
+function judgeEvidence(call: CallRecord, systems?: Record<string, { text: string }>): string {
+  // Saved metadata is authoritative for an older run. Never substitute today's
+  // system prompt for a historical hash whose text was not retained.
+  const system = systems ? systems[call.systemHash]?.text : SYSTEM_PROMPTS.get(call.systemHash)?.text;
+  return `${system ? `ASSISTANT SYSTEM INSTRUCTIONS (field definitions and scale meanings; illustrative examples are not case facts):\n${system}` : "ASSISTANT SYSTEM INSTRUCTIONS: unavailable in this historical record; do not infer their contents."}\n\nACTUAL CASE INPUT:\n${call.prompt}`;
+}
+
 async function execute(task: TaskName, c: unknown, subject: Subject, llm: ProviderChain, today: Date): Promise<{ output: unknown; context?: unknown; judgeInput?: string }> {
   if (task === "identify") {
     const ic = c as IdentifyCase;
@@ -137,7 +144,8 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
     const rc = c as ReviewCase;
     const input = reviewFixture(rc.input.fixture);
     const result = subject.kind === "rules" ? { review: rulesReview(input), source: "rules" } : await reviewShot(llm, input);
-    return { output: result.review, context: { fellBack: subject.kind === "llm" && result.source === "rules" }, judgeInput: JSON.stringify(input) };
+    const raw = (llm.providers[0] as RecordingProvider).calls.find((x) => x.schemaName === "ShotReview");
+    return { output: result.review, context: { fellBack: subject.kind === "llm" && result.source === "rules" }, judgeInput: raw ? judgeEvidence(raw) : JSON.stringify(input) };
   }
 
   const dc = c as DialInCase;
@@ -154,12 +162,12 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
 }
 
 /** Re-run only the judge on a saved record, using the prompt the model saw. */
-export async function rejudge(task: TaskName, r: RunRecord, judgeProvider: LlmProvider): Promise<void> {
-  const call = r.calls.find((c) => c.schemaName === "Recipe" || c.schemaName === "DialInAdvice");
+export async function rejudge(task: TaskName, r: RunRecord, judgeProvider: LlmProvider, systems?: Record<string, { text: string }>): Promise<void> {
+  const call = r.calls.find((c) => c.schemaName === "Recipe" || c.schemaName === "DialInAdvice" || c.schemaName === "ShotReview");
   if (task === "identify" || !call || r.output == null || hasFallback(r)) return;
   const jr = new RecordingProvider(judgeProvider);
   try {
-    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", call.prompt, r.output);
+    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", task === "review" ? judgeEvidence(call, systems) : call.prompt, r.output);
   } catch (e) {
     console.warn(`judge failed on ${r.caseId}: ${(e as Error).message.slice(0, 200)}`);
     delete r.judge;
@@ -176,5 +184,7 @@ export function gradeRecord(task: TaskName, c: unknown, r: RunRecord): Grade {
   else if (task === "review") g = gradeReview(c as ReviewCase, r.output as ShotReviewData, r.context as { fellBack: boolean });
   else g = gradeDialIn(c as DialInCase, r.output as DialInAdvice, r.context as { fellBack: boolean });
   // Verdicts from an older judge schema are ignored until re-judged.
-  return typeof r.judge?.contradictions?.[0] !== "string" && Array.isArray(r.judge?.contradictions) ? finalize([...g.checks, ...judgeChecks(r.judge)], g.labels) : g;
+  const hasJudge = typeof r.judge?.contradictions?.[0] !== "string" && Array.isArray(r.judge?.contradictions);
+  const coverage = task === "review" && r.judgeCalls != null ? [{ name: "judge.answered", pass: hasJudge, critical: true }] : [];
+  return finalize([...g.checks, ...coverage, ...(hasJudge ? judgeChecks(r.judge!, task === "review") : [])], g.labels);
 }

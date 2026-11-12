@@ -1,35 +1,33 @@
 # Crema implementation handoff
 
-Created: 6 November 2026. Status: **in progress** (last updated 11 November 2026). The
+Created: 6 November 2026. Status: **in progress** (last updated 12 November 2026). The
 progress table and the ticked items say what is done; everything else is still planned.
 Dated status updates and superseded orderings are in [history.md](history.md).
 
-## Where things stand (10 November 2026)
+## Where things stand (12 November 2026)
 
-Phases 1, 2 and 5 are done in software, and phase 6 mostly. The current release is
-v0.4.1 (shot review fixed for real shots). The user reports the tablet was upgraded in
-place through each release to v0.4.1 and is in daily use without problems, so a
-supervised tablet session is not planned and agents should not ask for tablet access
-unless the user offers it. A code review the same day found problems this plan had not
-listed (see "Code review and findings"). The fixes for F1 to F5 and the control logic
-under unit tests (phase 4 re-scoped) were merged into `main` on 10 November 2026 as
-PRs #42 to #46 and #48, with the review itself (#41), the plan trim (#47), and the
-startup-edit race fix (#50). This carousel implementation includes PR #50. Nothing
-has been released or tagged since v0.4.1, and none of it has run on the tablet: it is
-checked against the simulator and CI only. Agents open a PR per piece of work and do
-not merge; tagging a release is the user's call. Software checks use
-`dev/mock-decaid.ts` and desktop Decaid 0.9.1 with its
-simulated machine. The [review record](review-2026-11-06.md) separates reproductions,
-source findings and untested assumptions; read it before changing behaviour.
+Phases 1, 2 and 5 are done in software, and phase 6 mostly. **v0.5.0 is the latest
+published release**, including the completed UI work in PR #64 and the earlier
+reliability fixes. PR #65 (canonical packshots) and PR #66 (deeper shot review) were
+subsequently merged; they are not part of v0.5.0. The UI workstreams are complete in
+software, including phone Stop, after-shot draft advice and zero target exceptions.
 
-## UI finish (11 November 2026)
+The user last reported upgrading the tablet through v0.4.1 and daily use without
+problems. Publishing v0.5.0 is not evidence of its installation or physical-machine
+acceptance. A supervised tablet session is not planned; agents should not ask for
+access unless offered. Software checks use `dev/mock-decaid.ts` and, where stated,
+desktop Decaid 0.9.1 with its simulated machine. Agents open a PR per piece of work
+and do not merge; tagging and deployment remain the user's call.
 
-WS 4.5, 5, 7, 8 and 11 are implemented together on `codex/ui-finish` for review.
-This completes the planned UI work in software: stable pour axes, after-shot results
-and draft-only numeric advice, viewport-pinned phone controls, action feedback and
-consistent motion. The target audit has zero exceptions. Screenshots, walkthrough and
-built demo are refreshed. Verification and limitations are recorded in `docs/ui-plan.md`.
-No new release, tablet/NAS deployment, real AI calls or physical-machine testing.
+## Shot-review quality and history (12 November 2026)
+
+The follow-up on `codex/shot-review-quality` strengthens diagnostic prose and evals,
+uses recorded earlier-shot measurements rather than current drafts, excludes
+confounded comparisons and distinguishes recorded/recipe timing from a catalogue
+guide. It also prevents a changed current recipe from supplying an old shot's time
+window. Design, measurements and remaining model-validation limits are in
+[shot-review-quality.md](shot-review-quality.md). No release or deployment accompanies
+this follow-up. Streamline Settings remains on hold as described below.
 
 ## Next
 
@@ -62,7 +60,7 @@ Decaid.
    plan in [PR #51](https://github.com/gauravawadhwal/crema/pull/51). The bottom
    favourites carousel is [PR #53](https://github.com/gauravawadhwal/crema/pull/53),
    which now includes current `main`, the history integration and the Streamline
-   source audit. Both UI changes remain unreleased.
+   source audit. Both UI changes are included in v0.5.0.
 4. **Startup edit race, merged and included:**
    [PR #50](https://github.com/gauravawadhwal/crema/pull/50) explains the intermittent
    `e2e-live.cjs` failure labelled "inventory refresh preserves the tablet's unsaved
@@ -79,11 +77,10 @@ Decaid.
    established. The complete live suite, including both assertions, passes locally
    on the PR #50 base used here. Preserve the failed runs as evidence; investigate
    further if the timeout assertion recurs on the current base.
-5. **Package the completed fixes for installation when ready.** The latest release,
-   v0.4.1, is a snapshot of older code; the merged fixes are on `main`, not yet in an
-   installable GitHub release. A release runs CI and attaches a new skin ZIP for
-   Decaid to install. It is distribution work, not a separate feature or a reason
-   to pause implementation. Tagging remains the user's call.
+5. **Next release, when ready.** v0.5.0 includes the completed UI and earlier fixes.
+   PRs #65/#66 and the quality follow-up require a later skin release and a separate
+   server update to run the new AI prompt. A release runs CI and attaches a skin ZIP.
+   Tagging and deployment remain the user's call.
 6. **Streamline Settings entry and feature access** (phase 3). The source audit is
    complete in [parity.md](parity.md): all 42 Streamline settings sub-pages and the
    daily features, with owners and proposed routes. The integration remains on hold

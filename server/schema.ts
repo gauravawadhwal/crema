@@ -156,9 +156,14 @@ const ReviewProfileStep = z.object({
 const ReviewProfile = z.object({ title: z.string().max(160).optional(), beverage_type: z.string().max(60).optional(), target_weight: z.union([z.string().max(30), z.number()]).optional(), steps: z.array(ReviewProfileStep).max(40).optional() }).nullable();
 const ReviewHistory = z.object({
   timestamp: z.string().max(80), profileTitle: z.string().max(160).nullish(), doseG: z.number().min(0).max(60).nullish(),
+  profileShape: z.string().max(20000).nullish(), durationS: z.number().min(0).max(600).nullish(),
+  grinderSetting: z.string().max(120).nullish(), tempC: z.number().min(0).max(150).nullish(),
+  stopReason: z.string().max(120).nullish(), targetYieldG: z.number().min(0).max(500).nullish(),
   yieldG: z.number().min(0).max(500).nullish(), enjoyment: z.number().min(0).max(10).nullish(), notes: z.string().max(500).nullish(), review: z.string().max(1000).nullish(),
 });
 export const ReviewBody = z.object({
+  timestamp: z.string().max(80).nullish(), grinderSetting: z.string().max(120).nullish(),
+  tempC: z.number().min(0).max(150).nullish(), profileShape: z.string().max(20000).nullish(),
   points: z.array(ReviewPoint).max(1800).superRefine((points, ctx) => {
     for (let i = 1; i < points.length; i++) if (points[i].t <= points[i - 1].t) ctx.addIssue({ code: "custom", path: [i, "t"], message: "times must increase without duplicates" });
   }), profile: ReviewProfile,
@@ -166,6 +171,7 @@ export const ReviewBody = z.object({
   doseG: z.number().min(0).max(60).nullable(), yieldG: reading(0, 500),
   targetYieldG: z.number().min(0).max(500).nullable(),
   targetTimeS: z.tuple([z.number().min(0).max(600), z.number().min(0).max(600)]).nullable(),
+  timeBasis: z.enum(["recorded", "recipe", "guide"]).nullish(),
   stopReason: z.string().max(120).nullable(), feedback: TasteFeedback.extend({ notes: z.string().max(1000).nullable() }).nullable(), bean: BeanInfo.nullable(),
   notes: z.string().max(1000).nullable().optional(),
   installedProfiles: z.array(z.string().min(1).max(160)).max(200), history: z.array(ReviewHistory).max(20),

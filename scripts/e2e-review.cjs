@@ -131,6 +131,81 @@ const openShot = async (page, id, selector) => {
     check(raw.annotations.extras.thirdParty.keep === "plugin-value" && raw.annotations.extras.crema.keep === "existing-crema-data" && raw.annotations.extras.crema.sourBitter === 0 && raw.annotations.extras.crema.body === 0, "rapid taste updates preserve each other and unrelated extras");
     check(JSON.stringify(await evalPage(() => S.api.machine.recipe())) === JSON.stringify(machineRecipe), "review leaves the loaded machine recipe unchanged");
 
+    // Reviewing an older shot must find the shots before it, hydrate their
+    // measurements (the list has none), and never borrow today's recipe draft.
+    const historyBag = "review-history-bag", selectedAt = "2026-10-01T12:00:00Z", callsBeforeHistory = reviewCalls.length;
+    const capturedProfile = { title: "Adaptive v2", beverage_type: "espresso", target_weight: 36, steps: [{ name: "Pour", pump: "pressure", pressure: "9", seconds: "40", temperature: "94", limiter: { value: "3", range: "1" } }] };
+    let savedHistoryRecipe = { profileTitle: capturedProfile.title, doseG: 20, yieldG: 54, tempC: 94, targetTimeS: [40, 50] }, currentRecordedWindow = null, failedYield = false;
+    const historyMeasurements = (timestamp) => Array.from({ length: 45 }, (_, t) => ({
+      machine: { timestamp: new Date(Date.parse(timestamp) + t * 1000).toISOString(), state: { state: "espresso", substate: t < 5 ? "preparingForShot" : t <= 35 ? "pouring" : "ending" }, pressure: 9, flow: 2, targetPressure: 9, targetFlow: -1, profileFrame: 0, mixTemperature: 94 },
+      scale: { weight: Math.max(0, t - 5) * 1.2 },
+    }));
+    const historicalShots = Array.from({ length: 10 }, (_, i) => {
+      const timestamp = new Date(Date.parse(selectedAt) - (i + 1) * 60000).toISOString();
+      const profile = { ...capturedProfile, target_weight: 38, steps: [{ ...capturedProfile.steps[0], pressure: i === 1 ? "8" : "9", temperature: i === 2 ? undefined : "91" }] };
+      return { id: `review-history-old-${i}`, timestamp, stopReason: "targetWeight", workflow: { profile, context: { beanBatchId: historyBag, targetDoseWeight: 18, targetYield: 36, grinderSetting: i === 2 ? undefined : "10" } },
+        annotations: { actualDoseWeight: 18, actualYield: 36 }, measurements: i === 2 ? [] : historyMeasurements(timestamp) };
+    });
+    const newer = Array.from({ length: 102 }, (_, i) => ({ id: `review-history-new-${i}`, timestamp: new Date(Date.parse(selectedAt) + (i + 1) * 60000).toISOString(), workflow: { context: { beanBatchId: historyBag } } }));
+    const historicalSummaries = [...newer, { id: shotId, timestamp: selectedAt, workflow: { context: { beanBatchId: historyBag } } },
+      ...historicalShots.map(({ measurements, ...rest }) => rest)];
+    const historyPages = [], historyReads = [];
+    const listHistory = async (route) => {
+      const u = new URL(route.request().url());
+      if (u.searchParams.get("beanBatchId") !== historyBag) return route.fallback();
+      const offset = Number(u.searchParams.get("offset") ?? 0), limit = Number(u.searchParams.get("limit") ?? 20);
+      historyPages.push(offset);
+      await route.fulfill({ json: { items: historicalSummaries.slice(offset, offset + Math.min(100, limit)), total: historicalSummaries.length } });
+    };
+    const readHistory = async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const id = new URL(route.request().url()).pathname.split("/").at(-1);
+      if (id === shotId) {
+        const response = await route.fetch(), data = await response.json();
+        data.timestamp = selectedAt; data.workflow = { profile: capturedProfile, context: { beanBatchId: historyBag, targetDoseWeight: 18, targetYield: 36, grinderSetting: "11.25" } };
+        data.measurements = historyMeasurements(selectedAt);
+        data.annotations.extras.crema.targetTimeS = currentRecordedWindow;
+        if (failedYield) data.annotations.actualYield = 4;
+        return route.fulfill({ response, json: data });
+      }
+      const shot = historicalShots.find((s) => s.id === id);
+      if (!shot) return route.fallback();
+      historyReads.push(id);
+      return route.fulfill(id === "review-history-old-3" ? { status: 404, json: { error: "removed shot" } } : { json: shot });
+    };
+    const historyRecipe = (route) => route.fulfill({ json: new URL(route.request().url()).pathname.includes("/bean-batches/") ? { beanId: "review-history-coffee" } : { recipe: savedHistoryRecipe } });
+    await page.route(/\/api\/v1\/shots\?/, listHistory);
+    await page.route(/\/api\/v1\/shots\/[^/]+$/, readHistory);
+    await page.route(/\/api\/v1\/(?:bean-batches\/review-history-bag|store\/crema\/bean%3Areview-history-coffee)$/i, historyRecipe);
+    const savedNext = await evalPage(() => { const before = JSON.parse(JSON.stringify(S.next)); S.next = { ...S.next, grind: "999", tempC: 70, doseG: 10, yieldG: 100 }; return before; });
+    await evalPage(async (id) => S.api.review(id), shotId);
+    const historyInput = reviewCalls.at(-1), prior = historyInput.history[0], unknown = historyInput.history.find((s) => s.tempC === null);
+    check(historyPages.includes(100) && historyReads.length === 10 && historyInput.history.length === 9, "older-shot review pages past newer shots and bounds full reads, omitting a removed shot");
+    check(historyInput.history.every((s) => Date.parse(s.timestamp) < Date.parse(historyInput.timestamp)), "review history contains only shots earlier than the selected shot");
+    check(historyInput.grinderSetting === "11.25" && historyInput.tempC === 94 && historyInput.doseG === 18 && historyInput.targetYieldG === 36, "review context uses the captured shot instead of next-shot edits");
+    const guideWindow = await evalPage(() => E.findProfile("Adaptive v2").recipe.timeS);
+    check(historyInput.timeBasis === "guide" && JSON.stringify(historyInput.targetTimeS) === JSON.stringify(guideWindow), "an older 18 g / 36 g shot ignores today's same-title 20 g / 54 g recipe window");
+    check(prior.durationS === 30 && prior.grinderSetting === "10" && prior.tempC === 91 && prior.targetYieldG === 36 && prior.stopReason === "targetWeight", "prior history carries measured brew duration, recorded grind, temperature, target and stop");
+    check(unknown && unknown.durationS === null && unknown.grinderSetting === null, "missing historical measurements and grind remain unknown");
+    check(prior.profileShape === historyInput.profileShape && historyInput.history[1].profileShape !== historyInput.profileShape, "profile comparison ignores absolute temperature and yield but distinguishes same-title pressure changes");
+    savedHistoryRecipe = { ...savedHistoryRecipe, doseG: 18, yieldG: 36, targetTimeS: [26, 34] }; failedYield = true;
+    await evalPage(async (id) => S.api.review(id), shotId);
+    check(reviewCalls.at(-1).timeBasis === "recipe" && reviewCalls.at(-1).yieldG === 4 && JSON.stringify(reviewCalls.at(-1).targetTimeS) === "[26,34]", "matching recorded recipe uses its time window even when the actual yield failed");
+    savedHistoryRecipe.profileShape = "a-different-profile-with-the-same-title";
+    await evalPage(async (id) => S.api.review(id), shotId);
+    check(reviewCalls.at(-1).timeBasis === "guide", "a saved recipe with a different profile shape cannot supply the old shot's time window");
+    currentRecordedWindow = [20, 26];
+    await evalPage(async (id) => S.api.review(id), shotId);
+    check(reviewCalls.at(-1).timeBasis === "recorded" && JSON.stringify(reviewCalls.at(-1).targetTimeS) === "[20,26]", "the shot's recorded time window wins over recipe and guide fallbacks");
+    currentRecordedWindow = [0, 600]; capturedProfile.title = "Recorded custom profile";
+    await evalPage(async (id) => S.api.review(id), shotId);
+    check(reviewCalls.at(-1).timeBasis === null && reviewCalls.at(-1).targetTimeS === null, "an unknown custom profile with only a legacy unknown-window sentinel stays unknown");
+    await page.unroute(/\/api\/v1\/shots\?/, listHistory);
+    await page.unroute(/\/api\/v1\/shots\/[^/]+$/, readHistory);
+    await page.unroute(/\/api\/v1\/(?:bean-batches\/review-history-bag|store\/crema\/bean%3Areview-history-coffee)$/i, historyRecipe);
+    await evalPage((next) => { S.next = next; }, savedNext);
+    reviewCalls.length = callsBeforeHistory;
+
     failReview = true;
     const failedReview = page.waitForResponse((r) => r.url().endsWith("/api/review"), { timeout: 10000 });
     await page.click("#reviewDetail");
@@ -213,6 +288,34 @@ const openShot = async (page, id, selector) => {
     await page.setViewportSize({ width: 1340, height: 800 });
     check((await page.locator('#liveChart').boundingBox()).height >= 190, "finished chart is at least 190 px at tablet size");
     await page.screenshot({ path: "/tmp/crema-ws5-after-shot.png" });
+    // The standalone demo uses the same recorded history contract, even when
+    // the prepared recipe has moved on from the shot being reviewed.
+    await page.goto(`http://localhost:${SKIN}/?demo&full#shots`);
+    await page.waitForFunction(() => S.api?.demo && S.shelfLoaded);
+    const demoHistory = await evalPage(async () => {
+      const shots = await S.api.shots(100), current = shots.find((s) => shots.some((p) => p.id !== s.id && p.batch === s.batch));
+      const previous = shots.find((s) => s.id !== current.id && s.batch === current.batch);
+      const profile = { title: "Recorded demo pour", beverage_type: "espresso", target_weight: 36, steps: [{ name: "Pour", pump: "pressure", pressure: "9", seconds: "40", temperature: "92" }] };
+      const points = (seconds) => Array.from({ length: seconds + 1 }, (_, t) => ({ t, p: 9, f: 2, tp: 9, tf: null, w: t / seconds * 36, temp: 92, targetTemp: 92, frame: 0, substate: "pouring", weightFlow: 36 / seconds }));
+      for (const s of [current, previous]) Object.assign(s, { profile, profileTitle: profile.title, doseG: 18, yieldG: 36, targetYieldG: 36, targetTimeS: [26, 34], stopReason: "targetWeight" });
+      Object.assign(current, { timestamp: "2026-10-01T12:00:00Z", points: points(30), grinderSetting: "9.75" });
+      Object.assign(previous, { timestamp: "2026-10-01T11:00:00Z", points: points(22), grinderSetting: "10" });
+      S.next = { ...S.next, grind: "999", tempC: 70 };
+      const recorded = await S.api.review(current.id);
+      previous.points = []; previous.grinderSetting = null;
+      const unknown = await S.api.review(current.id);
+      const bag = (await S.api.shelf()).find((b) => b.batch === current.batch);
+      Object.assign(bag.recipe, { profileTitle: "Adaptive v2", doseG: 20, yieldG: 54, tempC: 92, targetTimeS: [40, 50] });
+      current.profile = { ...profile, title: "Adaptive v2" }; current.profileTitle = "Adaptive v2"; current.targetTimeS = null;
+      const guide = await S.api.review(current.id);
+      current.profile = { ...profile, title: "Recorded custom profile" }; current.profileTitle = "Recorded custom profile";
+      const noWindow = await S.api.review(current.id);
+      return { recorded: recorded.review.summary, unknown: unknown.review.summary, guide: guide.review.summary, noWindow: noWindow.review.summary };
+    });
+    check(/22(?: → | to )30 s/.test(demoHistory.recorded) && demoHistory.recorded.includes("10 → 9.75") && !demoHistory.recorded.includes("999"), "demo reviews compare recorded shot time and grind rather than the next-shot draft", demoHistory.recorded);
+    check(!/22(?: → | to )30 s/.test(demoHistory.unknown) && !demoHistory.unknown.includes("10 → 9.75"), "demo history does not invent missing duration or grinder settings", demoHistory.unknown);
+    check(/guide/i.test(demoHistory.guide) && !/40[–-]50/.test(demoHistory.guide), "demo ignores a newer changed recipe and labels the profile guide as an approximation", demoHistory.guide);
+    check(!/target window|profile guide|40[–-]50/.test(demoHistory.noWindow), "demo custom profile without a recorded matching recipe has no invented expected window", demoHistory.noWindow);
     check(!errors.length, "no browser errors", errors.join("; "));
   } catch (e) {
     console.error(e);

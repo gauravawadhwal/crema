@@ -223,6 +223,47 @@ function brewProfileShape(profile) {
   const ordered = (v) => Array.isArray(v) ? v.map(ordered) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().filter((k) => k !== "target_weight").map((k) => [k, ordered(v[k])])) : v;
   return JSON.stringify(ordered(relative));
 }
+// Context for comparing saved shots. Read only their captured profile, grind and
+// telemetry; the next-shot draft can already have changed by the time Review runs.
+function recordedReviewNumber(value, min, max) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min && n <= max ? n : null;
+}
+function recordedReviewContext(profile, points, grinderSetting) {
+  const shape = brewProfileShape(profile);
+  const grind = grinderSetting == null ? null : String(grinderSetting).trim();
+  const facts = E.shotFacts({ points, profile, doseG: null, yieldG: null, targetYieldG: null, targetTimeS: null, stopReason: null });
+  return {
+    profileShape: shape && shape.length <= 20000 ? shape : null,
+    durationS: facts.durationS != null && facts.durationS >= 0 && facts.durationS <= 600 ? facts.durationS : null,
+    grinderSetting: grind && grind.length <= 120 ? grind : null,
+    tempC: recordedReviewNumber(profile?.steps?.[0]?.temperature, 0, 150),
+  };
+}
+// A coffee's recipe can change after this shot. Its time window is useful only
+// when its recorded brewing variables still match; otherwise use the guide as
+// an explicitly approximate fallback, never today's recipe for yesterday's shot.
+function reviewTimeContext(profile, recorded, recipe) {
+  const window = (value) => Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) && value[0] > 0 && value[0] <= value[1] && value[1] <= 300 ? value : null;
+  if (profile?.beverage_type === "manual") return { targetTimeS: null, timeBasis: null };
+  for (const value of recorded.windows ?? []) {
+    const targetTimeS = window(value);
+    if (targetTimeS) return { targetTimeS, timeBasis: "recorded" };
+  }
+  const dose = recordedReviewNumber(recorded.doseG, 0, 60), temp = recordedReviewNumber(recorded.tempC, 0, 150);
+  const targetYield = recordedReviewNumber(recorded.targetYieldG, 0, 500);
+  const yieldG = targetYield > 0 ? targetYield : recordedReviewNumber(recorded.yieldG, 0, 500);
+  const recipeDose = recordedReviewNumber(recipe?.doseG, 0, 60), recipeYield = recordedReviewNumber(recipe?.yieldG, 0, 500), recipeTemp = recordedReviewNumber(recipe?.tempC, 0, 150);
+  const sameRecipe = profile?.title && recipe?.profileTitle === profile.title &&
+    dose > 0 && yieldG > 0 && temp > 0 && recipeDose > 0 && recipeYield > 0 && recipeTemp > 0 &&
+    Math.abs(dose - recipeDose) <= 0.5 && Math.abs(yieldG - recipeYield) <= Math.max(2, yieldG * 0.05) && Math.abs(temp - recipeTemp) <= 0.5 &&
+    (!recipe.profileShape || recipe.profileShape === recorded.profileShape);
+  const recipeTime = sameRecipe ? window(recipe.targetTimeS) : null;
+  if (recipeTime) return { targetTimeS: recipeTime, timeBasis: "recipe" };
+  const guideTime = profile?.title ? window(E.findProfile(profile.title)?.recipe?.timeS) : null;
+  return { targetTimeS: guideTime, timeBasis: guideTime ? "guide" : null };
+}
 const PROCESS_KINDS = ["washed", "natural", "honey", "anaerobic", "wet-hulled", "decaf", "experimental"];
 function processKindOf(text) {
   const t = String(text || "").toLowerCase();
@@ -349,6 +390,41 @@ function makeLiveApi(conn) {
   const batchShots = async (batchId, limit) => (batchId ? (await j(D(`/shots?beanBatchId=${encodeURIComponent(batchId)}&limit=${Math.min(limit, SHOT_PAGE)}`)).catch(() => ({ items: [] }))).items : []);
   const fullShot = async (id) => {
     try { return await j(D(`/shots/${encodeURIComponent(id)}`)); } catch (e) { if (e.status === 404) return null; throw e; }
+  };
+  // An explicit review can inspect an older shot, so start before that shot,
+  // rather than taking the bag's newest ten. Bound both paging and full reads.
+  const reviewHistory = async (batchId, shotId, timestamp) => {
+    const before = Date.parse(timestamp);
+    if (!batchId || !Number.isFinite(before)) return [];
+    const earlier = [], seen = new Set();
+    for (let offset = 0, pages = 0; pages < 10 && earlier.length < 10; offset += SHOT_PAGE, pages++) {
+      const q = new URLSearchParams({ beanBatchId: batchId, limit: String(SHOT_PAGE), offset: String(offset) });
+      const page = await j(D(`/shots?${q}`)).catch(() => null);
+      if (!page) break;
+      const items = page.items ?? [];
+      for (const s of items) {
+        if (s.id === shotId || seen.has(s.id) || s.workflow?.context?.beanBatchId !== batchId || !(Date.parse(s.timestamp) < before)) continue;
+        seen.add(s.id); earlier.push(s);
+        if (earlier.length === 10) break;
+      }
+      if (!items.length || offset + items.length >= (page.total ?? 0)) break;
+    }
+    const complete = await Promise.all(earlier.map((s) => fullShot(s.id).catch(() => null)));
+    return complete.filter((s) => s && s.workflow?.context?.beanBatchId === batchId && Date.parse(s.timestamp) < before)
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).map((s) => {
+        const ctx = s.workflow?.context ?? {}, profile = s.workflow?.profile ?? null;
+        const points = shotPoints(s), saved = s.annotations?.extras?.crema?.review;
+        return {
+          timestamp: s.timestamp, profileTitle: profile?.title ?? null,
+          ...recordedReviewContext(profile, points, ctx.grinderSetting),
+          doseG: recordedReviewNumber(s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, 0, 60),
+          yieldG: recordedReviewNumber(s.annotations?.actualYield ?? points.at(-1)?.w, 0, 500),
+          targetYieldG: recordedReviewNumber(ctx.targetYield ?? profile?.target_weight, 0, 500),
+          stopReason: s.stopReason ?? s.annotations?.stopReason ?? ctx.stopReason ?? null,
+          enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes?.slice(0, 500) ?? null,
+          review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) ?? null,
+        };
+      });
   };
 
   // ---- one coffee, assembled from Decaid + Crema's record ----
@@ -649,21 +725,18 @@ function makeLiveApi(conn) {
       const profile = full.workflow?.profile ?? null;
       const batchId = ctx.beanBatchId ?? null;
       const installed = await api.library().then((items) => items.map((p) => p.title)).catch(() => []);
-      const history = batchId ? (await batchShots(batchId, 10)).filter((s) => s.id !== shotId && Date.parse(s.timestamp) < Date.parse(full.timestamp)).map((s) => {
-        const saved = s.annotations?.extras?.crema?.review;
-        return { timestamp: s.timestamp, profileTitle: s.workflow?.profile?.title, doseG: s.annotations?.actualDoseWeight ?? s.workflow?.context?.targetDoseWeight, yieldG: s.annotations?.actualYield, enjoyment: s.annotations?.enjoyment, notes: s.annotations?.espressoNotes?.slice(0, 500), review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) };
-      }).slice(0, 10) : [];
-      const targetYieldG = optionalNumber(ctx.targetYield ?? profile?.target_weight);
+      const history = await reviewHistory(batchId, shotId, full.timestamp);
+      const { durationS: _durationS, ...recordedContext } = recordedReviewContext(profile, points, ctx.grinderSetting);
+      const targetYieldG = recordedReviewNumber(ctx.targetYield ?? profile?.target_weight, 0, 500);
+      const doseG = recordedReviewNumber(full.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, 0, 60);
+      const yieldG = recordedReviewNumber(full.annotations?.actualYield ?? points.at(-1)?.w, 0, 500);
       // The expected time window: the shot's own, else the coffee's saved recipe for this profile, else the catalogue's.
       const savedRec = profile?.title && profile.beverage_type !== "manual" && (ctx.beanId || batchId)
         ? await (ctx.beanId ? recordOf(ctx.beanId) : j(D(`/bean-batches/${batchId}`)).then((bt) => recordOf(bt.beanId))).catch(() => null) : null;
-      const recipeTimeS = (savedRec?.recipe?.profileTitle === profile?.title ? savedRec?.recipe?.targetTimeS : null)
-        ?? (profile?.title && profile.beverage_type !== "manual" ? E.findProfile(profile.title)?.recipe?.timeS ?? null : null);
-      const targetTimeS = full.annotations?.extras?.crema?.targetTimeS ?? ctx.targetTimeS ?? recipeTimeS ?? null;
+      const timeContext = reviewTimeContext(profile, { ...recordedContext, doseG, yieldG, targetYieldG, windows: [full.annotations?.extras?.crema?.targetTimeS, ctx.targetTimeS] }, savedRec?.recipe);
       const input = {
-        points, profile, doseG: full.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null,
-        yieldG: full.annotations?.actualYield ?? (points.at(-1)?.w ?? null), targetYieldG,
-        targetTimeS: Array.isArray(targetTimeS) && targetTimeS.length === 2 ? targetTimeS : null,
+        timestamp: full.timestamp ?? null, ...recordedContext,
+        points, profile, doseG, yieldG, targetYieldG, ...timeContext,
         stopReason: full.stopReason ?? full.annotations?.stopReason ?? ctx.stopReason ?? null,
         feedback, notes: full.annotations?.espressoNotes?.slice(0, 1000) ?? null, bean: bean ?? null, installedProfiles: installed, history,
       };

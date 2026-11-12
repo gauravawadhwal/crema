@@ -27,7 +27,7 @@ const provider = (answer: unknown | ((prompt: string) => unknown) | Error): Prov
 };
 const cleanReview = (overrides: Record<string, unknown> = {}) => ({
   summary: "The measured shot tracked its targets.", wentWell: ["Pressure stayed near target."], issues: [],
-  nextShot: null, confidence: "low", askTaste: true, ...overrides,
+  nextShot: null, confidence: "low", askTaste: true, notesEvidence: null, notesTaste: null, ...overrides,
 });
 
 describe("shot review backend", () => {
@@ -102,6 +102,45 @@ describe("shot review backend", () => {
     expect(result.review.nextShot).toBeNull();
   });
 
+  it("requires a grounded note quote for notes-only advice and keeps it private", async () => {
+    const advice = { change: "Grind finer", grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "You reported a sour taste. Try one small finer step at the same dose and yield, then taste for less sharpness." };
+    const clean = input({
+      points: Array.from({ length: 21 }, (_, t) => ({ ...point(t), p: 8, tp: 8 })),
+      profile: { title: "Installed profile", steps: [{ pump: "pressure", pressure: "8", seconds: "30" }] },
+      notes: "It tasted sharp and sour.",
+    });
+    for (const notesEvidence of [null, "It tasted bitter."]) {
+      const rejected = await reviewShot(provider(cleanReview({ nextShot: advice, notesEvidence })), clean);
+      expect(rejected.source).toBe("rules");
+      expect(rejected.review.nextShot).toBeNull();
+    }
+    const accepted = await reviewShot(provider(cleanReview({ nextShot: advice, notesEvidence: "sharp and sour", notesTaste: "sour" })), clean);
+    expect(accepted.source).toBe("mock");
+    expect(accepted.review.nextShot?.grindDelta).toBe("finer");
+    expect(accepted.review).not.toHaveProperty("notesEvidence");
+    expect(accepted.review).not.toHaveProperty("notesTaste");
+    const switched = { ...advice, grindDelta: "same", switchProfile: "Installed profile" };
+    expect((await reviewShot(provider(cleanReview({ nextShot: switched, notesEvidence: "sharp and sour", notesTaste: "sour" })), clean)).source).toBe("rules");
+  });
+
+  it("abstains when a grounded taste note opposes the curve instead of falling back to the opposite move", async () => {
+    const shot = input({
+      points: Array.from({ length: 26 }, (_, t) => ({ ...point(t), p: 8, tp: 8, f: 0.2 })),
+      profile: { title: "Installed profile", steps: [{ pump: "pressure", pressure: "8", seconds: "30" }] },
+      notes: "It tasted sharply sour.",
+    });
+    const advice = { change: "Grind finer", grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "The notes report a sour taste." };
+    const result = await reviewShot(provider(cleanReview({ nextShot: advice, confidence: "high", notesEvidence: "sharply sour", notesTaste: "sour" })), shot);
+    expect(result.source).toBe("mock");
+    expect(result.review.issues.map(i => i.kind)).toContain("choked");
+    expect(result.review.nextShot).toBeNull();
+    expect(result.review.confidence).toBe("low");
+    expect(result.review.summary).toMatch(/opposite.*Repeat/);
+    const curveMove = { ...advice, change: "Grind coarser", grindDelta: "coarser" };
+    const ignoresTaste = await reviewShot(provider(cleanReview({ nextShot: curveMove, confidence: "high", notesEvidence: "sharply sour", notesTaste: "sour" })), shot);
+    expect(ignoresTaste.review.nextShot).toBeNull();
+  });
+
   it("allows finer or coarser grind advice without taste when timing or target shortfall supports it", async () => {
     const advice = { change: "Grind finer", grindDelta: "much-finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "Pressure fell short of target." };
     const shortfall = input({
@@ -174,7 +213,7 @@ describe("shot review backend", () => {
 
   it("replaces the model's narrative when the shot has too few samples to describe", async () => {
     const result = await reviewShot(provider(cleanReview({ confidence: "high" })), input());
-    expect(result.review.summary).toMatch(/^There is not enough telemetry/);
+    expect(result.review.summary).toMatch(/^This recording is too short or sparse/);
     expect(result.review.wentWell).toEqual([]);
     expect(result.review.confidence).toBe("low");
   });
@@ -187,5 +226,24 @@ describe("shot review backend", () => {
     expect((await post(JSON.stringify({ points: [], profile: null }))).status).toBe(400);
     expect((await post("not json")).status).toBe(400);
     expect((await post("{}", { "content-length": "1000001" })).status).toBe(413);
+  });
+
+  it("distinguishes no recording from a recorded early stop", async () => {
+    const empty = await reviewShot(provider(cleanReview()), input({ points: [] }));
+    expect(empty.review.summary).toMatch(/^No shot curve was recorded/);
+    const early = await reviewShot(provider(cleanReview()), input({ points: Array.from({ length: 25 }, (_, i) => point(i / 4)), yieldG: 4, stopReason: "apiStop" }));
+    expect(early.review.summary).toMatch(/stopped early.*full repeat/);
+    expect(early.review.summary).not.toMatch(/No.*curve.*recorded/);
+  });
+
+  it("accepts older clients and bounds the optional recorded history metadata", () => {
+    expect(ReviewBody.safeParse(input()).success).toBe(true);
+    const history = { timestamp: "2026-11-01T00:00:00Z", durationS: 30, grinderSetting: "E-3", tempC: 92, profileShape: "recorded-shape" };
+    expect(ReviewBody.safeParse({ ...input(), history }).success).toBe(false);
+    expect(ReviewBody.safeParse(input({ history: [history] })).success).toBe(true);
+    for (const bad of [{ durationS: 601 }, { durationS: -1 }, { tempC: 151 }, { grinderSetting: "x".repeat(121) }, { profileShape: "x".repeat(20001) }]) {
+      expect(ReviewBody.safeParse(input({ history: [{ ...history, ...bad }] })).success).toBe(false);
+    }
+    expect(ReviewBody.safeParse({ ...input(), timestamp: "x".repeat(81) }).success).toBe(false);
   });
 });

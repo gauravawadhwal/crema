@@ -375,3 +375,11 @@ feel superficial: they read back the shot details already displayed in the heade
   `e2e-live.cjs`, `e2e-demo.cjs` (source and `--built`), `check-tablet-fit.cjs`, and
   `check-targets.cjs` (source and `--built`).
 
+
+## Quality and history follow-up — 12 November 2026
+
+The implementation after PR #66 replaces keyword-only quality checks, supplies
+recorded comparable history, and makes the review explain evidence → decision →
+next check. See [shot-review-quality.md](shot-review-quality.md) for the contract,
+measured results and limits, including the deferred Claude subscription reruns.
+Saved reviews remain version 1 and advice remains draft-only.

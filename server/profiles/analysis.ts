@@ -34,6 +34,9 @@ export interface ShotFacts {
   weightGlitches: number;
   /** The time window this shot was meant to land in: the recorded target, else the catalogue profile's. */
   expectedTimeS: [number, number] | null;
+  expectedTimeSource: "recorded" | "recipe" | "guide" | "provided" | null;
+  /** A catalogue guide cannot diagnose pace when dose/target yield differ or are unknown. */
+  timeTargetComparable: boolean;
   /** How durationS compares with expectedTimeS; null when either is unknown or the shot was stopped early by hand. */
   timeStatus: "fast" | "in_window" | "slow" | null;
   /** Seconds below the window's minimum (negative) or above its maximum (positive); 0 inside it. */
@@ -60,6 +63,8 @@ export interface PourStep {
   limiterValue: number | null;
   /** The limiter held the controlled quantity short of its target. */
   limiterEngaged: boolean;
+  /** A sustained, continuously recorded target, suitable for a hold comparison. */
+  steadyTarget: boolean;
 }
 
 export interface ShotAnalysis {
@@ -109,13 +114,13 @@ type Window = {
 const USER_STOPS = new Set(["apistop", "userstop", "manual"]);
 
 /** Whether the shot reached at least 80% of its target yield; null when either is unknown. */
-function reachedYield(input: ReviewInput): boolean | null {
+function reachedYield(input: Pick<ReviewInput, "yieldG" | "targetYieldG">): boolean | null {
   if (!finite(input.yieldG) || !finite(input.targetYieldG) || input.targetYieldG <= 0) return null;
   return input.yieldG >= 0.8 * input.targetYieldG;
 }
 
 /** Stopped by hand or from the app before reaching (or without showing) 80% of the target yield. */
-function stoppedEarly(input: ReviewInput): boolean {
+export function stoppedEarly(input: Pick<ReviewInput, "yieldG" | "targetYieldG" | "stopReason">): boolean {
   return USER_STOPS.has((input.stopReason ?? "").toLowerCase()) && reachedYield(input) !== true;
 }
 
@@ -123,14 +128,18 @@ function stoppedEarly(input: ReviewInput): boolean {
  * The time window the shot was meant to land in: the recorded target when it is
  * a real window, else the catalogue's recipe time for a known espresso profile.
  */
-export function expectedTimeWindow(input: Pick<ReviewInput, "targetTimeS" | "profile">): [number, number] | null {
+function resolveTimeWindow(input: Pick<ReviewInput, "targetTimeS" | "profile" | "timeBasis">): { window: [number, number] | null; source: ShotFacts["expectedTimeSource"] } {
   const t = input.targetTimeS;
-  if (t && finite(t[0]) && finite(t[1]) && t[0] > 0 && t[0] <= t[1] && t[1] <= 300 && !(t[0] === 0 && t[1] === 600)) return [t[0], t[1]];
+  if (t && finite(t[0]) && finite(t[1]) && t[0] > 0 && t[0] <= t[1] && t[1] <= 300) return { window: [t[0], t[1]], source: input.timeBasis ?? "provided" };
   if (input.profile?.title && input.profile.beverage_type !== "manual") {
     const known = findProfile(input.profile.title)?.recipe.timeS;
-    return known ? [known[0], known[1]] : null;
+    if (known) return { window: [known[0], known[1]], source: "guide" };
   }
-  return null;
+  return { window: null, source: null };
+}
+
+export function expectedTimeWindow(input: Pick<ReviewInput, "targetTimeS" | "profile" | "timeBasis">): [number, number] | null {
+  return resolveTimeWindow(input).window;
 }
 
 function targetAndActual(input: ReviewInput, point: ReviewInput["points"][number]) {
@@ -235,13 +244,13 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
       const capped = limiter != null && flow != null && flow >= 0.85 * limiter;
       issues.push({
         kind: "pressure_shortfall", what: "Pressure stayed below the profile's target during the pour.",
-        evidence: `${span}: target ${w.target.toFixed(1)} bar, measured ${actual.toFixed(1)} bar (peak ${Math.max(...w.actuals).toFixed(1)} bar)${flow == null ? "" : ` with flow at ${flow.toFixed(1)} ml/s`}${capped ? `, held at the ${limiter} ml/s flow limit because the puck gave too little resistance` : ""}.`,
+        evidence: `${span}: target ${w.target.toFixed(1)} bar, measured ${actual.toFixed(1)} bar (peak ${Math.max(...w.actuals).toFixed(1)} bar)${flow == null ? "" : ` with flow at ${flow.toFixed(1)} ml/s`}${capped ? `, near the ${limiter} ml/s flow limit, consistent with low puck resistance` : ""}.`,
         severity: "caution", fromS: w.start, toS: w.end,
       });
     } else if (!kind && judged && w.pump === "flow" && ratio <= 0.75 && w.target - actual >= 0.4) {
       issues.push({
         kind: "flow_shortfall", what: "Flow stayed below the profile's target during the pour.",
-        evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, held at the ${limiter} bar pressure limit because the puck was too restrictive` : ""}.`,
+        evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit, consistent with a restrictive puck` : ""}.`,
         severity: "caution", fromS: w.start, toS: w.end,
       });
     }
@@ -330,7 +339,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
 
   const lastT = points.at(-1)?.t ?? 0;
   const window = facts.expectedTimeS;
-  if (judged && window && facts.durationS != null && facts.timeDeltaS != null) {
+  if (judged && facts.timeTargetComparable && window && facts.durationS != null && facts.timeDeltaS != null) {
     const ran = Math.round(facts.durationS);
     const range = { fromS: facts.brewStartS ?? 0, toS: facts.brewEndS ?? lastT };
     if (facts.timeStatus === "fast" && facts.timeDeltaS <= -4 && reachedYield(input) !== false) {
@@ -392,7 +401,12 @@ export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): S
   const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
   const yieldG = finite(input.yieldG) && input.yieldG > 0 ? input.yieldG : null;
   const durationS = round(span(brewing));
-  const expectedTimeS = expectedTimeWindow(input);
+  const { window: expectedTimeS, source: expectedTimeSource } = resolveTimeWindow(input);
+  const guide = input.profile?.title ? findProfile(input.profile.title)?.recipe : null;
+  const timingYield = finite(input.targetYieldG) && input.targetYieldG > 0 ? input.targetYieldG : yieldG;
+  const timeTargetComparable = expectedTimeS != null && (expectedTimeSource !== "guide" ||
+    guide != null && doseG != null && timingYield != null && Math.abs(doseG - guide.doseG) <= 0.5 &&
+    Math.abs(timingYield - guide.yieldG) <= Math.max(2, guide.yieldG * 0.05));
   // Pace is only judged on a recorded shot that ran its course.
   const hasCurve = points.some((p) => finite(p.p) || finite(p.f));
   let timeStatus: ShotFacts["timeStatus"] = null, timeDeltaS: number | null = null;
@@ -410,7 +424,7 @@ export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): S
     pourMeanPressureBar: round(avg(pour.map((p) => p.p).filter(finite))),
     pourMeanFlowMlS: round(avg(pour.map((p) => p.f).filter(finite))),
     weightGlitches: points.filter((p) => finite(p.w) && p.w < -5).length,
-    expectedTimeS, timeStatus, timeDeltaS,
+    expectedTimeS, expectedTimeSource, timeTargetComparable, timeStatus, timeDeltaS,
     pourSteps: pourSteps(input, points),
   };
 }
@@ -459,6 +473,9 @@ function pourSteps(input: ReviewInput, points: ReviewInput["points"]): PourStep[
       target: round(target)!, actualMean: round(actualMean)!, actualPeak: round(Math.max(...peaks))!,
       otherMean: round(otherMean), limiterValue,
       limiterEngaged: limiterValue != null && otherMean != null && short && otherMean >= 0.85 * limiterValue,
+      steadyTarget: durationS >= 8 && settled.length >= 5 && recorded.length >= 0.8 * settled.length &&
+        actuals.length >= 0.8 * settled.length && Math.max(...recorded) - Math.min(...recorded) <= 0.25 &&
+        settled.every((p, i) => i === 0 || p.t - settled[i - 1].t <= 1.5),
     });
   }
   return out;

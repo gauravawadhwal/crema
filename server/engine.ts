@@ -10,7 +10,7 @@ export { baseline, inferRoast, restOf } from "./recommend/rules.js";
 export { rulesDialIn, rulesRecipe, strip, toPastShot, withTemperature } from "./recommend/local.js";
 export { DEFAULT_MAINTENANCE, DEFAULT_PRESETS, DEFAULT_SETTINGS, GRIND_STEPS } from "./shared/defaults.js";
 export { outlineProfile, planAt, profileCurve, shotSim, simulateShot, stepDurations } from "./profiles/curve.js";
-export { analyzeShot } from "./profiles/analysis.js";
+export { analyzeShot, shotFacts } from "./profiles/analysis.js";
 export { rulesReview } from "./recommend/review-local.js";
 export {
   adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, NOT_READY, reconcileOutcome, recipeMatches,
