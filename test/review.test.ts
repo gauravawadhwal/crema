@@ -234,6 +234,9 @@ describe("shot review backend", () => {
     const early = await reviewShot(provider(cleanReview()), input({ points: Array.from({ length: 25 }, (_, i) => point(i / 4)), yieldG: 4, stopReason: "apiStop" }));
     expect(early.review.summary).toMatch(/stopped early.*full repeat/);
     expect(early.review.summary).not.toMatch(/No.*curve.*recorded/);
+    const manual = await reviewShot(provider(cleanReview()), input({ points: Array.from({ length: 25 }, (_, i) => point(i / 4)), profile: { title: "Manual", beverage_type: "manual" }, targetYieldG: 0, yieldG: 4, stopReason: "apiStop" }));
+    expect(manual.review.summary).toMatch(/short or sparse/);
+    expect(manual.review.summary).not.toMatch(/stopped early/);
   });
 
   it("accepts older clients and bounds the optional recorded history metadata", () => {

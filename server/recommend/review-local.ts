@@ -45,7 +45,8 @@ export function factsSentence(f: ShotFacts): string | null {
 
 export function recordingLimitSummary(input: ReviewInput, metrics: ShotAnalysisMetrics): string {
   if (metrics.recordedPoints === 0) return "No shot curve was recorded. Check that Decaid is recording, then repeat the recipe and taste it before changing grind from telemetry.";
-  if (stoppedEarly(input)) return "This shot was stopped early, so its short recording cannot establish a grind problem. Keep the recipe for a full repeat when ready, then compare taste before adjusting.";
+  const knownShortYield = input.targetYieldG != null && input.targetYieldG > 0 && input.yieldG != null && input.yieldG < 0.8 * input.targetYieldG;
+  if (knownShortYield && stoppedEarly(input)) return "This shot was stopped early, so its short recording cannot establish a grind problem. Keep the recipe for a full repeat when ready, then compare taste before adjusting.";
   return "This recording is too short or sparse for a reliable curve assessment. Repeat with recording active; any immediate adjustment should rest on reported taste, not this curve.";
 }
 
