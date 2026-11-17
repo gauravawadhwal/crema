@@ -68,6 +68,14 @@ docker run -d --name crema --restart unless-stopped -p 8787:8787 --env-file .env
 
 To use a Claude or ChatGPT subscription, the image needs their CLIs. Set `AI_CLIS` in `.env` (Compose passes it to the build), or build with `--build-arg AI_CLIS="@anthropic-ai/claude-code @openai/codex"`. Claude needs only `CLAUDE_CODE_OAUTH_TOKEN` in `.env`. Codex needs a login saved in the container, as below.
 
+#### Updating the UI without rebuilding the image
+
+The server serves the phone UI from `/app/skin`, baked into the image by `COPY skin ./skin`. It reads files on each request without caching them. To release UI-only changes without rebuilding or restarting, bind-mount a host folder containing the release's `skin/` files over `/app/skin` when creating the container: `--mount type=bind,source=<host-skin-dir>,target=/app/skin,readonly` (or a Compose `volumes:` entry such as `/srv/crema/skin:/app/skin:ro`). The mount must be read-only so the server process cannot rewrite the JavaScript phones run.
+
+Update the mounted folder by replacing files one at a time: rename each new file into place from a folder on the same filesystem, writing `index.html` last. Never replace, rename or symlink the mounted folder itself; the container keeps the old directory until its next start. Do not use a named volume: it copies the image's files once and does not refresh them.
+
+This only works when `server/`, package files, the Dockerfile and `.dockerignore` are unchanged between the image's release and the new release; otherwise rebuild the image. Recreate a rebuilt container with the same mount. The server sends no `Cache-Control` or `ETag` for the UI, so phones may keep an old copy for hours; reload to refresh. A cache-control fix is tracked in [issue #72](https://github.com/gauravawadhwal/crema/issues/72).
+
 #### Logging Codex in
 
 Codex saves its login in `/home/node/.codex`, which Compose keeps on the `codex-home` volume, so it survives rebuilds. The server usually has no browser, so use Codex's device code sign-in:
@@ -222,7 +230,7 @@ None of these routes has been tested from Crema on a real tablet yet.
 
 ## Updating
 
-- **Skin:** publish a new release (push a tag such as `v0.1.1` from `main`), then install it in Decaid again the same way, or install a newly built ZIP. Your data is in Decaid, so it carries over. An upgrade on a real tablet hasn't been tested yet.
+- **Skin:** publish a new release (push a tag such as `v0.1.1` from `main`), then install it in Decaid again the same way, or install a newly built ZIP. Upgrades have been done repeatedly on a real tablet through Decaid's GitHub Release installer; Crema's data lives in Decaid and was unchanged each time. A WebView already showing the skin can keep the previous copy until the skin is reopened or reloaded.
 - **Server:** pull and rebuild (`docker compose up -d --build`), or `git pull && npm ci --omit=dev` and restart.
 
 ## Backing up

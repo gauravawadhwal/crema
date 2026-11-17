@@ -335,6 +335,8 @@ live data migration. Real Decaid/tablet validation and release installation pend
 
 *Preserved from CLAUDE.md status logs during the November 2026 instructions cleanup.*
 
+- **v0.6.1 (17 November 2026)**: Cobalto Napoli navy theme (#68), shot rating star alignment fix (#70), and removal of the bag selection toast with selection announced to screen readers (#71).
+- **v0.6.0 (12 November 2026)**: Shot-review insight, recorded history and eval quality improvements (#69).
 - **v0.5.0 (11 November 2026)**: UI finish merged in PR #64 (pour polish WS 4.5, after-shot results WS 5, feedback WS 7, phone layout WS 8, motion/assets WS 11), packshots (#65), and deeper shot review (#66). Favourites carousel and shorter graph, including adding beyond five recipes, legacy record preservation, and live/built interaction checks (#53). History pane fix (#52).
 - **v0.4.1 (10 November 2026)**: Shot review fixes for real Decaid shots (no more rejected requests from `-1` targets or cup bumps, limited main pours graded, temperature compared on the sensor each step controls, measured shot facts in review).
 - **v0.4.0 (10 November 2026)**: AI shot review (shot checks with no AI, optional AI review saved on Decaid shot record), shared grind start value and stepper, buttons stabilized during panel redrawing.
