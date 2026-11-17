@@ -170,6 +170,7 @@ const SKINS = [
   { id: "acciaio", name: "Acciaio", note: "Industrial black and steel, like the machine.", pv: ["#171a1d", "#e9edf0", "#21252a", "#4fd19a", "#63a9f2", "#c9a27a"], bg: "#0e1012" },
   { id: "nordic", name: "Nordic", note: "Light-roast café: birch, ink and fjord blue.", pv: ["#fbfbf9", "#2f6a8c", "#e2e6e1", "#2a8a64", "#2f6a8c", "#8a6340"], bg: "#eef0ed" },
   { id: "notte", name: "Notte", note: "True black and dim amber for the first shot.", pv: ["#0b0b0b", "#b8742e", "#151515", "#3f9c75", "#4b7fb3", "#9b7856"], bg: "#000000" },
+  { id: "cobalto", name: "Cobalto", note: "Napoli bar machine: maritime navy and electric cyan.", pv: ["#131d2e", "#38bdf8", "#1b283e", "#34d399", "#38bdf8", "#d97706"], bg: "#0b121e" },
 ];
 function currentSkin() { return document.documentElement.getAttribute("data-skin") || "crema"; }
 function applySkin(id, redraw = true, save = false) {
