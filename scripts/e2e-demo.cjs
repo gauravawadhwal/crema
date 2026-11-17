@@ -45,8 +45,21 @@ async function clickThrough(b, url, [name, vp, scheme]) {
   const starAt = async (sel, n, frac) => { await p.locator(sel).evaluate(el => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" })); const b = await p.locator(`${sel} > span:not(.stars-fill) i[data-n="${n}"]`).boundingBox(); return [b.x + b.width * frac, b.y + b.height / 2]; };
   const rating = (sel) => p.getAttribute(sel, "aria-valuenow");
   const expectRating = async (sel, v, how) => { const got = await rating(sel); if (got !== v) throw new Error(`${how}: rating ${got}, expected ${v}`); };
+  const expectStarsAligned = async (sel, points) => {
+    const geometry = await p.locator(sel).evaluate((el) => {
+      const empty = el.querySelector('i').getBoundingClientRect();
+      const fill = el.querySelector('.stars-fill');
+      const filled = fill.querySelector('i').getBoundingClientRect();
+      const clip = fill.getBoundingClientRect();
+      const target = el.getBoundingClientRect();
+      return { dx: filled.x - empty.x, dy: filled.y - empty.y, width: clip.width, targetWidth: target.width, targetHeight: target.height };
+    });
+    if (Math.abs(geometry.dx) > 0.5 || Math.abs(geometry.dy) > 0.5 || Math.abs(geometry.width - geometry.targetWidth * points / 10) > 0.5 || geometry.targetHeight < 44)
+      throw new Error(`${sel}: misaligned rating or undersized target: ${JSON.stringify(geometry)}`);
+  };
   await step("rate by tap and drag", async () => {
     await p.mouse.click(...(await starAt("#afterStars", 3, 0.3))); await expectRating("#afterStars", "5", "tap left half of star 3");
+    await expectStarsAligned("#afterStars", 5);
     await p.mouse.move(...(await starAt("#afterStars", 1, 0.8))); await p.mouse.down();
     await p.mouse.move(...(await starAt("#afterStars", 5, 0.9)), { steps: 6 }); await p.mouse.up(); await expectRating("#afterStars", "10", "drag to the end");
     await p.focus("#afterStars"); await p.keyboard.press("ArrowLeft"); await expectRating("#afterStars", "9", "arrow key");
@@ -70,6 +83,10 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     const label = await p.getAttribute("[data-rating] .stars >> nth=0", "aria-label");
     if (label !== "4 of 5 stars") throw new Error(`newest shot shows "${label}"`);
     await expectRating("#detailStars", "8", "shot detail");
+    await expectStarsAligned("#detailStars", 8);
+    await p.focus("#detailStars"); await p.keyboard.press("ArrowLeft");
+    await expectRating("#detailStars", "7", "shot detail half star");
+    await expectStarsAligned("#detailStars", 7);
   });
   await step("compare", async () => {
     await p.goto(url + "#shots"); await p.waitForTimeout(800);
