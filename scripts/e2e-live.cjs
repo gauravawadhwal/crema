@@ -355,6 +355,10 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
         check(puts === 1 && (await batchOf()).frozen === !frozenBefore, "tapped twice, it sent exactly one request", `${puts} requests`);
         check(await done.getAttribute("aria-busy") === null && !/pending/.test(await done.getAttribute("class")), "and the pending state clears afterwards");
         await page.unroute(/\/bean-batches\//, slowPut);
+        await S(async () => {
+          for (let i = 0; i < 4; i++) await selectBean(S.shelf[(i + 1) % S.shelf.length].key);
+        });
+        check(await page.locator("#toast .toast-act").count() === 1 && !/Now brewing/.test(await toastNow()), "cycling bags leaves the real Freeze Undo available");
         await page.click("#toast .toast-act");
         await page.waitForTimeout(500);
         check((await batchOf()).freezeDate === freezeDateBefore && (await batchOf()).frozen === frozenBefore && await page.evaluate((k) => S.shelf.find((b) => b.key === k).frozen, bag0.key) === frozenBefore, "Undo on Freeze puts the bag back as Decaid held it");

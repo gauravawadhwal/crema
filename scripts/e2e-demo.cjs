@@ -37,6 +37,42 @@ async function clickThrough(b, url, [name, vp, scheme]) {
   const step = async (label, fn) => { try { await fn(); } catch (e) { errs.push(`${label}: ${e.message.split("\n")[0]}`); } };
 
   await p.goto(url + "#brew"); await p.waitForTimeout(1200); await snap("1-home");
+  await step("coffee selection feedback", async () => {
+    const state = () => p.evaluate(() => ({ name: S.current?.info.name.value, key: S.current?.key, profile: S.next?.profileTitle, text: document.querySelector("#coffeeAnnouncement").textContent, toast: document.querySelector("#toast").textContent }));
+    const live = p.locator("#coffeeAnnouncement");
+    if (await live.getAttribute("role") !== "status" || await live.getAttribute("aria-atomic") !== "true") throw new Error("selection announcement is not an atomic live status");
+    const seen = [];
+    for (let i = 0; i < 4; i++) {
+      await p.focus("#nextBean"); await p.keyboard.press("Enter"); await p.waitForTimeout(100);
+      const s = await state(); seen.push(s.key);
+      if (!s.text.includes(s.name) || /Now brewing/.test(s.toast)) throw new Error(`next selection feedback: ${JSON.stringify(s)}`);
+    }
+    if (new Set(seen).size !== 4) throw new Error("rapid selection did not visit four bags");
+    const final = await state();
+    if (!(await p.textContent("#coffeeChoice")).includes(final.name) || !(await p.textContent("#profileBtn")).includes(final.profile)) throw new Error("final coffee and recipe do not match selection");
+    await p.click("#prevBean"); await p.waitForTimeout(100);
+    if ((await state()).key !== seen[2]) throw new Error("previous did not select previous bag");
+    await p.click("#coffeeChoice"); await p.click("#chooseNoBag");
+    if ((await state()).text !== "Selected: No bag" || !(await p.textContent("#coffeeChoice")).includes("No bag")) throw new Error("No bag feedback missing");
+    await p.click("#coffeeChoice"); await p.locator("[data-choose-bag]").first().click(); await p.waitForTimeout(100);
+    if (!(await state()).text.includes((await state()).name)) throw new Error("picker feedback missing");
+    await p.goto(url + "#shelf"); await p.waitForSelector("[data-brew]");
+    await p.locator('[data-brew]:has-text("Brew this")').first().click(); await p.waitForTimeout(100);
+    if (!p.url().endsWith("#brew") || !(await state()).text.includes((await state()).name)) throw new Error("shelf selection feedback missing");
+    const duplicate = await p.evaluate(() => {
+      const b = S.shelf[0]; b.bags = 2; b.bagNo = 1;
+      const other = { ...b, key: `${b.key}-test`, bagNo: 2 }; S.shelf.splice(1, 0, other); return other.key;
+    });
+    await p.click("#coffeeChoice"); await p.locator("[data-choose-bag]").filter({ hasText: "Bag 2" }).first().click(); await p.waitForTimeout(100);
+    if ((await state()).key !== duplicate || !(await state()).text.includes("Bag 2") || !(await p.textContent(".coffee-meta")).includes("Bag 2")) throw new Error("same-coffee bag identity missing");
+    await p.evaluate(() => { S.shelf.splice(1, 1); S.shelf[0].bags = 1; });
+    await p.reload(); await p.waitForTimeout(1200);
+    await p.evaluate(() => { const b = S.shelf.find(x => x.key !== S.current.key); b.recipe = null; S.api.recommend = async () => { throw new Error("test failure"); }; });
+    await p.click("#nextBean"); await p.waitForTimeout(200);
+    const failure = await state();
+    if (!/Couldn't get a recipe: test failure/.test(failure.toast) || /Now brewing/.test(failure.toast) || !failure.text.includes(failure.name)) throw new Error(`recipe failure feedback: ${JSON.stringify(failure)}`);
+    await p.reload(); await p.waitForTimeout(1200);
+  });
   await step("espresso", async () => {
     await p.click('[data-run="espresso"]'); await p.waitForTimeout(3000); await snap("2-pulling");
     await p.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 });

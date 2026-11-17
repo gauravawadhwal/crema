@@ -1480,6 +1480,7 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
 async function selectBean(key, opts = {}) {
   if (key === NO_BAG) {
     S.noBag = true; S.current = null; local.set("current", NO_BAG);
+    if (!opts.quiet) $("#coffeeAnnouncement").textContent = "Selected: No bag";
     S.next = local.get("baglessRecipe", null); S.loaded = false; S.ghost = null;
     if (S.next && !S.next.grind) S.next.grind = savedGrind(null);
     renderNextShot(); renderLive(); renderControls(); return;
@@ -1487,6 +1488,10 @@ async function selectBean(key, opts = {}) {
   S.noBag = false;
   S.current = S.shelf.find((b) => b.key === key) || S.shelf.find((b) => b.id === key) || S.shelf[0] || null;
   local.set("current", S.current?.key);
+  if (!opts.quiet && S.current) {
+    const b = S.current;
+    $("#coffeeAnnouncement").textContent = `Selected: ${b.info.roaster.value}, ${b.info.name.value}${b.bags > 1 ? `, Bag ${b.bagNo}` : ""}`;
+  }
   if (S.current && !S.current.recipe) {
     const b = S.current;
     S.recommending = b.id;
@@ -1516,7 +1521,6 @@ async function selectBean(key, opts = {}) {
   S.ghost = null;
   await loadGhost();
   renderNextShot(); renderLive(); renderControls();
-  if (!opts.quiet && S.current) toast(`Now brewing ${S.current.info.name.value}`);
 }
 async function loadGhost() {
   const b = S.current;
