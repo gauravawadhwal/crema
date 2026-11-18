@@ -9,7 +9,7 @@ whether the result got better or worse, and by how much it costs.
 | `identify` | `identify()` in `server/identify.ts` | `BeanInfo` from bag photos, a fetched product page, a typed or dictated description, and/or a query | 27 self-contained + 9 live web |
 | `recommend` | `recommend()` in `server/recommend/index.ts` | `Recipe`: one profile among the installed candidates, plus dose, yield, temperature and guidance | 32 |
 | `dialin` | `dialIn()` in `server/recommend/index.ts` | `DialInAdvice`: the one change to make after a shot | 28 |
-| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded interpretation, recorded history and one next decision | 39 synthetic |
+| `review` | `reviewShot()` in `server/recommend/review.ts` | Grounded interpretation, recorded history and one next decision | 41 synthetic |
 
 The runner calls those real functions, with the real prompts and the real
 post-processing (rules fallback, profile-title matching), and swaps only the
@@ -51,13 +51,14 @@ deterministic fallback in place of a model.
 
 ## Shot-review quality — 12 November 2026
 
-The legacy review suite has **39 synthetic cases**. Of these, 28 were authored
+The legacy review suite has **41 synthetic cases**. Of these, 30 were authored
 for development and 11 carry the historical `holdout` split name. Their committed
-final score comes from rescoring already-viewed model outputs, so all 39 count as
+final score comes from rescoring already-viewed model outputs, so all 41 count as
 development evidence. The split names and baselines are preserved for historical
 comparisons. The suite tests
 recorded-history comparisons and confounds, timing/target interpretation, useful
-abstention, notes-driven advice, negation and embedded instructions. The design,
+abstention, high-flow tracking and limiter behavior, notes-driven advice, negation
+and embedded instructions. The design,
 comparison tolerances and limitations are in
 [shot-review-quality.md](../docs/shot-review-quality.md).
 

@@ -1167,6 +1167,520 @@ var CremaEngine = (() => {
     return out;
   }
 
+  // server/profiles/phase-evidence.ts
+  var MACHINE_GAP_S = 1.5;
+  var SCALE_GAP_S = 0.75;
+  var ONSET_WINDOW_S = 2;
+  var RESPONSE_WINDOW_S = 5;
+  var rounded = (n) => Math.round(n * 1e3) / 1e3;
+  var roundedReading = (n) => n == null ? null : rounded(n);
+  var reading = (n, min = 0, max = Infinity) => n != null && Number.isFinite(n) && n >= min && n <= max ? n : null;
+  var profileNumber = (n) => n == null || String(n).trim() === "" ? null : reading(Number(n));
+  var evidence = (value, source, reason) => ({ value, source: value == null ? null : source, reason });
+  var positive = (n) => reading(n, Number.MIN_VALUE);
+  function isBrewPoint(p, hasState) {
+    return !hasState || /^(pour|preinfusion)/i.test(p.substate ?? "");
+  }
+  function phaseRuns(points, hasState) {
+    const runs = [];
+    let current;
+    for (const [i, p] of points.entries()) {
+      const previous = points[i - 1];
+      if (!isBrewPoint(p, hasState)) {
+        current = void 0;
+        continue;
+      }
+      if (!current || p.frame !== previous?.frame || p.substate !== previous?.substate) {
+        current = { points: [], previous, next: void 0 };
+        runs.push(current);
+      }
+      current.points.push(p);
+      current.next = points[i + 1];
+    }
+    return runs;
+  }
+  function interpolate(a, b, fraction) {
+    return a + (b - a) * fraction;
+  }
+  function intervals(points, select, fromS, toS) {
+    const rows = points.map(select);
+    const result = [];
+    for (let i = 1; i < points.length; i++) {
+      const start = points[i - 1].t, end = points[i].t, dt = end - start;
+      const a = rows[i - 1], b = rows[i];
+      const lo = Math.max(start, fromS), hi = Math.min(end, toS);
+      if (dt > MACHINE_GAP_S || hi <= lo || a.some((v) => v == null) || b.some((v) => v == null)) continue;
+      result.push({
+        dt: hi - lo,
+        a: a.map((v, j) => interpolate(v, b[j], (lo - start) / dt)),
+        b: a.map((v, j) => interpolate(v, b[j], (hi - start) / dt))
+      });
+    }
+    return result;
+  }
+  function windowEvidence(value, fromS, toS, coveredS, reason) {
+    return { ...evidence(value, "inferred", reason), fromS: rounded(fromS), toS: rounded(toS), coveredS: rounded(coveredS) };
+  }
+  var coverage = (xs) => xs.reduce((total, x) => total + x.dt, 0);
+  function coverageReason(covered, duration) {
+    if (covered === 0) return "no_adjacent_valid_readings";
+    return covered + 1e-6 < duration ? "partial_missing_readings_or_gaps" : "covered";
+  }
+  function summarizeReadings(points, select) {
+    const first = points[0], last = points.at(-1);
+    const readings = points.map(select).filter((x) => x != null);
+    const pairs = intervals(points, (p) => [select(p)], first.t, last.t);
+    const covered = coverage(pairs);
+    const mean = covered ? pairs.reduce((sum, { a, b, dt }) => sum + dt * (a[0] + b[0]) / 2, 0) / covered : null;
+    const value = readings.length ? {
+      entry: roundedReading(select(first)),
+      last: roundedReading(select(last)),
+      min: rounded(Math.min(...readings)),
+      max: rounded(Math.max(...readings)),
+      timeWeightedMean: mean == null ? null : rounded(mean)
+    } : null;
+    return { ...evidence(value, "recorded", readings.length ? coverageReason(covered, last.t - first.t) : "no_valid_readings"), coveredS: rounded(covered) };
+  }
+  function residual(points, command, actual) {
+    const start = points[0].t, end = points.at(-1).t;
+    const pairs = intervals(points, (p) => [command(p), actual(p)], start, end);
+    const covered = coverage(pairs);
+    let abs = 0, signed = 0;
+    for (const { a, b, dt } of pairs) {
+      const ea = a[1] - a[0], eb = b[1] - b[0];
+      signed += dt * (ea + eb) / 2;
+      abs += dt * (ea * eb < 0 ? (ea ** 2 + eb ** 2) / (Math.abs(ea) + Math.abs(eb)) : Math.abs(ea + eb)) / 2;
+    }
+    return windowEvidence(
+      covered ? { absoluteMean: rounded(abs / covered), signedMean: rounded(signed / covered) } : null,
+      start,
+      end,
+      covered,
+      coverageReason(covered, end - start)
+    );
+  }
+  function nonnegative(a, b) {
+    if (a >= 0 && b >= 0) return [0, 1];
+    if (a < 0 && b < 0) return [0, 0];
+    const cross = a / (a - b);
+    return a < 0 ? [cross, 1] : [0, cross];
+  }
+  function capTime(points, command, actual, other, limit) {
+    const start = points[0].t, end = points.at(-1).t;
+    const pairs = intervals(points, (p) => [command(p), actual(p), other(p)], start, end);
+    const covered = coverage(pairs);
+    let seconds = 0;
+    for (const { a, b, dt } of pairs) {
+      if (a[0] === 0 && b[0] === 0) continue;
+      const cap2 = nonnegative(a[2] - 0.9 * limit, b[2] - 0.9 * limit);
+      const shortage = nonnegative(0.8 * a[0] - a[1], 0.8 * b[0] - b[1]);
+      seconds += dt * Math.max(0, Math.min(cap2[1], shortage[1]) - Math.max(cap2[0], shortage[0]));
+    }
+    return windowEvidence(
+      covered ? { seconds: rounded(seconds), shareOfCoveredTime: rounded(seconds / covered) } : null,
+      start,
+      end,
+      covered,
+      coverageReason(covered, end - start)
+    );
+  }
+  var pressure = (p) => reading(p.p, 0, 20);
+  var flow = (p) => reading(p.f, 0, 20);
+  var weight = (p) => reading(p.w, -5, 500);
+  function median(values) {
+    values.sort((a, b) => a - b);
+    const middle = Math.floor(values.length / 2);
+    return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+  }
+  function timeMedian(pairs, index) {
+    const half = coverage(pairs) / 2;
+    const values = pairs.map(({ dt, a, b }) => ({ dt, value: (a[index] + b[index]) / 2 })).sort((a, b) => a.value - b.value);
+    let time = 0;
+    for (const [i, x] of values.entries()) {
+      time += x.dt;
+      if (Math.abs(time - half) <= 1e-9 && values[i + 1]) return (x.value + values[i + 1].value) / 2;
+      if (time >= half) return x.value;
+    }
+    return values.at(-1).value;
+  }
+  function hydraulicWindow(points, from, to) {
+    const pairs = intervals(points, (p) => [pressure(p), flow(p)], from, to);
+    const covered = coverage(pairs);
+    const usable = covered >= 1 && covered + 1e-6 >= (to - from) * 0.8;
+    const proxy = pairs.filter(({ a, b }) => a[1] >= 0.5 && b[1] >= 0.5).map(({ dt, a, b }) => ({ dt, a: [a[0] / a[1]], b: [b[0] / b[1]] }));
+    const proxyCovered = coverage(proxy);
+    return windowEvidence(usable ? {
+      medianPressureBar: rounded(timeMedian(pairs, 0)),
+      medianInletFlowMlS: rounded(timeMedian(pairs, 1)),
+      pressurePerInletFlowProxyBarPerMlS: evidence(
+        proxyCovered >= 1 && proxyCovered >= 0.8 * covered ? rounded(timeMedian(proxy, 0)) : null,
+        "inferred",
+        proxyCovered >= 1 && proxyCovered >= 0.8 * covered ? "paired_pressure_and_inlet_flow" : "inlet_flow_too_low_or_sparse"
+      )
+    } : null, from, to, covered, usable ? coverageReason(covered, to - from) : "less_than_one_second_or_80_percent_paired_coverage");
+  }
+  function pressurePeak(points) {
+    let peak;
+    for (const p of points) if (pressure(p) != null && (peak == null || p.p > peak.p)) peak = p;
+    return peak;
+  }
+  function pressureCrest(peak) {
+    const f = peak ? flow(peak) : null;
+    return evidence(peak ? {
+      tS: rounded(peak.t),
+      pressureBar: rounded(peak.p),
+      inletFlowMlS: roundedReading(f),
+      pressurePerInletFlowProxyBarPerMlS: evidence(
+        f != null && f >= 0.5 ? rounded(peak.p / f) : null,
+        "inferred",
+        f != null && f >= 0.5 ? "paired_pressure_and_inlet_flow" : "inlet_flow_too_low_or_missing"
+      )
+    } : null, "recorded", peak ? "largest_observed_sample" : "no_valid_pressure");
+  }
+  function scaleRows(points, hasState) {
+    let previousScaleS;
+    return points.flatMap((p) => {
+      const actual = weight(p);
+      const sampleS = p.scaleSampleS ?? p.t;
+      const stale = p.scaleSampleS != null && (Math.abs(p.t - sampleS) > SCALE_GAP_S || previousScaleS != null && sampleS < previousScaleS);
+      if (!stale && p.scaleSampleS != null && sampleS === previousScaleS && isBrewPoint(p, hasState)) return [];
+      previousScaleS = p.scaleSampleS ?? previousScaleS;
+      if (!isBrewPoint(p, hasState)) return [{ p, w: null, sampleS, reason: "not_brewing" }];
+      return [{ p, w: stale ? null : actual, sampleS, reason: stale ? "stale_scale_sample" : (p.w ?? 0) < -5 ? "weight_jump" : actual == null ? "missing_or_invalid_weight" : "recorded_weight" }];
+    });
+  }
+  function scaleEdge(a, b) {
+    if (a.w == null) return a.reason;
+    if (b.w == null) return b.reason;
+    const dt = b.sampleS - a.sampleS;
+    if (dt <= 0 || dt > SCALE_GAP_S || b.p.t <= a.p.t || b.p.t - a.p.t > SCALE_GAP_S) return "scale_gap";
+    if (b.w - a.w > Math.max(5, 15 * dt) || a.w - b.w > Math.max(2, 8 * dt)) return "weight_jump";
+    return null;
+  }
+  function firstBeverage(rows, hasScale, brewStartS) {
+    let rejected = "no_three_consecutive_gram_readings";
+    for (let i = 0; brewStartS != null && i + 2 < rows.length; i++) {
+      const [a, b, c] = [rows[i], rows[i + 1], rows[i + 2]];
+      if ((a.w ?? -Infinity) < 1 || (b.w ?? -Infinity) < 1 || (c.w ?? -Infinity) < 1) continue;
+      const prev = rows[i - 1];
+      const before = a.p.t === brewStartS ? null : prev ? scaleEdge(prev, a) : "missing_preceding_weight";
+      const fault = before ?? scaleEdge(a, b) ?? scaleEdge(b, c);
+      if (fault || (prev?.w ?? -Infinity) >= 1) {
+        if (fault) rejected = fault;
+        continue;
+      }
+      const p = a.p;
+      const volume = positive(p.countedVolumeMl);
+      return { point: p, event: evidence({
+        tS: rounded(p.t),
+        brewElapsedS: rounded(p.t - brewStartS),
+        confirmedThroughS: rounded(c.p.t),
+        previousBelowGramS: prev?.w != null ? rounded(prev.p.t) : null,
+        weightG: rounded(a.w),
+        pressureBar: roundedReading(pressure(p)),
+        inletFlowMlS: roundedReading(flow(p)),
+        pressureAtPreviousBelowGramBar: prev?.w != null ? roundedReading(pressure(prev.p)) : null,
+        pressureAtConfirmationBar: roundedReading(pressure(c.p)),
+        countedVolumeMl: evidence(
+          volume == null ? null : rounded(volume),
+          "recorded",
+          volume != null ? "machine_counted_volume" : p.countedVolumeMl === 0 ? "counter_zero_or_not_started" : "counter_not_available"
+        )
+      }, "inferred", prev?.w != null ? "three_consecutive_gram_readings" : "already_at_gram_in_first_brew_sample") };
+    }
+    if (rows.some((row) => row.reason === "stale_scale_sample") && rejected === "no_three_consecutive_gram_readings") rejected = "stale_scale_sample";
+    return { point: null, event: evidence(null, "inferred", hasScale ? rejected : "no_scale_readings") };
+  }
+  function cupRate(rows, from, to, hasScale) {
+    const first = rows.findIndex((row) => row.p.t >= from);
+    const left = first > 0 && rows[first].p.t > from ? first - 1 : first;
+    let right = rows.findIndex((row) => row.p.t >= to);
+    if (right < 0) right = rows.length - 1;
+    const selected = left >= 0 ? rows.slice(left, right + 1) : [];
+    let covered = 0;
+    let failure = hasScale ? null : "no_scale_readings";
+    for (let i2 = 1; i2 < selected.length; i2++) {
+      const a = selected[i2 - 1], b = selected[i2];
+      const reason = scaleEdge(a, b);
+      if (reason) failure ?? (failure = reason);
+      else covered += Math.max(0, Math.min(to, b.p.t) - Math.max(from, a.p.t));
+    }
+    if (failure || to - from < 1 || covered + 1e-6 < to - from || selected.length < 3) {
+      return windowEvidence(null, from, to, covered, failure ?? "less_than_one_second_or_incomplete_scale_window");
+    }
+    let i = 1;
+    const probes = Array.from({ length: 9 }, (_, j) => {
+      const t = interpolate(from, to, j / 8);
+      while (selected[i].p.t < t && i + 1 < selected.length) i++;
+      const a = selected[i - 1], b = selected[i];
+      return { t, w: interpolate(a.w, b.w, (t - a.p.t) / (b.p.t - a.p.t)) };
+    });
+    const slopes = probes.flatMap((a, k) => probes.slice(k + 1).map((b) => (b.w - a.w) / (b.t - a.t)));
+    return windowEvidence(rounded(median(slopes)), from, to, covered, "covered_median_of_pairwise_slopes");
+  }
+  function thermalOffset(p, step, sensor) {
+    const actual = reading(sensor === "group" ? p.groupTemp : p.temp, 0, 150);
+    const logged = reading(sensor === "group" ? p.targetGroupTemp : p.targetTemp, 20, 150);
+    const plan = reading(profileNumber(step.temperature), 20, 150);
+    const target = logged ?? plan;
+    return evidence(
+      actual != null && target != null ? { tS: rounded(p.t), actualC: rounded(actual), targetC: rounded(target), offsetC: rounded(actual - target) } : null,
+      "recorded",
+      actual == null ? "controlled_sensor_missing" : logged != null ? "logged_temperature_target" : plan != null ? "configured_temperature_target" : "no_temperature_target"
+    );
+  }
+  function thermalEvidence(run, step, onset, lateStart) {
+    const sensor = step?.sensor?.toLowerCase() === "coffee" ? "group" : step?.sensor?.toLowerCase() === "water" ? "mix" : null;
+    if (!sensor || !step) return evidence(null, "recorded", "controlled_sensor_unknown");
+    const points = run.points, first = points[0], last = points.at(-1);
+    const entry = thermalOffset(first, step, sensor);
+    const atOnset = onset && points.includes(onset) ? thermalOffset(onset, step, sensor) : evidence(null, "recorded", "onset_not_observed_in_phase");
+    const pairs = intervals(points, (p) => {
+      const v = thermalOffset(p, step, sensor).value;
+      return [v?.offsetC ?? null];
+    }, lateStart, last.t);
+    const covered = coverage(pairs);
+    const previous = run.previous;
+    const measure = (p) => reading(sensor === "group" ? p.groupTemp : p.temp, 0, 150);
+    const prevC = previous ? measure(previous) : null, entryC = measure(first);
+    const loggedTarget = (p) => reading(sensor === "group" ? p.targetGroupTemp : p.targetTemp, 20, 150);
+    const prevTarget = previous ? loggedTarget(previous) : null;
+    const thisTarget = loggedTarget(first);
+    const adjacent = previous != null && first.t - previous.t <= MACHINE_GAP_S;
+    const boundary = adjacent && prevC != null && entryC != null && previous.substate !== first.substate && first.t > previous.t ? { fromS: rounded(previous.t), toS: rounded(first.t), deltaC: rounded(entryC - prevC) } : null;
+    return evidence({
+      sensor,
+      entry,
+      atOnset,
+      last: thermalOffset(last, step, sensor),
+      lateMedianOffsetC: windowEvidence(
+        covered >= 1 ? rounded(timeMedian(pairs, 0)) : null,
+        lateStart,
+        last.t,
+        covered,
+        covered >= 1 ? coverageReason(covered, last.t - lateStart) : "less_than_one_second_of_paired_temperature"
+      ),
+      stateBoundaryDeltaC: evidence(boundary, "recorded", boundary ? "adjacent_readings_across_state_change" : "no_adjacent_state_boundary_reading"),
+      targetChangeAtEntryC: evidence(
+        adjacent && prevTarget != null && thisTarget != null ? rounded(thisTarget - prevTarget) : null,
+        "recorded",
+        adjacent && prevTarget != null && thisTarget != null ? "difference_between_adjacent_logged_targets" : "no_adjacent_temperature_target_pair"
+      )
+    }, "recorded", "profile_selects_controlled_sensor");
+  }
+  function phasePurpose(first, step, mode, delta) {
+    const name = step?.name ?? "";
+    if (/bloom|pause/i.test(name) || mode === "flow" && profileNumber(step?.flow) === 0) return "bloom_or_pause";
+    if (/^preinfusion/i.test(first.substate ?? "") || /fill|soak|infus/i.test(name)) return "fill_or_soak";
+    if (/declin|ramp down/i.test(name) || delta != null && delta < -0.25) return "decline";
+    if (/ramp|rise|pressure up/i.test(name) || delta != null && delta > 0.25) return "ramp";
+    return mode ? "hold_or_pour" : null;
+  }
+  function describePhase(run, index, step, alignmentReason, scale, hasScale, hasState, onset) {
+    const xs = run.points, first = xs[0], last = xs.at(-1);
+    const span = last.t - first.t;
+    const pump = step?.pump?.toLowerCase();
+    const mode = pump === "pressure" || pump === "flow" ? pump : null;
+    const command = (p) => {
+      if (!mode) return null;
+      const value = reading(mode === "flow" ? p.tf : p.tp, 0, 20);
+      const opposite = positive(mode === "flow" ? p.tp : p.tf);
+      return opposite != null && (value ?? 0) === 0 ? null : value;
+    };
+    const actual = mode === "flow" ? flow : pressure;
+    const other = mode === "flow" ? pressure : flow;
+    const limit = positive(profileNumber(step?.limiter?.value));
+    const pressureBar = summarizeReadings(xs, pressure);
+    const inletFlowMlS = summarizeReadings(xs, flow);
+    const loggedCommand = summarizeReadings(xs, command);
+    const measurement = loggedCommand.value;
+    const delta = measurement?.entry != null && measurement.last != null ? measurement.last - measurement.entry : null;
+    const purpose = phasePurpose(first, step, mode, delta);
+    const lateStart = last.t - Math.min(RESPONSE_WINDOW_S, span / 2);
+    const earlyEnd = first.t + Math.min(RESPONSE_WINDOW_S, span / 2);
+    const early = hydraulicWindow(xs, first.t, earlyEnd), late = hydraulicWindow(xs, lateStart, last.t);
+    const crestPoint = pressurePeak(xs);
+    const crest = pressureCrest(crestPoint);
+    const cap2 = mode && limit != null ? capTime(xs, command, actual, other, limit) : windowEvidence(null, first.t, last.t, 0, mode ? "no_configured_limiter" : alignmentReason);
+    const controlledError = mode ? residual(xs, command, actual) : windowEvidence(null, first.t, last.t, 0, alignmentReason);
+    const settled = xs.filter((p) => p.t - first.t >= 2);
+    const paired = settled.filter((p) => (command(p) ?? 0) > 0 && actual(p) != null);
+    const settledStart = settled[0]?.t ?? last.t;
+    const settledSpan = last.t - settledStart;
+    const steadyPairs = intervals(settled, (p) => {
+      const target = positive(command(p));
+      return [target, actual(p)];
+    }, settledStart, last.t);
+    const steadyCovered = coverage(steadyPairs);
+    const targets = paired.map((p) => command(p));
+    const steadyTarget = mode != null && purpose !== "fill_or_soak" && purpose !== "bloom_or_pause" && span >= 8 && settledSpan >= 5 && paired.length >= 5 && steadyCovered + 1e-6 >= 0.8 * settledSpan && Math.max(...targets) - Math.min(...targets) <= 0.25;
+    const steadyMean = (index2) => rounded(steadyPairs.reduce((sum, { a, b, dt }) => sum + dt * (a[index2] + b[index2]) / 2, 0) / steadyCovered);
+    const steadyHold = windowEvidence(
+      steadyTarget ? {
+        meanCommand: steadyMean(0),
+        meanResponse: steadyMean(1),
+        otherMean: summarizeReadings(settled, other).value?.timeWeightedMean ?? null
+      } : null,
+      settledStart,
+      last.t,
+      steadyCovered,
+      steadyTarget ? coverageReason(steadyCovered, settledSpan) : !mode ? alignmentReason : purpose === "fill_or_soak" || purpose === "bloom_or_pause" ? "fill_soak_or_bloom" : span < 8 || settledSpan < 5 ? "short_phase" : paired.length < 5 || steadyCovered < 0.8 * settledSpan ? "insufficient_paired_settled_coverage" : "changing_logged_command"
+    );
+    const peak = crest.value, tail = late.value;
+    const heldError = mode === "flow" && crestPoint ? residual(xs.filter((p) => p.t >= crestPoint.t), command, actual) : null;
+    const peakTarget = crestPoint ? positive(command(crestPoint)) : null;
+    const heldFlow = steadyTarget && mode === "flow" && peak != null && tail != null && peakTarget != null && peak.inletFlowMlS != null && peak.tS >= settledStart && peak.tS < lateStart && Math.abs(peak.inletFlowMlS - peakTarget) <= 0.1 * peakTarget && Math.abs(peak.inletFlowMlS - tail.medianInletFlowMlS) <= 0.1 * peakTarget && heldError?.value != null && heldError.coveredS + 1e-6 >= 0.8 * (last.t - peak.tS) && heldError.value.absoluteMean <= 0.1 * peakTarget;
+    const decline = evidence(
+      heldFlow && peak && tail ? rounded(peak.pressureBar - tail.medianPressureBar) : null,
+      "inferred",
+      heldFlow ? "crest_minus_late_median_at_similar_tracked_inlet_flow" : "no_covered_crest_to_late_comparison_at_held_flow"
+    );
+    const next = run.next;
+    const end = next && isBrewPoint(next, hasState) ? evidence(
+      { nextFrame: next.frame, nextSubstate: next.substate, nextSampleS: rounded(next.t) },
+      "recorded",
+      next.t - last.t <= MACHINE_GAP_S ? "next_brew_phase_observed_trigger_unknown" : "next_brew_phase_after_gap_trigger_unknown"
+    ) : evidence(null, "recorded", "no_adjacent_next_brew_phase");
+    const plannedTarget = mode ? profileNumber(mode === "pressure" ? step?.pressure : step?.flow) : null;
+    const massRows = scale.filter((row) => row.p.t >= first.t && row.p.t <= last.t);
+    const phaseWeight = massRows.filter((row) => row.w != null);
+    const massStart = phaseWeight[0], massEnd = phaseWeight.at(-1);
+    const cupRateEarlyGS = cupRate(scale, first.t, earlyEnd, hasScale);
+    const cupRateLateGS = cupRate(scale, lateStart, last.t, hasScale);
+    const massFault = massRows.slice(1).map((row, i) => scaleEdge(massRows[i], row)).find(Boolean);
+    return {
+      index,
+      frame: first.frame,
+      substate: first.substate,
+      fromS: rounded(first.t),
+      toS: rounded(last.t),
+      durationS: rounded(span),
+      phaseSource: "recorded",
+      phaseReason: first.substate ? "contiguous_frame_and_machine_substate" : "machine_substate_missing_assumed_brew",
+      purpose: evidence(purpose, "inferred", purpose ? "frame_label_substate_or_command_shape" : alignmentReason),
+      mode: evidence(mode, "recorded", mode ? "recorded_profile_step" : alignmentReason),
+      plan: evidence(step ? {
+        name: step.name ?? null,
+        transition: step.transition ?? null,
+        endpoint: plannedTarget,
+        maximumS: profileNumber(step.seconds),
+        temperatureC: profileNumber(step.temperature),
+        limiter: limit == null ? null : { value: limit, unit: mode === "flow" ? "bar" : mode === "pressure" ? "mL/s" : null, range: profileNumber(step.limiter?.range) },
+        exit: step.exit ?? null,
+        weightG: positive(profileNumber(step.weight)),
+        volumeMl: positive(profileNumber(step.volume))
+      } : null, "recorded", step ? "recorded_profile_configuration" : alignmentReason),
+      controlledUnit: mode === "pressure" ? "bar" : mode === "flow" ? "mL/s" : null,
+      loggedCommand: mode ? loggedCommand : { ...evidence(null, "recorded", alignmentReason), coveredS: 0 },
+      pressureBar,
+      inletFlowMlS,
+      controlledError,
+      capLikeTime: cap2,
+      steadyHold,
+      earlyHydraulics: early,
+      lateHydraulics: late,
+      pressureCrest: crest,
+      pressureDroopAtHeldFlowBar: decline,
+      cupRateEarlyGS,
+      cupRateLateGS,
+      cupGainG: evidence(
+        massStart && massEnd && massStart !== massEnd && !massFault ? rounded(massEnd.w - massStart.w) : null,
+        "inferred",
+        !hasScale ? "no_scale_readings" : massFault ?? (massStart && massEnd && massStart !== massEnd ? "difference_between_recorded_weights" : "insufficient_scale_readings")
+      ),
+      temperature: thermalEvidence(run, step, onset, lateStart),
+      nextPhase: end
+    };
+  }
+  function ambiguousZeroFrames(input, points) {
+    return (input.profile?.steps?.length ?? 0) !== 1 && points.length > 0 && points.every((p) => p.frame === 0 && /^pour/i.test(p.substate ?? ""));
+  }
+  function measurePhases(input, points) {
+    const hasState = points.some((p) => p.substate);
+    const runs = phaseRuns(points, hasState);
+    const steps = input.profile?.steps ?? [];
+    const brew = points.filter((p) => isBrewPoint(p, hasState));
+    const allZeroPour = ambiguousZeroFrames(input, points);
+    const alignmentReason = input.profile?.beverage_type === "manual" ? "manual_control" : allZeroPour ? "all_frames_zero_only_pouring_plan_alignment_ambiguous" : steps.length === 0 ? "recorded_profile_steps_missing" : null;
+    const hasScale = brew.some((p) => p.w != null || p.weightFlow != null);
+    const scale = scaleRows(points, hasState);
+    const first = brew[0], last = brew.at(-1);
+    const onset = firstBeverage(scale, hasScale, first?.t);
+    const phases = runs.map((run, index) => {
+      const frame = run.points[0].frame;
+      const step = !alignmentReason && frame != null && Number.isInteger(frame) ? steps[frame] : void 0;
+      const mode = step?.pump?.toLowerCase();
+      const points2 = run.points;
+      const incompatible = (mode === "flow" || mode === "pressure") && !points2.some((p) => positive(mode === "flow" ? p.tf : p.tp) != null) && points2.some((p) => positive(mode === "flow" ? p.tp : p.tf) != null);
+      return describePhase(
+        run,
+        index,
+        incompatible ? void 0 : step,
+        alignmentReason ?? (incompatible ? "logged_controller_conflicts_with_frame" : step ? "configured_controller_unknown" : "frame_missing_or_out_of_plan"),
+        scale,
+        hasScale,
+        hasState,
+        onset.point
+      );
+    });
+    const rateBoundary = onset.point?.t ?? null;
+    const before = rateBoundary != null && first ? cupRate(scale, Math.max(first.t, rateBoundary - ONSET_WINDOW_S), rateBoundary, hasScale) : null;
+    const after = rateBoundary != null && last ? cupRate(scale, rateBoundary, Math.min(last.t, rateBoundary + ONSET_WINDOW_S), hasScale) : null;
+    const lastPhase = phases.at(-1);
+    const executed = new Set(phases.filter((p) => p.plan.value).map((p) => p.frame));
+    const weightStop = input.stopReason?.toLowerCase() === "targetweight";
+    const terminalFrame = lastPhase?.plan.value ? lastPhase.frame : null;
+    const missed = steps.flatMap((step, frame) => {
+      if (terminalFrame == null || executed.has(frame)) return [];
+      const status = frame < terminalFrame ? "skipped_or_unrecorded" : weightStop ? "preempted_by_weight_stop" : "not_observed_before_recording_ended";
+      return [{ frame, name: step.name ?? null, status }];
+    });
+    const dose = positive(input.doseG), suppliedYield = positive(input.yieldG);
+    const annotated = positive(input.annotatedYieldG);
+    const lastScale = last ? scale.find((row) => row.p === last) : void 0;
+    const previousScale = lastScale ? scale[scale.indexOf(lastScale) - 1] : void 0;
+    const finalWeightJump = previousScale && lastScale && scaleEdge(previousScale, lastScale) === "weight_jump";
+    const lastScaleValue = finalWeightJump ? null : lastScale?.w ?? null;
+    return {
+      phases,
+      firstSustainedBeverage: onset.event,
+      cupRateBeforeOnsetGS: before ?? evidence(null, "inferred", hasScale ? "no_confirmed_onset" : "no_scale_readings"),
+      cupRateAfterOnsetGS: after ?? evidence(null, "inferred", hasScale ? "no_confirmed_onset" : "no_scale_readings"),
+      cupRateChangeAtOnsetGS: evidence(
+        before?.value != null && after?.value != null ? rounded(after.value - before.value) : null,
+        "inferred",
+        before?.value != null && after?.value != null ? "difference_between_covered_before_and_after_slopes" : "both_onset_rate_windows_required"
+      ),
+      scaleClock: evidence(
+        hasScale ? brew.some((p) => p.scaleSampleS != null) ? "scale_timestamps_checked" : "machine_timestamps_only" : null,
+        "recorded",
+        hasScale ? "cup_windows_use_recording_clock" : "no_scale_readings"
+      ),
+      finish: {
+        annotatedYieldG: evidence(annotated, "recorded", annotated != null ? "shot_annotation" : input.annotatedYieldG === null ? "no_positive_yield_annotation" : "annotation_provenance_not_available"),
+        suppliedYieldG: evidence(suppliedYield, "recorded", suppliedYield != null ? "supplied_shot_yield_may_include_last_weight_fallback" : "no_positive_yield"),
+        lastRecordedWeightG: evidence(lastScaleValue, "recorded", lastScaleValue != null ? "last_brew_sample" : hasScale ? finalWeightJump ? "weight_jump" : lastScale?.reason ?? "no_fresh_final_weight" : "no_scale_readings"),
+        yieldToDoseRatio: evidence(dose && suppliedYield ? rounded(suppliedYield / dose) : null, "inferred", dose && suppliedYield ? "supplied_yield_divided_by_dose" : "positive_dose_and_yield_required"),
+        stopSource: evidence(input.stopReason, "recorded", input.stopReason ? "recorded_stop_reason" : "stop_reason_missing"),
+        lastObservedPhase: evidence(
+          lastPhase ? { index: lastPhase.index, frame: lastPhase.frame, toS: lastPhase.toS } : null,
+          "recorded",
+          lastPhase ? "last_brew_sample_may_precede_stop" : "no_brew_samples"
+        ),
+        unobservedPlanPhases: evidence(
+          terminalFrame != null ? missed : null,
+          "inferred",
+          terminalFrame != null ? "plan_after_or_between_observed_frames" : alignmentReason ?? "last_frame_not_aligned_to_plan"
+        ),
+        volumeCountStartFrame: evidence(
+          profileNumber(input.volumeCountStartFrame),
+          "recorded",
+          input.volumeCountStartFrame != null ? "recorded_profile_count_start" : "count_start_not_available"
+        )
+      }
+    };
+  }
+
   // server/profiles/analysis.ts
   var finite = (n) => n != null && Number.isFinite(n);
   var number = (v) => {
@@ -1178,11 +1692,11 @@ var CremaEngine = (() => {
     if (frame == null || !Number.isInteger(frame) || frame < 0) return null;
     return profile.steps?.[frame] ?? null;
   }
-  function skippedStep(profile, step, target) {
+  function skipFaultChecks(profile, step, target) {
     const title = `${profile.title ?? ""} ${step.name ?? ""}`.toLowerCase();
     if (profile.beverage_type === "manual" || /turbo|bloom|pre.?infusion/.test(title)) return true;
     if (target <= 0) return true;
-    if ((step.pump === "flow" || step.pump === "Flow") && target > 3) return true;
+    if ((step.pump === "flow" || step.pump === "Flow") && (target > 3 || (number(step.flow) ?? 0) > 3)) return true;
     return false;
   }
   var USER_STOPS = /* @__PURE__ */ new Set(["apistop", "userstop", "manual"]);
@@ -1202,7 +1716,7 @@ var CremaEngine = (() => {
     }
     return { window: null, source: null };
   }
-  function targetAndActual(input, point) {
+  function faultTargetAndActual(input, point) {
     const step = stepAt(input.profile, point.frame);
     if (!step || point.frame == null) return null;
     if (point.substate && !/^pour/i.test(point.substate)) return null;
@@ -1210,14 +1724,14 @@ var CremaEngine = (() => {
     const pump = step.pump === "flow" ? "flow" : "pressure";
     const target = pump === "pressure" ? point.tp : point.tf;
     const actual = pump === "pressure" ? point.p : point.f;
-    if (!finite(target) || !finite(actual) || target <= 0 || skippedStep(input.profile, step, target)) return null;
+    if (!finite(target) || !finite(actual) || target <= 0 || skipFaultChecks(input.profile, step, target)) return null;
     return { pump, target, actual, step };
   }
   function analyzeShot(input) {
     const issues = [];
     const profile = input.profile;
     const points = [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
-    const targets = points.map((p) => ({ p, data: profile ? targetAndActual(input, p) : null }));
+    const targets = profile && !ambiguousZeroFrames(input, points) ? points.map((p) => ({ p, data: faultTargetAndActual(input, p) })) : [];
     const windows = [];
     let run = [];
     const flush = () => {
@@ -1267,13 +1781,13 @@ var CremaEngine = (() => {
       const actual = avg(w.actuals);
       const flowValues = w.flows.filter(finite);
       const flowCoverage = flowValues.length / w.flows.length;
-      const flow = avg(flowValues);
-      const pressure = avg(w.pressures.filter(finite));
+      const flow2 = avg(flowValues);
+      const pressure2 = avg(w.pressures.filter(finite));
       if (actual == null) continue;
       const ratio = actual / w.target;
       const limit = number(w.step.limiter?.value);
       const limiter = limit != null && limit > 0 ? limit : null;
-      const pressureCapped = judged && w.pump === "flow" && limiter != null && pressure != null && pressure >= 0.85 * limiter;
+      const pressureCapped = judged && w.pump === "flow" && limiter != null && pressure2 != null && pressure2 >= 0.85 * limiter;
       let kind = null;
       let what = "";
       if (w.pump === "flow" && ratio <= 0.55 && !pressureCapped) {
@@ -1282,10 +1796,10 @@ var CremaEngine = (() => {
       } else if (w.pump === "flow" && ratio >= 1.55) {
         kind = "gushed";
         what = "Flow stayed well above the profile's flow target.";
-      } else if (w.pump === "pressure" && ratio <= 0.55 && flowCoverage >= 0.8 && flow != null && flow >= 3.5) {
+      } else if (w.pump === "pressure" && ratio <= 0.55 && flowCoverage >= 0.8 && flow2 != null && flow2 >= 3.5) {
         kind = "gushed";
         what = "Pressure stayed well below target while flow remained high.";
-      } else if (w.pump === "pressure" && flowCoverage >= 0.8 && flow != null && flow <= 0.5 && actual >= 4) {
+      } else if (w.pump === "pressure" && flowCoverage >= 0.8 && flow2 != null && flow2 <= 0.5 && actual >= 4) {
         kind = "choked";
         what = "Flow stayed very low while pressure remained high.";
       }
@@ -1293,7 +1807,7 @@ var CremaEngine = (() => {
         issues.push({
           kind,
           what,
-          evidence: `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}: ${w.pump} target ${w.target.toFixed(1)}, measured ${actual.toFixed(1)}${w.pump === "pressure" ? " bar" : " ml/s"}${flow == null ? "" : `, flow ${flow.toFixed(1)} ml/s`}.`,
+          evidence: `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}: ${w.pump} target ${w.target.toFixed(1)}, measured ${actual.toFixed(1)}${w.pump === "pressure" ? " bar" : " ml/s"}${flow2 == null ? "" : `, flow ${flow2.toFixed(1)} ml/s`}.`,
           severity: "caution",
           fromS: w.start,
           toS: w.end
@@ -1301,11 +1815,11 @@ var CremaEngine = (() => {
       }
       const span = `${(w.end - w.start).toFixed(1)}s in frame ${w.frame + 1}`;
       if (!kind && judged && w.pump === "pressure" && ratio <= 0.78 && w.target - actual >= 1.2) {
-        const capped = limiter != null && flow != null && flow >= 0.85 * limiter;
+        const capped = limiter != null && flow2 != null && flow2 >= 0.85 * limiter;
         issues.push({
           kind: "pressure_shortfall",
           what: "Pressure stayed below the profile's target during the pour.",
-          evidence: `${span}: target ${w.target.toFixed(1)} bar, measured ${actual.toFixed(1)} bar (peak ${Math.max(...w.actuals).toFixed(1)} bar)${flow == null ? "" : ` with flow at ${flow.toFixed(1)} ml/s`}${capped ? `, near the ${limiter} ml/s flow limit, consistent with low puck resistance` : ""}.`,
+          evidence: `${span}: target ${w.target.toFixed(1)} bar, measured ${actual.toFixed(1)} bar (peak ${Math.max(...w.actuals).toFixed(1)} bar)${flow2 == null ? "" : ` with flow at ${flow2.toFixed(1)} ml/s`}${capped ? `, near the ${limiter} ml/s flow limit, consistent with low puck resistance` : ""}.`,
           severity: "caution",
           fromS: w.start,
           toS: w.end
@@ -1314,14 +1828,14 @@ var CremaEngine = (() => {
         issues.push({
           kind: "flow_shortfall",
           what: "Flow stayed below the profile's target during the pour.",
-          evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit, consistent with a restrictive puck` : ""}.`,
+          evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure2 == null ? "" : ` with pressure at ${pressure2.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit, consistent with a restrictive puck` : ""}.`,
           severity: "caution",
           fromS: w.start,
           toS: w.end
         });
       }
       const pressureStable = Math.max(...w.actuals) - Math.min(...w.actuals) <= Math.max(0.5, w.target * 0.15);
-      if (w.pump === "pressure" && w.end - w.start >= 15 && flow != null && flowCoverage >= 0.8 && Math.abs(actual / w.target - 1) <= 0.15 && pressureStable && actual >= 4.5 && flowValues.length >= 8 && Math.max(...flowValues) <= 3) {
+      if (w.pump === "pressure" && w.end - w.start >= 15 && flow2 != null && flowCoverage >= 0.8 && Math.abs(actual / w.target - 1) <= 0.15 && pressureStable && actual >= 4.5 && flowValues.length >= 8 && Math.max(...flowValues) <= 3) {
         const binCount = 4;
         const bins = Array.from({ length: binCount }, (_, i) => {
           const start = Math.floor(i * flowValues.length / binCount);
@@ -1427,6 +1941,7 @@ var CremaEngine = (() => {
       issues,
       wentWell,
       facts,
+      faultWindows: windows.map((w) => ({ frame: w.frame, startS: w.start, endS: w.end })),
       metrics: {
         recordedPoints: points.length,
         usableTemperaturePoints: tempPairs.length,
@@ -1440,19 +1955,13 @@ var CremaEngine = (() => {
   function shotFacts(input, sorted) {
     const points = sorted ?? [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
     const phased = points.some((p) => p.substate);
-    const brewing = phased ? points.filter((p) => p.substate && /^(pour|preinfusion)/i.test(p.substate)) : points;
+    const brewing = points.filter((p) => isBrewPoint(p, phased));
     const span = (xs) => xs.length > 1 ? xs.at(-1).t - xs[0].t : null;
     const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     const pour = phased ? brewing.filter((p) => /^pour/i.test(p.substate)) : brewing;
     const preinfusion = phased ? brewing.filter((p) => /^preinfusion/i.test(p.substate)) : [];
-    const weights = brewing.map((p) => ({ t: p.t, w: finite(p.w) && p.w >= -5 ? p.w : null }));
-    let firstDripsS = null;
-    for (let i = 0; i + 2 < weights.length; i++) {
-      if ([0, 1, 2].every((k) => (weights[i + k].w ?? -1) >= 1)) {
-        firstDripsS = weights[i].t;
-        break;
-      }
-    }
+    const phaseEvidence = measurePhases(input, points);
+    const firstDripsS = phaseEvidence.firstSustainedBeverage.value?.tS ?? null;
     const pressures = brewing.map((p) => p.p).filter(finite);
     const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
     const yieldG = finite(input.yieldG) && input.yieldG > 0 ? input.yieldG : null;
@@ -1496,58 +2005,39 @@ var CremaEngine = (() => {
       timeTargetComparable,
       timeStatus,
       timeDeltaS,
-      pourSteps: pourSteps(input, points)
+      pourSteps: pourSteps(phaseEvidence.phases),
+      phaseEvidence
     };
   }
-  function pourSteps(input, points) {
-    const profile = input.profile;
-    if (!profile || profile.beverage_type === "manual") return [];
-    const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
-    const byFrame = /* @__PURE__ */ new Map();
-    for (const p of points) {
-      if (p.substate && !/^pour/i.test(p.substate)) continue;
-      if (p.frame == null || !Number.isInteger(p.frame) || p.frame < 0) continue;
-      if (!byFrame.has(p.frame)) byFrame.set(p.frame, []);
-      byFrame.get(p.frame).push(p);
-    }
-    const out = [];
-    for (const [frame, xs] of [...byFrame].sort((a, b) => a[0] - b[0])) {
-      const step = stepAt(profile, frame);
-      if (!step || step.pump !== "pressure" && step.pump !== "flow") continue;
-      const pump = step.pump;
-      const durationS = xs.at(-1).t - xs[0].t;
-      if (xs.length < 3 || durationS < 3) continue;
-      const settledAll = xs.filter((p) => p.t - xs[0].t >= 2);
-      const settled = settledAll.length >= 3 ? settledAll : xs;
-      const controlled = (p) => pump === "pressure" ? p.p : p.f;
-      const other = (p) => pump === "pressure" ? p.f : p.p;
-      const recorded = settled.map((p) => pump === "pressure" ? p.tp : p.tf).filter((n) => finite(n) && n > 0);
-      const stepTarget = number(pump === "pressure" ? step.pressure : step.flow);
-      const target = recorded.length ? avg(recorded) : stepTarget != null && stepTarget > 0 ? stepTarget : null;
-      if (target == null || skippedStep(profile, step, target)) continue;
-      const actuals = settled.map(controlled).filter(finite);
-      const peaks = xs.map(controlled).filter(finite);
-      if (!actuals.length) continue;
-      const actualMean = avg(actuals);
-      const otherMean = avg(settled.map(other).filter(finite));
-      const limit = number(step.limiter?.value);
-      const limiterValue = limit != null && limit > 0 ? limit : null;
-      const short = target - actualMean >= (pump === "pressure" ? 0.8 : 0.4);
-      out.push({
+  function pourSteps(phases) {
+    return phases.flatMap((phase) => {
+      const { frame, durationS } = phase;
+      const pump = phase.mode.value;
+      if (frame == null || !pump || /^preinfusion/i.test(phase.substate ?? "")) return [];
+      const plan = phase.plan.value;
+      const command = phase.loggedCommand.value;
+      const actual = (pump === "pressure" ? phase.pressureBar : phase.inletFlowMlS).value;
+      const other = (pump === "pressure" ? phase.inletFlowMlS : phase.pressureBar).value;
+      const steady = phase.steadyHold.value;
+      const target = steady?.meanCommand ?? command?.timeWeightedMean ?? command?.entry ?? command?.last ?? plan?.endpoint;
+      const actualMean = steady?.meanResponse ?? actual?.timeWeightedMean ?? actual?.entry ?? actual?.last;
+      if (target == null || actualMean == null || actual == null) return [];
+      const otherMean = steady?.otherMean ?? other?.timeWeightedMean ?? other?.entry ?? other?.last ?? null;
+      const limiterValue = plan?.limiter?.value ?? null;
+      return [{
         frame,
-        name: step.name ?? null,
+        name: plan?.name ?? null,
         pump,
-        durationS: round2(durationS),
+        durationS,
         target: round2(target),
         actualMean: round2(actualMean),
-        actualPeak: round2(Math.max(...peaks)),
+        actualPeak: round2(actual.max),
         otherMean: round2(otherMean),
         limiterValue,
-        limiterEngaged: limiterValue != null && otherMean != null && short && otherMean >= 0.85 * limiterValue,
-        steadyTarget: durationS >= 8 && settled.length >= 5 && recorded.length >= 0.8 * settled.length && actuals.length >= 0.8 * settled.length && Math.max(...recorded) - Math.min(...recorded) <= 0.25 && settled.every((p, i) => i === 0 || p.t - settled[i - 1].t <= 1.5)
-      });
-    }
-    return out;
+        limiterEngaged: steady != null && limiterValue != null && otherMean != null && target - actualMean >= (pump === "pressure" ? 0.8 : 0.4) && otherMean >= 0.85 * limiterValue,
+        steadyTarget: steady != null
+      }];
+    });
   }
 
   // server/control/workflow.ts
@@ -1583,9 +2073,9 @@ var CremaEngine = (() => {
   }
 
   // server/recommend/review-history.ts
-  var positive = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
+  var positive2 = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
   var setting = (s) => s?.trim() || null;
-  var rounded = (n) => Math.round(n * 10) / 10;
+  var rounded2 = (n) => Math.round(n * 10) / 10;
   function compareReviewHistory(input, facts) {
     const out = {
       status: input.history.length ? "insufficient" : "none",
@@ -1596,10 +2086,10 @@ var CremaEngine = (() => {
     };
     if (!input.history.length) return out;
     const currentAt = Date.parse(input.timestamp ?? "");
-    const currentKnown = input.profile != null && input.profile.beverage_type !== "manual" && !!input.profileShape && positive(facts.durationS) && positive(facts.doseG) && positive(facts.yieldG) && positive(input.tempC) && Number.isFinite(currentAt);
+    const currentKnown = input.profile != null && input.profile.beverage_type !== "manual" && !!input.profileShape && positive2(facts.durationS) && positive2(facts.doseG) && positive2(facts.yieldG) && positive2(input.tempC) && Number.isFinite(currentAt);
     const comparable = [];
     for (const p2 of input.history.slice(0, 20)) {
-      if (!currentKnown || !p2.profileShape || !positive(p2.durationS) || !positive(p2.doseG) || !positive(p2.yieldG) || !positive(p2.tempC)) {
+      if (!currentKnown || !p2.profileShape || !positive2(p2.durationS) || !positive2(p2.doseG) || !positive2(p2.yieldG) || !positive2(p2.tempC)) {
         out.excluded.missing++;
         continue;
       }
@@ -1608,7 +2098,7 @@ var CremaEngine = (() => {
         out.excluded.chronology++;
         continue;
       }
-      if (stoppedEarly(input) || stoppedEarly({ yieldG: p2.yieldG, targetYieldG: p2.targetYieldG ?? null, stopReason: p2.stopReason ?? null }) || positive(input.targetYieldG) && facts.yieldG < 0.8 * input.targetYieldG || positive(p2.targetYieldG) && p2.yieldG < 0.8 * p2.targetYieldG) {
+      if (stoppedEarly(input) || stoppedEarly({ yieldG: p2.yieldG, targetYieldG: p2.targetYieldG ?? null, stopReason: p2.stopReason ?? null }) || positive2(input.targetYieldG) && facts.yieldG < 0.8 * input.targetYieldG || positive2(p2.targetYieldG) && p2.yieldG < 0.8 * p2.targetYieldG) {
         out.excluded.incomplete++;
         continue;
       }
@@ -1624,7 +2114,7 @@ var CremaEngine = (() => {
         out.excluded.yield++;
         continue;
       }
-      if (positive(input.targetYieldG) && positive(p2.targetYieldG) && Math.abs(input.targetYieldG - p2.targetYieldG) > Math.max(2, input.targetYieldG * 0.05)) {
+      if (positive2(input.targetYieldG) && positive2(p2.targetYieldG) && Math.abs(input.targetYieldG - p2.targetYieldG) > Math.max(2, input.targetYieldG * 0.05)) {
         out.excluded.yield++;
         continue;
       }
@@ -1647,7 +2137,7 @@ var CremaEngine = (() => {
       timestamp: p.timestamp,
       previousDurationS: p.durationS,
       currentDurationS: facts.durationS,
-      deltaS: rounded(facts.durationS - p.durationS),
+      deltaS: rounded2(facts.durationS - p.durationS),
       previousGrind,
       currentGrind,
       // A numeric direction does not establish which way this grinder gets finer.
@@ -1699,17 +2189,28 @@ var CremaEngine = (() => {
   function rulesSummary(a, input, direction, conflict) {
     const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
     const temp = a.issues.find((i) => i.kind === "off_target_temp");
-    if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) return recordingLimitSummary(input, a.metrics);
+    const phases = a.facts.phaseEvidence.phases;
+    const measured = phases.filter((p) => p.controlledError.value != null).sort((a2, b) => b.controlledError.coveredS - a2.controlledError.coveredS)[0];
+    if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) {
+      const limit = recordingLimitSummary(input, a.metrics);
+      return measured?.controlledError.coveredS >= 1 ? `${limit} ${shortPhaseSentence(measured)}` : limit;
+    }
     const lines = [paceSentence(a.facts)];
-    const tracking = a.metrics.observedWindows ? trackingSentence(a.facts) : null;
+    const main = phases.filter((p) => p.substate == null || /^pour/i.test(p.substate)).reduce((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
+    const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
+    const eligible = new Set(a.faultWindows.map((w) => w.frame));
+    const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, eligible);
     if (tracking) lines.push(tracking);
     else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
     else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
     else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
     else if (input.profile?.beverage_type === "manual") lines.push("Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare.");
     else if (!input.profile) lines.push("The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind.");
-    else lines.push("No step held a steady target long enough to compare; repeat the recipe before treating the curve as a grind diagnosis.");
-    if (a.issues.some((i) => i.kind === "channeling")) lines.push("Flow rose steadily through the pour, which can mean the water found a channel.");
+    else if (measured) lines.push(shortPhaseSentence(measured));
+    else if (phases.some((p) => p.pressureCrest.value != null)) {
+      lines.push(`Pressure peaked at ${a.facts.peakPressureBar?.toFixed(1)} bar. A target comparison needs reliable phase data.`);
+    } else lines.push("The recording did not provide enough paired target and response data for comparison.");
+    if (a.issues.some((i) => i.kind === "channeling")) lines.push("Inlet flow rose gradually while pressure held near its target.");
     if (temp && a.metrics.meanTemperatureOffsetC != null) {
       const d = a.metrics.meanTemperatureOffsetC;
       lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} \xB0C ${d > 0 ? "above" : "below"} its target.`);
@@ -1734,26 +2235,44 @@ var CremaEngine = (() => {
     if (f.timeStatus === "in_window" || off < 1) return `Finished in ${ran} s, ${f.timeStatus === "in_window" ? "right in" : "at the edge of"} the ${lo}\u2013${hi} s ${basis} window.`;
     return `Ran ${off} s ${f.timeStatus === "fast" ? "faster" : "slower"} than the ${lo}\u2013${hi} s ${basis} window (${detail}).`;
   }
-  function trackingSentence(f) {
+  function trackingSentence(f, faultFrames) {
     const main = f.pourSteps.filter((s) => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
     if (!main) return null;
-    const pressure = main.pump === "pressure";
-    const unit = pressure ? "bar" : "ml/s";
-    const otherUnit = pressure ? "ml/s" : "bar";
+    const pressure2 = main.pump === "pressure";
+    const unit = pressure2 ? "bar" : "ml/s";
+    const otherUnit = pressure2 ? "ml/s" : "bar";
     const n = (x) => x.toFixed(1);
     const at = main.otherMean != null ? ` at ${n(main.otherMean)} ${otherUnit}` : "";
     const ratio = main.actualMean / main.target;
     const gap = main.target - main.actualMean;
-    const short = pressure ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
-    const name = pressure ? "pressure" : "flow";
+    const short = pressure2 ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
+    const name = pressure2 ? "pressure" : "flow";
+    if (!faultFrames.has(main.frame)) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
     const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
     if (short || main.limiterEngaged) {
-      const why = main.limiterEngaged ? pressure ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck` : "";
+      const why = main.limiterEngaged ? pressure2 ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck` : "";
       return `Pour ${name} only reached ${n(main.actualMean)} ${unit} of the ${n(main.target)} ${unit} target${at}${why}.`;
     }
-    if (Math.abs(ratio - 1) <= 0.1) return `${pressure ? "Pressure" : "Flow"} held ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
-    const limitNote = atLimit && gap > 0 ? `, with ${pressure ? "flow" : "pressure"} at its ${main.limiterValue} ${otherUnit} limit as the profile allows` : "";
+    if (Math.abs(ratio - 1) <= 0.1) return `${pressure2 ? "Pressure" : "Flow"} held ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
+    const limitNote = atLimit && gap > 0 ? `, with ${pressure2 ? "flow" : "pressure"} at its ${main.limiterValue} ${otherUnit} limit as the profile allows` : "";
     return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}${limitNote}.`;
+  }
+  function shortPhaseSentence(phase) {
+    const name = phase.purpose.value === "bloom_or_pause" ? "bloom" : phase.purpose.value === "decline" ? "decline" : "phase";
+    return `During the ${name}, ${phase.mode.value} differed from the recorded command by ${phase.controlledError.value.absoluteMean.toFixed(1)} ${phase.controlledUnit} on average over ${phase.controlledError.coveredS.toFixed(1)} s.`;
+  }
+  function highFlowSentence(facts, phase) {
+    const hold = phase.steadyHold;
+    const mean = hold.value;
+    const peak = phase.pressureCrest.value;
+    const droop = phase.pressureDroopAtHeldFlowBar.value;
+    const onset = facts.phaseEvidence.firstSustainedBeverage.value;
+    const rate = facts.phaseEvidence.cupRateAfterOnsetGS.value;
+    const first = `Inlet flow averaged ${mean.meanResponse.toFixed(1)} mL/s against the ${mean.meanCommand.toFixed(1)} mL/s target over ${hold.coveredS.toFixed(1)} s`;
+    const pressure2 = peak ? `, with pressure peaking at ${peak.pressureBar.toFixed(1)} bar` : "";
+    const late = droop != null && droop >= 0.2 ? ` and easing by ${droop.toFixed(1)} bar late` : "";
+    const cup = onset?.previousBelowGramS != null && rate != null ? ` The cup reached 1 g after ${onset.brewElapsedS.toFixed(1)} s, then gained about ${rate.toFixed(1)} g/s.` : "";
+    return `${first}${pressure2}${late}.${cup}`;
   }
   var FAST = ["gushed", "pressure_shortfall", "fast_shot"];
   var SLOW = ["choked", "flow_shortfall", "slow_shot"];
@@ -1775,8 +2294,7 @@ var CremaEngine = (() => {
   }
   var capitalize = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
   var joinAnd = (xs) => xs.length <= 1 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
-  function rulesReview(input) {
-    const analysis = analyzeShot(input);
+  function rulesReview(input, analysis = analyzeShot(input)) {
     const issues = analysis.issues;
     const kinds = issues.map((i) => i.kind);
     const hasFast = kinds.some((k) => FAST.includes(k));
@@ -1987,7 +2505,7 @@ var CremaEngine = (() => {
     const { index, start, lastT } = stepTimes(points, count);
     const last = points.at(-1);
     const hasScale = i.hasScale ?? points.some((p) => typeof p.w === "number" && Number.isFinite(p.w));
-    const weight = hasScale && last && typeof last.w === "number" && Number.isFinite(last.w) ? last.w : null;
+    const weight2 = hasScale && last && typeof last.w === "number" && Number.isFinite(last.w) ? last.w : null;
     const target = i.targetYieldG != null && Number.isFinite(i.targetYieldG) && i.targetYieldG > 0 ? i.targetYieldG : null;
     const steps = plan.map((s, n) => {
       const state = index == null || n > index ? "ahead" : n < index ? "done" : "now";
@@ -2020,8 +2538,8 @@ var CremaEngine = (() => {
         }
       }
       const sw = num2(s.weight);
-      if (sw != null && sw > 0 && weight != null) exits.push({ kind: "weight", progress: clamp01(weight / sw), value: weight, goal: sw });
-      if (target != null && weight != null) exits.push({ kind: "yield", progress: clamp01(weight / target), value: weight, goal: target });
+      if (sw != null && sw > 0 && weight2 != null) exits.push({ kind: "weight", progress: clamp01(weight2 / sw), value: weight2, goal: sw });
+      if (target != null && weight2 != null) exits.push({ kind: "yield", progress: clamp01(weight2 / target), value: weight2, goal: target });
       const sv = num2(s.volume);
       if (sv != null && sv > 0) {
         let ml = 0;
@@ -2032,14 +2550,14 @@ var CremaEngine = (() => {
       now.tracking = exits.reduce((best, x) => !best || x.progress > best.progress ? x : best, null);
     }
     let etaS = null;
-    if (target != null && weight != null) {
-      if (weight >= target) etaS = 0;
+    if (target != null && weight2 != null) {
+      if (weight2 >= target) etaS = 0;
       else {
         const rate = steadyWeightFlow(hasScale ? points : [], i.weightFlow);
-        if (rate != null) etaS = round1(Math.min(ETA_MAX_S, Math.max(0, (target - weight) / rate)));
+        if (rate != null) etaS = round1(Math.min(ETA_MAX_S, Math.max(0, (target - weight2) / rate)));
       }
     }
-    return { steps, index, count, yieldFraction: target != null && weight != null ? clamp01(weight / target) : null, etaS };
+    return { steps, index, count, yieldFraction: target != null && weight2 != null ? clamp01(weight2 / target) : null, etaS };
   }
 
   // server/control/stop.ts

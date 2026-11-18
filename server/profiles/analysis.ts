@@ -1,5 +1,6 @@
 import type { ProfileLike } from "./curve.js";
 import { findProfile } from "./catalog.js";
+import { ambiguousZeroFrames, isBrewPoint, measurePhases, type PhaseEvidence } from "./phase-evidence.js";
 import type { ReviewInput, ReviewIssue } from "../recommend/review-types.js";
 
 export interface ShotAnalysisMetrics {
@@ -43,6 +44,7 @@ export interface ShotFacts {
   timeDeltaS: number | null;
   /** What each pour step targeted and what the shot actually reached. */
   pourSteps: PourStep[];
+  phaseEvidence: ReturnType<typeof measurePhases>;
 }
 
 export interface PourStep {
@@ -54,7 +56,7 @@ export interface PourStep {
   durationS: number;
   /** The step's target for the controlled quantity: bar for pressure, ml/s for flow. */
   target: number;
-  /** Mean of the controlled quantity once the step settled (after its first two seconds). */
+  /** Mean of the controlled quantity, using the settled window for a steady hold. */
   actualMean: number;
   actualPeak: number;
   /** Mean of the other quantity: flow (ml/s) on a pressure step, pressure (bar) on a flow step. */
@@ -72,6 +74,7 @@ export interface ShotAnalysis {
   wentWell: string[];
   metrics: ShotAnalysisMetrics;
   facts: ShotFacts;
+  faultWindows: { frame: number; startS: number; endS: number }[];
 }
 
 const finite = (n: number | null | undefined): n is number => n != null && Number.isFinite(n);
@@ -86,7 +89,7 @@ function stepAt(profile: ProfileLike, frame: number | null) {
   return profile.steps?.[frame] ?? null;
 }
 
-function skippedStep(profile: ProfileLike, step: NonNullable<ReturnType<typeof stepAt>>, target: number) {
+function skipFaultChecks(profile: ProfileLike, step: NonNullable<ReturnType<typeof stepAt>>, target: number) {
   const title = `${profile.title ?? ""} ${step.name ?? ""}`.toLowerCase();
   if (profile.beverage_type === "manual" || /turbo|bloom|pre.?infusion/.test(title)) return true;
   // A limiter caps the other quantity; it doesn't make the step ungradable. Most
@@ -95,7 +98,7 @@ function skippedStep(profile: ProfileLike, step: NonNullable<ReturnType<typeof s
   // a gusher on a pressure step also needs high flow.
   if (target <= 0) return true;
   // High flow targets are often intentional, so don't grade them as faults.
-  if ((step.pump === "flow" || step.pump === "Flow") && target > 3) return true;
+  if ((step.pump === "flow" || step.pump === "Flow") && (target > 3 || (number(step.flow) ?? 0) > 3)) return true;
   return false;
 }
 
@@ -142,7 +145,7 @@ export function expectedTimeWindow(input: Pick<ReviewInput, "targetTimeS" | "pro
   return resolveTimeWindow(input).window;
 }
 
-function targetAndActual(input: ReviewInput, point: ReviewInput["points"][number]) {
+function faultTargetAndActual(input: ReviewInput, point: ReviewInput["points"][number]) {
   const step = stepAt(input.profile!, point.frame);
   if (!step || point.frame == null) return null;
   // Decaid marks the machine's own phases. The preinfusion phase fills and
@@ -152,7 +155,7 @@ function targetAndActual(input: ReviewInput, point: ReviewInput["points"][number
   const pump: "pressure" | "flow" = step.pump === "flow" ? "flow" : "pressure";
   const target = pump === "pressure" ? point.tp : point.tf;
   const actual = pump === "pressure" ? point.p : point.f;
-  if (!finite(target) || !finite(actual) || target <= 0 || skippedStep(input.profile!, step, target)) return null;
+  if (!finite(target) || !finite(actual) || target <= 0 || skipFaultChecks(input.profile!, step, target)) return null;
   return { pump, target, actual, step };
 }
 
@@ -165,7 +168,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
   const issues: ReviewIssue[] = [];
   const profile = input.profile;
   const points = [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
-  const targets = points.map((p) => ({ p, data: profile ? targetAndActual(input, p) : null }));
+  const targets = profile && !ambiguousZeroFrames(input, points) ? points.map(p => ({ p, data: faultTargetAndActual(input, p) })) : [];
 
   const windows: Window[] = [];
   let run: typeof targets = [];
@@ -372,6 +375,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
   }
   return {
     issues, wentWell, facts,
+    faultWindows: windows.map(w => ({ frame: w.frame, startS: w.start, endS: w.end })),
     metrics: {
       recordedPoints: points.length, usableTemperaturePoints: tempPairs.length, meanTemperatureOffsetC: meanTemp, observedWindows: windows.length,
       enoughTelemetry: points.length >= 20 && (facts.durationS ?? 0) >= 10,
@@ -385,18 +389,13 @@ const round = (n: number | null, places = 1) => n == null ? null : Math.round(n 
 export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): ShotFacts {
   const points = sorted ?? [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
   const phased = points.some((p) => p.substate);
-  const brewing = phased ? points.filter((p) => p.substate && /^(pour|preinfusion)/i.test(p.substate)) : points;
+  const brewing = points.filter(p => isBrewPoint(p, phased));
   const span = (xs: typeof points) => xs.length > 1 ? xs.at(-1)!.t - xs[0].t : null;
   const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
   const pour = phased ? brewing.filter((p) => /^pour/i.test(p.substate!)) : brewing;
   const preinfusion = phased ? brewing.filter((p) => /^preinfusion/i.test(p.substate!)) : [];
-  // First drips: the cup holds at least a gram for three readings in a row, so
-  // a single bump of the scale doesn't count.
-  const weights = brewing.map((p) => ({ t: p.t, w: finite(p.w) && p.w >= -5 ? p.w : null }));
-  let firstDripsS: number | null = null;
-  for (let i = 0; i + 2 < weights.length; i++) {
-    if ([0, 1, 2].every((k) => (weights[i + k].w ?? -1) >= 1)) { firstDripsS = weights[i].t; break; }
-  }
+  const phaseEvidence = measurePhases(input, points);
+  const firstDripsS = phaseEvidence.firstSustainedBeverage.value?.tS ?? null;
   const pressures = brewing.map((p) => p.p).filter(finite);
   const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
   const yieldG = finite(input.yieldG) && input.yieldG > 0 ? input.yieldG : null;
@@ -425,58 +424,32 @@ export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): S
     pourMeanFlowMlS: round(avg(pour.map((p) => p.f).filter(finite))),
     weightGlitches: points.filter((p) => finite(p.w) && p.w < -5).length,
     expectedTimeS, expectedTimeSource, timeTargetComparable, timeStatus, timeDeltaS,
-    pourSteps: pourSteps(input, points),
+    pourSteps: pourSteps(phaseEvidence.phases), phaseEvidence,
   };
 }
 
-/**
- * For each pour step long enough to compare, what it targeted and what the shot
- * reached. Preinfusion phases, manual profiles and steps the analysis never grades
- * (bloom, turbo, high flow targets) are left out.
- */
-function pourSteps(input: ReviewInput, points: ReviewInput["points"]): PourStep[] {
-  const profile = input.profile;
-  if (!profile || profile.beverage_type === "manual") return [];
-  const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
-  const byFrame = new Map<number, ReviewInput["points"]>();
-  for (const p of points) {
-    if (p.substate && !/^pour/i.test(p.substate)) continue;
-    if (p.frame == null || !Number.isInteger(p.frame) || p.frame < 0) continue;
-    if (!byFrame.has(p.frame)) byFrame.set(p.frame, []);
-    byFrame.get(p.frame)!.push(p);
-  }
-  const out: PourStep[] = [];
-  for (const [frame, xs] of [...byFrame].sort((a, b) => a[0] - b[0])) {
-    const step = stepAt(profile, frame);
-    if (!step || (step.pump !== "pressure" && step.pump !== "flow")) continue;
-    const pump: "pressure" | "flow" = step.pump;
-    const durationS = xs.at(-1)!.t - xs[0].t;
-    if (xs.length < 3 || durationS < 3) continue;
-    const settledAll = xs.filter((p) => p.t - xs[0].t >= 2);
-    const settled = settledAll.length >= 3 ? settledAll : xs;
-    const controlled = (p: ReviewInput["points"][number]) => pump === "pressure" ? p.p : p.f;
-    const other = (p: ReviewInput["points"][number]) => pump === "pressure" ? p.f : p.p;
-    const recorded = settled.map((p) => pump === "pressure" ? p.tp : p.tf).filter((n): n is number => finite(n) && n > 0);
-    const stepTarget = number(pump === "pressure" ? step.pressure : step.flow);
-    const target = recorded.length ? avg(recorded)! : stepTarget != null && stepTarget > 0 ? stepTarget : null;
-    if (target == null || skippedStep(profile, step, target)) continue;
-    const actuals = settled.map(controlled).filter(finite);
-    const peaks = xs.map(controlled).filter(finite);
-    if (!actuals.length) continue;
-    const actualMean = avg(actuals)!;
-    const otherMean = avg(settled.map(other).filter(finite));
-    const limit = number(step.limiter?.value);
-    const limiterValue = limit != null && limit > 0 ? limit : null;
-    const short = target - actualMean >= (pump === "pressure" ? 0.8 : 0.4);
-    out.push({
-      frame, name: step.name ?? null, pump, durationS: round(durationS)!,
-      target: round(target)!, actualMean: round(actualMean)!, actualPeak: round(Math.max(...peaks))!,
-      otherMean: round(otherMean), limiterValue,
-      limiterEngaged: limiterValue != null && otherMean != null && short && otherMean >= 0.85 * limiterValue,
-      steadyTarget: durationS >= 8 && settled.length >= 5 && recorded.length >= 0.8 * settled.length &&
-        actuals.length >= 0.8 * settled.length && Math.max(...recorded) - Math.min(...recorded) <= 0.25 &&
-        settled.every((p, i) => i === 0 || p.t - settled[i - 1].t <= 1.5),
-    });
-  }
-  return out;
+/** Keep the existing pour-step facts as a compact projection of the observed phases. */
+function pourSteps(phases: PhaseEvidence[]): PourStep[] {
+  return phases.flatMap<PourStep>(phase => {
+    const { frame, durationS } = phase;
+    const pump = phase.mode.value;
+    if (frame == null || !pump || /^preinfusion/i.test(phase.substate ?? "")) return [];
+    const plan = phase.plan.value;
+    const command = phase.loggedCommand.value;
+    const actual = (pump === "pressure" ? phase.pressureBar : phase.inletFlowMlS).value;
+    const other = (pump === "pressure" ? phase.inletFlowMlS : phase.pressureBar).value;
+    const steady = phase.steadyHold.value;
+    const target = steady?.meanCommand ?? command?.timeWeightedMean ?? command?.entry ?? command?.last ?? plan?.endpoint;
+    const actualMean = steady?.meanResponse ?? actual?.timeWeightedMean ?? actual?.entry ?? actual?.last;
+    if (target == null || actualMean == null || actual == null) return [];
+    const otherMean = steady?.otherMean ?? other?.timeWeightedMean ?? other?.entry ?? other?.last ?? null;
+    const limiterValue = plan?.limiter?.value ?? null;
+    return [{
+      frame, name: plan?.name ?? null, pump, durationS, target: round(target)!, actualMean: round(actualMean)!,
+      actualPeak: round(actual.max)!, otherMean: round(otherMean), limiterValue,
+      limiterEngaged: steady != null && limiterValue != null && otherMean != null &&
+        target - actualMean >= (pump === "pressure" ? 0.8 : 0.4) && otherMean >= 0.85 * limiterValue,
+      steadyTarget: steady != null,
+    }];
+  });
 }

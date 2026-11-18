@@ -1148,6 +1148,80 @@
         "noFaults": true,
         "askTaste": true
       }
+    },
+    {
+      "id": "review-high-flow-tracked",
+      "split": "dev",
+      "tags": [
+        "synthetic",
+        "high-flow",
+        "phase-evidence"
+      ],
+      "why": "The recipe commands 4.5 mL/s. Inlet flow tracks despite the low pressure crest, so low peak pressure is not a pressure target miss.",
+      "input": {
+        "fixture": "high-flow-tracked"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "pressure_shortfall",
+          "flow_shortfall",
+          "choked",
+          "gushed",
+          "channeling"
+        ],
+        "noFaults": true,
+        "askTaste": true,
+        "narrative": {
+          "target": {
+            "pump": "flow",
+            "actual": 4.5,
+            "target": 4.5,
+            "status": "met"
+          }
+        }
+      }
+    },
+    {
+      "id": "review-high-flow-capped",
+      "split": "dev",
+      "tags": [
+        "synthetic",
+        "high-flow",
+        "phase-evidence"
+      ],
+      "why": "The recipe commands 4.5 mL/s and the inlet sits at 3.0 mL/s near the pressure cap. This is a descriptive shortfall and does not justify a new fault or a grind change.",
+      "input": {
+        "fixture": "high-flow-capped"
+      },
+      "expect": {
+        "accept": [
+          "none",
+          "keep"
+        ],
+        "requiredIssues": [],
+        "forbiddenIssues": [
+          "pressure_shortfall",
+          "flow_shortfall",
+          "choked",
+          "gushed",
+          "channeling"
+        ],
+        "noFaults": true,
+        "askTaste": true,
+        "narrative": {
+          "target": {
+            "pump": "flow",
+            "actual": 3,
+            "target": 4.5,
+            "status": "shortfall"
+          }
+        }
+      }
     }
   ]
 }

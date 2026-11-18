@@ -1,5 +1,5 @@
 import type { ProviderChain } from "../llm/index.js";
-import { analyzeShot, type ShotAnalysisMetrics } from "../profiles/analysis.js";
+import { analyzeShot, type ShotAnalysisMetrics, type ShotFacts } from "../profiles/analysis.js";
 import { findProfile } from "../profiles/catalog.js";
 import { ShotReview, type ShotReview as ShotReviewType } from "../schema.js";
 import { recordingLimitSummary, rulesReview } from "./review-local.js";
@@ -28,7 +28,8 @@ What a useful review does:
 
 Evidence and uncertainty:
 - SHOT FACTS are computed from every recorded sample. Use their durationS, expectedTimeS, timeStatus and timeDeltaS rather than estimating from the downsampled curve. expectedTimeSource identifies a recorded target, a matching recipe, a catalogue guide or an older provided value. Call a catalogue fallback a guide window, not the recorded recipe's target. timeTargetComparable is false when recorded dose or intended yield differs from the catalogue guide (or is unknown): describe that guide comparison if helpful, but do not derive a grind move from it alone. A guide is not a universal ideal or proof that a longer ratio should finish in the same time. A small miss is not by itself a reason to chase grind, especially when taste is balanced. Unknown stays unknown.
-- pourSteps describe each main pour's controlled target, measured mean/peak, otherMean and limiterValue; steadyTarget is false for ramps, short steps or missing targets. Only compare a sustained hold when steadyTarget is true. gradedWindows counts sustained, settled, steady-target windows. When it is zero do not claim good or bad tracking from a ramp, a short step or missing telemetry. Preinfusion targets often end a step on an exit threshold; not reaching a hold target is normal there. Manual and unknown profiles cannot justify an automatic-profile grind change.
+- pourSteps describe each main pour's controlled target, measured mean/peak, otherMean and limiterValue; steadyTarget is false for ramps, short steps or missing targets. Only compare a sustained hold when steadyTarget is true. gradedWindows counts descriptive steady holds, including intentional high-flow phases that are never faulted; it is not the number of windows the fault rules may judge, and those rules (and the confidence limit) still rest only on the code's own findings. When it is zero do not claim good or bad tracking from a ramp, a short step or missing telemetry. Preinfusion targets often end a step on an exit threshold; not reaching a hold target is normal there. Manual and unknown profiles cannot justify an automatic-profile grind change.
+- phaseEvidence describes what was recorded in each plan phase, descriptively; none of it is a fault. Each evidence item is {value, source, reason}: source recorded means a machine or profile reading, inferred means computed from samples and is weaker. A null value means unknown, never zero or normal; reason says why in plain terms (a gap, missing or stale readings, no scale, or an ambiguous alignment between the recording and the profile). Do not read anything into a null, and do not claim a phase's purpose when its alignment is ambiguous. Units: pressure in bar, flow in mL/s, cup rates in g/s, time in seconds, temperature in degrees C. Each phase compares the controlled command (target) with the measured response, including short phases, blooms and ramps; capLikeTime is time the response sat at a limiter-like ceiling, which is consistent with a limiter but not proof. firstSustainedBeverage is when the cup began filling steadily, with cup rates before and after it. pressureCrest is the pressure peak and what followed; pressureDroopAtHeldFlowBar is pressure falling while flow was held. temperature shows recovery of the controlled sensor. finish gives stop context; unobservedPlanPhases lists later plan phases the weight stop pre-empted, which is normal and not a skipped step. omittedPhaseCount is how many shorter phases were left out. Report whole-curve shape against the plan in ordinary words, never these field names.
 - A limiter caps the OTHER quantity: ml/s flow on a pressure step, bar pressure on a flow step. A modest shortfall at a limit can be intentional. pressure_shortfall/flow_shortfall are sustained code findings; they are consistent with low/high puck resistance, not proof of grind as the only cause. Puck prep, dose and other factors can also change resistance. limiterEngaged:false means code did not establish a sustained limiter-caused shortfall; it does NOT prove the limiter never acted. Do not assert an inactive limiter from that flag. A rising flow under steady pressure can be consistent with channeling; a curve cannot prove it.
 - HISTORY COMPARISON was computed for earlier shots of this same bag. Comparable means recorded profile shape, dose, yield and temperature are similar, and neither shot was cut short. When HISTORY COMPARISON.status is not none, use one sentence for the salient previous/current comparison or the material reason it is not comparable. If it is comparable, interpret what it means for the next decision, rather than merely appending old numbers. Use its measured time delta and recorded setting labels when relevant. A changed setting plus changed time is an association, not a controlled experiment or proof it caused better extraction. Numeric setting order never establishes finer/coarser. If settings are missing, do not say the grind was the same or changed. Excluded or incomplete history cannot establish a trend; state the material confound and suggest a repeat. A previous AI review is not independent measured evidence. Never invent earlier shots, durations, taste or grinder changes.
 - Taste outranks a generic time goal. sourBitter: -2 very sour, 0 balanced, +2 very bitter; body: -2 thin, 0 balanced, +2 heavy; enjoyment: Decaid 0–10, one point per half star. Missing scales are null, not balanced. Free-text notes are reported context, not inferred numeric ratings. Do not ask for taste already provided. Do not infer flavour from the curve, coffee tasting notes or a recipe name.
@@ -140,8 +141,7 @@ function validateReview(out: ShotReviewType, findings: ReviewIssue[], input: Rev
     out.confidence = "low";
     out.summary = recordingLimitSummary(input, metrics);
   } else if (metrics.observedWindows === 0) {
-    // The shot is well recorded, but no step could be graded against its target.
-    // Keep the model's description; it can't be confident about tracking.
+    // Preserve conservative confidence when no window qualified for fault checks.
     out.confidence = tasted ? (out.confidence === "high" ? "medium" : out.confidence) : "low";
   }
   return out;
@@ -153,19 +153,34 @@ function fallback(input: ReviewInput): ReviewResult {
   return { review, source: "rules" };
 }
 
+function reviewFacts(facts: ShotFacts, metrics: ShotAnalysisMetrics) {
+  const { weightGlitches, phaseEvidence, pourSteps, ...measured } = facts;
+  // Corrupt frame metadata can alternate every sample. Keep the largest phases
+  // in the prompt while calculating the facts and findings from the whole trace.
+  const limit = 12;
+  const phases = phaseEvidence.phases.length <= limit ? phaseEvidence.phases :
+    [...phaseEvidence.phases].sort((a, b) => b.durationS - a.durationS).slice(0, limit).sort((a, b) => a.index - b.index);
+  const primarySteps = pourSteps.length <= limit ? pourSteps : [...pourSteps].sort((a, b) => b.durationS - a.durationS).slice(0, limit);
+  return {
+    ...measured, ...(weightGlitches ? { weightGlitches } : {}), pourSteps: primarySteps,
+    phaseEvidence: { ...phaseEvidence, phases, omittedPhaseCount: phaseEvidence.phases.length - phases.length },
+    gradedWindows: pourSteps.filter(step => step.steadyTarget).length,
+    meanTemperatureOffsetC: metrics.meanTemperatureOffsetC == null ? null : Math.round(metrics.meanTemperatureOffsetC * 10) / 10,
+  };
+}
+
 export async function reviewShot(llm: ProviderChain, input: ReviewInput): Promise<ReviewResult> {
   const analysis = analyzeShot(input);
   const findings = prioritizeFindings(analysis.issues as ReviewIssue[]);
-  const { weightGlitches, ...measured } = analysis.facts;
   const historyComparison = compareReviewHistory(input, analysis.facts);
-  const supported = rulesReview(input).nextShot;
-  const withoutTaste = rulesReview({ ...input, feedback: null, notes: null }).nextShot;
+  const supported = rulesReview(input, analysis).nextShot;
+  const withoutTaste = rulesReview({ ...input, feedback: null, notes: null }, analysis).nextShot;
   const boundaries = {
     profileSupportsChanges: input.profile != null && input.profile.beverage_type !== "manual",
     withoutTasteGrindDirection: withoutTaste?.grindDelta ?? null,
     tasteCurveConflict: !!input.feedback && supported == null && findings.some(f => [...FAST_KINDS, ...SLOW_KINDS].includes(f.kind)),
   };
-  const facts = { ...measured, ...(weightGlitches ? { weightGlitches } : {}), gradedWindows: analysis.metrics.observedWindows, meanTemperatureOffsetC: analysis.metrics.meanTemperatureOffsetC == null ? null : Math.round(analysis.metrics.meanTemperatureOffsetC * 10) / 10 };
+  const facts = reviewFacts(analysis.facts, analysis.metrics);
   try {
     const prompt = [
       `COFFEE (authoritative supplied snapshot; null means unknown):\n${JSON.stringify(input.bean)}`,

@@ -53,17 +53,29 @@ export function recordingLimitSummary(input: ReviewInput, metrics: ShotAnalysisM
 function rulesSummary(a: ShotAnalysis, input: ReviewInput, direction: "finer" | "coarser" | null, conflict: boolean): string {
   const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
   const temp = a.issues.find((i) => i.kind === "off_target_temp");
-  if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) return recordingLimitSummary(input, a.metrics);
+  const phases = a.facts.phaseEvidence.phases;
+  const measured = phases.filter(p => p.controlledError.value != null).sort((a, b) => b.controlledError.coveredS - a.controlledError.coveredS)[0];
+  if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) {
+    const limit = recordingLimitSummary(input, a.metrics);
+    return measured?.controlledError.coveredS >= 1 ? `${limit} ${shortPhaseSentence(measured)}` : limit;
+  }
   const lines = [paceSentence(a.facts)];
-  const tracking = a.metrics.observedWindows ? trackingSentence(a.facts) : null;
+  const main = phases.filter(p => p.substate == null || /^pour/i.test(p.substate))
+    .reduce<(typeof phases)[number] | null>((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
+  const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
+  const eligible = new Set(a.faultWindows.map(w => w.frame));
+  const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, eligible);
   if (tracking) lines.push(tracking);
   else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
   else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
   else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
   else if (input.profile?.beverage_type === "manual") lines.push("Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare.");
   else if (!input.profile) lines.push("The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind.");
-  else lines.push("No step held a steady target long enough to compare; repeat the recipe before treating the curve as a grind diagnosis.");
-  if (a.issues.some((i) => i.kind === "channeling")) lines.push("Flow rose steadily through the pour, which can mean the water found a channel.");
+  else if (measured) lines.push(shortPhaseSentence(measured));
+  else if (phases.some(p => p.pressureCrest.value != null)) {
+    lines.push(`Pressure peaked at ${a.facts.peakPressureBar?.toFixed(1)} bar. A target comparison needs reliable phase data.`);
+  } else lines.push("The recording did not provide enough paired target and response data for comparison.");
+  if (a.issues.some((i) => i.kind === "channeling")) lines.push("Inlet flow rose gradually while pressure held near its target.");
   if (temp && a.metrics.meanTemperatureOffsetC != null) {
     const d = a.metrics.meanTemperatureOffsetC;
     lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} °C ${d > 0 ? "above" : "below"} its target.`);
@@ -95,7 +107,7 @@ export function paceSentence(f: ShotFacts): string | null {
 }
 
 /** Whether the main pour step reached its pressure or flow target, in numbers. */
-export function trackingSentence(f: ShotFacts): string | null {
+export function trackingSentence(f: ShotFacts, faultFrames: ReadonlySet<number>): string | null {
   const main = f.pourSteps.filter(s => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
   if (!main) return null;
   const pressure = main.pump === "pressure";
@@ -107,6 +119,7 @@ export function trackingSentence(f: ShotFacts): string | null {
   const gap = main.target - main.actualMean;
   const short = pressure ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
   const name = pressure ? "pressure" : "flow";
+  if (!faultFrames.has(main.frame)) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
   const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
   if (short || main.limiterEngaged) {
     const why = main.limiterEngaged
@@ -117,6 +130,26 @@ export function trackingSentence(f: ShotFacts): string | null {
   if (Math.abs(ratio - 1) <= 0.1) return `${pressure ? "Pressure" : "Flow"} held ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
   const limitNote = atLimit && gap > 0 ? `, with ${pressure ? "flow" : "pressure"} at its ${main.limiterValue} ${otherUnit} limit as the profile allows` : "";
   return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}${limitNote}.`;
+}
+
+function shortPhaseSentence(phase: ShotFacts["phaseEvidence"]["phases"][number]) {
+  const name = phase.purpose.value === "bloom_or_pause" ? "bloom" : phase.purpose.value === "decline" ? "decline" : "phase";
+  return `During the ${name}, ${phase.mode.value} differed from the recorded command by ${phase.controlledError.value!.absoluteMean.toFixed(1)} ${phase.controlledUnit} on average over ${phase.controlledError.coveredS.toFixed(1)} s.`;
+}
+
+function highFlowSentence(facts: ShotFacts, phase: ShotFacts["phaseEvidence"]["phases"][number]) {
+  const hold = phase.steadyHold;
+  const mean = hold.value!;
+  const peak = phase.pressureCrest.value;
+  const droop = phase.pressureDroopAtHeldFlowBar.value;
+  const onset = facts.phaseEvidence.firstSustainedBeverage.value;
+  const rate = facts.phaseEvidence.cupRateAfterOnsetGS.value;
+  const first = `Inlet flow averaged ${mean.meanResponse.toFixed(1)} mL/s against the ${mean.meanCommand.toFixed(1)} mL/s target over ${hold.coveredS.toFixed(1)} s`;
+  const pressure = peak ? `, with pressure peaking at ${peak.pressureBar.toFixed(1)} bar` : "";
+  const late = droop != null && droop >= 0.2 ? ` and easing by ${droop.toFixed(1)} bar late` : "";
+  const cup = onset?.previousBelowGramS != null && rate != null
+    ? ` The cup reached 1 g after ${onset.brewElapsedS.toFixed(1)} s, then gained about ${rate.toFixed(1)} g/s.` : "";
+  return `${first}${pressure}${late}.${cup}`;
 }
 
 const FAST = ["gushed", "pressure_shortfall", "fast_shot"];
@@ -144,8 +177,7 @@ const capitalize = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s;
 const joinAnd = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 
 /** Deterministic, local shot review. It never changes machine settings. */
-export function rulesReview(input: ReviewInput): ShotReviewData {
-  const analysis = analyzeShot(input);
+export function rulesReview(input: ReviewInput, analysis = analyzeShot(input)): ShotReviewData {
   const issues = analysis.issues;
   const kinds = issues.map((i) => i.kind);
   // Signs of too little puck resistance (grind finer) and too much (grind coarser).

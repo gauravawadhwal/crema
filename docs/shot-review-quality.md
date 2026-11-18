@@ -64,12 +64,12 @@ note. Real notes-driven advice remains an AI capability.
 
 ## Evaluation design
 
-The legacy suite contains 39 synthetic cases. Of these, 28 were authored for
+The legacy suite contains 41 synthetic cases. Of these, 30 were authored for
 development and 11 carry the historical holdout split. The committed final score
-for those 11 comes from rescoring already-viewed outputs. Treat all 39 cases as
+for those 11 comes from rescoring already-viewed outputs. Treat all 41 cases as
 development evidence. Authored expectations are independent of the analysis
 implementation. They cover timing, pressure/flow,
-limits, missing data, early stops, manual/unknown profiles, taste conflicts,
+limits, high-flow tracking, missing data, early stops, manual/unknown profiles, taste conflicts,
 changed/same/missing grind labels, changed recipes/profiles, genuine and negated
 taste notes, and instructions embedded in notes.
 
