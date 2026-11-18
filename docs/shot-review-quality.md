@@ -45,7 +45,7 @@ marks the window as recorded, matching recipe or catalogue guide. A guide is
 explicitly approximate; if its dose or intended yield differs, timing stays descriptive
 and cannot alone support a grind adjustment; legacy unknown windows and unknown custom profiles stay
 unknown. These input fields are optional for older clients. Saved review version 1
-is unchanged; no migration is needed.
+still renders; new saves use version 2 (see [architecture.md](architecture.md#shot-review)).
 
 ## Taste notes and fallback
 

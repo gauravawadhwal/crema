@@ -5,6 +5,8 @@ import { ProviderChain } from "../server/llm/index.js";
 import type { LlmProvider } from "../server/llm/types.js";
 import { reviewShot } from "../server/recommend/review.js";
 import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
+import { fullReviewTrace, REVIEW_POINT_LIMIT } from "../server/recommend/review-evidence.js";
+import { rulesReviewResult } from "../server/recommend/review-local.js";
 import { ReviewBody } from "../server/schema.js";
 
 const point = (t: number, frame: number | null = 0, substate: string | null = "pour"): ReviewPoint => ({
@@ -74,7 +76,7 @@ describe("shot review backend", () => {
     expect(facts.gradedWindows).toBe(1);
     expect(facts.phaseEvidence.phases[1]).toMatchObject({ mode: { value: "flow" }, controlledError: { value: { absoluteMean: 0 } },
       pressureCrest: { value: { tS: hidden.t, pressureBar: 3.45 } } });
-    expect(facts.phaseEvidence.firstSustainedBeverage.value.countedVolumeMl).toMatchObject({ value: null, reason: "counter_not_available" });
+    expect(facts.phaseEvidence.firstSustainedBeverage.value.countedVolumeMl).toMatchObject({ value: 28.125, reason: "machine_counted_volume" });
     expect(sampled.rows).toContainEqual(expect.arrayContaining([hidden.t, 3.45]));
     expect(sampled.events).toContainEqual(expect.objectContaining({ kind: "brew_pressure_crest", t: hidden.t,
       at: expect.arrayContaining([hidden.t, 3.45]) }));
@@ -85,7 +87,7 @@ describe("shot review backend", () => {
     const runs = [];
     for (const pointBudget of [0, 1, 32, 5000]) {
       let prompt = "";
-      const result = await reviewShot(provider(value => { prompt = value; return cleanReview(); }), shot, { pointBudget });
+      const result = await reviewShot(provider(value => { prompt = value; return cleanReview(); }), shot, undefined, { pointBudget });
       const facts = JSON.parse(prompt.split("SHOT FACTS")[1].split("\n")[1]);
       const { events, rows, gaps } = JSON.parse(prompt.split("SHOT CURVES AND EVENTS")[1].split("\n")[1]);
       expect(rows).toHaveLength(Math.min(shot.points.length, pointBudget));
@@ -95,6 +97,59 @@ describe("shot review backend", () => {
     }
     expect(runs[0].events.map((event: { kind: string }) => event.kind)).toContain("first_sustained_beverage");
     for (const result of runs.slice(1)) expect(result).toEqual(runs[0]);
+  });
+
+  it("uses the same versioned history and landmarks in rules, AI facts and the returned review", async () => {
+    const shot = reviewFixture("comparable-phase-history");
+    shot.history.push({ ...shot.history[0], timestamp: "2000-01-01T11:00:00Z", batchId: "other-bag", notes: "Different bag only" });
+    const rules = rulesReviewResult(shot);
+    let prompt = "";
+    const app = createApp({ llm: provider(value => { prompt = value; return cleanReview(); }) });
+    const res = await app.request("/api/review", { method: "POST", body: JSON.stringify(shot) });
+    expect(res.status).toBe(200);
+    const result = await res.json();
+    expect(result.evidence).toEqual(rules.evidence);
+    const facts = JSON.parse(prompt.split("SHOT FACTS (measured by code from every sample; null means not measured):\n")[1].split("\n\n")[0]);
+    const history = JSON.parse(prompt.split("HISTORY COMPARISON (computed from recorded metadata, not prior review prose):\n")[1].split("\n\n")[0]);
+    expect(facts).toMatchObject({ evidenceVersion: 1, units: { pressure: "bar", cupMass: "g" },
+      landmarks: expect.arrayContaining([{ id: "first-sustained-gram", phaseId: "phase-0", tS: 4.5, brewElapsedS: 4.5, phaseElapsedS: 4.5, source: "inferred", reason: "three_consecutive_gram_readings" }]) });
+    expect(history).toEqual(rules.evidence.history);
+    expect(history.excluded.bag).toBe(1);
+    expect(prompt).not.toContain("Different bag only");
+  });
+
+  it("keeps a full-trace crest and the code findings when the request caps the sampled points", async () => {
+    const shot = reviewFixture("comparable-phase-history");
+    shot.points = Array.from({ length: 2401 }, (_, i) => {
+      const t = i / 100;
+      return { ...shot.points[0], t, scaleSampleS: t - 0.05, w: Math.max(0, t - 4) * 2, p: 3.6 };
+    });
+    const points = Array.from({ length: REVIEW_POINT_LIMIT }, (_, i) => shot.points[Math.round(i * (shot.points.length - 1) / (REVIEW_POINT_LIMIT - 1))]);
+    const crest = shot.points.find(p => p.t > 8 && !points.includes(p))!;
+    crest.p = 5.2;
+    const fullTrace = fullReviewTrace(shot);
+    const app = createApp({ llm: provider(cleanReview()) });
+    const request = (body: unknown) => app.request("/api/review", { method: "POST", body: JSON.stringify(body) });
+    const res = await request({ ...shot, points, fullTrace });
+    expect(res.status).toBe(200);
+    const result = await res.json();
+    expect(result.evidence).toEqual(rulesReviewResult(shot).evidence);
+    expect(result.evidence.analysis.facts.peakPressureBar).toBe(5.2);
+    expect(result.evidence.history.curves.phase).toMatchObject({ peakPressureBar: 5.2, peakPhaseElapsedS: crest.t });
+    expect((await request({ ...shot, points, fullTrace: { ...fullTrace, version: 999 } })).status).toBe(400);
+    expect((await request({ ...shot, points, doseG: 22, fullTrace })).status).toBe(400);
+    const boundedOnly = await request({ ...shot, points });
+    expect((await boundedOnly.json()).evidence.analysis.facts.peakPressureBar).toBe(3.6);
+  });
+
+  it("accepts an older skin without evidence fields and treats null history as absent", async () => {
+    const app = createApp({ llm: provider(cleanReview()) });
+    const legacy = input({ points: [point(0), point(0.25), point(0.5)] });
+    const res = await app.request("/api/review", { method: "POST", body: JSON.stringify({ ...legacy, history: null }) });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ evidence: { version: 1, history: { status: "none", curves: { usableCount: 0 } },
+      analysis: { facts: { phaseEvidence: { scaleClock: { value: "machine_timestamps_only" },
+        finish: { volumeCountStartFrame: { value: null }, annotatedYieldG: { value: null, reason: "annotation_provenance_not_available" } } } } } } });
   });
 
   it("bounds per-phase prompt facts when the recorded frame changes on every sample", async () => {
@@ -229,7 +284,7 @@ describe("shot review backend", () => {
     expect(res.status).toBe(200);
     const parsed = ReviewBody.parse(input({ points, yieldG: -124.19 }));
     expect(parsed.points[0]).toMatchObject({ tp: null, tf: 4 });
-    expect(parsed.points[12].w).toBeNull();
+    expect(parsed.points[12].w).toBe(-6);
     expect(parsed.yieldG).toBeNull();
   });
 

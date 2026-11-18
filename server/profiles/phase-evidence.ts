@@ -32,7 +32,7 @@ const rounded = (n: number) => Math.round(n * 1000) / 1000;
 const roundedReading = (n: number | null) => n == null ? null : rounded(n);
 const reading = (n: number | null | undefined, min = 0, max = Infinity): number | null =>
   n != null && Number.isFinite(n) && n >= min && n <= max ? n : null;
-const profileNumber = (n: string | number | undefined) =>
+const profileNumber = (n: string | number | null | undefined) =>
   n == null || String(n).trim() === "" ? null : reading(Number(n));
 const evidence = <T>(value: T | null, source: Provenance, reason: string): Evidence<T> =>
   ({ value, source: value == null ? null : source, reason });
@@ -233,10 +233,12 @@ function scaleRows(points: ReviewPoint[], hasState: boolean): ScaleRow[] {
   let previousScaleS: number | undefined;
   return points.flatMap(p => {
     const actual = weight(p);
-    const sampleS = p.scaleSampleS ?? p.t;
-    const stale = p.scaleSampleS != null && (Math.abs(p.t - sampleS) > SCALE_GAP_S || (previousScaleS != null && sampleS < previousScaleS));
-    if (!stale && p.scaleSampleS != null && sampleS === previousScaleS && isBrewPoint(p, hasState)) return [];
-    previousScaleS = p.scaleSampleS ?? previousScaleS;
+    const hasClock = p.scaleSampleS != null || p.scaleAgeS != null;
+    const sampleS = p.scaleSampleS ?? p.t - (p.scaleAgeS ?? 0);
+    const stale = (p.scaleAgeS != null && Math.abs(p.scaleAgeS) > SCALE_GAP_S) ||
+      (hasClock && (Math.abs(p.t - sampleS) > SCALE_GAP_S || (previousScaleS != null && sampleS < previousScaleS)));
+    if (!stale && actual != null && hasClock && sampleS === previousScaleS && isBrewPoint(p, hasState)) return [];
+    if (hasClock) previousScaleS = sampleS;
     if (!isBrewPoint(p, hasState)) return [{ p, w: null, sampleS, reason: "not_brewing" }];
     return [{ p, w: stale ? null : actual, sampleS, reason: stale ? "stale_scale_sample" : (p.w ?? 0) < -5 ? "weight_jump" : actual == null ? "missing_or_invalid_weight" : "recorded_weight" }];
   });
@@ -249,6 +251,46 @@ function scaleEdge(a: ScaleRow, b: ScaleRow) {
   if (dt <= 0 || dt > SCALE_GAP_S || b.p.t <= a.p.t || b.p.t - a.p.t > SCALE_GAP_S) return "scale_gap";
   if (b.w - a.w > Math.max(5, 15 * dt) || a.w - b.w > Math.max(2, 8 * dt)) return "weight_jump";
   return null;
+}
+
+/** Sample first crossings on a fixed mass grid so past traces stay off the wire. */
+export function measureMassCheckpoints(points: ReviewPoint[], phases: PhaseEvidence[]) {
+  const rows = scaleRows(points, points.some(p => p.substate));
+  const first = rows.findIndex(row => row.reason !== "not_brewing");
+  const checkpoints: { massG: number; frame: number; phaseElapsedS: number; brewElapsedS: number; pressureBar: number }[] = [];
+  const start = rows[first];
+  if (!start || start.w == null || Math.abs(start.w) >= 1) {
+    return { checkpoints, reason: !start || !rows.some(row => row.w != null) ? "no_scale_readings" : "no_near_zero_brew_start" };
+  }
+  const grid = [1, 2, ...Array.from({ length: 100 }, (_, i) => (i + 1) * 5)];
+  let next = 0, phaseIndex = 0, machineIndex = 0;
+  let highWeight = start.w;
+  let reason = "recording_ended";
+  for (let i = first + 1; i < rows.length && next < grid.length; i++) {
+    const a = rows[i - 1], b = rows[i];
+    if (b.reason === "not_brewing") break;
+    const fault = scaleEdge(a, b);
+    if (fault) { reason = fault; break; }
+    // Avoid relabelling post-tare weights as cumulative beverage.
+    if (b.w! < highWeight - 0.5) { reason = "weight_drop_or_reset"; break; }
+    highWeight = Math.max(highWeight, b.w!);
+    while (phaseIndex + 1 < phases.length && b.p.t > phases[phaseIndex].toS + 0.0005) phaseIndex++;
+    const phase = phases[phaseIndex];
+    for (; next < grid.length && grid[next] <= b.w!; next++) {
+      if (!phase?.plan.value || phase.frame == null || a.p.t < phase.fromS - 0.0005 || a.w! >= grid[next]) continue;
+      const fraction = (grid[next] - a.w!) / (b.w! - a.w!);
+      const t = interpolate(a.sampleS, b.sampleS, fraction);
+      while (machineIndex < points.length && points[machineIndex].t < t) machineIndex++;
+      const right = points[machineIndex], left = right?.t === t ? right : points[machineIndex - 1];
+      if (!left || !right || left.t < phase.fromS - 0.0005 || right.t > phase.toS + 0.0005 || right.t - left.t > SCALE_GAP_S) continue;
+      const pa = pressure(left), pb = pressure(right);
+      if (pa == null || pb == null) continue;
+      const crossingBar = left === right ? pa : interpolate(pa, pb, (t - left.t) / (right.t - left.t));
+      checkpoints.push({ massG: grid[next], frame: phase.frame, phaseElapsedS: rounded(Math.max(0, t - phase.fromS)),
+        brewElapsedS: rounded(Math.max(0, t - start.p.t)), pressureBar: rounded(crossingBar) });
+    }
+  }
+  return { checkpoints, reason };
 }
 
 function firstBeverage(rows: ScaleRow[], hasScale: boolean, brewStartS: number | undefined, landmarks?: PhaseLandmark[]) {
@@ -454,7 +496,7 @@ function describePhase(run: Run, index: number, step: ProfileStepLike | undefine
   const cupRateLateGS = cupRate(scale, lateStart, last.t, hasScale);
   const massFault = massRows.slice(1).map((row, i) => scaleEdge(massRows[i], row)).find(Boolean);
   return {
-    index, frame: first.frame, substate: first.substate, fromS: rounded(first.t), toS: rounded(last.t), durationS: rounded(span),
+    id: `phase-${index}`, index, frame: first.frame, substate: first.substate, fromS: rounded(first.t), toS: rounded(last.t), durationS: rounded(span),
     phaseSource: "recorded" as const, phaseReason: first.substate ? "contiguous_frame_and_machine_substate" : "machine_substate_missing_assumed_brew",
     purpose: evidence(purpose, "inferred", purpose ? "frame_label_substate_or_command_shape" : alignmentReason),
     mode: evidence<Mode>(mode, "recorded", mode ? "recorded_profile_step" : alignmentReason),
@@ -462,7 +504,8 @@ function describePhase(run: Run, index: number, step: ProfileStepLike | undefine
       name: step.name ?? null, transition: step.transition ?? null, endpoint: plannedTarget, maximumS: profileNumber(step.seconds),
       temperatureC: profileNumber(step.temperature),
       limiter: limit == null ? null : { value: limit, unit: mode === "flow" ? "bar" : mode === "pressure" ? "mL/s" : null, range: profileNumber(step.limiter?.range) },
-      exit: step.exit ?? null, weightG: positive(profileNumber(step.weight)), volumeMl: positive(profileNumber(step.volume)),
+      exit: step.exit ? { type: step.exit.type ?? null, condition: step.exit.condition ?? null, value: step.exit.value ?? null } : null,
+      weightG: positive(profileNumber(step.weight)), volumeMl: positive(profileNumber(step.volume)),
     } : null, "recorded", step ? "recorded_profile_configuration" : alignmentReason),
     controlledUnit: mode === "pressure" ? "bar" : mode === "flow" ? "mL/s" : null,
     loggedCommand: mode ? loggedCommand : { ...evidence<never>(null, "recorded", alignmentReason), coveredS: 0 },
@@ -523,7 +566,8 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[], landmar
   });
   const dose = positive(input.doseG), suppliedYield = positive(input.yieldG);
   const annotated = positive(input.annotatedYieldG);
-  const lastScale = last ? scale.find(row => row.p === last) : undefined;
+  // The last machine snapshot can reuse the previous fresh scale sample.
+  const lastScale = last ? scale.findLast(row => row.p.t <= last.t && last.t - row.p.t <= SCALE_GAP_S) : undefined;
   const previousScale = lastScale ? scale[scale.indexOf(lastScale) - 1] : undefined;
   const finalWeightJump = previousScale && lastScale && scaleEdge(previousScale, lastScale) === "weight_jump";
   const lastScaleValue = finalWeightJump ? null : lastScale?.w ?? null;
@@ -577,12 +621,29 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[], landmar
     cupRateAfterOnsetGS: after ?? evidence<never>(null, "inferred", hasScale ? "no_confirmed_onset" : "no_scale_readings"),
     cupRateChangeAtOnsetGS: evidence(before?.value != null && after?.value != null ? rounded(after.value - before.value) : null, "inferred",
       before?.value != null && after?.value != null ? "difference_between_covered_before_and_after_slopes" : "both_onset_rate_windows_required"),
-    scaleClock: evidence(hasScale ? (brew.some(p => p.scaleSampleS != null) ? "scale_timestamps_checked" : "machine_timestamps_only") : null, "recorded",
+    scaleClock: evidence(hasScale ? (brew.some(p => p.scaleSampleS != null) ? "scale_timestamps_checked" :
+      brew.some(p => p.scaleAgeS != null) ? "scale_age_checked" : "machine_timestamps_only") : null, "recorded",
       hasScale ? "cup_windows_use_recording_clock" : "no_scale_readings"),
+    scaleAvailability: {
+      weightSamples: scale.filter(row => row.w != null).length,
+      staleSamples: scale.filter(row => row.reason === "stale_scale_sample").length,
+      pairingAgeS: evidence(roundedReading(brew.reduce<number | null>((max, p) => {
+        if (weight(p) == null) return max;
+        const age = p.scaleAgeS ?? (p.scaleSampleS != null ? p.t - p.scaleSampleS : null);
+        return age == null ? max : Math.max(max ?? 0, Math.abs(age));
+      }, null)), "inferred", brew.some(p => weight(p) != null && (p.scaleAgeS != null || p.scaleSampleS != null)) ?
+        "max_absolute_scale_pairing_age" : "no_timestamp_or_age_for_recorded_weight"),
+    },
+    thermalAvailability: {
+      mixSamples: brew.filter(p => reading(p.temp, 0, 150) != null).length,
+      groupSamples: brew.filter(p => reading(p.groupTemp, 0, 150) != null).length,
+    },
     finish: {
       annotatedYieldG: evidence(annotated, "recorded", annotated != null ? "shot_annotation" : input.annotatedYieldG === null ? "no_positive_yield_annotation" : "annotation_provenance_not_available"),
       suppliedYieldG: evidence(suppliedYield, "recorded", suppliedYield != null ? "supplied_shot_yield_may_include_last_weight_fallback" : "no_positive_yield"),
-      lastRecordedWeightG: evidence(lastScaleValue, "recorded", lastScaleValue != null ? "last_brew_sample" : hasScale ? finalWeightJump ? "weight_jump" : lastScale?.reason ?? "no_fresh_final_weight" : "no_scale_readings"),
+      lastRecordedWeightG: evidence(lastScaleValue, "recorded", lastScaleValue != null ?
+        (lastScale?.p === last ? "last_brew_sample" : "last_fresh_paired_scale_sample") :
+        hasScale ? finalWeightJump ? "weight_jump" : lastScale?.reason ?? "no_fresh_final_weight" : "no_scale_readings"),
       yieldToDoseRatio: evidence(dose && suppliedYield ? rounded(suppliedYield / dose) : null, "inferred", dose && suppliedYield ? "supplied_yield_divided_by_dose" : "positive_dose_and_yield_required"),
       stopSource: evidence(input.stopReason, "recorded", input.stopReason ? "recorded_stop_reason" : "stop_reason_missing"),
       lastObservedPhase: evidence(lastPhase ? { index: lastPhase.index, frame: lastPhase.frame, toS: lastPhase.toS } : null,

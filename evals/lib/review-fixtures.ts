@@ -1,4 +1,5 @@
 import type { ReviewInput, ReviewPoint } from "../../server/recommend/review-types.js";
+import { fullReviewTrace } from "../../server/recommend/review-evidence.js";
 
 /** Synthetic, deterministic observations; labels describe the evidence, not a diagnosis. */
 export const REVIEW_FIXTURES = [
@@ -10,7 +11,7 @@ export const REVIEW_FIXTURES = [
   "history-profile-change", "history-grind-slower", "time-taste-conflict", "history-missing-grind",
   "notes-injection", "notes-sour", "notes-sour-injection", "notes-sour-choke", "notes-negation",
   "high-flow-tracked", "high-flow-capped", "pressure-ramp", "dynamic-bloom", "preempted-decline",
-  "phase-gap", "scale-jump", "stale-scale", "all-zero-import",
+  "phase-gap", "scale-jump", "stale-scale", "all-zero-import", "comparable-phase-history",
 ] as const;
 export type ReviewFixture = typeof REVIEW_FIXTURES[number];
 
@@ -136,6 +137,29 @@ export function reviewFixture(name: ReviewFixture): ReviewInput {
       };
     });
     input.doseG = 18; input.yieldG = 35.7; input.targetYieldG = 36; input.targetTimeS = [28, 34];
+  }
+  if (name === "comparable-phase-history") {
+    const byFlow = (span: number, cupRate: number, bar: number, inlet: number) =>
+      Array.from({ length: 4 * span + 1 }, (_, i) => {
+        const t = i / 4;
+        return { ...points[0], t, p: Math.min(1, t / 9) * bar, f: inlet, tp: null, tf: 4.2,
+          w: Math.max(0, t - 4) * cupRate, weightFlow: t < 4 ? 0 : cupRate,
+          scaleSampleS: t - 0.05, scaleAgeS: 0.05, countedVolumeMl: t * inlet };
+      });
+    Object.assign(input, {
+      profile: { title: "Synthetic high-flow hold", steps: [
+        { name: "Pour", pump: "flow", flow: 4.2, seconds: 60, temperature: 92, sensor: "water", limiter: { value: 8.5 } },
+      ] },
+      points: byFlow(24, 2, 3.6, 4.2), batchId: "synthetic-bag", profileShape: "synthetic-flow-hold",
+      timestamp: "2000-01-03T12:00:00Z", yieldG: 40, targetYieldG: 40, targetWaterMl: 100,
+      annotatedYieldG: 40, volumeCountStartFrame: 0, tempC: 92, grinderSetting: "B-2",
+    });
+    input.history = [[36, 1.25, 8.1], [44, 1, 8.8]].map(([durationS, rate, bar], i) => ({
+      timestamp: `2000-01-0${2 - i}T12:00:00Z`, durationS, profileTitle: input.profile!.title,
+      batchId: input.batchId, profileShape: input.profileShape, doseG: input.doseG, yieldG: 40, targetYieldG: 40,
+      stopReason: "targetWeight", targetWaterMl: 100, tempC: 92, grinderSetting: `A-${i + 1}`,
+      trace: fullReviewTrace({ ...input, points: byFlow(durationS, rate, bar, 2) }).trace,
+    }));
   }
   if (name.startsWith("history-")) {
     // Each field is recorded for that shot, never supplied from today's recipe.

@@ -231,16 +231,28 @@ function recordedReviewNumber(value, min, max) {
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
-function recordedReviewContext(profile, points, grinderSetting) {
+function recordedReviewContext(profile, grinderSetting) {
   const shape = brewProfileShape(profile);
   const grind = grinderSetting == null ? null : String(grinderSetting).trim();
-  const facts = E.shotFacts({ points, profile, doseG: null, yieldG: null, targetYieldG: null, targetTimeS: null, stopReason: null });
   return {
     profileShape: shape && shape.length <= 20000 ? shape : null,
-    durationS: facts.durationS != null && facts.durationS >= 0 && facts.durationS <= 600 ? facts.durationS : null,
     grinderSetting: grind && grind.length <= 120 ? grind : null,
     tempC: recordedReviewNumber(profile?.steps?.[0]?.temperature, 0, 150),
   };
+}
+function reviewPoint(p) {
+  const read = recordedReviewNumber;
+  const nonnegative = (v) => { const n = read(v, -0.5, 20); return n == null ? null : Math.max(0, n); };
+  return { t: p.t, p: nonnegative(p.p), f: nonnegative(p.f), w: p.w < -5 ? -6 : read(p.w, -5, 500),
+    temp: read(p.temp, 0, 150), tp: read(p.tp, 0, 20), tf: read(p.tf, 0, 20), targetTemp: read(p.targetTemp, 0, 150),
+    groupTemp: read(p.groupTemp, 0, 150), targetGroupTemp: read(p.targetGroupTemp, 0, 150),
+    frame: Number.isInteger(p.frame) && p.frame >= 0 && p.frame <= 100 ? p.frame : null,
+    substate: typeof p.substate === "string" ? p.substate.slice(0, 80) : null, weightFlow: read(p.weightFlow, -20, 100),
+    countedVolumeMl: read(p.countedVolumeMl, 0, 5000), scaleSampleS: read(p.scaleSampleS, -600, 1200), scaleAgeS: read(p.scaleAgeS, -600, 600) };
+}
+function recordedReviewTrace(points, profile, metadata) {
+  const facts = E.shotFacts({ points, profile, ...metadata, targetTimeS: null });
+  return { durationS: recordedReviewNumber(facts.durationS, 0, 600), trace: E.summarizeReviewTrace(points, facts.phaseEvidence) };
 }
 // A coffee's recipe can change after this shot. Its time window is useful only
 // when its recorded brewing variables still match; otherwise use the guide as
@@ -345,20 +357,23 @@ function makeLiveApi(conn) {
   const optionalNumber = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
 
   // ---- shots ----
-  const shotPoints = (full, includeLocalEvidence = false) => {
+  const shotPoints = (full, forReview = false) => {
     const m = full.measurements || [];
     const t0 = m.map((x) => Date.parse(x.machine?.timestamp)).find(Number.isFinite);
     if (t0 == null) return [];
     const points = m.filter((x) => x.machine).map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? null, f: x.machine.flow ?? null, w: x.scale?.weight ?? null, temp: x.machine.mixTemperature ?? null, tp: x.machine.targetPressure ?? null, tf: x.machine.targetFlow ?? null,
       targetTemp: x.machine.targetMixTemperature ?? null, groupTemp: x.machine.groupTemperature ?? null, targetGroupTemp: x.machine.targetGroupTemperature ?? null, frame: x.machine.profileFrame ?? null, substate: x.machine.state?.substate ?? null, weightFlow: x.scale?.weightFlow ?? null,
-      ...(includeLocalEvidence ? { countedVolumeMl: x.volume ?? null, scaleSampleS: optionalNumber((Date.parse(x.scale?.timestamp) - t0) / 1000) } : {}) }));
+      ...(forReview ? { countedVolumeMl: x.volume ?? null,
+        scaleSampleS: optionalNumber((Date.parse(x.scale?.timestamp) - t0) / 1000),
+        scaleAgeS: optionalNumber((Date.parse(x.machine.timestamp) - Date.parse(x.scale?.timestamp)) / 1000),
+      } : {}) }));
     const ordered = [];
     for (const point of points) {
       if (!Number.isFinite(point.t) || point.t < 0) continue;
       if (ordered.length && point.t === ordered.at(-1).t) ordered[ordered.length - 1] = point;
       else if (!ordered.length || point.t > ordered.at(-1).t) ordered.push(point);
     }
-    return ordered;
+    return forReview ? ordered.map(reviewPoint) : ordered;
   };
   const toShot = (s, full) => {
     const ctx = s.workflow?.context || {};
@@ -411,18 +426,22 @@ function makeLiveApi(conn) {
       }
       if (!items.length || offset + items.length >= (page.total ?? 0)) break;
     }
-    const complete = await Promise.all(earlier.map((s) => fullShot(s.id).catch(() => null)));
-    return complete.filter((s) => s && s.workflow?.context?.beanBatchId === batchId && Date.parse(s.timestamp) < before)
+    const hydrated = await Promise.all(earlier.map((s) => fullShot(s.id).catch(() => null)));
+    return hydrated.filter((s) => s && s.workflow?.context?.beanBatchId === batchId && Date.parse(s.timestamp) < before)
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).map((s) => {
         const ctx = s.workflow?.context ?? {}, profile = s.workflow?.profile ?? null;
-        const points = shotPoints(s), saved = s.annotations?.extras?.crema?.review;
-        return {
-          timestamp: s.timestamp, profileTitle: profile?.title ?? null,
-          ...recordedReviewContext(profile, points, ctx.grinderSetting),
+        const points = shotPoints(s, true), saved = s.annotations?.extras?.crema?.review;
+        const metadata = {
           doseG: recordedReviewNumber(s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, 0, 60),
           yieldG: recordedReviewNumber(s.annotations?.actualYield ?? points.at(-1)?.w, 0, 500),
           targetYieldG: recordedReviewNumber(ctx.targetYield ?? profile?.target_weight, 0, 500),
           stopReason: s.stopReason ?? s.annotations?.stopReason ?? ctx.stopReason ?? null,
+        };
+        return {
+          timestamp: s.timestamp, profileTitle: profile?.title ?? null, batchId: ctx.beanBatchId,
+          targetWaterMl: recordedReviewNumber(ctx.targetWaterVolume ?? profile?.target_volume, 0, 5000),
+          ...recordedReviewContext(profile, ctx.grinderSetting), ...metadata,
+          ...(points.length ? recordedReviewTrace(points, profile, metadata) : { durationS: null, trace: null }),
           enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes?.slice(0, 500) ?? null,
           review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) ?? null,
         };
@@ -727,7 +746,7 @@ function makeLiveApi(conn) {
       const batchId = ctx.beanBatchId ?? null;
       const installed = await api.library().then((items) => items.map((p) => p.title)).catch(() => []);
       const history = await reviewHistory(batchId, shotId, full.timestamp);
-      const { durationS: _durationS, ...recordedContext } = recordedReviewContext(profile, points, ctx.grinderSetting);
+      const recordedContext = recordedReviewContext(profile, ctx.grinderSetting);
       const targetYieldG = recordedReviewNumber(ctx.targetYield ?? profile?.target_weight, 0, 500);
       const doseG = recordedReviewNumber(full.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, 0, 60);
       const yieldG = recordedReviewNumber(full.annotations?.actualYield ?? points.at(-1)?.w, 0, 500);
@@ -736,23 +755,25 @@ function makeLiveApi(conn) {
         ? await (ctx.beanId ? recordOf(ctx.beanId) : j(D(`/bean-batches/${batchId}`)).then((bt) => recordOf(bt.beanId))).catch(() => null) : null;
       const timeContext = reviewTimeContext(profile, { ...recordedContext, doseG, yieldG, targetYieldG, windows: [full.annotations?.extras?.crema?.targetTimeS, ctx.targetTimeS] }, savedRec?.recipe);
       const input = {
-        timestamp: full.timestamp ?? null, ...recordedContext,
+        timestamp: full.timestamp ?? null, ...recordedContext, batchId,
+        targetWaterMl: recordedReviewNumber(ctx.targetWaterVolume ?? profile?.target_volume, 0, 5000),
         points, profile, doseG, yieldG, targetYieldG, ...timeContext,
+        annotatedYieldG: recordedReviewNumber(full.annotations?.actualYield, 0, 500),
+        volumeCountStartFrame: profile?.target_volume_count_start ?? null,
         stopReason: full.stopReason ?? full.annotations?.stopReason ?? ctx.stopReason ?? null,
         feedback, notes: full.annotations?.espressoNotes?.slice(0, 1000) ?? null, bean: bean ?? null, installedProfiles: installed, history,
       };
+      const limit = E.REVIEW_POINT_LIMIT;
+      const fullTrace = points.length > limit ? E.fullReviewTrace(input) : undefined;
       let result = null;
       if (aiOn() && points.length) {
-        const bounded = points.length <= 1800 ? points : Array.from({ length: 1800 }, (_, i) => points[Math.round(i * (points.length - 1) / 1799)]);
-        const requestPoints = bounded.map(({ countedVolumeMl, scaleSampleS, ...point }) => point);
-        try { result = await cremaCall(() => post(C("/api/review"), { ...input, points: requestPoints }, { timeoutMs: AI_WAIT.review })); }
+        const bounded = fullTrace ? Array.from({ length: limit }, (_, i) => points[Math.round(i * (points.length - 1) / (limit - 1))]) : points;
+        try { result = await cremaCall(() => post(C("/api/review"), { ...input, points: bounded, fullTrace }, { timeoutMs: AI_WAIT.review })); }
         catch (e) { console.warn("AI shot review failed; using the rules review", e); }
       }
-      if (!result?.review) result = { review: E.rulesReview({
-        ...input, annotatedYieldG: recordedReviewNumber(full.annotations?.actualYield, 0, 500),
-        volumeCountStartFrame: profile?.target_volume_count_start,
-      }), source: "rules" };
-      const saved = { version: 1, review: result.review, source: result.source || "rules", createdAt: new Date().toISOString() };
+      if (!result?.review || (fullTrace && result.evidence?.version !== E.REVIEW_EVIDENCE_VERSION)) result = E.rulesReviewResult(input, fullTrace);
+      const evidence = result.evidence?.version === E.REVIEW_EVIDENCE_VERSION ? result.evidence : E.rulesReviewResult(input).evidence;
+      const saved = { version: 2, review: result.review, evidence, source: result.source || "rules", createdAt: new Date().toISOString() };
       const crema = { review: saved };
       if (feedback) { crema.sourBitter = feedback.sourBitter; crema.body = feedback.body; }
       await api.annotate(shotId, { extras: { crema } });
@@ -2302,8 +2323,10 @@ function reviewHtml(saved, shot = null) {
   const review = saved.review;
   const edit = reviewRecipeMatches(shot) && S.reviewEdit?.shotId !== shot.id ? reviewAdjustment(review.nextShot) : null;
   const source = String(saved.source || "").toLowerCase().includes("rules") ? "From Crema's shot checks" : "Review from the AI";
+  const history = saved.version === 2 && saved.evidence?.version === E.REVIEW_EVIDENCE_VERSION && saved.evidence.history ?
+    E.historyCurveSentence(saved.evidence.history) : null;
   return `<div class="advice shot-review"><div class="row between"><span class="label">${source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
-    <p>${esc(review.summary)}</p>${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+    <p>${esc(review.summary)}</p>${history ? `<p>${esc(history)}</p>` : ""}${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${review.issues?.length ? `<div class="label">To watch</div><ul>${review.issues.map((x) => `<li>${esc(x.what)} <span class="muted">${esc(x.evidence)}</span></li>`).join("")}</ul>` : ""}
     ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;

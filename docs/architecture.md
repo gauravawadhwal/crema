@@ -129,7 +129,7 @@ Both must provide:
 | `apply(beanId, recipe, grinderSetting, batchId)` | Load the recipe onto the machine; null bean id means No bag |
 | `lastShotWith(title, profileShape?)` | The newest shot with the matching title and recorded profile shape, in full, or null. Its `points` carry the step number (`frame`, Decaid's `profileFrame`), which times the profile's graph |
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
-| `review(shotId, feedback?)` | Recorded curves/profile and optional explicit taste → saved `{version, review, source, createdAt}`. Local checks work without AI; requests never apply settings. Stored in `annotations.extras.crema.review`; unrelated extras are preserved |
+| `review(shotId, feedback?)` | Recorded curves/profile and optional explicit taste → saved `{version: 2, review, evidence, source, createdAt}`. Local checks work without AI; requests never apply settings. Stored in `annotations.extras.crema.review`; unrelated extras are preserved |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` provider id or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `recipe`, `workflowSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat`. `recipe()` is what the machine holds now, as `{profileTitle, doseG, yieldG, tempC, grind, batchId}` (the demo returns null until something is loaded); `workflowSettings` reads and writes only the workflow's `steamSettings`, `hotWaterData` and `rinseData` (never the profile); `settings` is left with fan and USB |
@@ -185,7 +185,7 @@ BeanInfo ──► rules baseline (roast, rest, grind hint)                     
 `server/profiles/analysis.ts` computes conservative observations from recorded
 samples; `server/recommend/review-local.ts` supplies local advice. Both are bundled
 into the browser engine. `POST /api/review` validates a bounded `ReviewInput`, calls
-the provider chain and returns `{review, source}` with rules fallback. The model
+the provider chain and returns `{review, source, evidence}` with rules fallback. The model
 receives sampled curves, the recorded profile, observations and bounded earlier-shot
 context. Missing measurements/taste are null. Suggested changes are advisory only.
 
@@ -197,16 +197,27 @@ the sensor selected by the recorded step. Limiter occupancy and the pressure
 to inlet-flow ratio describe the observed response. The existing diagnostic
 windows decide which findings can fire.
 
-Local review uses the full recording and can read counted volume, scale
-timestamps and annotated yield from Decaid. AI shot facts use every sample
-accepted by the existing 1,800-point request before the smaller curve sample
-is selected for the prompt. Fields unavailable in that request carry a reason.
-The prompt keeps at most twelve phase summaries, prioritizing elapsed duration
-when the trace contains more.
+The shared review evidence records units, phase and event IDs, elapsed time,
+coverage, and the source of measurements and guides. Both paths receive counted
+inlet volume, its start frame, scale pairing time and age, and annotated yield
+when Decaid recorded them. If the recording exceeds 1,800 points, the skin runs
+the shared analysis before thinning and sends a validated versioned snapshot
+with the bounded points. Older skins can omit the snapshot and the server
+computes evidence from their submitted recording. The prompt includes up to
+twelve phase summaries. The plan overlay is generated independently.
 
-Saved reviews use version 1 at `annotations.extras.crema.review` and carry creation
-time and source. Reopening a shot reads that value without making an AI call;
-Review again explicitly replaces it. Chart shading and follow-up chat are deferred.
+History uses strictly earlier recordings of the captured bag with similar
+profile shape, dose, yield, temperature and stop conditions. References carry
+measured phase summaries. Pressure is compared at shared cup mass within a
+matched phase using adjacent, fresh scale readings. Phase comparisons require
+two usable references, and medians and quartiles require five. Grinder labels
+are recorded context. The same code supplies the displayed comparison for both
+rules and AI.
+
+New saved reviews use version 2 at `annotations.extras.crema.review` and carry
+the evidence projection, creation time and source. Version 1 reviews still
+render with the fields they saved. Reopening a shot reads the saved review
+without making an AI call. Review again explicitly replaces it.
 The legacy `/api/dialin` now also returns source so provider failures cannot be
 mislabelled as AI answers.
 

@@ -26,7 +26,9 @@ function recording() {
       extras: { crema: { targetTimeS: [24, 32], sourBitter: 0, body: 1 } } },
     measurements: [
       { scale: { weight: -3 } }, { machine: { timestamp: "invalid" } },
-      sample(0, 1, 0), sample(250, 2, 1), sample(250, 3, 2), sample(100, 9, 9), sample(1850, 8, 4),
+      sample(0, 1, 0), sample(250, 2, 1),
+      { ...sample(250, 3, 2), volume: 2, scale: { ...sample(250, 3, 2).scale, timestamp: new Date(start + 200).toISOString() } },
+      sample(100, 9, 9), sample(1850, 8, 4),
     ],
   };
 }
@@ -36,15 +38,17 @@ describe("Decaid replay mapping", () => {
     const shot = recording();
     const input = decaidReviewInput(shot, { installedProfiles: ["Synthetic recording"] });
     const point = { f: 1.8, temp: 94, tp: 9, tf: -1, targetTemp: 95, groupTemp: 90, targetGroupTemp: 91,
-      frame: 0, substate: "pouring", weightFlow: 1.5 };
+      frame: 0, substate: "pouring", weightFlow: 1.5, countedVolumeMl: null, scaleSampleS: null, scaleAgeS: null };
     expect(input).toEqual({
       timestamp: "2000-01-02T00:00:00Z",
-      points: [{ ...point, t: 0, p: 1, w: 0 }, { ...point, t: 0.25, p: 3, w: 2 }, { ...point, t: 1.85, p: 8, w: 4 }],
+      points: [{ ...point, t: 0, p: 1, w: 0 }, { ...point, t: 0.25, p: 3, w: 2, countedVolumeMl: 2, scaleSampleS: 0.2, scaleAgeS: 0.05 },
+        { ...point, t: 1.85, p: 8, w: 4 }],
       profile: shot.workflow.profile,
       profileShape: JSON.stringify({ beverage_type: "espresso", notes: "Synthetic profile metadata", steps: [
         { name: "Pour", pump: "pressure", temperature: 0 }, { name: "Finish", pump: "pressure", temperature: -1 },
       ], title: "Synthetic recording" }),
       grinderSetting: "S-4", tempC: 91, stopReason: "targetWeight", doseG: 18, yieldG: 35, targetYieldG: 36,
+      batchId: "synthetic-batch", targetWaterMl: null, annotatedYieldG: 35, volumeCountStartFrame: null,
       targetTimeS: [24, 32], timeBasis: "recorded", feedback: { sourBitter: 0, body: 1, enjoyment: 9, notes: null },
       notes: "Sweet.", bean: null, installedProfiles: ["Synthetic recording"], history: [],
     });
@@ -70,11 +74,12 @@ describe("Decaid replay mapping", () => {
 
   it("uses the skin's 1800-point endpoint-preserving downsample", () => {
     const shot = { measurements: Array.from({ length: 2000 }, (_, i) => sample(20 * i, 8, i / 60)) };
-    const { points, yieldG } = decaidReviewInput(shot);
+    const { points, yieldG, fullTrace } = decaidReviewInput(shot);
     expect(points).toHaveLength(1800);
     expect(points[0].t).toBe(0);
     expect(points.at(-1)?.t).toBe(39.98);
     expect(yieldG).toBe(1999 / 60);
+    expect(fullTrace?.analysis.metrics.recordedPoints).toBe(2000);
   });
 
   it("accepts captured metadata with no saved timing window", () => {

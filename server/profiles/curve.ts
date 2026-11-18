@@ -34,6 +34,7 @@ export interface ProfileLike {
   beverage_type?: string;
   steps?: ProfileStepLike[];
   target_weight?: string | number;
+  target_volume_count_start?: string | number;
 }
 
 export interface PlanStep {
@@ -195,7 +196,7 @@ export function outlineProfile(title: string, style: string, tempC = 92, targetW
 
 /* ---------------- a puck that follows a profile ---------------- */
 
-export interface ShotSample { t: number; p: number; f: number; w: number; tp: number | null; tf: number | null; frame: number; temp: number | null }
+export interface ShotSample { t: number; p: number; f: number; w: number; tp: number | null; tf: number | null; frame: number; temp: number | null; countedVolumeMl: number }
 
 /**
  * Steps a simulated shot through a profile, 0.1 s at a time: the pump chases
@@ -206,7 +207,9 @@ export interface ShotSample { t: number; p: number; f: number; w: number; tp: nu
 export function shotSim(profile: ProfileLike, { resistance = 1 }: { resistance?: number } = {}) {
   const steps = profile.steps?.length ? profile.steps : outlineProfile("", "flat-pressure").steps!;
   const manual = profile.beverage_type === "manual";
+  const countStart = num(profile.target_volume_count_start) ?? 0;
   let t = 0, frame = 0, frameStart = 0, p = 0, f = 0, w = 0, water = 0, from: { p: number | null; f: number | null } = { p: null, f: null };
+  let countedVolumeMl = 0;
   let done = false, out: { tp: number | null; tf: number | null; frame: number; temp: number | null } = { tp: null, tf: null, frame: 0, temp: null };
   const FILL = 18; // ml to fill the headspace and wet the puck before pressure can build
   return {
@@ -247,6 +250,7 @@ export function shotSim(profile: ProfileLike, { resistance = 1 }: { resistance?:
         f += (wantF - f) * k + (Math.random() - 0.5) * 0.03;
         p = Math.max(0, p); f = Math.max(0, f);
         water += f * dt;
+        if (frame >= countStart) countedVolumeMl += f * dt;
         if (water > FILL + 4) w += f * dt * 0.92;
         t += dt;
         out = { tp: pump === "pressure" ? goal : null, tf: pump === "flow" ? goal : null, frame, temp: num(s.temperature) };
@@ -259,7 +263,7 @@ export function shotSim(profile: ProfileLike, { resistance = 1 }: { resistance?:
           if (frame >= steps.length) { done = true; frame = steps.length - 1; }
         }
       }
-      return { t, p, f, w, ...out };
+      return { t, p, f, w, ...out, countedVolumeMl };
     },
   };
 }

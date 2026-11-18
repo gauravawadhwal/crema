@@ -11,7 +11,9 @@ export { rulesDialIn, rulesRecipe, strip, toPastShot, withTemperature } from "./
 export { DEFAULT_MAINTENANCE, DEFAULT_PRESETS, DEFAULT_SETTINGS, GRIND_STEPS } from "./shared/defaults.js";
 export { outlineProfile, planAt, profileCurve, shotSim, simulateShot, stepDurations } from "./profiles/curve.js";
 export { analyzeShot, shotFacts } from "./profiles/analysis.js";
-export { rulesReview } from "./recommend/review-local.js";
+export { rulesReview, rulesReviewResult } from "./recommend/review-local.js";
+export { fullReviewTrace, summarizeReviewTrace, REVIEW_EVIDENCE_VERSION, REVIEW_POINT_LIMIT } from "./recommend/review-evidence.js";
+export { historyCurveSentence } from "./recommend/review-history.js";
 export {
   adoptPatch, afterStartSent, bagRemaining, gramsUsed, isStarting, loadDecision, near, NOT_READY, reconcileOutcome, recipeMatches,
   mergeRecord, recommendPatch, saveBeanPatch, pruneNewRows, sameGrind, shotAcrossOnLoss, shotRunning, snapshotDecision, socketFrame, socketLost, startGate, startSettled, startSteps, trackNewRows, waitingForRecipe,

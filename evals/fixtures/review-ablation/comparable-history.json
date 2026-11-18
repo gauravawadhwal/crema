@@ -1,0 +1,302 @@
+{
+  "id": "comparable-history",
+  "demonstration": false,
+  "cases": [
+    {
+      "id": "held-flow-two-references",
+      "session": "flow-tuning-session",
+      "recipe": "flow-tuning-recipe",
+      "profileFamily": "flat-flow",
+      "pumpMode": "flow",
+      "split": "dev",
+      "input": {
+        "points": [
+          {"t":0,"p":0,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":-0.05,"scaleAgeS":0.05,"countedVolumeMl":0},
+          {"t":0.25,"p":0.09999999999999999,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":0.2,"scaleAgeS":0.05,"countedVolumeMl":1.05},
+          {"t":0.5,"p":0.19999999999999998,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":0.45,"scaleAgeS":0.05,"countedVolumeMl":2.1},
+          {"t":0.75,"p":0.3,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":0.7,"scaleAgeS":0.05,"countedVolumeMl":3.1500000000000004},
+          {"t":1,"p":0.39999999999999997,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":0.95,"scaleAgeS":0.05,"countedVolumeMl":4.2},
+          {"t":1.25,"p":0.5,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":1.2,"scaleAgeS":0.05,"countedVolumeMl":5.25},
+          {"t":1.5,"p":0.6,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":1.45,"scaleAgeS":0.05,"countedVolumeMl":6.300000000000001},
+          {"t":1.75,"p":0.7000000000000001,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":1.7,"scaleAgeS":0.05,"countedVolumeMl":7.3500000000000005},
+          {"t":2,"p":0.7999999999999999,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":1.95,"scaleAgeS":0.05,"countedVolumeMl":8.4},
+          {"t":2.25,"p":0.9,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":2.2,"scaleAgeS":0.05,"countedVolumeMl":9.450000000000001},
+          {"t":2.5,"p":1,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":2.45,"scaleAgeS":0.05,"countedVolumeMl":10.5},
+          {"t":2.75,"p":1.1,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":2.7,"scaleAgeS":0.05,"countedVolumeMl":11.55},
+          {"t":3,"p":1.2,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":2.95,"scaleAgeS":0.05,"countedVolumeMl":12.600000000000001},
+          {"t":3.25,"p":1.3,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":3.2,"scaleAgeS":0.05,"countedVolumeMl":13.65},
+          {"t":3.5,"p":1.4000000000000001,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":3.45,"scaleAgeS":0.05,"countedVolumeMl":14.700000000000001},
+          {"t":3.75,"p":1.5,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":0,"scaleSampleS":3.7,"scaleAgeS":0.05,"countedVolumeMl":15.75},
+          {"t":4,"p":1.5999999999999999,"f":4.2,"w":0,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":3.95,"scaleAgeS":0.05,"countedVolumeMl":16.8},
+          {"t":4.25,"p":1.7,"f":4.2,"w":0.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":4.2,"scaleAgeS":0.05,"countedVolumeMl":17.85},
+          {"t":4.5,"p":1.8,"f":4.2,"w":1,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":4.45,"scaleAgeS":0.05,"countedVolumeMl":18.900000000000002},
+          {"t":4.75,"p":1.9000000000000001,"f":4.2,"w":1.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":4.7,"scaleAgeS":0.05,"countedVolumeMl":19.95},
+          {"t":5,"p":2,"f":4.2,"w":2,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":4.95,"scaleAgeS":0.05,"countedVolumeMl":21},
+          {"t":5.25,"p":2.1,"f":4.2,"w":2.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":5.2,"scaleAgeS":0.05,"countedVolumeMl":22.05},
+          {"t":5.5,"p":2.2,"f":4.2,"w":3,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":5.45,"scaleAgeS":0.05,"countedVolumeMl":23.1},
+          {"t":5.75,"p":2.3,"f":4.2,"w":3.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":5.7,"scaleAgeS":0.05,"countedVolumeMl":24.150000000000002},
+          {"t":6,"p":2.4,"f":4.2,"w":4,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":5.95,"scaleAgeS":0.05,"countedVolumeMl":25.200000000000003},
+          {"t":6.25,"p":2.5,"f":4.2,"w":4.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":6.2,"scaleAgeS":0.05,"countedVolumeMl":26.25},
+          {"t":6.5,"p":2.6,"f":4.2,"w":5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":6.45,"scaleAgeS":0.05,"countedVolumeMl":27.3},
+          {"t":6.75,"p":2.7,"f":4.2,"w":5.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":6.7,"scaleAgeS":0.05,"countedVolumeMl":28.35},
+          {"t":7,"p":2.8000000000000003,"f":4.2,"w":6,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":6.95,"scaleAgeS":0.05,"countedVolumeMl":29.400000000000002},
+          {"t":7.25,"p":2.9000000000000004,"f":4.2,"w":6.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":7.2,"scaleAgeS":0.05,"countedVolumeMl":30.450000000000003},
+          {"t":7.5,"p":3,"f":4.2,"w":7,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":7.45,"scaleAgeS":0.05,"countedVolumeMl":31.5},
+          {"t":7.75,"p":3.1,"f":4.2,"w":7.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":7.7,"scaleAgeS":0.05,"countedVolumeMl":32.550000000000004},
+          {"t":8,"p":3.1999999999999997,"f":4.2,"w":8,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":7.95,"scaleAgeS":0.05,"countedVolumeMl":33.6},
+          {"t":8.25,"p":3.3,"f":4.2,"w":8.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":8.2,"scaleAgeS":0.05,"countedVolumeMl":34.65},
+          {"t":8.5,"p":3.4,"f":4.2,"w":9,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":8.45,"scaleAgeS":0.05,"countedVolumeMl":35.7},
+          {"t":8.75,"p":3.5,"f":4.2,"w":9.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":8.7,"scaleAgeS":0.05,"countedVolumeMl":36.75},
+          {"t":9,"p":3.6,"f":4.2,"w":10,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":8.95,"scaleAgeS":0.05,"countedVolumeMl":37.800000000000004},
+          {"t":9.25,"p":3.6,"f":4.2,"w":10.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":9.2,"scaleAgeS":0.05,"countedVolumeMl":38.85},
+          {"t":9.5,"p":3.6,"f":4.2,"w":11,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":9.45,"scaleAgeS":0.05,"countedVolumeMl":39.9},
+          {"t":9.75,"p":3.6,"f":4.2,"w":11.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":9.7,"scaleAgeS":0.05,"countedVolumeMl":40.95},
+          {"t":10,"p":3.6,"f":4.2,"w":12,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":9.95,"scaleAgeS":0.05,"countedVolumeMl":42},
+          {"t":10.25,"p":3.6,"f":4.2,"w":12.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":10.2,"scaleAgeS":0.05,"countedVolumeMl":43.050000000000004},
+          {"t":10.5,"p":3.6,"f":4.2,"w":13,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":10.45,"scaleAgeS":0.05,"countedVolumeMl":44.1},
+          {"t":10.75,"p":3.6,"f":4.2,"w":13.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":10.7,"scaleAgeS":0.05,"countedVolumeMl":45.15},
+          {"t":11,"p":3.6,"f":4.2,"w":14,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":10.95,"scaleAgeS":0.05,"countedVolumeMl":46.2},
+          {"t":11.25,"p":3.6,"f":4.2,"w":14.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":11.2,"scaleAgeS":0.05,"countedVolumeMl":47.25},
+          {"t":11.5,"p":3.6,"f":4.2,"w":15,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":11.45,"scaleAgeS":0.05,"countedVolumeMl":48.300000000000004},
+          {"t":11.75,"p":3.6,"f":4.2,"w":15.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":11.7,"scaleAgeS":0.05,"countedVolumeMl":49.35},
+          {"t":12,"p":3.6,"f":4.2,"w":16,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":11.95,"scaleAgeS":0.05,"countedVolumeMl":50.400000000000006},
+          {"t":12.25,"p":3.6,"f":4.2,"w":16.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":12.2,"scaleAgeS":0.05,"countedVolumeMl":51.45},
+          {"t":12.5,"p":3.6,"f":4.2,"w":17,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":12.45,"scaleAgeS":0.05,"countedVolumeMl":52.5},
+          {"t":12.75,"p":3.6,"f":4.2,"w":17.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":12.7,"scaleAgeS":0.05,"countedVolumeMl":53.550000000000004},
+          {"t":13,"p":3.6,"f":4.2,"w":18,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":12.95,"scaleAgeS":0.05,"countedVolumeMl":54.6},
+          {"t":13.25,"p":3.6,"f":4.2,"w":18.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":13.2,"scaleAgeS":0.05,"countedVolumeMl":55.650000000000006},
+          {"t":13.5,"p":3.6,"f":4.2,"w":19,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":13.45,"scaleAgeS":0.05,"countedVolumeMl":56.7},
+          {"t":13.75,"p":3.6,"f":4.2,"w":19.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":13.7,"scaleAgeS":0.05,"countedVolumeMl":57.75},
+          {"t":14,"p":3.6,"f":4.2,"w":20,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":13.95,"scaleAgeS":0.05,"countedVolumeMl":58.800000000000004},
+          {"t":14.25,"p":3.6,"f":4.2,"w":20.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":14.2,"scaleAgeS":0.05,"countedVolumeMl":59.85},
+          {"t":14.5,"p":3.6,"f":4.2,"w":21,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":14.45,"scaleAgeS":0.05,"countedVolumeMl":60.900000000000006},
+          {"t":14.75,"p":3.6,"f":4.2,"w":21.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":14.7,"scaleAgeS":0.05,"countedVolumeMl":61.95},
+          {"t":15,"p":3.6,"f":4.2,"w":22,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":14.95,"scaleAgeS":0.05,"countedVolumeMl":63},
+          {"t":15.25,"p":3.6,"f":4.2,"w":22.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":15.2,"scaleAgeS":0.05,"countedVolumeMl":64.05},
+          {"t":15.5,"p":3.6,"f":4.2,"w":23,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":15.45,"scaleAgeS":0.05,"countedVolumeMl":65.10000000000001},
+          {"t":15.75,"p":3.6,"f":4.2,"w":23.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":15.7,"scaleAgeS":0.05,"countedVolumeMl":66.15},
+          {"t":16,"p":3.6,"f":4.2,"w":24,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":15.95,"scaleAgeS":0.05,"countedVolumeMl":67.2},
+          {"t":16.25,"p":3.6,"f":4.2,"w":24.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":16.2,"scaleAgeS":0.05,"countedVolumeMl":68.25},
+          {"t":16.5,"p":3.6,"f":4.2,"w":25,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":16.45,"scaleAgeS":0.05,"countedVolumeMl":69.3},
+          {"t":16.75,"p":3.6,"f":4.2,"w":25.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":16.7,"scaleAgeS":0.05,"countedVolumeMl":70.35000000000001},
+          {"t":17,"p":3.6,"f":4.2,"w":26,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":16.95,"scaleAgeS":0.05,"countedVolumeMl":71.4},
+          {"t":17.25,"p":3.6,"f":4.2,"w":26.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":17.2,"scaleAgeS":0.05,"countedVolumeMl":72.45},
+          {"t":17.5,"p":3.6,"f":4.2,"w":27,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":17.45,"scaleAgeS":0.05,"countedVolumeMl":73.5},
+          {"t":17.75,"p":3.6,"f":4.2,"w":27.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":17.7,"scaleAgeS":0.05,"countedVolumeMl":74.55},
+          {"t":18,"p":3.6,"f":4.2,"w":28,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":17.95,"scaleAgeS":0.05,"countedVolumeMl":75.60000000000001},
+          {"t":18.25,"p":3.6,"f":4.2,"w":28.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":18.2,"scaleAgeS":0.05,"countedVolumeMl":76.65},
+          {"t":18.5,"p":3.6,"f":4.2,"w":29,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":18.45,"scaleAgeS":0.05,"countedVolumeMl":77.7},
+          {"t":18.75,"p":3.6,"f":4.2,"w":29.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":18.7,"scaleAgeS":0.05,"countedVolumeMl":78.75},
+          {"t":19,"p":3.6,"f":4.2,"w":30,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":18.95,"scaleAgeS":0.05,"countedVolumeMl":79.8},
+          {"t":19.25,"p":3.6,"f":4.2,"w":30.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":19.2,"scaleAgeS":0.05,"countedVolumeMl":80.85000000000001},
+          {"t":19.5,"p":3.6,"f":4.2,"w":31,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":19.45,"scaleAgeS":0.05,"countedVolumeMl":81.9},
+          {"t":19.75,"p":3.6,"f":4.2,"w":31.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":19.7,"scaleAgeS":0.05,"countedVolumeMl":82.95},
+          {"t":20,"p":3.6,"f":4.2,"w":32,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":19.95,"scaleAgeS":0.05,"countedVolumeMl":84},
+          {"t":20.25,"p":3.6,"f":4.2,"w":32.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":20.2,"scaleAgeS":0.05,"countedVolumeMl":85.05},
+          {"t":20.5,"p":3.6,"f":4.2,"w":33,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":20.45,"scaleAgeS":0.05,"countedVolumeMl":86.10000000000001},
+          {"t":20.75,"p":3.6,"f":4.2,"w":33.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":20.7,"scaleAgeS":0.05,"countedVolumeMl":87.15},
+          {"t":21,"p":3.6,"f":4.2,"w":34,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":20.95,"scaleAgeS":0.05,"countedVolumeMl":88.2},
+          {"t":21.25,"p":3.6,"f":4.2,"w":34.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":21.2,"scaleAgeS":0.05,"countedVolumeMl":89.25},
+          {"t":21.5,"p":3.6,"f":4.2,"w":35,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":21.45,"scaleAgeS":0.05,"countedVolumeMl":90.3},
+          {"t":21.75,"p":3.6,"f":4.2,"w":35.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":21.7,"scaleAgeS":0.05,"countedVolumeMl":91.35000000000001},
+          {"t":22,"p":3.6,"f":4.2,"w":36,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":21.95,"scaleAgeS":0.05,"countedVolumeMl":92.4},
+          {"t":22.25,"p":3.6,"f":4.2,"w":36.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":22.2,"scaleAgeS":0.05,"countedVolumeMl":93.45},
+          {"t":22.5,"p":3.6,"f":4.2,"w":37,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":22.45,"scaleAgeS":0.05,"countedVolumeMl":94.5},
+          {"t":22.75,"p":3.6,"f":4.2,"w":37.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":22.7,"scaleAgeS":0.05,"countedVolumeMl":95.55},
+          {"t":23,"p":3.6,"f":4.2,"w":38,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":22.95,"scaleAgeS":0.05,"countedVolumeMl":96.60000000000001},
+          {"t":23.25,"p":3.6,"f":4.2,"w":38.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":23.2,"scaleAgeS":0.05,"countedVolumeMl":97.65},
+          {"t":23.5,"p":3.6,"f":4.2,"w":39,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":23.45,"scaleAgeS":0.05,"countedVolumeMl":98.7},
+          {"t":23.75,"p":3.6,"f":4.2,"w":39.5,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":23.7,"scaleAgeS":0.05,"countedVolumeMl":99.75},
+          {"t":24,"p":3.6,"f":4.2,"w":40,"temp":92,"tp":null,"tf":4.2,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":2,"scaleSampleS":23.95,"scaleAgeS":0.05,"countedVolumeMl":100.80000000000001}
+        ],
+        "profile": {
+          "title": "Synthetic high-flow hold",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "flow",
+              "flow": 4.2,
+              "seconds": 60,
+              "temperature": 92,
+              "sensor": "water",
+              "limiter": {
+                "value": 8.5
+              }
+            }
+          ]
+        },
+        "doseG": 18,
+        "yieldG": 40,
+        "targetYieldG": 40,
+        "targetTimeS": null,
+        "stopReason": "targetWeight",
+        "feedback": null,
+        "bean": null,
+        "installedProfiles": [
+          "Recorded flat pressure"
+        ],
+        "history": [
+          {
+            "timestamp": "2000-01-02T12:00:00Z",
+            "durationS": 36,
+            "profileTitle": "Synthetic high-flow hold",
+            "batchId": "synthetic-bag",
+            "profileShape": "synthetic-flow-hold",
+            "doseG": 18,
+            "yieldG": 40,
+            "targetYieldG": 40,
+            "stopReason": "targetWeight",
+            "targetWaterMl": 100,
+            "tempC": 92,
+            "grinderSetting": "A-1",
+            "trace": {
+              "version": 1,
+              "phases": [
+                {
+                  "frame": 0,
+                  "durationS": 36,
+                  "pressureCoveredS": 36,
+                  "peakPressureBar": 8.1,
+                  "peakPhaseElapsedS": 9,
+                  "latePressureBar": 8.1,
+                  "lateInletFlowMlS": 2,
+                  "capLikeShare": 0.764
+                }
+              ],
+              "firstGramBrewElapsedS": 5,
+              "cupRateAfterOnsetGS": 1.25,
+              "mass": {
+                "checkpoints": [
+                  {"massG":1,"frame":0,"phaseElapsedS":4.75,"brewElapsedS":4.75,"pressureBar":4.275},
+                  {"massG":2,"frame":0,"phaseElapsedS":5.55,"brewElapsedS":5.55,"pressureBar":4.995},
+                  {"massG":5,"frame":0,"phaseElapsedS":7.95,"brewElapsedS":7.95,"pressureBar":7.155},
+                  {"massG":10,"frame":0,"phaseElapsedS":11.95,"brewElapsedS":11.95,"pressureBar":8.1},
+                  {"massG":15,"frame":0,"phaseElapsedS":15.95,"brewElapsedS":15.95,"pressureBar":8.1},
+                  {"massG":20,"frame":0,"phaseElapsedS":19.95,"brewElapsedS":19.95,"pressureBar":8.1},
+                  {"massG":25,"frame":0,"phaseElapsedS":23.95,"brewElapsedS":23.95,"pressureBar":8.1},
+                  {"massG":30,"frame":0,"phaseElapsedS":27.95,"brewElapsedS":27.95,"pressureBar":8.1},
+                  {"massG":35,"frame":0,"phaseElapsedS":31.95,"brewElapsedS":31.95,"pressureBar":8.1},
+                  {"massG":40,"frame":0,"phaseElapsedS":35.95,"brewElapsedS":35.95,"pressureBar":8.1}
+                ],
+                "reason": "recording_ended"
+              }
+            }
+          },
+          {
+            "timestamp": "2000-01-01T12:00:00Z",
+            "durationS": 44,
+            "profileTitle": "Synthetic high-flow hold",
+            "batchId": "synthetic-bag",
+            "profileShape": "synthetic-flow-hold",
+            "doseG": 18,
+            "yieldG": 40,
+            "targetYieldG": 40,
+            "stopReason": "targetWeight",
+            "targetWaterMl": 100,
+            "tempC": 92,
+            "grinderSetting": "A-2",
+            "trace": {
+              "version": 1,
+              "phases": [
+                {
+                  "frame": 0,
+                  "durationS": 44,
+                  "pressureCoveredS": 44,
+                  "peakPressureBar": 8.8,
+                  "peakPhaseElapsedS": 9,
+                  "latePressureBar": 8.8,
+                  "lateInletFlowMlS": 2,
+                  "capLikeShare": 0.822
+                }
+              ],
+              "firstGramBrewElapsedS": 5,
+              "cupRateAfterOnsetGS": 1,
+              "mass": {
+                "checkpoints": [
+                  {"massG":1,"frame":0,"phaseElapsedS":4.95,"brewElapsedS":4.95,"pressureBar":4.84},
+                  {"massG":2,"frame":0,"phaseElapsedS":5.95,"brewElapsedS":5.95,"pressureBar":5.818},
+                  {"massG":5,"frame":0,"phaseElapsedS":8.95,"brewElapsedS":8.95,"pressureBar":8.751},
+                  {"massG":10,"frame":0,"phaseElapsedS":13.95,"brewElapsedS":13.95,"pressureBar":8.8},
+                  {"massG":15,"frame":0,"phaseElapsedS":18.95,"brewElapsedS":18.95,"pressureBar":8.8},
+                  {"massG":20,"frame":0,"phaseElapsedS":23.95,"brewElapsedS":23.95,"pressureBar":8.8},
+                  {"massG":25,"frame":0,"phaseElapsedS":28.95,"brewElapsedS":28.95,"pressureBar":8.8},
+                  {"massG":30,"frame":0,"phaseElapsedS":33.95,"brewElapsedS":33.95,"pressureBar":8.8},
+                  {"massG":35,"frame":0,"phaseElapsedS":38.95,"brewElapsedS":38.95,"pressureBar":8.8},
+                  {"massG":40,"frame":0,"phaseElapsedS":43.95,"brewElapsedS":43.95,"pressureBar":8.8}
+                ],
+                "reason": "recording_ended"
+              }
+            }
+          }
+        ],
+        "batchId": "synthetic-bag",
+        "profileShape": "synthetic-flow-hold",
+        "timestamp": "2000-01-03T12:00:00Z",
+        "targetWaterMl": 100,
+        "annotatedYieldG": 40,
+        "volumeCountStartFrame": 0,
+        "tempC": 92,
+        "grinderSetting": "B-2"
+      },
+      "labels": {
+        "source": "synthetic-injected",
+        "injection": "Each shot delivers 40 g, with weight flat until 4 s. The current and earlier pressures rise linearly until 9 s and hold at 3.6, 8.1 and 8.8 bar, respectively. Each reaches 20 g after the plateau begins. All use the same recorded flow profile and finish at their target weight.",
+        "observations": [
+          {
+            "id": "no-flow-fault",
+            "kind": "flow_shortfall",
+            "phase": "pouring",
+            "controlledVariable": "flow",
+            "expected": "forbidden"
+          }
+        ],
+        "figures": [
+          {
+            "id": "history.comparable.peak",
+            "unit": "bar",
+            "value": 3.6,
+            "tolerance": 0.01
+          },
+          {
+            "id": "history.comparable.count",
+            "unit": "shots",
+            "value": 2,
+            "tolerance": 0.01
+          },
+          {
+            "id": "history.mass.current",
+            "unit": "bar",
+            "value": 3.6,
+            "tolerance": 0.01
+          },
+          {
+            "id": "history.mass.delivered",
+            "unit": "g",
+            "value": 20,
+            "tolerance": 0.01
+          },
+          {
+            "id": "history.mass.previous-1",
+            "unit": "bar",
+            "value": 8.1,
+            "tolerance": 0.01
+          },
+          {
+            "id": "history.mass.previous-2",
+            "unit": "bar",
+            "value": 8.8,
+            "tolerance": 0.01
+          }
+        ],
+        "supportedOutcomes": [
+          "abstain"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ]
+      }
+    }
+  ]
+}
