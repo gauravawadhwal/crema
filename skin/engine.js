@@ -2197,7 +2197,7 @@ var CremaEngine = (() => {
     const lines = [paceSentence(a.facts)];
     const main = phases.filter((p) => p.substate == null || /^pour/i.test(p.substate)).reduce((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
     const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
-    const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts);
+    const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, a.metrics.observedWindows > 0);
     if (tracking) lines.push(tracking);
     else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
     else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
@@ -2233,7 +2233,7 @@ var CremaEngine = (() => {
     if (f.timeStatus === "in_window" || off < 1) return `Finished in ${ran} s, ${f.timeStatus === "in_window" ? "right in" : "at the edge of"} the ${lo}\u2013${hi} s ${basis} window.`;
     return `Ran ${off} s ${f.timeStatus === "fast" ? "faster" : "slower"} than the ${lo}\u2013${hi} s ${basis} window (${detail}).`;
   }
-  function trackingSentence(f) {
+  function trackingSentence(f, faultEligible = true) {
     const main = f.pourSteps.filter((s) => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
     if (!main) return null;
     const pressure2 = main.pump === "pressure";
@@ -2245,6 +2245,7 @@ var CremaEngine = (() => {
     const gap = main.target - main.actualMean;
     const short = pressure2 ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
     const name = pressure2 ? "pressure" : "flow";
+    if (!faultEligible) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
     const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
     if (short || main.limiterEngaged) {
       const why = main.limiterEngaged ? pressure2 ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck` : "";

@@ -63,7 +63,7 @@ function rulesSummary(a: ShotAnalysis, input: ReviewInput, direction: "finer" | 
   const main = phases.filter(p => p.substate == null || /^pour/i.test(p.substate))
     .reduce<(typeof phases)[number] | null>((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
   const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
-  const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts);
+  const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, a.metrics.observedWindows > 0);
   if (tracking) lines.push(tracking);
   else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
   else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
@@ -106,7 +106,7 @@ export function paceSentence(f: ShotFacts): string | null {
 }
 
 /** Whether the main pour step reached its pressure or flow target, in numbers. */
-export function trackingSentence(f: ShotFacts): string | null {
+export function trackingSentence(f: ShotFacts, faultEligible = true): string | null {
   const main = f.pourSteps.filter(s => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
   if (!main) return null;
   const pressure = main.pump === "pressure";
@@ -118,6 +118,7 @@ export function trackingSentence(f: ShotFacts): string | null {
   const gap = main.target - main.actualMean;
   const short = pressure ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
   const name = pressure ? "pressure" : "flow";
+  if (!faultEligible) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
   const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
   if (short || main.limiterEngaged) {
     const why = main.limiterEngaged

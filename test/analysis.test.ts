@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { reviewFixture, type ReviewFixture } from "../evals/lib/review-fixtures.js";
 import type { ProfileLike } from "../server/profiles/curve.js";
 import { analyzeShot } from "../server/profiles/analysis.js";
+import { trackingSentence } from "../server/recommend/review-local.js";
 import { rulesReview } from "../server/recommend/review-local.js";
 import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
 
@@ -158,6 +159,14 @@ describe("real Decaid shot shapes", () => {
     const result = analyzeShot(real(shot({ p: 5.4, f: 1.9 }), limited("1")));
     expect(result.metrics.observedWindows).toBe(1);
     expect(result.issues).toEqual([]);
+  });
+
+  it("words a hold neutrally unless the fault rules can judge it", () => {
+    const facts = analyzeShot(real(shot({ p: 3.8, f: 2 }))).facts;
+    expect(trackingSentence(facts, true)).toMatch(/^Pour pressure only reached 3\.8 bar of the 6\.0 bar target/);
+    const neutral = trackingSentence(facts, false)!;
+    expect(neutral).toMatch(/^Pour pressure averaged 3\.8 bar against the 6\.0 bar target/);
+    expect(neutral).not.toMatch(/only reached|limit|consistent/);
   });
 
   it("still finds a choke on a limited step", () => {
