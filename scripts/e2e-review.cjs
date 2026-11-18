@@ -7,25 +7,29 @@ const { spawn } = require("child_process");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "..");
 const base = 23800 + Math.floor(Math.random() * 500);
 const MOCK = base, SKIN = base + 1;
-let failReview = false, reviewCalls = [];
+let failReview = false, supportsCurveReview = true, reviewCalls = [];
 const proc = spawn("npx", ["tsx", "dev/mock-decaid.ts"], { cwd: root, env: { ...process.env, PORT: String(MOCK) }, stdio: ["ignore", "pipe", "pipe"], detached: true });
 const ready = new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error("mock Decaid did not start")), 20000);
   proc.stdout.on("data", (d) => { if (String(d).includes("mock-decaid on")) { clearTimeout(t); resolve(); } });
 });
-const reviewResult = { summary: "The recorded shot is available for review.", wentWell: ["The simulator recorded the shot."], issues: [], nextShot: null, confidence: "low", askTaste: true };
+const engineContext = { window: {} };
+vm.runInNewContext(fs.readFileSync(path.join(root, "skin", "engine.js"), "utf8"), engineContext);
+const engine = engineContext.CremaEngine;
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, "http://localhost").pathname;
-  if (pathname === "/api/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ crema: true, decaidUrl: `http://localhost:${MOCK}` })); }
+  if (pathname === "/api/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ crema: true, shotReviewVersion: supportsCurveReview ? engine.SHOT_REVIEW_VERSION : undefined, decaidUrl: `http://localhost:${MOCK}` })); }
   if (pathname === "/api/review" && req.method === "POST") {
     let raw = ""; req.on("data", (x) => raw += x); req.on("end", () => {
-      reviewCalls.push(JSON.parse(raw));
+      const input = JSON.parse(raw);
+      reviewCalls.push(input);
       if (failReview) { res.writeHead(503, { "content-type": "application/json" }); return res.end('{"error":"review service unavailable"}'); }
-      res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ review: reviewResult, source: "mock-review-provider" }));
+      res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ ...engine.rulesReviewResult(input, input.fullTrace), source: "mock-review-provider" }));
     });
     return;
   }
@@ -100,7 +104,8 @@ const openShot = async (page, id, selector) => {
     await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#shots`);
     await page.waitForFunction((id) => S.shots.some((s) => s.id === id), shotId);
     await openShot(page, shotId, "#detailReview");
-    check((await page.textContent("#detailReview")).includes("From Crema's shot checks"), "saved review reappears on the phone after reload");
+    const reopenedLabels = await page.locator("#detailReview .label").allTextContents();
+    check(reopenedLabels[0] === "Curve read" && reopenedLabels.includes("Taste alignment"), "saved curve and taste stages reappear on the phone after reload");
     await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#shots`);
     await page.waitForFunction((id) => S.shots.some((s) => s.id === id), manualId);
     await openShot(page, manualId, "#reviewDetail");
@@ -214,7 +219,15 @@ const openShot = async (page, id, selector) => {
     await waitForPage(async (id) => (await S.api.shot(id))?.review?.source === "rules", shotId);
     check(true, "server failure falls back to saved rules review");
     const final = await evalPage(async (id) => S.api.shot(id), shotId);
-    check(final.review?.review?.summary && final.review.version === 2 && final.review.evidence?.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
+    check(final.review?.review?.summary && final.review.version === 3 && final.review.curve && final.review.taste && final.review.evidence?.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
+    supportsCurveReview = false;
+    await page.reload();
+    await page.waitForFunction(() => S.api?.ai.on && S.shelfLoaded, null, { timeout: 20000 });
+    const legacyServerReview = await evalPage((id) => S.api.review(id, { sourBitter: 0, body: 0, enjoyment: 5, notes: null }), shotId);
+    check(legacyServerReview.version === 3 && legacyServerReview.source === "rules" && reviewCalls.length === 2,
+      "older Crema servers receive no review request, even with taste recorded");
+    supportsCurveReview = true;
+
     // Taste taps stick in the after-shot panel too: saved on tap, no review needed (same code as the detail).
     await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}`);
     await page.waitForFunction(() => typeof showAfterShot === "function" && S.api);

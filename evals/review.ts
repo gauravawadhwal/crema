@@ -9,8 +9,8 @@ import { MockProvider } from "../server/llm/mock.js";
 import { ROOT_DIR, EVALS_DIR } from "./lib/dataset.js";
 import { REVIEW_FIXTURES, reviewFixture } from "./lib/review-fixtures.js";
 import { checkReviewHoldout, freezeReviewHoldout, loadReviewDataset, selectReviewCases } from "./lib/review-holdout.js";
-import { REVIEW_VARIANTS, VARIANT_NAMES, runReviewAblation, runReviewVariant } from "./lib/review-ablation.js";
-import { assertCurveStageInvariant, checkModelStage } from "./lib/review-crossed.js";
+import { REVIEW_VARIANTS, VARIANT_NAMES, runReviewAblation } from "./lib/review-ablation.js";
+import { assertCurveStageInvariant, mockCurveStage } from "./lib/review-crossed.js";
 import { loadLocalReviewShots } from "./lib/review-local-replay.js";
 import { reviewAblationMarkdown, type ReviewAblationReport } from "./lib/review-ablation-report.js";
 
@@ -52,14 +52,9 @@ async function main() {
     const input = reviewFixture(fixture);
     await assertCurveStageInvariant(input);
     console.log(`Curve stage invariant across crossed taste inputs for ${fixture}`);
-    if (args.provider) {
-      const changes = await checkModelStage(input, async (variant) => {
-        const result = await runReviewVariant("old", variant, provider);
-        if (result.status !== "ready" || result.fellBack) throw new Error("Requested review stage did not answer");
-        return { findings: result.review.issues, confidence: result.review.confidence };
-      });
-      console.log(JSON.stringify({ stage: "legacy review", provider: providerName, changes }, null, 2));
-      if (changes.length) return 1;
+    if (provider) {
+      await assertCurveStageInvariant(input, mockCurveStage);
+      console.log("Mock curve narrative prompt and output are byte-identical");
     }
     return 0;
   }
@@ -67,7 +62,7 @@ async function main() {
   if (command === "replay") {
     const cases = loadLocalReviewShots();
     if (!cases.length) throw new Error("No Decaid recordings found");
-    const [result] = await runReviewAblation(cases, ["old"], provider);
+    const [result] = await runReviewAblation(cases, ["two-stage"], provider);
     if (result.status !== "ready") throw new Error(result.reason);
     // Keep recordings, annotations and prompt text out of the results directory.
     console.log(JSON.stringify({ provider: providerName, summary: result.summary, labelSources: result.labelSources }, null, 2));

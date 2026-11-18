@@ -354,7 +354,9 @@ function makeDemoApi() {
     async review(shotId, feedback = null, bean = null) {
       const s = shots.find((x) => x.id === shotId);
       if (!s) throw new Error("Shot not found");
-      if (feedback) { s.taste = { sourBitter: feedback.sourBitter, body: feedback.body }; if (feedback.enjoyment != null) s.enjoyment = feedback.enjoyment; }
+      if (feedback?.sourBitter != null) s.taste = { ...s.taste, sourBitter: feedback.sourBitter };
+      if (feedback?.body != null) s.taste = { ...s.taste, body: feedback.body };
+      if (feedback?.enjoyment != null) s.enjoyment = feedback.enjoyment;
       const byTime = new Map();
       for (const p of s.points || []) if (Number.isFinite(p.t) && p.t >= 0) byTime.set(p.t, reviewPoint(p));
       const points = [...byTime.values()].sort((a, b) => a.t - b.t);
@@ -367,17 +369,16 @@ function makeDemoApi() {
         points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG, ...timeContext,
         annotatedYieldG: s.yieldG ?? null, volumeCountStartFrame: s.profile?.target_volume_count_start ?? null,
         targetWaterMl: recordedReviewNumber(s.profile?.target_volume, 0, 5000),
-        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: null } : null, notes: s.notes || null, bean: bean ?? bag?.info ?? null,
+        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: feedback.notes ?? null } : null, notes: s.notes?.slice(0, 1000) || null, bean: bean ?? bag?.info ?? null,
         installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => {
           const metadata = { doseG: recordedReviewNumber(x.doseG, 0, 60), yieldG: recordedReviewNumber(x.yieldG, 0, 500),
             targetYieldG: recordedReviewNumber(x.targetYieldG ?? x.profile?.target_weight, 0, 500), stopReason: x.stopReason ?? null };
           return { timestamp: x.timestamp, profileTitle: x.profileTitle, batchId: x.batch,
             targetWaterMl: recordedReviewNumber(x.profile?.target_volume, 0, 5000),
             ...recordedReviewContext(x.profile ?? null, x.grinderSetting), ...metadata,
-            ...recordedReviewTrace((x.points ?? []).map(reviewPoint), x.profile ?? null, metadata),
-            enjoyment: x.enjoyment ?? null, notes: x.notes?.slice(0, 500) || null, review: x.review?.review?.summary?.slice(0, 1000) ?? null };
+            ...recordedReviewTrace((x.points ?? []).map(reviewPoint), x.profile ?? null, metadata) };
         }) };
-      const saved = { version: 2, ...CE.rulesReviewResult(input), createdAt: new Date().toISOString() };
+      const saved = { version: CE.SHOT_REVIEW_VERSION, ...CE.rulesReviewResult(input), createdAt: new Date().toISOString() };
       s.review = saved; saveDemoReview(s); return clone(saved);
     },
     async feedback(shotId, beanId, fb) {

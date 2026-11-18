@@ -7,6 +7,7 @@ import { cacheImage, findProductImage, isPlaceholderImage, isSafeUrl, readCached
 import type { ProviderChain } from "./llm/index.js";
 import type { AudioInput, ImageInput } from "./llm/types.js";
 import { dialInWithSource, recommend } from "./recommend/index.js";
+import { SHOT_REVIEW_VERSION } from "./recommend/review-types.js";
 import { reviewShot } from "./recommend/review.js";
 import { BeanInfo, Recipe, ReviewBody, TasteFeedback } from "./schema.js";
 
@@ -128,6 +129,7 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null;
     return c.json({
       crema: true,
       ai: true,
+      shotReviewVersion: SHOT_REVIEW_VERSION,
       providers: llm.providers.map((p) => ({ id: p.id, billing: p.billing })),
       // Which provider turns speech into text, or null when none can (no GEMINI_API_KEY).
       voice: llm.transcribers[0]?.id ?? null,

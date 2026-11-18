@@ -11,6 +11,7 @@ export { rulesDialIn, rulesRecipe, strip, toPastShot, withTemperature } from "./
 export { DEFAULT_MAINTENANCE, DEFAULT_PRESETS, DEFAULT_SETTINGS, GRIND_STEPS } from "./shared/defaults.js";
 export { outlineProfile, planAt, profileCurve, shotSim, simulateShot, stepDurations } from "./profiles/curve.js";
 export { analyzeShot, shotFacts } from "./profiles/analysis.js";
+export { SHOT_REVIEW_VERSION } from "./recommend/review-types.js";
 export { rulesReview, rulesReviewResult } from "./recommend/review-local.js";
 export { fullReviewTrace, summarizeReviewTrace, REVIEW_EVIDENCE_VERSION, REVIEW_POINT_LIMIT } from "./recommend/review-evidence.js";
 export { historyCurveSentence } from "./recommend/review-history.js";

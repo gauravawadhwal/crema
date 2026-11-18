@@ -158,7 +158,7 @@ The server is stateless: it answers questions and stores nothing but cached prod
 | `POST` | `/api/transcribe` | multipart `audio` (WAV, up to 4 MB) → `{text, provider}`. Needs `GEMINI_API_KEY`; 501 without one |
 | `POST` | `/api/recommend` | `{bean, profileTitles?, history?, preferences?}` → recipe chosen by the AI among the installed profiles |
 | `POST` | `/api/dialin` | `{bean, recipe, shot, feedback, history?}` → `{advice, source}` |
-| `POST` | `/api/review` | Recorded profile/curves, optional taste and earlier shots → `{review, source}`; saved by the client in Decaid |
+| `POST` | `/api/review` | Recorded profile/curves, optional taste and earlier shots → `{review, curve, taste, source, evidence}` (curve read first, taste alignment after); saved by the client in Decaid |
 | `POST` | `/api/images/cache` | `{url}` → a cached copy of a roaster's product photo |
 | `GET` | `/api/images/:file` | cached product photos |
 | any | `/decaid/*` | proxy to Decaid's REST API when `DECAID_URL` is set, for the app opened from the server |

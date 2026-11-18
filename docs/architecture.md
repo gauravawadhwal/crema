@@ -183,11 +183,21 @@ BeanInfo ──► rules baseline (roast, rest, grind hint)                     
 ## Shot review
 
 `server/profiles/analysis.ts` computes conservative observations from recorded
-samples; `server/recommend/review-local.ts` supplies local advice. Both are bundled
-into the browser engine. `POST /api/review` validates a bounded `ReviewInput`, calls
-the provider chain and returns `{review, source, evidence}` with rules fallback. The model
-receives sampled curves, the recorded profile, observations and bounded earlier-shot
-context. Missing measurements/taste are null. Suggested changes are advisory only.
+samples. `server/recommend/review-local.ts` and `review-taste.ts` are bundled
+with the analysis for the browser. One Review action validates a bounded
+`ReviewInput` at `POST /api/review` and returns `{review, curve, taste, source, evidence}`.
+The curve stage fixes findings, priority, confidence and its initial experiment
+from the recorded mechanics. An optional provider call can add a short explanation
+with validated evidence IDs. Its input excludes ratings, notes, earlier review
+text and bean tasting descriptors. The skin runs both stages locally when
+the connected server does not advertise support for the staged review.
+
+Taste alignment runs after the curve stage. The recorded scales can endorse
+or change the experiment. Opposing grind directions lead to a repeat. When
+there is a saved note and no taste or body rating, an optional second call can
+interpret a verbatim sensory quote and suggest one bounded trial. Rules can
+show an uninterpreted note and suggest a repeat. Missing readings are null and
+all proposed adjustments are advisory.
 
 Phase evidence groups contiguous frame and machine substate readings on the shot
 clock and excludes preparation. It compares the active pump channel with its
@@ -214,10 +224,10 @@ two usable references, and medians and quartiles require five. Grinder labels
 are recorded context. The same code supplies the displayed comparison for both
 rules and AI.
 
-New saved reviews use version 2 at `annotations.extras.crema.review` and carry
-the evidence projection, creation time and source. Version 1 reviews still
-render with the fields they saved. Reopening a shot reads the saved review
-without making an AI call. Review again explicitly replaces it.
+New saved reviews use version 3 at `annotations.extras.crema.review`. They carry
+the curve read, taste alignment, final experiment, evidence projection, creation
+time and source. Versions 1 and 2 still render with the fields they saved.
+Reopening a shot reads its saved review. Review again explicitly replaces it.
 The legacy `/api/dialin` now also returns source so provider failures cannot be
 mislabelled as AI answers.
 

@@ -468,7 +468,11 @@ const server = createServer(async (req, res) => {
         const t = new Date(oldest - i * 60000).toISOString();
         shots.push({
           id: `seed-${t.replace(/[:.]/g, "-")}`, timestamp: t,
-          measurements: [{ machine: { timestamp: t, state: { state: "espresso", substate: "pouring" }, flow: 2, pressure: 9, mixTemperature: 93 }, scale: { timestamp: t, weight: 36 } }],
+          measurements: Array.from({ length: 61 }, (_, i) => {
+            const timestamp = new Date(Date.parse(t) + i * 500).toISOString();
+            return { machine: { timestamp, state: { state: "espresso", substate: "pouring" }, flow: 2, pressure: 9, mixTemperature: 93 },
+              scale: { timestamp, weight: i * 0.6 } };
+          }),
           workflow: { name: "Crema", profile: { title: b.profileTitle ?? "Adaptive v2" }, context: { targetDoseWeight: b.dose ?? 18, targetYield: 36, beanBatchId: b.batchId ?? null } },
           annotations: { actualDoseWeight: b.dose ?? 18, actualYield: 36 },
         });

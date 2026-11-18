@@ -46,7 +46,7 @@ export interface ReviewInput {
   /** Where the time window came from; a profile guide is an approximation. */
   timeBasis?: "recorded" | "recipe" | "guide" | null;
   stopReason: string | null;
-  feedback: TasteFeedback | null;
+  feedback: (Omit<TasteFeedback, "sourBitter" | "body"> & { sourBitter: number | null; body: number | null }) | null;
   /** Free-text taste can be provided even when the tap scales were left unset. */
   notes?: string | null;
   bean: BeanInfo | null;
@@ -78,7 +78,33 @@ export interface ShotReviewData {
   askTaste: boolean;
 }
 
-export interface ReviewResult { review: ShotReviewData; source: string; evidence: ReviewEvidence }
+export interface CurveReview {
+  summary: string;
+  history: string | null;
+  timing: string | null;
+  wentWell: string[];
+  issues: ReviewIssue[];
+  confidence: ShotReviewData["confidence"];
+  limitation: string;
+  finer: boolean;
+  coarser: boolean;
+  nextShot: DialInAdvice | null;
+  check: string;
+  narrative: { text: string; evidenceIds: string[] } | null;
+}
+
+export interface TasteAlignment {
+  status: "absent" | "agrees" | "conflicts" | "no_direction" | "uninterpreted_notes";
+  summary: string;
+  notes: string | null;
+  changesExperiment: boolean;
+  check: string | null;
+}
+
+interface LegacyReviewResult { review: ShotReviewData; source: string; evidence: ReviewEvidence }
+export interface ReviewResult extends LegacyReviewResult { curve: CurveReview; taste: TasteAlignment }
+export const SHOT_REVIEW_VERSION = 3;
 export type SavedReview =
   | { version: 1; review: ShotReviewData; source: string; createdAt: string }
-  | (ReviewResult & { version: 2; createdAt: string });
+  | (LegacyReviewResult & { version: 2; createdAt: string })
+  | (ReviewResult & { version: typeof SHOT_REVIEW_VERSION; createdAt: string });

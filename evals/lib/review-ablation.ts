@@ -4,10 +4,11 @@ import { analyzeShot } from "../../server/profiles/analysis.js";
 import type { PhaseLandmark } from "../../server/profiles/phase-evidence.js";
 import { reviewCurveSection } from "../../server/recommend/review-curve.js";
 import type { LlmProvider } from "../../server/llm/types.js";
+import { legacyReviewShot, legacyRulesReview } from "./review-legacy.js";
 import { reviewShot } from "../../server/recommend/review.js";
+import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "../../server/recommend/review-evidence.js";
 import { rulesReviewResult } from "../../server/recommend/review-local.js";
-import type { FullReviewTrace, ReviewEvidence } from "../../server/recommend/review-evidence.js";
-import type { ReviewInput, ShotReviewData } from "../../server/recommend/review-types.js";
+import type { ReviewInput, ReviewResult, ShotReviewData } from "../../server/recommend/review-types.js";
 import { RecordingProvider } from "./recorder.js";
 import { legacyReviewCurveSection } from "./review-legacy-curve.js";
 import type { PumpMode, ReviewLabels } from "./review-labels.js";
@@ -28,6 +29,7 @@ interface VariantOutput {
   review: ShotReviewData;
   source: string;
   fellBack: boolean;
+  stages?: Pick<ReviewResult, "curve" | "taste">;
 }
 
 type Variant =
@@ -87,7 +89,12 @@ function curveVariant(curveSection?: typeof legacyReviewCurveSection): Variant {
   return {
     status: "ready",
     async run(input, llm, fullTrace) {
-      const { review, source, evidence } = llm ? await reviewShot(llm, input, fullTrace, { curveSection }) : rulesReviewResult(input, fullTrace);
+      if (!llm) {
+        const evidence = buildReviewEvidence(input, fullTrace);
+        const review = legacyRulesReview(input, evidence);
+        return { review, source: "rules", scored: normalizeLegacyReview(review, input, projectReviewEvidence(evidence)), fellBack: false };
+      }
+      const { review, source, evidence } = await legacyReviewShot(llm, input, fullTrace, { curveSection });
       return { review, source, scored: normalizeLegacyReview(review, input, evidence), fellBack: llm != null && source === "rules" };
     },
   };
@@ -97,7 +104,13 @@ export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
   old: curveVariant(legacyReviewCurveSection),
   "facts-only": pending,
   "facts-plus-anchored": curveVariant(),
-  "two-stage": pending,
+  "two-stage": {
+    status: "ready",
+    async run(input, llm, fullTrace) {
+      const { review, source, evidence, curve, taste } = llm ? await reviewShot(llm, input, fullTrace) : rulesReviewResult(input, fullTrace);
+      return { review, source, stages: { curve, taste }, scored: normalizeLegacyReview(review, input, evidence), fellBack: llm != null && source === "rules" };
+    },
+  },
 };
 
 export async function runReviewVariant(name: VariantName, input: ReviewInput, provider?: LlmProvider, fullTrace?: FullReviewTrace) {
@@ -127,6 +140,7 @@ export interface PromptMeasure { curveChars: number; promptChars: number; landma
 const CURVE_SECTIONS: Partial<Record<VariantName, (input: ReviewInput, landmarks: PhaseLandmark[]) => string>> = {
   old: (input) => legacyReviewCurveSection(input.points),
   "facts-plus-anchored": (input, landmarks) => reviewCurveSection(input.points, landmarks),
+  "two-stage": (input, landmarks) => reviewCurveSection(input.points, landmarks),
 };
 
 /** Times the model can see in the curve section: every row, and every reading carried by an event. */
@@ -149,7 +163,11 @@ export async function measurePrompt(name: VariantName, input: ReviewInput): Prom
   const curve = section(input, landmarks);
   const seen = visibleTimes(curve);
   const recorder = new RecordingProvider(new MockProvider());
-  await reviewShot(new ProviderChain([recorder]), structuredClone(input), undefined, { curveSection: name === "old" ? () => curve : undefined });
+  const llm = new ProviderChain([recorder]);
+  if (name === "two-stage") {
+    await reviewShot(llm, structuredClone(input));
+    if (!recorder.calls.some(call => call.schemaName === "CurveNarrative")) return null;
+  } else await legacyReviewShot(llm, structuredClone(input), undefined, { curveSection: name === "old" ? () => curve : undefined });
   const counts = Object.fromEntries(MEASURED_LANDMARKS.map((kind) => [kind, { kept: 0, total: 0 }])) as LandmarkCounts;
   for (const landmark of landmarks) {
     if (!(landmark.kind in counts)) continue;

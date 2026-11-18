@@ -76,6 +76,9 @@ async function clickThrough(b, url, [name, vp, scheme]) {
   await step("espresso", async () => {
     await p.click('[data-run="espresso"]'); await p.waitForTimeout(3000); await snap("2-pulling");
     await p.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 });
+    // The panel is re-rendered once the shot is saved; wait for that so a rating tap is not discarded.
+    await p.waitForSelector("#reviewShot:not([disabled])", { timeout: 20000 });
+    await p.waitForTimeout(600); // let the chart resize settle so star positions measured next stay valid
   });
   // Ratings are Decaid's 0–10, shown as half stars: the left part of a star is a half.
   const starAt = async (sel, n, frac) => { await p.locator(sel).evaluate(el => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" })); const b = await p.locator(`${sel} > span:not(.stars-fill) i[data-n="${n}"]`).boundingBox(); return [b.x + b.width * frac, b.y + b.height / 2]; };
@@ -106,15 +109,21 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.waitForSelector("#reviewBox .advice", { timeout: 5000 }); await snap("3-after", true);
     const version = await p.evaluate(() => Object.values(JSON.parse(localStorage.getItem("crema:demo-reviews")))
       .find(entry => entry.shot.id.startsWith("demo-shot-"))?.review);
-    if (version?.version !== 2 || version.evidence?.version !== 1) throw new Error("new review did not save versioned evidence");
+    if (version?.version !== 3 || version.evidence?.version !== 1 || !version.curve?.summary || !version.taste?.summary) {
+      throw new Error("new review did not save both stages and versioned evidence");
+    }
+    const labels = await p.locator("#reviewBox .label").allTextContents();
+    if (labels[0] !== "Curve read" || !labels.includes("Taste alignment")) throw new Error("review stages are missing or out of order");
   });
-  await step("read a saved v1 shot review", async () => {
+  await step("read saved v1 and v2 shot reviews", async () => {
     const result = await p.evaluate(async () => {
       const key = "crema:demo-reviews", before = localStorage.getItem(key);
       try {
         const saved = { version: 1, source: "rules", createdAt: "2000-01-01T00:00:00Z",
           review: { summary: "Synthetic saved review", issues: [], wentWell: [], confidence: "low", nextShot: null, askTaste: true } };
-        localStorage.setItem(key, JSON.stringify({ ...JSON.parse(before ?? "{}"), s0: saved, s1: { review: saved } }));
+        const evidence = { version: 1, history: { curves: { usableCount: 0 } } };
+        localStorage.setItem(key, JSON.stringify({ ...JSON.parse(before ?? "{}"),
+          s0: saved, s1: { review: { ...saved, version: 2, evidence } } }));
         const demo = makeDemoApi();
         return await Promise.all(["s0", "s1"].map(async id => {
           const shot = await demo.shot(id);
@@ -125,8 +134,9 @@ async function clickThrough(b, url, [name, vp, scheme]) {
         else localStorage.setItem(key, before);
       }
     });
-    if (result.some(entry => entry.review?.version !== 1 || "evidence" in entry.review || !entry.html.includes("Synthetic saved review"))) {
-      throw new Error("v1 review did not render as saved");
+    if (result[0].review?.version !== 1 || "evidence" in result[0].review || result[1].review?.version !== 2 ||
+        result.some(entry => !entry.html.includes("Synthetic saved review") || entry.html.includes("Taste alignment"))) {
+      throw new Error("legacy reviews did not render as saved");
     }
   });
   await step("steam", async () => {

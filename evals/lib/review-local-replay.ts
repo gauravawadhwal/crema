@@ -139,8 +139,9 @@ function reviewInput(shot: DecaidShot, points: ReviewPoint[], history: ReviewInp
   const annotations = shot.annotations;
   const { sourBitter, body } = annotations?.extras?.crema ?? {};
   const profile = shot.workflow?.profile ?? null;
-  const manual = profile?.beverage_type === "manual";
-  const feedback = !manual && sourBitter != null && body != null ? { sourBitter, body, enjoyment: annotations?.enjoyment ?? null, notes: null } : null;
+  const enjoyment = annotations?.enjoyment ?? null;
+  const feedback = sourBitter != null || body != null || enjoyment != null ?
+    { sourBitter: sourBitter ?? null, body: body ?? null, enjoyment, notes: null } : null;
   const input: ReviewInput = {
     timestamp: shot.timestamp ?? null, ...observed, points, profile, ...timeContext(shot, observed, options.recipe),
     annotatedYieldG: bounded(annotations?.actualYield, 0, 500), volumeCountStartFrame: profile?.target_volume_count_start ?? null,

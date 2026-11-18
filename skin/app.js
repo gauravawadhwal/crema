@@ -430,7 +430,7 @@ function makeLiveApi(conn) {
     return hydrated.filter((s) => s && s.workflow?.context?.beanBatchId === batchId && Date.parse(s.timestamp) < before)
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).map((s) => {
         const ctx = s.workflow?.context ?? {}, profile = s.workflow?.profile ?? null;
-        const points = shotPoints(s, true), saved = s.annotations?.extras?.crema?.review;
+        const points = shotPoints(s, true);
         const metadata = {
           doseG: recordedReviewNumber(s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight, 0, 60),
           yieldG: recordedReviewNumber(s.annotations?.actualYield ?? points.at(-1)?.w, 0, 500),
@@ -442,8 +442,6 @@ function makeLiveApi(conn) {
           targetWaterMl: recordedReviewNumber(ctx.targetWaterVolume ?? profile?.target_volume, 0, 5000),
           ...recordedReviewContext(profile, ctx.grinderSetting), ...metadata,
           ...(points.length ? recordedReviewTrace(points, profile, metadata) : { durationS: null, trace: null }),
-          enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes?.slice(0, 500) ?? null,
-          review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) ?? null,
         };
       });
   };
@@ -766,16 +764,17 @@ function makeLiveApi(conn) {
       const limit = E.REVIEW_POINT_LIMIT;
       const fullTrace = points.length > limit ? E.fullReviewTrace(input) : undefined;
       let result = null;
-      if (aiOn() && points.length) {
+      // Use the local stages with older servers, whose review prompt received taste and curves together.
+      if (aiOn() && conn.cremaInfo?.shotReviewVersion === E.SHOT_REVIEW_VERSION && points.length) {
         const bounded = fullTrace ? Array.from({ length: limit }, (_, i) => points[Math.round(i * (points.length - 1) / (limit - 1))]) : points;
         try { result = await cremaCall(() => post(C("/api/review"), { ...input, points: bounded, fullTrace }, { timeoutMs: AI_WAIT.review })); }
         catch (e) { console.warn("AI shot review failed; using the rules review", e); }
       }
-      if (!result?.review || (fullTrace && result.evidence?.version !== E.REVIEW_EVIDENCE_VERSION)) result = E.rulesReviewResult(input, fullTrace);
-      const evidence = result.evidence?.version === E.REVIEW_EVIDENCE_VERSION ? result.evidence : E.rulesReviewResult(input).evidence;
-      const saved = { version: 2, review: result.review, evidence, source: result.source || "rules", createdAt: new Date().toISOString() };
+      if (!result?.curve || !result.taste || !result.review || result.evidence?.version !== E.REVIEW_EVIDENCE_VERSION) result = E.rulesReviewResult(input, fullTrace);
+      const saved = { ...result, version: E.SHOT_REVIEW_VERSION, createdAt: new Date().toISOString() };
       const crema = { review: saved };
-      if (feedback) { crema.sourBitter = feedback.sourBitter; crema.body = feedback.body; }
+      if (feedback?.sourBitter != null) crema.sourBitter = feedback.sourBitter;
+      if (feedback?.body != null) crema.body = feedback.body;
       await api.annotate(shotId, { extras: { crema } });
       return saved;
     },
@@ -2321,14 +2320,20 @@ function shotResultPills(shot, context = {}, points = shot?.points || []) {
 function reviewHtml(saved, shot = null) {
   if (!saved?.review) return "";
   const review = saved.review;
+  const curve = saved.version === 3 ? saved.curve : null;
+  const taste = saved.version === 3 ? saved.taste : null;
   const edit = reviewRecipeMatches(shot) && S.reviewEdit?.shotId !== shot.id ? reviewAdjustment(review.nextShot) : null;
   const source = String(saved.source || "").toLowerCase().includes("rules") ? "From Crema's shot checks" : "Review from the AI";
-  const history = saved.version === 2 && saved.evidence?.version === E.REVIEW_EVIDENCE_VERSION && saved.evidence.history ?
+  const history = curve ? curve.history : saved.version === 2 && saved.evidence?.version === E.REVIEW_EVIDENCE_VERSION && saved.evidence.history ?
     E.historyCurveSentence(saved.evidence.history) : null;
-  return `<div class="advice shot-review"><div class="row between"><span class="label">${source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
-    <p>${esc(review.summary)}</p>${history ? `<p>${esc(history)}</p>` : ""}${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+  return `<div class="advice shot-review"><div class="row between"><span class="label">${curve ? "Curve read" : source}</span><span class="muted small">${esc(review.confidence || "")}${review.confidence ? " confidence" : ""}</span></div>
+    <p>${esc(curve?.summary ?? review.summary)}</p>${curve?.narrative ? `<p>${esc(curve.narrative.text)}</p>` : ""}${history ? `<p>${esc(history)}</p>` : ""}${review.wentWell?.length ? `<div class="label">Went well</div><ul>${review.wentWell.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
     ${review.issues?.length ? `<div class="label">To watch</div><ul>${review.issues.map((x) => `<li>${esc(x.what)} <span class="muted">${esc(x.evidence)}</span></li>`).join("")}</ul>` : ""}
+    ${curve ? `${curve.timing ? `<p>${esc(curve.timing)}</p>` : ""}<p class="muted small">${esc(curve.limitation)}</p>` : ""}
+    ${taste ? `<div class="label">Taste alignment</div><p>${esc(taste.summary)}</p>
+      ${taste.notes ? `<p class="muted">Saved note: ${esc(taste.notes)}</p>` : ""}` : ""}
     ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
+    ${taste?.check ? `<p>${esc(taste.check)}</p>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
 /* ===== Taste scales and the Review button, shared by the after-shot panel and the shot detail ===== */
@@ -2340,7 +2345,7 @@ const TASTE_SCALES = [
 function tasteScalesHtml(taste, ids) {
   const t = taste ?? {};
   return TASTE_SCALES.map(({ key, label, opts }) => `<div class="scale-row"><span class="label">${label}</span><div class="seg tap" id="${ids[key]}" role="radiogroup" aria-label="${label}">${opts.map(([v, text]) => `<button type="button" role="radio" data-v="${v}" aria-checked="${t[key] === v}" aria-pressed="${t[key] === v}">${text}</button>`).join("")}</div></div>`).join("")
-    + `<p class="muted small">Tap to save. A review uses taste once both are chosen.</p>`;
+    + `<p class="muted small">Tap to save taste for the review.</p>`;
 }
 const markPressed = (group, button) => $$("button", group).forEach((x) => { const on = x === button; x.setAttribute("aria-pressed", String(on)); x.setAttribute("aria-checked", String(on)); });
 // A tap marks the answer and saves it on the shot at once (no shot yet: just marks it).
@@ -2362,17 +2367,17 @@ function bindTasteScales(shot, ids) {
     }));
   }
 }
-// Runs a review for `shot`. Taste goes with it once both scales are chosen (never for manual shots).
+// Runs one review for the shot with whatever taste ratings have been recorded.
 // buttonSel/boxSel find the live elements again afterwards; isCurrent() says the view still shows this shot.
-function bindReviewButton(shot, { buttonSel, boxSel, isCurrent, manual }) {
+function bindReviewButton(shot, { buttonSel, boxSel, isCurrent }) {
   const button = $(buttonSel);
   if (!button) return;
   const label = () => (shot?.review ? "Review again" : "Review shot");
   if (!shot || S.reviewPending.has(shot.id)) button.disabled = true;
   button.onclick = async () => {
     if (!shot || S.reviewPending.has(shot.id)) return;
-    const sb = shot.taste?.sourBitter, body = shot.taste?.body;
-    const feedback = !manual && sb != null && body != null ? { sourBitter: sb, body, enjoyment: shot.enjoyment ?? null, notes: null } : null;
+    const sourBitter = shot.taste?.sourBitter ?? null, body = shot.taste?.body ?? null, enjoyment = shot.enjoyment ?? null;
+    const feedback = sourBitter != null || body != null || enjoyment != null ? { sourBitter, body, enjoyment, notes: null } : null;
     S.reviewPending.add(shot.id); button.disabled = true; button.textContent = "Reviewing…";
     try {
       const saved = await S.api.review(shot.id, feedback, bagInfoForShot(shot));
@@ -2431,7 +2436,7 @@ function showAfterShot(shot, pts, context = {}) {
     rating = n;
     if (shot) { shot.enjoyment = n; S.api.annotate(shot.id, { enjoyment: n }).catch(() => toast("Couldn't save the rating")); }
   });
-  bindReviewButton(shot, { buttonSel: "#reviewShot", boxSel: "#reviewBox", manual, isCurrent: () => p.dataset.shotId === (shot?.id ?? "") && S.afterViewToken === viewToken });
+  bindReviewButton(shot, { buttonSel: "#reviewShot", boxSel: "#reviewBox", isCurrent: () => p.dataset.shotId === (shot?.id ?? "") && S.afterViewToken === viewToken });
   const pinBtn = $("#pinShot");
   const pinLabel = () => (pinBtn.textContent = bean?.bestShotId === shot?.id ? "Remove reference" : "Set as reference");
   pinLabel();
@@ -3329,7 +3334,7 @@ function renderShotDetail() {
   };
   bindReviewAdjustment($("#detailReview"), s);
   bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
-  bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", manual: s.manual, isCurrent: () => S.selShot === s.id });
+  bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", isCurrent: () => S.selShot === s.id });
   const pin = $("#pinDetail");
   if (pin) pin.onclick = async () => { if (await setReference(bean, bean.bestShotId === s.id ? null : s.id)) renderShotList(); };
 }
