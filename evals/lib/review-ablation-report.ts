@@ -33,11 +33,11 @@ export function reviewAblationMarkdown({ meta, variants }: ReviewAblationReport)
       lines.push(variant.reason, "");
       continue;
     }
-    const sections = [{ family: "All profile families", metrics: variant.summary }, ...variant.families];
+    const sections = [{ family: "All profile families", metrics: variant.summary, prompt: variant.prompt }, ...variant.families];
     if (variant.labelSources.length > 1 || (variant.labelSources.length === 1 && variant.summary.labelled !== variant.summary.runs)) {
-      sections.push(...variant.labelSources.map(({ source, metrics }) => ({ family: source, metrics })));
+      sections.push(...variant.labelSources.map(({ source, metrics, prompt }) => ({ family: source, metrics, prompt })));
     }
-    for (const { family, metrics: m } of sections) {
+    for (const { family, metrics: m, prompt } of sections) {
       lines.push(
         `### ${cell(family)}`, "",
         `${m.runs} runs · ${m.labelled} labelled · ${m.unscoredEvents} unscored predictions · ${m.forbiddenFindingHits} forbidden finding hits`, "",
@@ -55,7 +55,11 @@ export function reviewAblationMarkdown({ meta, variants }: ReviewAblationReport)
         `- Forbidden claims ${m.forbiddenClaims.violations} detected, ${m.forbiddenClaims.unassessed} unassessed`,
         `- Input/output tokens ${m.tokens.input}/${m.tokens.output} across ${m.tokens.reportedRuns}/${m.runs} runs with usage`,
         `- End-to-end latency p50/p95 ${num(m.latencyMs.p50)}/${num(m.latencyMs.p95)} ms`,
-        `- Fallback rate ${pct(m.fallbackRate)}`, "",
+        `- Fallback rate ${pct(m.fallbackRate)}`,
+        ...(prompt.runs ? [
+          `- Mean prompt size ${num(prompt.curveChars)} chars of curve, ${num(prompt.promptChars)} chars in total, across ${prompt.runs} runs`,
+          `- Landmarks visible to the model ${prompt.landmarks.map((l) => `${l.kind} ${l.kept}/${l.total}`).join(", ")}`,
+        ] : []), "",
       );
     }
   }

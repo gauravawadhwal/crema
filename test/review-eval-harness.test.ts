@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 import { MockProvider } from "../server/llm/mock.js";
 import type { ReviewIssue } from "../server/recommend/review-types.js";
 import { type LlmProvider } from "../server/llm/types.js";
-import { normalizeLegacyReview, runReviewAblation, runReviewVariant } from "../evals/lib/review-ablation.js";
+import { measurePrompt, normalizeLegacyReview, runReviewAblation, runReviewVariant } from "../evals/lib/review-ablation.js";
+import { RecordingProvider } from "../evals/lib/recorder.js";
 import { reviewAblationMarkdown } from "../evals/lib/review-ablation-report.js";
 import { assertCurveStageInvariant, checkModelStage, crossedTasteInputs } from "../evals/lib/review-crossed.js";
 import { checkReviewHoldout, freezeReviewHoldout, loadReviewDataset, selectReviewCases } from "../evals/lib/review-holdout.js";
@@ -176,15 +177,43 @@ describe("labelled review metrics", () => {
   });
 });
 
+describe("prompt measurement", () => {
+  it("counts landmarks that stay visible and shrinks a dense recording's curve section", async () => {
+    const input = reviewFixture("choke");
+    input.points = Array.from({ length: 400 }, (_, i) => ({ ...input.points[i % input.points.length], t: i / 4 }));
+    const [old, anchored] = [await measurePrompt("old", input), await measurePrompt("facts-plus-anchored", input)];
+    expect(await measurePrompt("two-stage", input)).toBeNull();
+    expect(anchored!.curveChars).toBeLessThan(old!.curveChars);
+    expect(anchored!.promptChars).toBeLessThan(old!.promptChars);
+    expect(anchored!.promptChars).toBeGreaterThan(anchored!.curveChars);
+    for (const kind of Object.keys(anchored!.landmarks) as (keyof typeof anchored.landmarks)[]) {
+      expect(anchored!.landmarks[kind].kept).toBe(anchored!.landmarks[kind].total);
+      expect(old!.landmarks[kind].total).toBe(anchored!.landmarks[kind].total);
+    }
+    expect(anchored!.landmarks.recording_end.total).toBe(1);
+  });
+
+  it("detects a landmark the old sampler drops", async () => {
+    const input = reviewFixture("choke");
+    input.points = Array.from({ length: 400 }, (_, i) => ({ ...input.points[0], t: i / 4, w: i > 300 ? 20 : 0, f: 3, p: i === 123 ? 9 : 6 }));
+    const old = await measurePrompt("old", input);
+    expect(old!.landmarks.brew_pressure_crest.total).toBeGreaterThan(0);
+    expect(old!.landmarks.brew_pressure_crest.kept).toBe(0);
+    expect((await measurePrompt("facts-plus-anchored", input))!.landmarks.brew_pressure_crest.kept).toBeGreaterThan(0);
+  });
+});
+
 describe("review ablation registry and report", () => {
   it("runs the shipped paths on the same fixtures, with explicit placeholders and a per-family report", async () => {
     const cases = loadReviewDataset(fixtures()).cases;
-    const variants = await runReviewAblation(cases, ["old", "facts-only", "facts-plus-anchored", "two-stage"]);
-    const [old, ...pending] = variants;
-    expect(pending).toHaveLength(3);
+    const variants = await runReviewAblation(cases, ["old", "facts-plus-anchored", "facts-only", "two-stage"]);
+    const [old, anchored, ...pending] = variants;
+    expect(pending).toHaveLength(2);
     for (const result of pending) expect(result).toMatchObject({ status: "pending", reason: "not implemented yet" });
     expect(old).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
       families: [{ family: "flat-flow" }, { family: "flat-pressure" }],
+      records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });
+    expect(anchored).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
       records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });
     const report = reviewAblationMarkdown({ meta: { task: "review-ablation", dataset: "demo", demonstration: true, split: "dev",
       purpose: "tune", provider: "rules", startedAt: "2000-01-01T00:00:00Z", git: { commit: "abcdef", dirty: false } }, variants });
@@ -192,9 +221,21 @@ describe("review ablation registry and report", () => {
     expect(report).toContain("### flat-pressure");
     expect(report).toContain("Numeric consistency 1/1");
     expect(report).toContain("not implemented yet");
-    const mock = await runReviewVariant("old", cases[0].input, new MockProvider());
+    expect(report).toMatch(/Mean prompt size [\d.]+ chars of curve, [\d.]+ chars in total, across 2 runs/);
+    expect(report).toMatch(/Landmarks visible to the model first_sustained_beverage \d+\/\d+, brew_pressure_crest/);
+    const recorder = new RecordingProvider(new MockProvider());
+    const mock = await runReviewVariant("old", cases[0].input, recorder);
     expect(mock).toMatchObject({ status: "ready", source: "mock", tokens: null, fellBack: false, promptHashes: [expect.any(String)] });
     if (mock.status !== "ready") throw new Error(mock.reason);
+    const anchoredMock = await runReviewVariant("facts-plus-anchored", cases[0].input, recorder);
+    expect(anchoredMock).toMatchObject({ status: "ready", source: "mock", fellBack: false, review: mock.review });
+    const [oldCall, anchoredCall] = recorder.calls;
+    expect(anchoredCall.systemHash).toBe(oldCall.systemHash);
+    expect(anchoredCall.prompt.split("\n\nSHOT CURVES")[0]).toBe(oldCall.prompt.split("\n\nSHOT CURVES")[0]);
+    const curve = JSON.parse(anchoredCall.prompt.split("SHOT CURVES AND EVENTS")[1].split("\n")[1]);
+    expect(curve.events).toContainEqual(expect.objectContaining({ kind: "brew_pressure_crest" }));
+    const oldCurve = JSON.parse(oldCall.prompt.split("SHOT CURVES (")[1].split("\n")[1]);
+    expect(oldCurve[0]).toEqual(cases[0].input.points[0]);
     expect(normalizeLegacyReview({ ...mock.review, nextShot: {
       change: "", reasoning: "", grindDelta: "finer", yieldDeltaG: 2, tempDeltaC: 0, switchProfile: null,
     } }, cases[0].input).claims["multiple-next-shot-changes"]).toBe(true);
