@@ -76,6 +76,9 @@ async function clickThrough(b, url, [name, vp, scheme]) {
   await step("espresso", async () => {
     await p.click('[data-run="espresso"]'); await p.waitForTimeout(3000); await snap("2-pulling");
     await p.waitForSelector("#afterShot:not([hidden])", { timeout: 20000 });
+    // The panel is re-rendered once the shot is saved; wait for that so a rating tap is not discarded.
+    await p.waitForSelector("#reviewShot:not([disabled])", { timeout: 20000 });
+    await p.waitForTimeout(600); // let the chart resize settle so star positions measured next stay valid
   });
   // Ratings are Decaid's 0–10, shown as half stars: the left part of a star is a half.
   const starAt = async (sel, n, frac) => { await p.locator(sel).evaluate(el => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" })); const b = await p.locator(`${sel} > span:not(.stars-fill) i[data-n="${n}"]`).boundingBox(); return [b.x + b.width * frac, b.y + b.height / 2]; };
