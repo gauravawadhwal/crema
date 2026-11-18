@@ -33,9 +33,11 @@ const mechanical = {
   figures: z.array(Figure).default([]),
 };
 
+export const SyntheticReviewLabels = z.strictObject({ source: z.literal("synthetic-injected"), ...mechanical, injection: name });
+
 export const ReviewLabels = z.discriminatedUnion("source", [
   z.strictObject({ source: z.literal("measured-reference"), ...mechanical, reference: name }),
-  z.strictObject({ source: z.literal("synthetic-injected"), ...mechanical, injection: name }),
+  SyntheticReviewLabels,
   z.strictObject({
     source: z.literal("sensory"),
     ...decisions,

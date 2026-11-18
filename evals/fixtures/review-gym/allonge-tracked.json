@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "id": "allonge-tracked",
+  "session": "high-flow-pair",
+  "recipe": "long-ratio",
+  "family": "allonge",
+  "profile": {
+    "temperatureC": 91.5,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 4.5, "seconds": 2, "substate": "preinfusion", "limiter": { "value": 8.6, "range": 0.6 } },
+      { "name": "Pour", "pump": "flow", "target": 4.5, "seconds": 58, "limiter": { "value": 8.6, "range": 0.6 } }
+    ]
+  },
+  "doseG": 21,
+  "stop": { "weightG": 105, "timeS": 60 },
+  "puck": { "resistance": 2.8 },
+  "interventions": [{ "kind": "low-resistance", "factor": 0.24 }],
+  "grading": {
+    "consequence": "After wetting, measured inlet remains close to the 4.5 mL/s command with group pressure under 4 bar. The cap is far above the observed pressure.",
+    "unknowableWhen": [
+      "Without valid pressure and inlet readings the tracked-flow regime cannot be established.",
+      "A low pressure crest at matched inlet cannot distinguish grind, preparation or other physical mechanisms."
+    ],
+    "observations": [
+      { "id": "flow-shortfall", "kind": "flow_shortfall", "phase": "pouring", "controlledVariable": "flow", "expected": "forbidden" },
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.2, 7] } }
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis"]
+  }
+}
