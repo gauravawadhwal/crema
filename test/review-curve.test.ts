@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { analyzeShot } from "../server/profiles/analysis.js";
 import type { PhaseLandmark } from "../server/profiles/phase-evidence.js";
-import { reviewCurveSection, sampleReviewCurve } from "../server/recommend/review-curve.js";
+import { MAX_PHASE_BOUNDARIES, reviewCurveSection, sampleReviewCurve } from "../server/recommend/review-curve.js";
+import { legacyReviewCurveSection } from "../evals/lib/review-legacy-curve.js";
 import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
 
 const point = (t: number, overrides: Partial<ReviewPoint> = {}): ReviewPoint => ({
@@ -120,14 +121,14 @@ describe("event-anchored review curves", () => {
   });
 
   it("is deterministic and carries every event when the anchor count exceeds the row budget", () => {
-    const shot = input(Array.from({ length: 101 }, (_, i) => point(i / 4, { frame: i % 2 })));
+    const shot = input(Array.from({ length: 101 }, (_, i) => point(i / 4, { frame: Math.floor(i / 4) % 2 === 0 ? 0 : 1, substate: i % 4 === 0 ? "preinfusion" : "pouring" })));
     const none = sample(shot, 0);
     const one = sample(shot, 1);
     const all = sample(shot, Infinity);
     expect(none.points).toEqual([]);
     expect(one.points).toEqual([shot.points[0]]);
     expect(all.points).toEqual(shot.points);
-    expect(none.events.filter(event => event.kind === "phase_boundary")).toHaveLength(100);
+    expect(none.events.filter(event => event.kind === "phase_boundary").length).toBeLessThanOrEqual(MAX_PHASE_BOUNDARIES);
     expect(none.events.find(event => event.kind === "recording_end")?.before).toBe(shot.points.at(-1));
     expect(one.events).toEqual(none.events);
     expect(all.events).toEqual(none.events);
@@ -143,5 +144,36 @@ describe("event-anchored review curves", () => {
     const curve = JSON.parse(reviewCurveSection(points, landmarks).split("\n")[1]);
     expect(curve.rows.map((row: number[]) => row.slice(0, 2))).toEqual([[0.0001, 3.01], [0.0002, 3.12]]);
     expect(curve.events).toContainEqual(expect.objectContaining({ kind: "recording_end", t: 0.0002 }));
+  });
+
+  it("collapses a flickering substate into its first and last boundary and reports the merged count", () => {
+    const points = Array.from({ length: 101 }, (_, i) => point(i / 4, { substate: i % 2 ? "pouring" : "preinfusion" }));
+    const result = sample(input(points));
+    const boundaries = result.events.filter(event => event.kind === "phase_boundary");
+    expect(boundaries.map(event => event.t)).toEqual([0.25, 25]);
+    expect(boundaries[0].detail).toMatchObject({ mergedBoundaries: 98, mergedThroughS: 25 });
+    expect(result.landmarks.filter(event => event.kind === "phase_boundary")).toHaveLength(100);
+    expect(result.analysis.issues).toEqual(analyzeShot(input(points)).issues);
+  });
+
+  it("keeps a flickering recording below the old fifty-row prompt", () => {
+    const points = Array.from({ length: 400 }, (_, i) => point(i / 4, { substate: i % 2 ? "pouring" : "preinfusion" }));
+    const { landmarks } = sample(input(points));
+    expect(reviewCurveSection(points, landmarks).length).toBeLessThan(legacyReviewCurveSection(points).length);
+  });
+
+  it("lists every boundary of a normal multi-phase shot unchanged", () => {
+    const points = Array.from({ length: 60 }, (_, i) => point(i, { frame: Math.floor(i / 5), substate: i % 5 ? "pouring" : "preinfusion" }));
+    const result = sample(input(points));
+    expect(result.events.filter(event => event.kind === "phase_boundary"))
+      .toEqual(result.landmarks.filter(event => event.kind === "phase_boundary"));
+  });
+
+  it("bounds widely spaced boundaries, prefers frame changes and reports the unlisted count", () => {
+    const points = Array.from({ length: 200 }, (_, i) => point(i * 2, { frame: i < 100 ? 0 : i - 99, substate: i % 2 ? "pouring" : "preinfusion" }));
+    const boundaries = sample(input(points)).events.filter(event => event.kind === "phase_boundary");
+    expect(boundaries).toHaveLength(MAX_PHASE_BOUNDARIES);
+    expect(boundaries[0].detail).toMatchObject({ unlistedBoundaries: 199 - MAX_PHASE_BOUNDARIES });
+    expect(boundaries.filter(event => event.before?.frame !== event.after?.frame).length).toBe(MAX_PHASE_BOUNDARIES);
   });
 });

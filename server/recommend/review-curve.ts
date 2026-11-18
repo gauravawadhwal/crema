@@ -33,6 +33,38 @@ const priority: Record<PhaseLandmark["kind"], number> = {
   pressure_droop_at_held_flow: 4, phase_pressure_crest: 5, weight_jump: 5, scale_gap: 5,
 };
 
+const FLICKER_GAP_S = 1;
+const FLICKER_MIN_RUN = 6;
+export const MAX_PHASE_BOUNDARIES = 40;
+
+const withDetail = (event: PhaseLandmark, extra: Record<string, number>): PhaseLandmark => ({
+  ...event, detail: { ...(event.detail && typeof event.detail === "object" ? event.detail : {}), ...extra },
+});
+
+/** Collapse frame or substate flicker, then bound what is left, always reporting what was not listed. */
+function boundPhaseBoundaries(events: PhaseLandmark[]) {
+  const boundaries = events.filter(event => event.kind === "phase_boundary");
+  const listed = new Map<PhaseLandmark, PhaseLandmark>(boundaries.map(event => [event, event]));
+  for (let start = 0; start < boundaries.length;) {
+    let end = start;
+    while (end + 1 < boundaries.length && boundaries[end + 1].t - boundaries[end].t <= FLICKER_GAP_S) end++;
+    if (end - start + 1 >= FLICKER_MIN_RUN) {
+      for (let i = start + 1; i < end; i++) listed.delete(boundaries[i]);
+      listed.set(boundaries[start], withDetail(boundaries[start], { mergedBoundaries: end - start - 1, mergedThroughS: boundaries[end].t }));
+    }
+    start = end + 1;
+  }
+  if (listed.size > MAX_PHASE_BOUNDARIES) {
+    const rank = ([source, event]: [PhaseLandmark, PhaseLandmark]) => (source.before?.frame !== source.after?.frame ? 0 : 2) +
+      (event.detail && typeof event.detail === "object" && Object.keys(event.detail).length ? 0 : 1);
+    const ranked = [...listed].sort((a, b) => rank(a) - rank(b) || a[0].t - b[0].t);
+    for (const [source] of ranked.slice(MAX_PHASE_BOUNDARIES)) listed.delete(source);
+    const first = boundaries.find(event => listed.has(event))!;
+    listed.set(first, withDetail(listed.get(first)!, { unlistedBoundaries: ranked.length - MAX_PHASE_BOUNDARIES }));
+  }
+  return events.flatMap(event => event.kind !== "phase_boundary" ? [event] : listed.has(event) ? [listed.get(event)!] : []);
+}
+
 type Gap = [fromS: number, toS: number, channels: string[]];
 
 /** Keep the original brackets, then fill by elapsed coverage and interpolation error. */
@@ -40,8 +72,8 @@ export function sampleReviewCurve(points: ReviewPoint[], landmarks: PhaseLandmar
   const budget = Math.max(0, Math.min(points.length, Math.floor(limit) || 0));
   const indices = new Map(points.map((point, i) => [point, i]));
   const globalCrest = landmarks.find(event => event.kind === "brew_pressure_crest")?.at;
-  const events = landmarks.filter(event => event.kind !== "phase_pressure_crest" || event.at !== globalCrest)
-    .sort((a, b) => a.t - b.t || priority[a.kind] - priority[b.kind]);
+  const events = boundPhaseBoundaries(landmarks.filter(event => event.kind !== "phase_pressure_crest" || event.at !== globalCrest)
+    .sort((a, b) => a.t - b.t || priority[a.kind] - priority[b.kind]));
 
   const scaleBreaks = new Set(events.filter(event => event.kind === "weight_jump" || event.kind === "scale_gap")
     .map(event => event.after));

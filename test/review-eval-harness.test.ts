@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MockProvider } from "../server/llm/mock.js";
 import type { ReviewIssue } from "../server/recommend/review-types.js";
 import { type LlmProvider } from "../server/llm/types.js";
-import { normalizeLegacyReview, runReviewAblation, runReviewVariant } from "../evals/lib/review-ablation.js";
+import { measurePrompt, normalizeLegacyReview, runReviewAblation, runReviewVariant } from "../evals/lib/review-ablation.js";
 import { RecordingProvider } from "../evals/lib/recorder.js";
 import { reviewAblationMarkdown } from "../evals/lib/review-ablation-report.js";
 import { assertCurveStageInvariant, checkModelStage, crossedTasteInputs } from "../evals/lib/review-crossed.js";
@@ -177,6 +177,32 @@ describe("labelled review metrics", () => {
   });
 });
 
+describe("prompt measurement", () => {
+  it("counts landmarks that stay visible and shrinks a dense recording's curve section", async () => {
+    const input = reviewFixture("choke");
+    input.points = Array.from({ length: 400 }, (_, i) => ({ ...input.points[i % input.points.length], t: i / 4 }));
+    const [old, anchored] = [await measurePrompt("old", input), await measurePrompt("facts-plus-anchored", input)];
+    expect(await measurePrompt("two-stage", input)).toBeNull();
+    expect(anchored!.curveChars).toBeLessThan(old!.curveChars);
+    expect(anchored!.promptChars).toBeLessThan(old!.promptChars);
+    expect(anchored!.promptChars).toBeGreaterThan(anchored!.curveChars);
+    for (const kind of Object.keys(anchored!.landmarks) as (keyof typeof anchored.landmarks)[]) {
+      expect(anchored!.landmarks[kind].kept).toBe(anchored!.landmarks[kind].total);
+      expect(old!.landmarks[kind].total).toBe(anchored!.landmarks[kind].total);
+    }
+    expect(anchored!.landmarks.recording_end.total).toBe(1);
+  });
+
+  it("detects a landmark the old sampler drops", async () => {
+    const input = reviewFixture("choke");
+    input.points = Array.from({ length: 400 }, (_, i) => ({ ...input.points[0], t: i / 4, w: i > 300 ? 20 : 0, f: 3, p: i === 123 ? 9 : 6 }));
+    const old = await measurePrompt("old", input);
+    expect(old!.landmarks.brew_pressure_crest.total).toBeGreaterThan(0);
+    expect(old!.landmarks.brew_pressure_crest.kept).toBe(0);
+    expect((await measurePrompt("facts-plus-anchored", input))!.landmarks.brew_pressure_crest.kept).toBeGreaterThan(0);
+  });
+});
+
 describe("review ablation registry and report", () => {
   it("runs the shipped paths on the same fixtures, with explicit placeholders and a per-family report", async () => {
     const cases = loadReviewDataset(fixtures()).cases;
@@ -195,6 +221,8 @@ describe("review ablation registry and report", () => {
     expect(report).toContain("### flat-pressure");
     expect(report).toContain("Numeric consistency 1/1");
     expect(report).toContain("not implemented yet");
+    expect(report).toMatch(/Mean prompt size [\d.]+ chars of curve, [\d.]+ chars in total, across 2 runs/);
+    expect(report).toMatch(/Landmarks visible to the model first_sustained_beverage \d+\/\d+, brew_pressure_crest/);
     const recorder = new RecordingProvider(new MockProvider());
     const mock = await runReviewVariant("old", cases[0].input, recorder);
     expect(mock).toMatchObject({ status: "ready", source: "mock", tokens: null, fellBack: false, promptHashes: [expect.any(String)] });
