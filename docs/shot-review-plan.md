@@ -147,8 +147,13 @@ cases and, later, real shots from the tablet. Unit tests in
 The prompt carries:
 
 - the findings, without any overall verdict;
-- curves downsampled to about 50 points (pressure, flow, weight, temperature and
-  their targets);
+- a compact curve of up to 32 rounded rows (pressure, flow, weight, temperature and
+  their targets), spread across elapsed time and the shape of the curves, plus
+  event rows kept with their measured neighbouring readings: start, phase
+  boundaries, first sustained beverage, pressure crest, planned rise and decline,
+  and stop (`server/recommend/review-curve.ts`). Missing readings stay null and
+  gaps stay visible; frame or substate flicker is merged and phase boundaries
+  are capped;
 - the profile's steps in words, from `curve.ts`, and the author's dial-in
   guidance from the catalogue;
 - the coffee, the recipe and its target time;
