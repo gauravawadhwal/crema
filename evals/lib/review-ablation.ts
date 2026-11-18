@@ -4,6 +4,7 @@ import { reviewShot } from "../../server/recommend/review.js";
 import { rulesReview } from "../../server/recommend/review-local.js";
 import type { ReviewInput, ShotReviewData } from "../../server/recommend/review-types.js";
 import { RecordingProvider } from "./recorder.js";
+import { legacyReviewCurveSection } from "./review-legacy-curve.js";
 import type { PumpMode, ReviewLabels } from "./review-labels.js";
 import { scoreReview, summarizeReviewMetrics, type ReviewEvalOutput, type ReviewMetricRow } from "./review-metrics.js";
 
@@ -64,16 +65,20 @@ export function normalizeLegacyReview(review: ShotReviewData, input: ReviewInput
 }
 
 const pending: Variant = { status: "pending", reason: "not implemented yet" };
-export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
-  old: {
+function curveVariant(curveSection?: typeof legacyReviewCurveSection): Variant {
+  return {
     status: "ready",
     async run(input, llm) {
-      const { review, source } = llm ? await reviewShot(llm, input) : { review: rulesReview(input), source: "rules" };
+      const { review, source } = llm ? await reviewShot(llm, input, { curveSection }) : { review: rulesReview(input), source: "rules" };
       return { review, source, scored: normalizeLegacyReview(review, input), fellBack: llm != null && source === "rules" };
     },
-  },
+  };
+}
+
+export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
+  old: curveVariant(legacyReviewCurveSection),
   "facts-only": pending,
-  "facts-plus-anchored": pending,
+  "facts-plus-anchored": curveVariant(),
   "two-stage": pending,
 };
 

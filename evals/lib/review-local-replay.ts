@@ -17,12 +17,12 @@ const DecaidShot = z.object({
   workflow: z.object({
     // Retain recorded profile metadata for the same shape comparison as the skin.
     profile: z.custom<ProfileLike>((value) => ReviewBody.shape.profile.unwrap().safeParse(value).success).nullish(),
-    context: z.object({ beanBatchId: text, grinderSetting: numeric, targetDoseWeight: numeric, targetYield: numeric, targetTimeS: z.unknown(), stopReason: text }).nullish(),
+    context: z.object({ beanBatchId: text, grinderSetting: numeric, targetDoseWeight: numeric, targetYield: numeric, targetTimeS: z.unknown().optional(), stopReason: text }).nullish(),
   }).nullish(),
   annotations: z.object({
     actualDoseWeight: numeric, actualYield: numeric, enjoyment: reading, espressoNotes: text, stopReason: text,
     extras: z.object({ crema: z.object({
-      sourBitter: reading, body: reading, targetTimeS: z.unknown(),
+      sourBitter: reading, body: reading, targetTimeS: z.unknown().optional(),
       review: z.object({ review: z.object({ summary: text }).nullish(), summary: text }).nullish(),
     }).nullish() }).nullish(),
   }).nullish(),

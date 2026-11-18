@@ -1,6 +1,6 @@
 import type { ProfileLike } from "./curve.js";
 import { findProfile } from "./catalog.js";
-import { ambiguousZeroFrames, isBrewPoint, measurePhases, type PhaseEvidence } from "./phase-evidence.js";
+import { ambiguousZeroFrames, isBrewPoint, measurePhases, type PhaseEvidence, type PhaseLandmark } from "./phase-evidence.js";
 import type { ReviewInput, ReviewIssue } from "../recommend/review-types.js";
 
 export interface ShotAnalysisMetrics {
@@ -164,7 +164,7 @@ function faultTargetAndActual(input: ReviewInput, point: ReviewInput["points"][n
  * samples are unknown. A candidate must have a known profile frame, a steady
  * recorded target, and a settled window of at least eight seconds.
  */
-export function analyzeShot(input: ReviewInput): ShotAnalysis {
+export function analyzeShot(input: ReviewInput, landmarks?: PhaseLandmark[]): ShotAnalysis {
   const issues: ReviewIssue[] = [];
   const profile = input.profile;
   const points = [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
@@ -338,7 +338,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
     const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
     return Math.abs(avg / w.target - 1) <= 0.2;
   });
-  const facts = shotFacts(input, points);
+  const facts = shotFacts(input, points, landmarks);
 
   const lastT = points.at(-1)?.t ?? 0;
   const window = facts.expectedTimeS;
@@ -386,7 +386,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
 const round = (n: number | null, places = 1) => n == null ? null : Math.round(n * 10 ** places) / 10 ** places;
 
 /** Measured facts about a shot: phases, first drips, yield and ratio, pressure and flow. */
-export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): ShotFacts {
+export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"], landmarks?: PhaseLandmark[]): ShotFacts {
   const points = sorted ?? [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
   const phased = points.some((p) => p.substate);
   const brewing = points.filter(p => isBrewPoint(p, phased));
@@ -394,7 +394,7 @@ export function shotFacts(input: ReviewInput, sorted?: ReviewInput["points"]): S
   const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
   const pour = phased ? brewing.filter((p) => /^pour/i.test(p.substate!)) : brewing;
   const preinfusion = phased ? brewing.filter((p) => /^preinfusion/i.test(p.substate!)) : [];
-  const phaseEvidence = measurePhases(input, points);
+  const phaseEvidence = measurePhases(input, points, landmarks);
   const firstDripsS = phaseEvidence.firstSustainedBeverage.value?.tS ?? null;
   const pressures = brewing.map((p) => p.p).filter(finite);
   const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;

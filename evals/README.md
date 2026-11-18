@@ -131,11 +131,13 @@ The legacy review exposes one confidence for the entire review. Its rules path
 can change that confidence in response to a taste conflict, which the check reports
 as a failure. A successful mock check establishes plumbing with canned responses.
 
-`run` defaults to dev/tuning and tries every registered variant. Use
-`--variant old` to select the current `reviewShot` (mock) or `rulesReview` (rules).
-`facts-only`, `facts-plus-anchored`, and `two-stage` report “not implemented yet”
-until their adapters are available. Each ready variant gets the same input cases
-and provider. The new CLI accepts `rules` and `mock`.
+`run` defaults to dev/tuning and tries every registered variant.
+`--variant old --variant facts-plus-anchored` compares the previous
+50-point prompt curve with the shipped event-anchored prompt curve. Mock uses
+the same review code and facts for both variants. Rules use the same full trace
+and skip prompt construction in both variants. Scoring still assesses returned
+findings and advice. `facts-only` and `two-stage` report “not implemented yet.”
+Each ready variant gets the same input cases and provider.
 
 Results are a JSON file and matching Markdown report in `evals/results/` or a
 directory supplied with `--out`. Synthetic reference runs can be promoted to

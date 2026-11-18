@@ -76,6 +76,15 @@ describe("Decaid replay mapping", () => {
     expect(points.at(-1)?.t).toBe(39.98);
     expect(yieldG).toBe(1999 / 60);
   });
+
+  it("accepts captured metadata with no saved timing window", () => {
+    const shot = recording();
+    const { targetTimeS: _context, ...context } = shot.workflow.context;
+    const { targetTimeS: _annotation, ...crema } = shot.annotations.extras.crema;
+    expect(decaidReviewInput({
+      ...shot, workflow: { ...shot.workflow, context }, annotations: { ...shot.annotations, extras: { crema } },
+    })).toMatchObject({ targetTimeS: null, timeBasis: null, feedback: { sourBitter: 0, body: 1 } });
+  });
 });
 
 describe("local replay loader", () => {

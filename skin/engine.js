@@ -1212,6 +1212,8 @@ var CremaEngine = (() => {
       if (dt > MACHINE_GAP_S || hi <= lo || a.some((v) => v == null) || b.some((v) => v == null)) continue;
       result.push({
         dt: hi - lo,
+        before: points[i - 1],
+        after: points[i],
         a: a.map((v, j) => interpolate(v, b[j], (lo - start) / dt)),
         b: a.map((v, j) => interpolate(v, b[j], (hi - start) / dt))
       });
@@ -1265,16 +1267,42 @@ var CremaEngine = (() => {
     const cross = a / (a - b);
     return a < 0 ? [cross, 1] : [0, cross];
   }
-  function capTime(points, command, actual, other, limit) {
+  function capTime(points, command, actual, other, limit, landmarks) {
     const start = points[0].t, end = points.at(-1).t;
     const pairs = intervals(points, (p) => [command(p), actual(p), other(p)], start, end);
     const covered = coverage(pairs);
     let seconds = 0;
-    for (const { a, b, dt } of pairs) {
-      if (a[0] === 0 && b[0] === 0) continue;
+    const spans = pairs.map(({ a, b }) => {
+      if (a[0] === 0 && b[0] === 0) return null;
       const cap2 = nonnegative(a[2] - 0.9 * limit, b[2] - 0.9 * limit);
       const shortage = nonnegative(0.8 * a[0] - a[1], 0.8 * b[0] - b[1]);
-      seconds += dt * Math.max(0, Math.min(cap2[1], shortage[1]) - Math.max(cap2[0], shortage[0]));
+      const lo = Math.max(cap2[0], shortage[0]), hi = Math.min(cap2[1], shortage[1]);
+      return hi > lo ? { lo, hi } : null;
+    });
+    for (const [i, { dt, before, after }] of pairs.entries()) {
+      const span = spans[i];
+      if (!span) continue;
+      const { lo, hi } = span;
+      seconds += dt * (hi - lo);
+      if (!landmarks) continue;
+      if (lo > 0 || pairs[i - 1]?.after === before && spans[i - 1]?.hi !== 1) {
+        landmarks.push({
+          kind: "cap_like_start",
+          confidence: "medium",
+          t: before.t + dt * lo,
+          before: lo === 0 ? pairs[i - 1].before : before,
+          after: lo === 0 ? before : after
+        });
+      }
+      if (hi < 1 || pairs[i + 1]?.before === after && spans[i + 1]?.lo !== 0) {
+        landmarks.push({
+          kind: "cap_like_end",
+          confidence: "medium",
+          t: before.t + dt * hi,
+          before: hi === 1 ? after : before,
+          after: hi === 1 ? pairs[i + 1].after : after
+        });
+      }
     }
     return windowEvidence(
       covered ? { seconds: rounded(seconds), shareOfCoveredTime: rounded(seconds / covered) } : null,
@@ -1357,7 +1385,7 @@ var CremaEngine = (() => {
     if (b.w - a.w > Math.max(5, 15 * dt) || a.w - b.w > Math.max(2, 8 * dt)) return "weight_jump";
     return null;
   }
-  function firstBeverage(rows, hasScale, brewStartS) {
+  function firstBeverage(rows, hasScale, brewStartS, landmarks) {
     let rejected = "no_three_consecutive_gram_readings";
     for (let i = 0; brewStartS != null && i + 2 < rows.length; i++) {
       const [a, b, c] = [rows[i], rows[i + 1], rows[i + 2]];
@@ -1371,6 +1399,15 @@ var CremaEngine = (() => {
       }
       const p = a.p;
       const volume = positive(p.countedVolumeMl);
+      landmarks?.push({
+        kind: "first_sustained_beverage",
+        t: p.t,
+        at: p,
+        confidence: prev?.w != null ? "high" : "medium",
+        before: prev?.w != null ? prev.p : void 0,
+        after: b.p,
+        confirmed: c.p
+      });
       return { point: p, event: evidence({
         tS: rounded(p.t),
         brewElapsedS: rounded(p.t - brewStartS),
@@ -1476,7 +1513,7 @@ var CremaEngine = (() => {
     if (/ramp|rise|pressure up/i.test(name) || delta != null && delta > 0.25) return "ramp";
     return mode ? "hold_or_pour" : null;
   }
-  function describePhase(run, index, step, alignmentReason, scale, hasScale, hasState, onset) {
+  function describePhase(run, index, step, alignmentReason, scale, hasScale, hasState, onset, landmarks) {
     const xs = run.points, first = xs[0], last = xs.at(-1);
     const span = last.t - first.t;
     const pump = step?.pump?.toLowerCase();
@@ -1496,12 +1533,21 @@ var CremaEngine = (() => {
     const measurement = loggedCommand.value;
     const delta = measurement?.entry != null && measurement.last != null ? measurement.last - measurement.entry : null;
     const purpose = phasePurpose(first, step, mode, delta);
+    if (first !== last && (purpose === "ramp" || purpose === "decline")) {
+      landmarks?.push({
+        kind: purpose === "ramp" ? "planned_rise" : "planned_decline",
+        t: first.t,
+        confidence: "medium",
+        before: first,
+        after: last
+      });
+    }
     const lateStart = last.t - Math.min(RESPONSE_WINDOW_S, span / 2);
     const earlyEnd = first.t + Math.min(RESPONSE_WINDOW_S, span / 2);
     const early = hydraulicWindow(xs, first.t, earlyEnd), late = hydraulicWindow(xs, lateStart, last.t);
     const crestPoint = pressurePeak(xs);
     const crest = pressureCrest(crestPoint);
-    const cap2 = mode && limit != null ? capTime(xs, command, actual, other, limit) : windowEvidence(null, first.t, last.t, 0, mode ? "no_configured_limiter" : alignmentReason);
+    const cap2 = mode && limit != null ? capTime(xs, command, actual, other, limit, landmarks) : windowEvidence(null, first.t, last.t, 0, mode ? "no_configured_limiter" : alignmentReason);
     const controlledError = mode ? residual(xs, command, actual) : windowEvidence(null, first.t, last.t, 0, alignmentReason);
     const settled = xs.filter((p) => p.t - first.t >= 2);
     const paired = settled.filter((p) => (command(p) ?? 0) > 0 && actual(p) != null);
@@ -1535,6 +1581,29 @@ var CremaEngine = (() => {
       "inferred",
       heldFlow ? "crest_minus_late_median_at_similar_tracked_inlet_flow" : "no_covered_crest_to_late_comparison_at_held_flow"
     );
+    if (landmarks && crestPoint) {
+      const at = xs.indexOf(crestPoint);
+      if (at > 0 && at < xs.length - 1) {
+        landmarks.push({
+          kind: "phase_pressure_crest",
+          confidence: "high",
+          t: crestPoint.t,
+          before: xs[at - 1],
+          at: crestPoint,
+          after: xs[at + 1]
+        });
+      }
+      if (decline.value != null && decline.value > 0) {
+        landmarks.push({
+          kind: "pressure_droop_at_held_flow",
+          confidence: "medium",
+          t: lateStart,
+          before: crestPoint,
+          at: xs.find((p) => p.t >= lateStart),
+          after: last
+        });
+      }
+    }
     const next = run.next;
     const end = next && isBrewPoint(next, hasState) ? evidence(
       { nextFrame: next.frame, nextSubstate: next.substate, nextSampleS: rounded(next.t) },
@@ -1595,7 +1664,7 @@ var CremaEngine = (() => {
   function ambiguousZeroFrames(input, points) {
     return (input.profile?.steps?.length ?? 0) !== 1 && points.length > 0 && points.every((p) => p.frame === 0 && /^pour/i.test(p.substate ?? ""));
   }
-  function measurePhases(input, points) {
+  function measurePhases(input, points, landmarks) {
     const hasState = points.some((p) => p.substate);
     const runs = phaseRuns(points, hasState);
     const steps = input.profile?.steps ?? [];
@@ -1605,7 +1674,7 @@ var CremaEngine = (() => {
     const hasScale = brew.some((p) => p.w != null || p.weightFlow != null);
     const scale = scaleRows(points, hasState);
     const first = brew[0], last = brew.at(-1);
-    const onset = firstBeverage(scale, hasScale, first?.t);
+    const onset = firstBeverage(scale, hasScale, first?.t, landmarks);
     const phases = runs.map((run, index) => {
       const frame = run.points[0].frame;
       const step = !alignmentReason && frame != null && Number.isInteger(frame) ? steps[frame] : void 0;
@@ -1620,7 +1689,8 @@ var CremaEngine = (() => {
         scale,
         hasScale,
         hasState,
-        onset.point
+        onset.point,
+        landmarks
       );
     });
     const rateBoundary = onset.point?.t ?? null;
@@ -1641,6 +1711,70 @@ var CremaEngine = (() => {
     const previousScale = lastScale ? scale[scale.indexOf(lastScale) - 1] : void 0;
     const finalWeightJump = previousScale && lastScale && scaleEdge(previousScale, lastScale) === "weight_jump";
     const lastScaleValue = finalWeightJump ? null : lastScale?.w ?? null;
+    if (landmarks) {
+      const start = points[0], end = points.at(-1);
+      if (start) landmarks.push({ kind: "recording_start", t: start.t, confidence: "high", after: start });
+      if (end) landmarks.push({ kind: "recording_end", t: end.t, confidence: "high", before: end });
+      const crest = pressurePeak(brew);
+      if (crest) {
+        const index = points.indexOf(crest);
+        landmarks.push({
+          kind: "brew_pressure_crest",
+          confidence: "high",
+          t: crest.t,
+          before: points[index - 1],
+          at: crest,
+          after: points[index + 1]
+        });
+      }
+      const phaseEntries = new Map(runs.map((run, i) => [run.points[0], phases[i]]));
+      const phaseExits = new Map(runs.map((run, i) => [run.points.at(-1), phases[i]]));
+      for (const [i, point] of points.entries()) {
+        const prev = points[i - 1];
+        if (!prev || prev.frame === point.frame && prev.substate === point.substate) continue;
+        const ending = phaseExits.get(prev), starting = phaseEntries.get(point);
+        const fromLimiter = ending?.plan.value?.limiter ?? null;
+        const toLimiter = starting?.plan.value?.limiter ?? null;
+        const limitChanged = fromLimiter?.value !== toLimiter?.value || fromLimiter?.unit !== toLimiter?.unit || fromLimiter?.range !== toLimiter?.range;
+        landmarks.push({
+          kind: "phase_boundary",
+          t: point.t,
+          before: prev,
+          after: point,
+          confidence: point.t - prev.t <= MACHINE_GAP_S ? "high" : "low",
+          detail: {
+            ...starting?.purpose.value ? { entering: starting.purpose.value } : {},
+            ...limitChanged ? { fromLimiter, toLimiter } : {}
+          }
+        });
+      }
+      for (const [i, row] of scale.entries()) {
+        const prev = scale[i - 1];
+        if (!prev || !isBrewPoint(prev.p, hasState) || !isBrewPoint(row.p, hasState)) continue;
+        const reason = scaleEdge(prev, row);
+        if (reason === "weight_jump" || reason === "scale_gap" || reason === "stale_scale_sample") {
+          landmarks.push({
+            kind: reason === "weight_jump" ? reason : "scale_gap",
+            confidence: "high",
+            t: row.p.t,
+            before: prev.p,
+            after: row.p
+          });
+        }
+      }
+      if (last) {
+        const index = points.indexOf(last);
+        const reason = input.stopReason;
+        landmarks.push({
+          kind: "stop",
+          confidence: reason ? "medium" : "low",
+          t: last.t,
+          before: last,
+          after: points[index + 1],
+          detail: reason
+        });
+      }
+    }
     return {
       phases,
       firstSustainedBeverage: onset.event,
@@ -1727,7 +1861,7 @@ var CremaEngine = (() => {
     if (!finite(target) || !finite(actual) || target <= 0 || skipFaultChecks(input.profile, step, target)) return null;
     return { pump, target, actual, step };
   }
-  function analyzeShot(input) {
+  function analyzeShot(input, landmarks) {
     const issues = [];
     const profile = input.profile;
     const points = [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
@@ -1900,7 +2034,7 @@ var CremaEngine = (() => {
       const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
       return Math.abs(avg / w.target - 1) <= 0.2;
     });
-    const facts = shotFacts(input, points);
+    const facts = shotFacts(input, points, landmarks);
     const lastT = points.at(-1)?.t ?? 0;
     const window = facts.expectedTimeS;
     if (judged && facts.timeTargetComparable && window && facts.durationS != null && facts.timeDeltaS != null) {
@@ -1952,7 +2086,7 @@ var CremaEngine = (() => {
     };
   }
   var round2 = (n, places = 1) => n == null ? null : Math.round(n * 10 ** places) / 10 ** places;
-  function shotFacts(input, sorted) {
+  function shotFacts(input, sorted, landmarks) {
     const points = sorted ?? [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
     const phased = points.some((p) => p.substate);
     const brewing = points.filter((p) => isBrewPoint(p, phased));
@@ -1960,7 +2094,7 @@ var CremaEngine = (() => {
     const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     const pour = phased ? brewing.filter((p) => /^pour/i.test(p.substate)) : brewing;
     const preinfusion = phased ? brewing.filter((p) => /^preinfusion/i.test(p.substate)) : [];
-    const phaseEvidence = measurePhases(input, points);
+    const phaseEvidence = measurePhases(input, points, landmarks);
     const firstDripsS = phaseEvidence.firstSustainedBeverage.value?.tS ?? null;
     const pressures = brewing.map((p) => p.p).filter(finite);
     const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;

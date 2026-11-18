@@ -7,6 +7,7 @@ import { MockProvider } from "../server/llm/mock.js";
 import type { ReviewIssue } from "../server/recommend/review-types.js";
 import { type LlmProvider } from "../server/llm/types.js";
 import { normalizeLegacyReview, runReviewAblation, runReviewVariant } from "../evals/lib/review-ablation.js";
+import { RecordingProvider } from "../evals/lib/recorder.js";
 import { reviewAblationMarkdown } from "../evals/lib/review-ablation-report.js";
 import { assertCurveStageInvariant, checkModelStage, crossedTasteInputs } from "../evals/lib/review-crossed.js";
 import { checkReviewHoldout, freezeReviewHoldout, loadReviewDataset, selectReviewCases } from "../evals/lib/review-holdout.js";
@@ -179,12 +180,14 @@ describe("labelled review metrics", () => {
 describe("review ablation registry and report", () => {
   it("runs the shipped paths on the same fixtures, with explicit placeholders and a per-family report", async () => {
     const cases = loadReviewDataset(fixtures()).cases;
-    const variants = await runReviewAblation(cases, ["old", "facts-only", "facts-plus-anchored", "two-stage"]);
-    const [old, ...pending] = variants;
-    expect(pending).toHaveLength(3);
+    const variants = await runReviewAblation(cases, ["old", "facts-plus-anchored", "facts-only", "two-stage"]);
+    const [old, anchored, ...pending] = variants;
+    expect(pending).toHaveLength(2);
     for (const result of pending) expect(result).toMatchObject({ status: "pending", reason: "not implemented yet" });
     expect(old).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
       families: [{ family: "flat-flow" }, { family: "flat-pressure" }],
+      records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });
+    expect(anchored).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
       records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });
     const report = reviewAblationMarkdown({ meta: { task: "review-ablation", dataset: "demo", demonstration: true, split: "dev",
       purpose: "tune", provider: "rules", startedAt: "2000-01-01T00:00:00Z", git: { commit: "abcdef", dirty: false } }, variants });
@@ -192,9 +195,19 @@ describe("review ablation registry and report", () => {
     expect(report).toContain("### flat-pressure");
     expect(report).toContain("Numeric consistency 1/1");
     expect(report).toContain("not implemented yet");
-    const mock = await runReviewVariant("old", cases[0].input, new MockProvider());
+    const recorder = new RecordingProvider(new MockProvider());
+    const mock = await runReviewVariant("old", cases[0].input, recorder);
     expect(mock).toMatchObject({ status: "ready", source: "mock", tokens: null, fellBack: false, promptHashes: [expect.any(String)] });
     if (mock.status !== "ready") throw new Error(mock.reason);
+    const anchoredMock = await runReviewVariant("facts-plus-anchored", cases[0].input, recorder);
+    expect(anchoredMock).toMatchObject({ status: "ready", source: "mock", fellBack: false, review: mock.review });
+    const [oldCall, anchoredCall] = recorder.calls;
+    expect(anchoredCall.systemHash).toBe(oldCall.systemHash);
+    expect(anchoredCall.prompt.split("\n\nSHOT CURVES")[0]).toBe(oldCall.prompt.split("\n\nSHOT CURVES")[0]);
+    const curve = JSON.parse(anchoredCall.prompt.split("SHOT CURVES AND EVENTS")[1].split("\n")[1]);
+    expect(curve.events).toContainEqual(expect.objectContaining({ kind: "brew_pressure_crest" }));
+    const oldCurve = JSON.parse(oldCall.prompt.split("SHOT CURVES (")[1].split("\n")[1]);
+    expect(oldCurve[0]).toEqual(cases[0].input.points[0]);
     expect(normalizeLegacyReview({ ...mock.review, nextShot: {
       change: "", reasoning: "", grindDelta: "finer", yieldDeltaG: 2, tempDeltaC: 0, switchProfile: null,
     } }, cases[0].input).claims["multiple-next-shot-changes"]).toBe(true);

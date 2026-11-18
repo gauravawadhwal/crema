@@ -7,12 +7,26 @@ type Evidence<T> = { value: T | null; source: Provenance | null; reason: string 
 type TimeWindow = { fromS: number; toS: number; coveredS: number };
 type WindowEvidence<T> = Evidence<T> & TimeWindow;
 
-const MACHINE_GAP_S = 1.5;
+export const MACHINE_GAP_S = 1.5;
 // These bounds reject unsupported interpolation and obvious scale artifacts.
 // They are evidence-coverage checks, independent of espresso fault thresholds.
 const SCALE_GAP_S = 0.75;
 const ONSET_WINDOW_S = 2;
 const RESPONSE_WINDOW_S = 5;
+
+/** Raw brackets for prompt sampling. These never feed back into the evidence or fault rules. */
+export interface PhaseLandmark {
+  kind: "recording_start" | "recording_end" | "phase_boundary" | "brew_pressure_crest" | "phase_pressure_crest" | "first_sustained_beverage" |
+    "cap_like_start" | "cap_like_end" | "planned_rise" | "planned_decline" |
+    "pressure_droop_at_held_flow" | "stop" | "weight_jump" | "scale_gap";
+  t: number;
+  confidence: "high" | "medium" | "low";
+  before?: ReviewPoint;
+  at?: ReviewPoint;
+  after?: ReviewPoint;
+  confirmed?: ReviewPoint;
+  detail?: unknown;
+}
 
 const rounded = (n: number) => Math.round(n * 1000) / 1000;
 const roundedReading = (n: number | null) => n == null ? null : rounded(n);
@@ -61,9 +75,9 @@ function interpolate(a: number, b: number, fraction: number) {
 
 /** Integrate only adjacent, valid pairs, clipping to the requested elapsed times. */
 function intervals(points: ReviewPoint[], select: (p: ReviewPoint) => (number | null)[],
-  fromS: number, toS: number): Interval[] {
+  fromS: number, toS: number) {
   const rows = points.map(select);
-  const result: Interval[] = [];
+  const result: (Interval & { before: ReviewPoint; after: ReviewPoint })[] = [];
   for (let i = 1; i < points.length; i++) {
     const start = points[i - 1].t, end = points[i].t, dt = end - start;
     const a = rows[i - 1], b = rows[i];
@@ -71,6 +85,7 @@ function intervals(points: ReviewPoint[], select: (p: ReviewPoint) => (number | 
     if (dt > MACHINE_GAP_S || hi <= lo || a.some(v => v == null) || b.some(v => v == null)) continue;
     result.push({
       dt: hi - lo,
+      before: points[i - 1], after: points[i],
       a: a.map((v, j) => interpolate(v!, b[j]!, (lo - start) / dt)),
       b: a.map((v, j) => interpolate(v!, b[j]!, (hi - start) / dt)),
     });
@@ -126,16 +141,35 @@ function nonnegative(a: number, b: number): [number, number] {
 }
 
 function capTime(points: ReviewPoint[], command: (p: ReviewPoint) => number | null,
-  actual: (p: ReviewPoint) => number | null, other: (p: ReviewPoint) => number | null, limit: number) {
+  actual: (p: ReviewPoint) => number | null, other: (p: ReviewPoint) => number | null, limit: number,
+  landmarks?: PhaseLandmark[]) {
   const start = points[0].t, end = points.at(-1)!.t;
   const pairs = intervals(points, p => [command(p), actual(p), other(p)], start, end);
   const covered = coverage(pairs);
   let seconds = 0;
-  for (const { a, b, dt } of pairs) {
-    if (a[0] === 0 && b[0] === 0) continue;
+  const spans = pairs.map(({ a, b }) => {
+    if (a[0] === 0 && b[0] === 0) return null;
     const cap = nonnegative(a[2] - 0.9 * limit, b[2] - 0.9 * limit);
     const shortage = nonnegative(0.8 * a[0] - a[1], 0.8 * b[0] - b[1]);
-    seconds += dt * Math.max(0, Math.min(cap[1], shortage[1]) - Math.max(cap[0], shortage[0]));
+    const lo = Math.max(cap[0], shortage[0]), hi = Math.min(cap[1], shortage[1]);
+    return hi > lo ? { lo, hi } : null;
+  });
+  for (const [i, { dt, before, after }] of pairs.entries()) {
+    const span = spans[i];
+    if (!span) continue;
+    const { lo, hi } = span;
+    seconds += dt * (hi - lo);
+    if (!landmarks) continue;
+    // An interpolated threshold crossing is descriptive. A gap or a phase
+    // endpoint by itself does not establish that the limiter changed state.
+    if (lo > 0 || (pairs[i - 1]?.after === before && spans[i - 1]?.hi !== 1)) {
+      landmarks.push({ kind: "cap_like_start", confidence: "medium", t: before.t + dt * lo,
+        before: lo === 0 ? pairs[i - 1].before : before, after: lo === 0 ? before : after });
+    }
+    if (hi < 1 || (pairs[i + 1]?.before === after && spans[i + 1]?.lo !== 0)) {
+      landmarks.push({ kind: "cap_like_end", confidence: "medium", t: before.t + dt * hi,
+        before: hi === 1 ? after : before, after: hi === 1 ? pairs[i + 1].after : after });
+    }
   }
   return windowEvidence(covered ? { seconds: rounded(seconds), shareOfCoveredTime: rounded(seconds / covered) } : null,
     start, end, covered, coverageReason(covered, end - start));
@@ -217,7 +251,7 @@ function scaleEdge(a: ScaleRow, b: ScaleRow) {
   return null;
 }
 
-function firstBeverage(rows: ScaleRow[], hasScale: boolean, brewStartS: number | undefined) {
+function firstBeverage(rows: ScaleRow[], hasScale: boolean, brewStartS: number | undefined, landmarks?: PhaseLandmark[]) {
   let rejected = "no_three_consecutive_gram_readings";
   for (let i = 0; brewStartS != null && i + 2 < rows.length; i++) {
     const [a, b, c] = [rows[i], rows[i + 1], rows[i + 2]];
@@ -231,6 +265,9 @@ function firstBeverage(rows: ScaleRow[], hasScale: boolean, brewStartS: number |
     }
     const p = a.p;
     const volume = positive(p.countedVolumeMl);
+    landmarks?.push({ kind: "first_sustained_beverage", t: p.t, at: p,
+      confidence: prev?.w != null ? "high" : "medium", before: prev?.w != null ? prev.p : undefined,
+      after: b.p, confirmed: c.p });
     return { point: p, event: evidence({
       tS: rounded(p.t), brewElapsedS: rounded(p.t - brewStartS), confirmedThroughS: rounded(c.p.t), previousBelowGramS: prev?.w != null ? rounded(prev.p.t) : null,
       weightG: rounded(a.w!), pressureBar: roundedReading(pressure(p)), inletFlowMlS: roundedReading(flow(p)),
@@ -322,7 +359,7 @@ function phasePurpose(first: ReviewPoint, step: ProfileStepLike | undefined, mod
 }
 
 function describePhase(run: Run, index: number, step: ProfileStepLike | undefined, alignmentReason: string,
-  scale: ScaleRow[], hasScale: boolean, hasState: boolean, onset: ReviewPoint | null) {
+  scale: ScaleRow[], hasScale: boolean, hasState: boolean, onset: ReviewPoint | null, landmarks?: PhaseLandmark[]) {
   const xs = run.points, first = xs[0], last = xs.at(-1)!;
   const span = last.t - first.t;
   const pump = step?.pump?.toLowerCase();
@@ -343,12 +380,16 @@ function describePhase(run: Run, index: number, step: ProfileStepLike | undefine
   const measurement = loggedCommand.value;
   const delta = measurement?.entry != null && measurement.last != null ? measurement.last - measurement.entry : null;
   const purpose = phasePurpose(first, step, mode, delta);
+  if (first !== last && (purpose === "ramp" || purpose === "decline")) {
+    landmarks?.push({ kind: purpose === "ramp" ? "planned_rise" : "planned_decline", t: first.t,
+      confidence: "medium", before: first, after: last });
+  }
   const lateStart = last.t - Math.min(RESPONSE_WINDOW_S, span / 2);
   const earlyEnd = first.t + Math.min(RESPONSE_WINDOW_S, span / 2);
   const early = hydraulicWindow(xs, first.t, earlyEnd), late = hydraulicWindow(xs, lateStart, last.t);
   const crestPoint = pressurePeak(xs);
   const crest = pressureCrest(crestPoint);
-  const cap = mode && limit != null ? capTime(xs, command, actual, other, limit) :
+  const cap = mode && limit != null ? capTime(xs, command, actual, other, limit, landmarks) :
     windowEvidence<never>(null, first.t, last.t, 0, mode ? "no_configured_limiter" : alignmentReason);
   const controlledError = mode ? residual(xs, command, actual) : windowEvidence<never>(null, first.t, last.t, 0, alignmentReason);
   // A steady logged command is descriptive even if the measured response misses it.
@@ -388,6 +429,17 @@ function describePhase(run: Run, index: number, step: ProfileStepLike | undefine
     heldError.value.absoluteMean <= 0.1 * peakTarget;
   const decline = evidence(heldFlow && peak && tail ? rounded(peak.pressureBar - tail.medianPressureBar) : null,
     "inferred", heldFlow ? "crest_minus_late_median_at_similar_tracked_inlet_flow" : "no_covered_crest_to_late_comparison_at_held_flow");
+  if (landmarks && crestPoint) {
+    const at = xs.indexOf(crestPoint);
+    if (at > 0 && at < xs.length - 1) {
+      landmarks.push({ kind: "phase_pressure_crest", confidence: "high", t: crestPoint.t,
+        before: xs[at - 1], at: crestPoint, after: xs[at + 1] });
+    }
+    if (decline.value != null && decline.value > 0) {
+      landmarks.push({ kind: "pressure_droop_at_held_flow", confidence: "medium", t: lateStart,
+        before: crestPoint, at: xs.find(p => p.t >= lateStart), after: last });
+    }
+  }
 
   const next = run.next;
   const end = next && isBrewPoint(next, hasState) ?
@@ -432,7 +484,7 @@ export function ambiguousZeroFrames(input: ReviewInput, points: ReviewPoint[]): 
     points.every(p => p.frame === 0 && /^pour/i.test(p.substate ?? ""));
 }
 
-export function measurePhases(input: ReviewInput, points: ReviewPoint[]) {
+export function measurePhases(input: ReviewInput, points: ReviewPoint[], landmarks?: PhaseLandmark[]) {
   const hasState = points.some(p => p.substate);
   const runs = phaseRuns(points, hasState);
   const steps = input.profile?.steps ?? [];
@@ -444,7 +496,7 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[]) {
   const hasScale = brew.some(p => p.w != null || p.weightFlow != null);
   const scale = scaleRows(points, hasState);
   const first = brew[0], last = brew.at(-1);
-  const onset = firstBeverage(scale, hasScale, first?.t);
+  const onset = firstBeverage(scale, hasScale, first?.t, landmarks);
   const phases = runs.map((run, index) => {
     const frame = run.points[0].frame;
     const step = !alignmentReason && frame != null && Number.isInteger(frame) ? steps[frame] : undefined;
@@ -455,7 +507,7 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[]) {
       points.some(p => positive(mode === "flow" ? p.tp : p.tf) != null);
     return describePhase(run, index, incompatible ? undefined : step,
       alignmentReason ?? (incompatible ? "logged_controller_conflicts_with_frame" : step ? "configured_controller_unknown" : "frame_missing_or_out_of_plan"),
-      scale, hasScale, hasState, onset.point);
+      scale, hasScale, hasState, onset.point, landmarks);
   });
   const rateBoundary = onset.point?.t ?? null;
   const before = rateBoundary != null && first ? cupRate(scale, Math.max(first.t, rateBoundary - ONSET_WINDOW_S), rateBoundary, hasScale) : null;
@@ -475,6 +527,49 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[]) {
   const previousScale = lastScale ? scale[scale.indexOf(lastScale) - 1] : undefined;
   const finalWeightJump = previousScale && lastScale && scaleEdge(previousScale, lastScale) === "weight_jump";
   const lastScaleValue = finalWeightJump ? null : lastScale?.w ?? null;
+  if (landmarks) {
+    const start = points[0], end = points.at(-1);
+    if (start) landmarks.push({ kind: "recording_start", t: start.t, confidence: "high", after: start });
+    if (end) landmarks.push({ kind: "recording_end", t: end.t, confidence: "high", before: end });
+    const crest = pressurePeak(brew);
+    if (crest) {
+      const index = points.indexOf(crest);
+      landmarks.push({ kind: "brew_pressure_crest", confidence: "high", t: crest.t,
+        before: points[index - 1], at: crest, after: points[index + 1] });
+    }
+    const phaseEntries = new Map(runs.map((run, i) => [run.points[0], phases[i]]));
+    const phaseExits = new Map(runs.map((run, i) => [run.points.at(-1)!, phases[i]]));
+    for (const [i, point] of points.entries()) {
+      const prev = points[i - 1];
+      if (!prev || (prev.frame === point.frame && prev.substate === point.substate)) continue;
+      const ending = phaseExits.get(prev), starting = phaseEntries.get(point);
+      const fromLimiter = ending?.plan.value?.limiter ?? null;
+      const toLimiter = starting?.plan.value?.limiter ?? null;
+      const limitChanged = (fromLimiter?.value !== toLimiter?.value || fromLimiter?.unit !== toLimiter?.unit ||
+        fromLimiter?.range !== toLimiter?.range);
+      landmarks.push({ kind: "phase_boundary", t: point.t, before: prev, after: point,
+        confidence: point.t - prev.t <= MACHINE_GAP_S ? "high" : "low",
+        detail: {
+          ...(starting?.purpose.value ? { entering: starting.purpose.value } : {}),
+          ...(limitChanged ? { fromLimiter, toLimiter } : {}),
+        } });
+    }
+    for (const [i, row] of scale.entries()) {
+      const prev = scale[i - 1];
+      if (!prev || !isBrewPoint(prev.p, hasState) || !isBrewPoint(row.p, hasState)) continue;
+      const reason = scaleEdge(prev, row);
+      if (reason === "weight_jump" || reason === "scale_gap" || reason === "stale_scale_sample") {
+        landmarks.push({ kind: reason === "weight_jump" ? reason : "scale_gap", confidence: "high",
+          t: row.p.t, before: prev.p, after: row.p });
+      }
+    }
+    if (last) {
+      const index = points.indexOf(last);
+      const reason = input.stopReason;
+      landmarks.push({ kind: "stop", confidence: reason ? "medium" : "low", t: last.t,
+        before: last, after: points[index + 1], detail: reason });
+    }
+  }
   return {
     phases,
     firstSustainedBeverage: onset.event,

@@ -3,7 +3,7 @@ import { reviewFixture } from "../evals/lib/review-fixtures.js";
 import { createApp } from "../server/app.js";
 import { ProviderChain } from "../server/llm/index.js";
 import type { LlmProvider } from "../server/llm/types.js";
-import { downsampleReviewPoints, reviewShot } from "../server/recommend/review.js";
+import { reviewShot } from "../server/recommend/review.js";
 import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
 import { ReviewBody } from "../server/schema.js";
 
@@ -32,21 +32,6 @@ const cleanReview = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("shot review backend", () => {
-  it("downsamples to 50 points while preserving endpoints and profile boundaries", () => {
-    const points = Array.from({ length: 201 }, (_, i) => point(i / 10, i < 100 ? 0 : 1));
-    const reduced = downsampleReviewPoints(points);
-    expect(reduced).toHaveLength(50);
-    expect(reduced[0].t).toBe(0);
-    expect(reduced.at(-1)?.t).toBe(20);
-    expect(reduced.some((p) => p.t === 10 && p.frame === 1)).toBe(true);
-  });
-
-  it("spreads downsampled points across a long steady shot", () => {
-    const reduced = downsampleReviewPoints(Array.from({ length: 1000 }, (_, i) => point(i)));
-    const gaps = reduced.slice(1).map((p, i) => p.t - reduced[i].t);
-    expect(Math.max(...gaps)).toBeLessThanOrEqual(32);
-  });
-
   it("uses rules with truthful provenance when the model fails", async () => {
     const result = await reviewShot(provider(new Error("provider unavailable")), input());
     expect(result.source).toBe("rules");
@@ -73,9 +58,9 @@ describe("shot review backend", () => {
     expect(JSON.parse(prompt.split("RECENT HISTORY FOR THIS BAG (bounded, enjoyment 0..10):\n")[1])).toEqual(history);
   });
 
-  it("sends a high-flow hold and its unsampled pressure crest as measured facts without adding faults", async () => {
+  it("sends a high-flow hold and its measured pressure crest without adding faults", async () => {
     const shot = reviewFixture("high-flow-tracked");
-    const hidden = shot.points.find(p => p.t > 8 && p.t < 11 && !downsampleReviewPoints(shot.points).includes(p))!;
+    const hidden = shot.points.find(p => p.t > 8 && p.t < 11)!;
     hidden.p = 3.45;
     let prompt = "";
     const app = createApp({ llm: provider(value => { prompt = value; return cleanReview(); }) });
@@ -85,12 +70,31 @@ describe("shot review backend", () => {
     expect(result.source).toBe("mock");
     expect(result.review.issues.map((issue: { kind: string }) => issue.kind)).toEqual(["off_target_temp"]);
     const facts = JSON.parse(prompt.split("SHOT FACTS (measured by code from every sample; null means not measured):\n")[1].split("\n\n")[0]);
-    const sampled = JSON.parse(prompt.split("SHOT CURVES (approximately 50 samples; all available phase starts retained):\n")[1].split("\n\n")[0]);
+    const sampled = JSON.parse(prompt.split("SHOT CURVES AND EVENTS")[1].split("\n")[1]);
     expect(facts.gradedWindows).toBe(1);
     expect(facts.phaseEvidence.phases[1]).toMatchObject({ mode: { value: "flow" }, controlledError: { value: { absoluteMean: 0 } },
       pressureCrest: { value: { tS: hidden.t, pressureBar: 3.45 } } });
     expect(facts.phaseEvidence.firstSustainedBeverage.value.countedVolumeMl).toMatchObject({ value: null, reason: "counter_not_available" });
-    expect(sampled.some((p: ReviewPoint) => p.t === hidden.t)).toBe(false);
+    expect(sampled.rows).toContainEqual(expect.arrayContaining([hidden.t, 3.45]));
+    expect(sampled.events).toContainEqual(expect.objectContaining({ kind: "brew_pressure_crest", t: hidden.t,
+      at: expect.arrayContaining([hidden.t, 3.45]) }));
+  });
+
+  it("keeps provider findings, facts and event evidence identical at every row budget", async () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const runs = [];
+    for (const pointBudget of [0, 1, 32, 5000]) {
+      let prompt = "";
+      const result = await reviewShot(provider(value => { prompt = value; return cleanReview(); }), shot, { pointBudget });
+      const facts = JSON.parse(prompt.split("SHOT FACTS")[1].split("\n")[1]);
+      const { events, rows, gaps } = JSON.parse(prompt.split("SHOT CURVES AND EVENTS")[1].split("\n")[1]);
+      expect(rows).toHaveLength(Math.min(shot.points.length, pointBudget));
+      expect(result.source).toBe("mock");
+      expect(result.review.issues.map(issue => issue.kind)).toEqual(["off_target_temp"]);
+      runs.push({ facts, events, gaps, issues: result.review.issues });
+    }
+    expect(runs[0].events.map((event: { kind: string }) => event.kind)).toContain("first_sustained_beverage");
+    for (const result of runs.slice(1)) expect(result).toEqual(runs[0]);
   });
 
   it("bounds per-phase prompt facts when the recorded frame changes on every sample", async () => {
