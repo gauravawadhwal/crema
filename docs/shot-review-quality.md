@@ -64,8 +64,11 @@ note. Real notes-driven advice remains an AI capability.
 
 ## Evaluation design
 
-There are 39 synthetic cases: 28 development and 11 holdout. Authored expectations
-are independent of the analysis implementation. They cover timing, pressure/flow,
+The legacy suite contains 39 synthetic cases. Of these, 28 were authored for
+development and 11 carry the historical holdout split. The committed final score
+for those 11 comes from rescoring already-viewed outputs. Treat all 39 cases as
+development evidence. Authored expectations are independent of the analysis
+implementation. They cover timing, pressure/flow,
 limits, missing data, early stops, manual/unknown profiles, taste conflicts,
 changed/same/missing grind labels, changed recipes/profiles, genuine and negated
 taste notes, and instructions embedded in notes.
@@ -89,6 +92,24 @@ judgment in [Anthropic's evaluation guidance](https://www.anthropic.com/research
 and [OpenAI's evaluation guidance](https://developers.openai.com/api/docs/guides/evaluation-best-practices).
 Synthetic checks and another model's judgment establish software behavior and
 usefulness under the rubric, not physical diagnostic accuracy or the owner's taste.
+
+## Curve-first evaluation
+
+The separate harness crosses current taste and history against fixed curves
+and checks byte-identical curve-stage results. It currently exercises the
+deterministic analysis of facts and issues. The model-stage check compares
+mechanical findings, their order and confidence across the same variants. The
+legacy review is registered for ablation, and the planned variants await their
+adapters. Event accuracy and timing, abstention, false alarms, numeric
+consistency, tokens, latency and fallback rate can be inspected by profile
+family. See the [eval guide](../evals/README.md#curve-first-review-harness).
+
+Synthetic labels describe deliberately injected features. Private replay can
+use measured references from real recordings. Sensory labels describe taste in
+separate cases. The fresh holdout will be authored with new cases in a later
+stage. The two committed demonstration cases exercise group boundaries and
+manifest validation. Session and recipe groups stay entirely in one split,
+and holdout attempts require a verified manifest and are logged before running.
 
 ## Validation record
 
