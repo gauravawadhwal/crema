@@ -1,0 +1,161 @@
+{
+  "id": "review-harness-demonstration",
+  "demonstration": true,
+  "cases": [
+    {
+      "id": "demo-steady",
+      "session": "demo-session-dev",
+      "recipe": "demo-recipe-dev",
+      "profileFamily": "flat-flow",
+      "pumpMode": "flow",
+      "split": "dev",
+      "input": {
+        "points": [
+          {"t": 0, "p": 7, "f": 2.5, "w": 0, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 1, "p": 7, "f": 2.5, "w": 2, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 2, "p": 7, "f": 2.5, "w": 4, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 3, "p": 7, "f": 2.5, "w": 6, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 4, "p": 7, "f": 2.5, "w": 8, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 5, "p": 7, "f": 2.5, "w": 10, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 6, "p": 7, "f": 2.5, "w": 12, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 7, "p": 7, "f": 2.5, "w": 14, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 8, "p": 7, "f": 2.5, "w": 16, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 9, "p": 7, "f": 2.5, "w": 18, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 10, "p": 7, "f": 2.5, "w": 20, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 11, "p": 7, "f": 2.5, "w": 22, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 12, "p": 7, "f": 2.5, "w": 24, "temp": 92, "tp": null, "tf": 2.5, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2}
+        ],
+        "profile": {
+          "title": "Synthetic flow hold",
+          "beverage_type": "espresso",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "flow",
+              "flow": 2.5,
+              "seconds": 12,
+              "temperature": 92
+            }
+          ]
+        },
+        "doseG": 12,
+        "yieldG": 24,
+        "targetYieldG": 24,
+        "targetTimeS": null,
+        "stopReason": "targetWeight",
+        "feedback": null,
+        "notes": null,
+        "bean": null,
+        "installedProfiles": [],
+        "history": []
+      },
+      "labels": {
+        "source": "synthetic-injected",
+        "injection": "Hold measured pressure and flow steady at the planned values.",
+        "observations": [
+          {
+            "id": "low-flow",
+            "kind": "flow_shortfall",
+            "phase": "pouring",
+            "controlledVariable": "flow",
+            "expected": "forbidden"
+          }
+        ],
+        "figures": [],
+        "supportedOutcomes": [
+          "abstain"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ]
+      }
+    },
+    {
+      "id": "demo-shortfall",
+      "session": "demo-session-holdout",
+      "recipe": "demo-recipe-holdout",
+      "profileFamily": "flat-pressure",
+      "pumpMode": "pressure",
+      "split": "holdout",
+      "input": {
+        "points": [
+          {"t": 0, "p": 6, "f": 2, "w": 0, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 1, "p": 6, "f": 2, "w": 2, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 2, "p": 6, "f": 2, "w": 4, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 3, "p": 6, "f": 2, "w": 6, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 4, "p": 6, "f": 2, "w": 8, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 5, "p": 6, "f": 2, "w": 10, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 6, "p": 6, "f": 2, "w": 12, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 7, "p": 6, "f": 2, "w": 14, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 8, "p": 6, "f": 2, "w": 16, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 9, "p": 6, "f": 2, "w": 18, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 10, "p": 6, "f": 2, "w": 20, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 11, "p": 6, "f": 2, "w": 22, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2},
+          {"t": 12, "p": 6, "f": 2, "w": 24, "temp": 92, "tp": 9, "tf": null, "targetTemp": 92, "frame": 0, "substate": "pouring", "weightFlow": 2}
+        ],
+        "profile": {
+          "title": "Synthetic pressure hold",
+          "beverage_type": "espresso",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "pressure",
+              "pressure": 9,
+              "seconds": 12,
+              "temperature": 92
+            }
+          ]
+        },
+        "doseG": 12,
+        "yieldG": 24,
+        "targetYieldG": 24,
+        "targetTimeS": null,
+        "stopReason": "targetWeight",
+        "feedback": null,
+        "notes": null,
+        "bean": null,
+        "installedProfiles": [],
+        "history": []
+      },
+      "labels": {
+        "source": "synthetic-injected",
+        "injection": "Hold measured pressure at 6 bar from the first sample against a 9 bar target. Assess the window after the 2 s settling interval.",
+        "observations": [
+          {
+            "id": "low-pressure",
+            "kind": "pressure_shortfall",
+            "phase": "pouring",
+            "controlledVariable": "pressure",
+            "expected": "required",
+            "timing": {
+              "type": "windowed-event",
+              "onsetS": [
+                2,
+                2
+              ]
+            }
+          }
+        ],
+        "figures": [
+          {
+            "id": "pressure_shortfall.frame-1.measured",
+            "unit": "bar",
+            "value": 6,
+            "tolerance": 0.05
+          }
+        ],
+        "supportedOutcomes": [
+          "grind-finer",
+          "abstain"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ]
+      }
+    }
+  ]
+}

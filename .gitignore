@@ -6,3 +6,7 @@ _site/
 dist/
 evals/results/
 ui-shots/
+# Private Decaid replay recordings and observed labels
+crema-local-shots/
+*.decaid-shot.json
+*.local-review-labels.json

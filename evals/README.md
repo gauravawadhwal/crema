@@ -51,7 +51,11 @@ deterministic fallback in place of a model.
 
 ## Shot-review quality — 12 November 2026
 
-The current review suite has **39 cases: 28 dev and 11 holdout**. It tests
+The legacy review suite has **39 synthetic cases**. Of these, 28 were authored
+for development and 11 carry the historical `holdout` split name. Their committed
+final score comes from rescoring already-viewed model outputs, so all 39 count as
+development evidence. The split names and baselines are preserved for historical
+comparisons. The suite tests
 recorded-history comparisons and confounds, timing/target interpretation, useful
 abstention, notes-driven advice, negation and embedded instructions. The design,
 comparison tolerances and limitations are in
@@ -78,10 +82,8 @@ CODEX_BIN="$PWD/scripts/codex-eval-isolated.cjs" CODEX_REASONING_EFFORT=medium n
 CODEX_BIN="$PWD/scripts/codex-eval-isolated.cjs" CODEX_REASONING_EFFORT=medium npm run eval -- --task review --provider codex-cli --model gpt-6.1-terra --split holdout --judge codex-cli:gpt-6.1-sol
 ```
 
-Use development outputs for iteration, then run holdout once without using its
-outputs to tune the prompt or labels. A holdout that has already been inspected is
-no longer fresh. Do not compare headline pass rates from different datasets,
-providers or judge/gate versions as if they measured only a prompt change.
+Use these commands to reproduce legacy comparisons. Compare runs with matching
+datasets, providers, judge and gate versions to isolate a prompt change.
 
 Measured baselines (Terra subject, Sol judge; isolated, medium reasoning):
 
@@ -102,6 +104,138 @@ heuristic rates. These synthetic results do not establish physical diagnostic ac
 Claude Haiku/Opus revalidation is deferred after a subscription-limit failure.
 Interrupted reference runs and a stale-desktop-MCP Codex run are not promoted as
 complete quality baselines. The older Haiku results below measure earlier prompts.
+
+## Curve-first review harness
+
+The curve harness uses independent labels for mechanical events. The checked-in
+[demonstration dataset](fixtures/review-ablation/demonstration.json) has one
+synthetic dev case and one synthetic holdout case to exercise the tooling. A later
+stage will author and freeze new, unseen cases for the actual holdout.
+
+### Run crossed checks and ablations
+
+```bash
+npx tsx evals/review.ts cross --fixture history-grind-progress
+npx tsx evals/review.ts cross --fixture history-grind-progress --provider mock
+npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/demonstration.json --provider rules
+```
+
+`cross` takes a synthetic fixture from `evals/lib/review-fixtures.ts`. It crosses
+seven current taste settings with three recorded history taste settings. All
+21 cells keep telemetry and mechanical history fixed. The `curveStage` adapter
+currently returns deterministic analysis facts and issues. The pending curve-only
+review test can use this adapter when the new stage is ready. Passing the optional
+`--provider` also checks the returned findings, their order and confidence.
+The legacy review exposes one confidence for the entire review. Its rules path
+can change that confidence in response to a taste conflict, which the check reports
+as a failure. A successful mock check establishes plumbing with canned responses.
+
+`run` defaults to dev/tuning and tries every registered variant. Use
+`--variant old` to select the current `reviewShot` (mock) or `rulesReview` (rules).
+`facts-only`, `facts-plus-anchored`, and `two-stage` report “not implemented yet”
+until their adapters are available. Each ready variant gets the same input cases
+and provider. The new CLI accepts `rules` and `mock`.
+
+Results are a JSON file and matching Markdown report in `evals/results/` or a
+directory supplied with `--out`. Synthetic reference runs can be promoted to
+`evals/baselines/` within this report format. `eval:compare` continues to compare
+the legacy wording/decision reports.
+
+The ablation report shows event precision and recall by kind and profile family,
+one-to-one within timestamp tolerance. Timing MAE measures distance outside the
+reference interval among matched events. Missing peaks have zero timing coverage.
+Unmatched predictions for assessed kinds count as false alarms in the labelled
+case's pump mode. Unlabelled kinds are reported as unscored. The report counts
+justified abstentions where the label permits abstention and unjustified ones
+where the label requires an action. Numeric checks require every claim for a
+labelled figure to have the right value and unit, with at least one occurrence.
+Usage coverage distinguishes zero-token rules runs from calls without reported
+tokens. End-to-end latency is measured around the review call and normalization.
+Fallback rate counts provider-requested runs that returned rules.
+
+The legacy adapter uses issue window starts as onset predictions, projected onto
+recorded phase and pump at that sample. It has no peak timestamps. It extracts
+figures from the deterministic shortfall evidence, with IDs such as
+`pressure_shortfall.frame-1.measured` and suffixes `target`, `measured` or
+`peak` (peak value). It checks multiple structured next-shot changes. Semantic
+claims in prose, including taste inference and diagnosis qualification, remain
+unassessed unless an adapter supplies adjudicated claims. The legacy wording
+grader and optional judge still cover narrative quality separately.
+
+### Label sources and groups
+
+The strict schema is in `evals/lib/review-labels.ts`. Give each case one
+`labels.source` and cite its evidence in the corresponding field.
+
+| Source | Evidence | Storage |
+|---|---|---|
+| `synthetic-injected` | `injection` describes the feature or control deliberately set in a made-up recording. | Synthetic datasets |
+| `measured-reference` | `reference` describes the physical measurement and how the reference was obtained. | Private replay sidecars |
+| `sensory` | `taste` captures the taster's ratings or notes. Enjoyment uses Decaid's 0–10 scale. | Private replay, or simulated sensory reports in synthetic datasets |
+
+Mechanical labels use `observations` with unique `id`, `kind`, and
+`expected` (`required` or `forbidden`). Add `phase` and `controlledVariable`
+where they are known. A `timing` label specifies `onsetS` and optional
+`peakS` as inclusive `[earliest, latest]` bounds on the shot's sample clock.
+`raw-landmark` bounds must contain a sample and accept the adjacent sample on
+each side. `windowed-event` bounds accept ±1 s beyond each edge. `figures` give
+`id`, `value`, `unit`, and absolute `tolerance`. Any source may specify
+`supportedOutcomes` and `forbiddenClaims`. Sensory labels are used for decision
+and claim checks. They cannot supply mechanical truth.
+
+Label the input independently of the review under test. Synthetic cases have
+an inline `input` in the API's review payload shape, a `profileFamily` and
+`pumpMode`, and stable `session` and `recipe` group IDs. Group repeated or
+closely related shots by session and recipe. Cases that share either group must
+stay in the same split, including chains linked by both kinds of group. The
+loader rejects crossed groups and repeated case IDs.
+
+### Freeze and verify a holdout
+
+The demonstration exercises the commands without creating the fresh holdout.
+
+```bash
+dataset=evals/fixtures/review-ablation/demonstration.json
+proof=$(mktemp -d)
+npx tsx evals/review.ts freeze --dataset "$dataset" --manifest "$proof/holdout.json"
+npx tsx evals/review.ts check --dataset "$dataset" --manifest "$proof/holdout.json"
+npx tsx evals/review.ts run --dataset "$dataset" --manifest "$proof/holdout.json" \
+  --split holdout --purpose evaluate --provider rules --out "$proof"
+```
+
+`freeze` writes SHA-256 hashes of the full serialized holdout cases, including
+input, group membership and labels, and refuses to overwrite a manifest. The
+check rejects changed, added or removed holdout cases. Freeze the new holdout
+before evaluating and keep that original manifest. Holdout requires explicit
+`--split holdout --purpose evaluate --manifest <file>`. Each verified attempt,
+including one that subsequently fails, appends a JSONL entry beside the
+manifest as `<manifest>.runs.jsonl`. Keep the manifest and log together across
+evaluations. Use dev results for tuning. The guard records declared evaluation
+attempts and checks fixture integrity. Freshness also depends on how the cases
+were acquired and who has seen them.
+
+### Replay private Decaid recordings
+
+Set `CREMA_LOCAL_SHOTS_DIR` to an absolute directory outside Git worktrees.
+Place one full Decaid shot object per `.json` file, in the format returned by
+`/shots/<id>`. For example:
+
+```bash
+CREMA_LOCAL_SHOTS_DIR="/path/to/private/crema-local-shots" npx tsx evals/review.ts replay --provider rules
+```
+
+Replay mirrors the live skin's point mapping, timestamp ordering, sample cap,
+recorded recipe context, notes and ratings. It reconstructs earlier same-batch
+history from the available recordings and validates the payload as the server
+does. Standalone exports lack the installed profile library, bean snapshot and
+saved recipe, so the CLI uses captured metadata and the catalogue when available.
+
+For optional real-shot labels, place `<stem>.local-review-labels.json` beside
+`<stem>.json`, with `profileFamily`, `pumpMode`, and one `labels` object.
+Measured and sensory labels use separate cases. Replay prints aggregate metrics
+by source to stdout. Keep real recordings and their labels outside the worktree.
+Git ignores `crema-local-shots/`, `*.decaid-shot.json` and `*.local-review-labels.json`
+as an extra safeguard. Public fixtures and labels must be synthetic.
 
 ## Shot review baseline — 10 November 2026
 
