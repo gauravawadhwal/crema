@@ -74,6 +74,7 @@ export interface ShotAnalysis {
   wentWell: string[];
   metrics: ShotAnalysisMetrics;
   facts: ShotFacts;
+  faultWindows: { frame: number; startS: number; endS: number }[];
 }
 
 const finite = (n: number | null | undefined): n is number => n != null && Number.isFinite(n);
@@ -374,6 +375,7 @@ export function analyzeShot(input: ReviewInput): ShotAnalysis {
   }
   return {
     issues, wentWell, facts,
+    faultWindows: windows.map(w => ({ frame: w.frame, startS: w.start, endS: w.end })),
     metrics: {
       recordedPoints: points.length, usableTemperaturePoints: tempPairs.length, meanTemperatureOffsetC: meanTemp, observedWindows: windows.length,
       enoughTelemetry: points.length >= 20 && (facts.durationS ?? 0) >= 10,

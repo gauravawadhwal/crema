@@ -161,10 +161,22 @@ describe("real Decaid shot shapes", () => {
     expect(result.issues).toEqual([]);
   });
 
+  it("keeps verdict wording for a fault-eligible shortfall and neutral wording for a skipped main hold", () => {
+    const eligible = rulesReview(real(shot({ p: 3.8, f: 2 }))).summary;
+    expect(eligible).toContain("Pour pressure only reached 3.8 bar of the 6.0 bar target");
+    const skipped: ProfileLike = { title: "Turbo two step", beverage_type: "espresso", steps: [
+      { name: "preinfusion", pump: "flow", flow: "8", seconds: "20", temperature: "88", sensor: "coffee" },
+      { name: "rise and hold", pump: "pressure", pressure: "6", seconds: "40", temperature: "88", sensor: "coffee", limiter: { value: "4", range: "1" } },
+    ] };
+    const summary = rulesReview(real(shot({ p: 3.8, f: 2 }), skipped)).summary;
+    expect(summary).toContain("Pour pressure averaged 3.8 bar against the 6.0 bar target");
+    expect(summary).not.toMatch(/only reached|limit|consistent/);
+  });
+
   it("words a hold neutrally unless the fault rules can judge it", () => {
     const facts = analyzeShot(real(shot({ p: 3.8, f: 2 }))).facts;
-    expect(trackingSentence(facts, true)).toMatch(/^Pour pressure only reached 3\.8 bar of the 6\.0 bar target/);
-    const neutral = trackingSentence(facts, false)!;
+    expect(trackingSentence(facts, new Set([1]))).toMatch(/^Pour pressure only reached 3\.8 bar of the 6\.0 bar target/);
+    const neutral = trackingSentence(facts, new Set())!;
     expect(neutral).toMatch(/^Pour pressure averaged 3\.8 bar against the 6\.0 bar target/);
     expect(neutral).not.toMatch(/only reached|limit|consistent/);
   });
@@ -331,7 +343,7 @@ describe("recorded phase evidence", () => {
     expect(metrics.observedWindows).toBe(0); // High-flow holds remain excluded from diagnostic grading.
     expect(issues.map(i => i.kind)).toEqual(["off_target_temp"]);
     const review = rulesReview(shot);
-    expect(review.summary).toContain("4.5 mL/s against a 4.5 mL/s");
+    expect(review.summary).toContain("4.5 mL/s against the 4.5 mL/s target");
     expect(review.summary).toContain("peaking at 3.4 bar");
     expect(review.summary).toContain("then gained about 4.8 g/s");
     expect(review.summary).not.toMatch(/No step held a steady target/);
@@ -346,7 +358,9 @@ describe("recorded phase evidence", () => {
     expect(pour.capLikeTime.value).toEqual({ seconds: 18, shareOfCoveredTime: 1 });
     expect(pour.pressureDroopAtHeldFlowBar.value).toBeNull();
     expect(issues.map(i => i.kind)).toEqual(["off_target_temp"]);
-    expect(rulesReview(shot).summary).toContain("near the 8.6 bar limit for 18.0 s");
+    const summary = rulesReview(shot).summary;
+    expect(summary).toContain("Inlet flow averaged 3.0 mL/s against the 4.5 mL/s target over 16.0 s");
+    expect(summary).not.toMatch(/limit|below command|only reached/);
 
     const mirrored = analyzeShot(reviewFixture("limited-pressure-shortfall")).facts.phaseEvidence.phases[1];
     expect(mirrored.capLikeTime.value).toEqual({ seconds: 16, shareOfCoveredTime: 1 });

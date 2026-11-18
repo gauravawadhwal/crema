@@ -1941,6 +1941,7 @@ var CremaEngine = (() => {
       issues,
       wentWell,
       facts,
+      faultWindows: windows.map((w) => ({ frame: w.frame, startS: w.start, endS: w.end })),
       metrics: {
         recordedPoints: points.length,
         usableTemperaturePoints: tempPairs.length,
@@ -2197,7 +2198,8 @@ var CremaEngine = (() => {
     const lines = [paceSentence(a.facts)];
     const main = phases.filter((p) => p.substate == null || /^pour/i.test(p.substate)).reduce((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
     const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
-    const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, a.metrics.observedWindows > 0);
+    const eligible = new Set(a.faultWindows.map((w) => w.frame));
+    const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, eligible);
     if (tracking) lines.push(tracking);
     else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
     else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
@@ -2233,7 +2235,7 @@ var CremaEngine = (() => {
     if (f.timeStatus === "in_window" || off < 1) return `Finished in ${ran} s, ${f.timeStatus === "in_window" ? "right in" : "at the edge of"} the ${lo}\u2013${hi} s ${basis} window.`;
     return `Ran ${off} s ${f.timeStatus === "fast" ? "faster" : "slower"} than the ${lo}\u2013${hi} s ${basis} window (${detail}).`;
   }
-  function trackingSentence(f, faultEligible = true) {
+  function trackingSentence(f, faultFrames) {
     const main = f.pourSteps.filter((s) => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
     if (!main) return null;
     const pressure2 = main.pump === "pressure";
@@ -2245,7 +2247,7 @@ var CremaEngine = (() => {
     const gap = main.target - main.actualMean;
     const short = pressure2 ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
     const name = pressure2 ? "pressure" : "flow";
-    if (!faultEligible) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
+    if (!faultFrames.has(main.frame)) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
     const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
     if (short || main.limiterEngaged) {
       const why = main.limiterEngaged ? pressure2 ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck` : "";
@@ -2260,20 +2262,14 @@ var CremaEngine = (() => {
     return `During the ${name}, ${phase.mode.value} differed from the recorded command by ${phase.controlledError.value.absoluteMean.toFixed(1)} ${phase.controlledUnit} on average over ${phase.controlledError.coveredS.toFixed(1)} s.`;
   }
   function highFlowSentence(facts, phase) {
-    const hold = phase.steadyHold.value;
-    const cap2 = phase.capLikeTime.value;
-    const limit = phase.plan.value?.limiter;
+    const hold = phase.steadyHold;
+    const mean = hold.value;
     const peak = phase.pressureCrest.value;
     const droop = phase.pressureDroopAtHeldFlowBar.value;
     const onset = facts.phaseEvidence.firstSustainedBeverage.value;
     const rate = facts.phaseEvidence.cupRateAfterOnsetGS.value;
-    const error = phase.controlledError.value?.absoluteMean;
-    const stayedNear = error != null && error <= 0.1 * hold.meanCommand;
-    const first = `Inlet flow ${stayedNear ? "held near" : "averaged"} ${hold.meanResponse.toFixed(1)} mL/s against a ${hold.meanCommand.toFixed(1)} mL/s command`;
+    const first = `Inlet flow averaged ${mean.meanResponse.toFixed(1)} mL/s against the ${mean.meanCommand.toFixed(1)} mL/s target over ${hold.coveredS.toFixed(1)} s`;
     const pressure2 = peak ? `, with pressure peaking at ${peak.pressureBar.toFixed(1)} bar` : "";
-    if (limit && cap2 && cap2.shareOfCoveredTime >= 0.2) {
-      return `${first}${pressure2}. Flow was at least 20% below command near the ${limit.value} bar limit for ${cap2.seconds.toFixed(1)} s.`;
-    }
     const late = droop != null && droop >= 0.2 ? ` and easing by ${droop.toFixed(1)} bar late` : "";
     const cup = onset?.previousBelowGramS != null && rate != null ? ` The cup reached 1 g after ${onset.brewElapsedS.toFixed(1)} s, then gained about ${rate.toFixed(1)} g/s.` : "";
     return `${first}${pressure2}${late}.${cup}`;

@@ -63,7 +63,8 @@ function rulesSummary(a: ShotAnalysis, input: ReviewInput, direction: "finer" | 
   const main = phases.filter(p => p.substate == null || /^pour/i.test(p.substate))
     .reduce<(typeof phases)[number] | null>((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
   const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
-  const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, a.metrics.observedWindows > 0);
+  const eligible = new Set(a.faultWindows.map(w => w.frame));
+  const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, eligible);
   if (tracking) lines.push(tracking);
   else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
   else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
@@ -106,7 +107,7 @@ export function paceSentence(f: ShotFacts): string | null {
 }
 
 /** Whether the main pour step reached its pressure or flow target, in numbers. */
-export function trackingSentence(f: ShotFacts, faultEligible = true): string | null {
+export function trackingSentence(f: ShotFacts, faultFrames: ReadonlySet<number>): string | null {
   const main = f.pourSteps.filter(s => s.steadyTarget).sort((a, b) => b.durationS - a.durationS)[0];
   if (!main) return null;
   const pressure = main.pump === "pressure";
@@ -118,7 +119,7 @@ export function trackingSentence(f: ShotFacts, faultEligible = true): string | n
   const gap = main.target - main.actualMean;
   const short = pressure ? ratio <= 0.78 && gap >= 1.2 : ratio <= 0.75 && gap >= 0.4;
   const name = pressure ? "pressure" : "flow";
-  if (!faultEligible) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
+  if (!faultFrames.has(main.frame)) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
   const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
   if (short || main.limiterEngaged) {
     const why = main.limiterEngaged
@@ -137,20 +138,14 @@ function shortPhaseSentence(phase: ShotFacts["phaseEvidence"]["phases"][number])
 }
 
 function highFlowSentence(facts: ShotFacts, phase: ShotFacts["phaseEvidence"]["phases"][number]) {
-  const hold = phase.steadyHold.value!;
-  const cap = phase.capLikeTime.value;
-  const limit = phase.plan.value?.limiter;
+  const hold = phase.steadyHold;
+  const mean = hold.value!;
   const peak = phase.pressureCrest.value;
   const droop = phase.pressureDroopAtHeldFlowBar.value;
   const onset = facts.phaseEvidence.firstSustainedBeverage.value;
   const rate = facts.phaseEvidence.cupRateAfterOnsetGS.value;
-  const error = phase.controlledError.value?.absoluteMean;
-  const stayedNear = error != null && error <= 0.1 * hold.meanCommand;
-  const first = `Inlet flow ${stayedNear ? "held near" : "averaged"} ${hold.meanResponse.toFixed(1)} mL/s against a ${hold.meanCommand.toFixed(1)} mL/s command`;
+  const first = `Inlet flow averaged ${mean.meanResponse.toFixed(1)} mL/s against the ${mean.meanCommand.toFixed(1)} mL/s target over ${hold.coveredS.toFixed(1)} s`;
   const pressure = peak ? `, with pressure peaking at ${peak.pressureBar.toFixed(1)} bar` : "";
-  if (limit && cap && cap.shareOfCoveredTime >= 0.2) {
-    return `${first}${pressure}. Flow was at least 20% below command near the ${limit.value} bar limit for ${cap.seconds.toFixed(1)} s.`;
-  }
   const late = droop != null && droop >= 0.2 ? ` and easing by ${droop.toFixed(1)} bar late` : "";
   const cup = onset?.previousBelowGramS != null && rate != null
     ? ` The cup reached 1 g after ${onset.brewElapsedS.toFixed(1)} s, then gained about ${rate.toFixed(1)} g/s.` : "";
