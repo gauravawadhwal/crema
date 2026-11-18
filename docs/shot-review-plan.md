@@ -387,4 +387,5 @@ The implementation after PR #66 replaces keyword-only quality checks, supplies
 recorded comparable history, and makes the review explain evidence → decision →
 next check. See [shot-review-quality.md](shot-review-quality.md) for the contract,
 measured results and limits, including the deferred Claude subscription reruns.
-Saved reviews remain version 1 and advice remains draft-only.
+Advice remains draft-only. New saved reviews are version 2 (see
+[architecture.md](architecture.md#shot-review)); version 1 reviews still render.
