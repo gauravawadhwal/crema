@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "lever-commanded-decline",
+  "session": "spring-session",
+  "recipe": "spring-lever",
+  "family": "lever",
+  "profile": {
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 6, "seconds": 9, "exit": { "type": "pressure", "condition": "over", "value": 2.5 }, "substate": "preinfusion" },
+      { "name": "Hold", "pump": "pressure", "target": 8, "seconds": 8, "limiter": { "value": 2.8, "range": 0.4 } },
+      { "name": "Decline", "pump": "pressure", "target": 5, "seconds": 20, "transition": "smooth", "limiter": { "value": 2.8, "range": 0.4 } }
+    ]
+  },
+  "stop": { "weightG": 38, "timeS": 45 },
+  "grading": {
+    "consequence": "After the hold, measured pressure follows a descending logged pressure command. A falling pressure alone should not count as a shortfall.",
+    "unknowableWhen": [
+      "Without the live command or a reliable frame match, a falling measured series alone cannot establish that the decline was planned."
+    ],
+    "observations": [
+      { "id": "decline-entry", "kind": "planned_decline", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [10.5, 14] } },
+      { "id": "pressure-shortfall", "kind": "pressure_shortfall", "phase": "pouring", "controlledVariable": "pressure", "expected": "forbidden" }
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis"]
+  }
+}

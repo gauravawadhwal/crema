@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "id": "allonge-capped",
+  "session": "high-flow-pair",
+  "recipe": "long-ratio",
+  "family": "allonge",
+  "profile": {
+    "temperatureC": 91.5,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 4.5, "seconds": 2, "substate": "preinfusion", "limiter": { "value": 8.6, "range": 0.6 } },
+      { "name": "Pour", "pump": "flow", "target": 4.5, "seconds": 58, "limiter": { "value": 8.6, "range": 0.6 } }
+    ]
+  },
+  "doseG": 21,
+  "stop": { "weightG": 105, "timeS": 60 },
+  "puck": { "resistance": 2.8 },
+  "interventions": [{ "kind": "restriction", "factor": 1.15 }],
+  "grading": {
+    "consequence": "In the main pour pressure reaches the limiter and inlet stays below the 4.5 mL/s command. Beverage onset is later and output rate is lower than in the tracked contrast.",
+    "unknowableWhen": [
+      "At the ceiling, the pressure reading cannot distinguish the magnitude or cause of a resistance change. Grade flow shortfall near the limiter and accept abstention on cause.",
+      "Without reliable scale timestamps, cup onset or rate cannot corroborate the regime."
+    ],
+    "observations": [
+      { "id": "blanket-choke", "kind": "choked", "phase": "pouring", "controlledVariable": "flow", "expected": "forbidden" },
+      { "id": "cap-entry", "kind": "cap_like_start", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [4, 7] } }
+    ],
+    "supportedOutcomes": ["abstain", "grind-coarser"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis"]
+  }
+}

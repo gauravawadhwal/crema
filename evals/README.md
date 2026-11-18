@@ -196,6 +196,73 @@ closely related shots by session and recipe. Cases that share either group must
 stay in the same split, including chains linked by both kinds of group. The
 loader rejects crossed groups and repeated case IDs.
 
+### Seeded synthetic shot gym
+
+```sh
+scenarios=evals/fixtures/review-gym
+proof=$(mktemp -d)
+npx tsx evals/gym.ts validate --scenarios "$scenarios" --seeds 8
+npx tsx evals/gym.ts generate --scenarios "$scenarios" --seeds 8 --out "$proof/gym"
+npx tsx evals/gym.ts replay-check --out "$proof/gym"
+npx tsx evals/review.ts run --dataset "$proof/gym/dataset.json" \
+  --provider rules --variant old --variant facts-plus-anchored --out "$proof/rules"
+```
+
+Generation uses no network or model calls. `--seeds N` runs seeds 0 through
+N−1 for every design. Use a new output directory whose parent already exists.
+`dataset.json` is the existing inline review dataset. The adjacent
+`replay.json` pins the generator version, seed count, resolved plans and
+grader-only context. Keep both for byte-for-byte verification. Pass only the
+case's `input` to a reviewer. Keep the case ID, group IDs, seed, labels and
+intervention parameters in the eval harness. Keep generated holdout files
+with the custodian until evaluation.
+
+Author one JSON object per file using the [strict scenario schema](lib/gym/scenario.ts).
+The [worked manifests](fixtures/review-gym/) supply a matched high-flow pair
+and a normal lever decline. Eight seeds each yield 24 dev cases.
+
+| Field | Authoring contract |
+|---|---|
+| `version`, `id`, `family` | Use schema version 1, a unique lowercase fixture ID and one of `flat-pressure`, `lever`, `fixed-flow`, `allonge`, `bloom`, `turbo`, `adaptive`. |
+| `session`, `recipe`, `split` | Share group IDs across linked variants, place the group in one split and use `dev` or `holdout`. Matched variants with the same session and seed share the random streams. |
+| `profile` | Omit `steps` to use Crema's outline for the family. Custom steps declare `name`, `pump`, `target` and maximum `seconds`. Targets use bar for pressure and mL/s for flow. Set `transition: "smooth"` for a ramp, `sensor` to `coffee` or `water`, and optionally override `temperatureC` or set `substate: "preinfusion"`. The `limiter.value` and optional `range` use the other pump channel's units. `exit` takes `type`, `condition` (`over` or `under`) and `value`. An optional `weightG` also advances the step. |
+| `doseG`, `stop`, `puck` | Default dose is 18 g. `stop.timeS` defaults to 90 s and can be set up to 180 s. `stop.weightG` is optional. `puck.resistance` is the baseline wet load in bar per (mL/s) before throughput-dependent softening. |
+| `interventions` | Use an empty list for a clean control. `low-resistance` and `restriction` take a load multiplier `factor`. `flow-cap` takes a hidden pump capacity `maxMlS`. `onset-dynamics` sets `fillMl` and outlet charge `delayMl`. `tare-jump` offsets scale mass by `deltaG`, `scale-loss` removes scale readings through the optional `untilS` (exclusive), `sensor-lag` delays the named pressure, flow or temperature channel by `delayS`, and `thermal-recovery` applies a `dropC` with decay constant `recoveryS` to the active sensor. `atS` is on the shot clock where provided, with the tare and loss applied on the scale sampling clock. |
+| `grading` | Describe the expected sampled `consequence` and the conditions in `unknowableWhen`. Use the existing `observations`, `figures`, `supportedOutcomes` and `forbiddenClaims`. Grade the observed regime under a limiter and accept uncertainty about the cause. `acceptCauseAbstention` records that expectation for graders. Include `abstain` in `supportedOutcomes` when omitting a numeric change is valid. |
+
+Clean controls use the existing synthetic label source with `injection: "none"`.
+Author bounds on the irregular machine sample clock in seconds from brew start.
+Validation checks that every raw landmark interval contains a sample for each
+requested seed. Check the actual landmark brackets and phase coverage when
+adding a scenario. The legacy review runner scores event kinds emitted as
+review issues. Descriptive labels such as `planned_decline` and
+`cap_like_start` can be checked against the production analysis landmarks
+with the same label scorer, as in [the kernel tests](../test/review-gym.test.ts).
+
+The v1 kernel advances at 10 ms. It uses Mulberry32 streams keyed with SHA-256
+over the generator version, session, seed and stream name. Scenario variation,
+pump noise, sampling jitter and sensor faults have independent keys. Machine
+and scale have separate sampling and fault streams. The model fills a retained
+volume, varies wet resistance with throughput and couples group pressure to
+pump flow through that resistance. A soft limiter tapers response in its
+configured range and enforces a hard ceiling. The pump approaches the
+constrained flow with a finite response time. Steps advance on the first
+applicable time, threshold or weight exit. Threshold and step weight exits
+arm after 0.5 s. A global weight stop uses latent cup mass. A global clock
+stop appears as a controller `apiStop`.
+
+Cup flow starts after the outlet charges and can continue during a pause.
+The fixed synthetic conversion is 0.98 g/mL. Inlet volume equals retained
+volume plus delivered mass divided by that density at every tick. This
+idealization keeps the mechanism auditable when recorded inlet estimates
+and scale rates differ. The machine clock samples every 190–300 ms and
+pairs the latest snapshot from an independent 80–120 ms scale clock. Both
+can have missing observations. Tare and other reporting faults leave the
+latent state and controller stops unchanged. The mix and group readings
+recover toward separate targets and record the active profile sensor target.
+Changes to the kernel or replay mapping that alter fixture bytes require a new
+generator version. Keep the matching revision to replay earlier outputs.
+
 ### Freeze and verify a holdout
 
 The demonstration exercises the commands without creating the fresh holdout.
