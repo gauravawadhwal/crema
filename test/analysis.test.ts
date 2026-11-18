@@ -3,7 +3,7 @@ import { reviewFixture, type ReviewFixture } from "../evals/lib/review-fixtures.
 import type { ProfileLike } from "../server/profiles/curve.js";
 import { analyzeShot } from "../server/profiles/analysis.js";
 import { trackingSentence } from "../server/recommend/review-local.js";
-import { rulesReview } from "../server/recommend/review-local.js";
+import { rulesReview, rulesReviewResult } from "../server/recommend/review-local.js";
 import type { ReviewInput, ReviewPoint } from "../server/recommend/review-types.js";
 
 const pressureProfile: ProfileLike = {
@@ -102,13 +102,13 @@ describe("conservative shot analysis", () => {
   });
 
   it("keeps telemetry and taste disagreement from creating a blind grind change", () => {
-    const result = rulesReview(input({
-      points: points(26, { p: 9, f: 0.25, tp: 9 }),
+    const restricted = input({ points: points(26, { p: 9, f: 0.25, tp: 9 }) });
+    const result = rulesReview({ ...restricted,
       feedback: { sourBitter: -2, body: 0, enjoyment: null, notes: null },
-    }));
+    });
     expect(result.issues.map((x) => x.kind)).toContain("choked");
     expect(result.nextShot).toBeNull();
-    expect(result.confidence).toBe("low");
+    expect(result.confidence).toBe(rulesReview(restricted).confidence);
   });
 
   it("returns no forced change when telemetry is missing, and respects explicit balance", () => {
@@ -168,7 +168,7 @@ describe("real Decaid shot shapes", () => {
       { name: "preinfusion", pump: "flow", flow: "8", seconds: "20", temperature: "88", sensor: "coffee" },
       { name: "rise and hold", pump: "pressure", pressure: "6", seconds: "40", temperature: "88", sensor: "coffee", limiter: { value: "4", range: "1" } },
     ] };
-    const summary = rulesReview(real(shot({ p: 3.8, f: 2 }), skipped)).summary;
+    const summary = rulesReviewResult(real(shot({ p: 3.8, f: 2 }), skipped)).curve.summary;
     expect(summary).toContain("Pour pressure averaged 3.8 bar against the 6.0 bar target");
     expect(summary).not.toMatch(/only reached|limit|consistent/);
   });
@@ -223,7 +223,7 @@ describe("real Decaid shot shapes", () => {
     const clean = rulesReview(real(shot())).summary;
     expect(clean).toContain("right in the 25–35 s target window");
     expect(clean).toContain("6.0 bar");
-    expect(clean).toMatch(/repeat.*taste/);
+    expect(clean).toMatch(/Repeat the same recipe with consistent puck prep/);
     const withoutWindow = rulesReview({ ...real(shot()), targetTimeS: null }).summary;
     expect(withoutWindow).toMatch(/^Pressure held 6\.0 bar against the 6\.0 bar target/);
     expect(withoutWindow).not.toContain("34.6 g from 18 g");
@@ -238,7 +238,7 @@ describe("real Decaid shot shapes", () => {
     expect(review.nextShot).toMatchObject({ change: "Grind finer", grindDelta: "finer" });
     expect(review.nextShot?.reasoning).toMatch(/pressure fell short/i);
     expect(review.summary).toContain("Pour pressure only reached 3.8 bar of the 6.0 bar target at 2.2 ml/s");
-    expect(review.summary).toContain("finer grind step");
+    expect(review.nextShot?.reasoning).toContain("one small finer step");
     const step = analyzeShot(real(shot({ p: 3.8, f: 2.2 }), limited("2.2"))).facts.pourSteps[0];
     expect(step).toMatchObject({ frame: 1, pump: "pressure", target: 6, actualMean: 3.8, limiterValue: 2.2, limiterEngaged: true });
   });
@@ -260,12 +260,12 @@ describe("real Decaid shot shapes", () => {
     const fast = rulesReview(input({ points: points(19), targetTimeS: [28, 34], stopReason: "targetWeight" }));
     expect(fast.issues.map((x) => x.kind)).toContain("fast_shot");
     expect(fast.nextShot?.grindDelta).toBe("finer");
-    expect(fast.summary).toMatch(/^Ran 10 s faster than the 28–34 s target window/);
+    expect(fast.summary).toMatch(/Ran 10 s faster than the 28–34 s target window/);
 
     const slow = rulesReview(input({ points: points(43, { f: 1.1 }), targetTimeS: [28, 34], stopReason: "targetWeight" }));
     expect(slow.issues.map((x) => x.kind)).toContain("slow_shot");
     expect(slow.nextShot?.grindDelta).toBe("coarser");
-    expect(slow.summary).toMatch(/^Ran 8 s slower than the 28–34 s target window/);
+    expect(slow.summary).toMatch(/Ran 8 s slower than the 28–34 s target window/);
 
     const fromCatalog = analyzeShot(input({
       profile: { title: "Extractamundo Dos!", beverage_type: "espresso", steps: pressureProfile.steps },

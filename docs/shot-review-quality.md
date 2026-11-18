@@ -44,12 +44,21 @@ target yield, temperature and profile shape (when available) still match. The in
 marks the window as recorded, matching recipe or catalogue guide. A guide is
 explicitly approximate; if its dose or intended yield differs, timing stays descriptive
 and cannot alone support a grind adjustment; legacy unknown windows and unknown custom profiles stay
-unknown. These input fields are optional for older clients. Saved review version 1
-still renders; new saves use version 2 (see [architecture.md](architecture.md#shot-review)).
+unknown. These input fields are optional for older clients. Saved review versions 1 and 2
+still render. New saves use version 3 (see [architecture.md](architecture.md#shot-review)).
 
-## Taste notes and fallback
+## Curve read and taste alignment
 
-A model must quote the sensory report verbatim in a private `notesEvidence` field
+The curve stage reads only telemetry, plan evidence and comparable mechanical
+history. Its findings, order, confidence and initial experiment stay fixed
+when taste arrives. The optional curve narrative cites evidence IDs checked
+against that recording's prompt. The taste stage uses the ratings to confirm,
+change or defer the proposed experiment. Enjoyment records preference and
+does not establish a mechanical cause.
+
+### Taste notes and fallback
+
+With a free-text note and neither taste nor body rated, a separate model call can interpret the note. It must quote the sensory report verbatim in a private `notesEvidence` field
 and separately classify its reported character in `notesTaste` before a notes-only
 adjustment is accepted. This separates taste interpretation from selecting a move. Code checks the quote's source,
 limits notes-only adjustments to a small trial, and abstains when the proposed
@@ -95,12 +104,10 @@ usefulness under the rubric, not physical diagnostic accuracy or the owner's tas
 
 ## Curve-first evaluation
 
-The separate harness crosses current taste and history against fixed curves
-and checks byte-identical curve-stage results. It currently exercises the
-deterministic analysis of facts and issues. The model-stage check compares
-mechanical findings, their order and confidence across the same variants. The
-legacy review is registered for ablation, and the planned variants await their
-adapters. Event accuracy and timing, abstention, false alarms, numeric
+The harness crosses current taste and history against fixed curves and checks
+byte-identical mechanics inputs and outputs, including the actual mock
+narrative prompt and its result. The registry preserves the pre-split review for
+comparison and runs the shipped two-stage path on the same inputs. Event accuracy and timing, abstention, false alarms, numeric
 consistency, tokens, latency and fallback rate can be inspected by profile
 family. See the [eval guide](../evals/README.md#curve-first-review-harness).
 

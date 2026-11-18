@@ -63,6 +63,8 @@ export function mockBean(prompt: string): BeanInfo {
 
 const mockAnswers: Record<string, (prompt: string) => unknown> = {
   BeanInfo: mockBean,
+  CurveNarrative: () => ({ interpretation: null }),
+  ReviewNotes: () => ({ report: null }),
   ShotReview: (prompt) => {
     const section = (label: string) => prompt.split(label)[1]?.split("\n\n")[0]?.split("\n").slice(1).join("\n");
     const findings = JSON.parse(section("DETERMINISTIC OBSERVATIONS") || "[]");

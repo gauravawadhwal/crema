@@ -4,6 +4,7 @@
  * grades it. "rules" stands in for a provider to measure the no-AI baseline.
  */
 import path from "node:path";
+import type { ReviewInput } from "../../server/recommend/review-types.js";
 import { reviewShot } from "../../server/recommend/review.js";
 import { rulesReview } from "../../server/recommend/review-local.js";
 import type { ShotReviewData } from "../../server/recommend/review-types.js";
@@ -93,6 +94,15 @@ function hasFallback(r: RunRecord) {
   return r.calls.some((c) => c.error) || (r.context as { source?: string } | undefined)?.source?.startsWith("rules (") === true || (r.context as { fellBack?: boolean } | undefined)?.fellBack === true;
 }
 
+type ReviewJudgeContext = Pick<ReviewInput, "feedback" | "notes">;
+const reviewCall = (call: CallRecord) => ["ShotReview", "CurveNarrative", "ReviewNotes"].includes(call.schemaName);
+
+function reviewJudgeInput(calls: CallRecord[], taste?: ReviewJudgeContext, systems?: Record<string, { text: string }>) {
+  const prompts = calls.filter(reviewCall).map(call => judgeEvidence(call, systems));
+  if (taste) prompts.push("RECORDED TASTE FOR ALIGNMENT (sourBitter -2 sour to +2 bitter, body -2 thin to +2 heavy, enjoyment 0–10):\n" + JSON.stringify(taste));
+  return prompts.join("\n\n");
+}
+
 function judgeEvidence(call: CallRecord, systems?: Record<string, { text: string }>): string {
   // Saved metadata is authoritative for an older run. Never substitute today's
   // system prompt for a historical hash whose text was not retained.
@@ -144,8 +154,10 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
     const rc = c as ReviewCase;
     const input = reviewFixture(rc.input.fixture);
     const result = subject.kind === "rules" ? { review: rulesReview(input), source: "rules" } : await reviewShot(llm, input);
-    const raw = (llm.providers[0] as RecordingProvider).calls.find((x) => x.schemaName === "ShotReview");
-    return { output: result.review, context: { fellBack: subject.kind === "llm" && result.source === "rules" }, judgeInput: raw ? judgeEvidence(raw) : JSON.stringify(input) };
+    const calls = (llm.providers[0] as RecordingProvider).calls;
+    const taste = { feedback: input.feedback, notes: input.notes };
+    return { output: result.review, context: { fellBack: subject.kind === "llm" && result.source === "rules", taste },
+      judgeInput: calls.length ? reviewJudgeInput(calls, taste) : JSON.stringify(input) };
   }
 
   const dc = c as DialInCase;
@@ -163,11 +175,11 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
 
 /** Re-run only the judge on a saved record, using the prompt the model saw. */
 export async function rejudge(task: TaskName, r: RunRecord, judgeProvider: LlmProvider, systems?: Record<string, { text: string }>): Promise<void> {
-  const call = r.calls.find((c) => c.schemaName === "Recipe" || c.schemaName === "DialInAdvice" || c.schemaName === "ShotReview");
+  const call = r.calls.find((c) => c.schemaName === "Recipe" || c.schemaName === "DialInAdvice" || reviewCall(c));
   if (task === "identify" || !call || r.output == null || hasFallback(r)) return;
   const jr = new RecordingProvider(judgeProvider);
   try {
-    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", task === "review" ? judgeEvidence(call, systems) : call.prompt, r.output);
+    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", task === "review" ? reviewJudgeInput(r.calls, (r.context as { taste?: ReviewJudgeContext } | undefined)?.taste, systems) : call.prompt, r.output);
   } catch (e) {
     console.warn(`judge failed on ${r.caseId}: ${(e as Error).message.slice(0, 200)}`);
     delete r.judge;

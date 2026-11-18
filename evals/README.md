@@ -120,25 +120,21 @@ npx tsx evals/review.ts cross --fixture history-grind-progress
 npx tsx evals/review.ts cross --fixture history-grind-progress --provider mock
 npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/demonstration.json --provider rules
 npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/comparable-history.json --provider rules
+npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/taste-alignment.json --variant two-stage --provider rules
 ```
 
 `cross` takes a synthetic fixture from `evals/lib/review-fixtures.ts`. It crosses
-seven current taste settings with three recorded history taste settings. All
-21 cells keep telemetry and mechanical history fixed. The `curveStage` adapter
-returns the versioned deterministic evidence, including history. The pending curve-only
-review test can use this adapter when the new stage is ready. Passing the optional
-`--provider` also checks the returned findings, their order and confidence.
-The legacy review exposes one confidence for the entire review. Its rules path
-can change that confidence in response to a taste conflict, which the check reports
-as a failure. A successful mock check establishes plumbing with canned responses.
+eight current taste settings with three recorded history taste settings. All
+24 cells keep telemetry and mechanical history fixed. Bag descriptors and prior
+review prose also vary. The adapter compares the serialized curve-stage input
+and output byte for byte. `--provider mock` also compares the actual curve
+narrative prompt and the resulting mechanical stage.
 
-`run` defaults to dev/tuning and tries every registered variant.
-`--variant old --variant facts-plus-anchored` compares the previous
-50-point prompt curve with the shipped event-anchored prompt curve. Mock uses
-the same review code and facts for both variants. Rules use the same full trace
-and skip prompt construction in both variants. Scoring still assesses returned
-findings and advice. `facts-only` and `two-stage` report “not implemented yet.”
-Each ready variant gets the same input cases and provider.
+`run` defaults to dev/tuning and tries every registered variant. `old` and
+`facts-plus-anchored` retain the pre-split reviewer with its 50-point and
+event-anchored samplers, respectively. `two-stage` runs the current review.
+`facts-only` remains pending. The taste-alignment dataset labels agreeing,
+conflicting, absent and ambiguous notes-only feedback under the same curve.
 
 Results are a JSON file and matching Markdown report in `evals/results/` or a
 directory supplied with `--out`. Synthetic reference runs can be promoted to

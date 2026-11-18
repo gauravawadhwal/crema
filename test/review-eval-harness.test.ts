@@ -9,7 +9,7 @@ import { type LlmProvider } from "../server/llm/types.js";
 import { measurePrompt, normalizeLegacyReview, runReviewAblation, runReviewVariant } from "../evals/lib/review-ablation.js";
 import { RecordingProvider } from "../evals/lib/recorder.js";
 import { reviewAblationMarkdown } from "../evals/lib/review-ablation-report.js";
-import { assertCurveStageInvariant, checkModelStage, crossedTasteInputs } from "../evals/lib/review-crossed.js";
+import { assertCurveStageInvariant, checkModelStage, crossedTasteInputs, mockCurveStage } from "../evals/lib/review-crossed.js";
 import { checkReviewHoldout, freezeReviewHoldout, loadReviewDataset, selectReviewCases } from "../evals/lib/review-holdout.js";
 import { validateReviewLabels } from "../evals/lib/review-labels.js";
 import { scoreReview, summarizeReviewMetrics, type ReviewEvalOutput } from "../evals/lib/review-metrics.js";
@@ -58,7 +58,7 @@ describe("crossed taste", () => {
     const input = fixture();
     const variants = crossedTasteInputs(input);
     const tasting = variants.find((r) => r.id === "high-enjoyment/liked")!;
-    expect(variants).toHaveLength(21);
+    expect(variants).toHaveLength(24);
     expect(tasting.input.feedback?.enjoyment).toBe(10);
     expect(tasting.input.history[0]).toMatchObject({ timestamp: input.history[0].timestamp, enjoyment: 10 });
     expect(variants.find((r) => r.id === "instructions-only/adverse")?.input).toMatchObject({
@@ -103,7 +103,10 @@ describe("crossed taste", () => {
     expect(await run()).toContainEqual({ variant: "sour-and-thin/unrated", findings: true, order: true, confidence: false });
   });
 
-  it.todo("future curve-only REVIEW is byte-identical across crossed taste inputs via curveStage");
+  it("keeps the curve-only model input and result byte-identical across crossed taste inputs", async () => {
+    await assertCurveStageInvariant(reviewFixture("choke"), mockCurveStage);
+    await assertCurveStageInvariant(reviewFixture("comparable-phase-history"), mockCurveStage);
+  });
 });
 
 describe("labelled review metrics", () => {
@@ -182,7 +185,7 @@ describe("prompt measurement", () => {
     const input = reviewFixture("choke");
     input.points = Array.from({ length: 400 }, (_, i) => ({ ...input.points[i % input.points.length], t: i / 4 }));
     const [old, anchored] = [await measurePrompt("old", input), await measurePrompt("facts-plus-anchored", input)];
-    expect(await measurePrompt("two-stage", input)).toBeNull();
+    expect(await measurePrompt("two-stage", input)).toMatchObject({ curveChars: anchored!.curveChars, landmarks: anchored!.landmarks });
     expect(anchored!.curveChars).toBeLessThan(old!.curveChars);
     expect(anchored!.promptChars).toBeLessThan(old!.promptChars);
     expect(anchored!.promptChars).toBeGreaterThan(anchored!.curveChars);
@@ -207,9 +210,9 @@ describe("review ablation registry and report", () => {
   it("runs the shipped paths on the same fixtures, with explicit placeholders and a per-family report", async () => {
     const cases = loadReviewDataset(fixtures()).cases;
     const variants = await runReviewAblation(cases, ["old", "facts-plus-anchored", "facts-only", "two-stage"]);
-    const [old, anchored, ...pending] = variants;
-    expect(pending).toHaveLength(2);
-    for (const result of pending) expect(result).toMatchObject({ status: "pending", reason: "not implemented yet" });
+    const [old, anchored, pending, twoStage] = variants;
+    expect(pending).toMatchObject({ status: "pending", reason: "not implemented yet" });
+    expect(twoStage).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 } } });
     expect(old).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
       families: [{ family: "flat-flow" }, { family: "flat-pressure" }],
       records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });

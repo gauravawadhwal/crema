@@ -1,0 +1,371 @@
+{
+  "id": "taste-alignment",
+  "demonstration": false,
+  "cases": [
+    {
+      "id": "taste-agreement",
+      "session": "crossed-pressure-session",
+      "recipe": "crossed-pressure-recipe",
+      "profileFamily": "flat-pressure",
+      "pumpMode": "pressure",
+      "split": "dev",
+      "input": {
+        "points": [
+          {"t":0.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":0.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.5,"p":8,"f":4,"w":1.6363636363636365,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.0,"p":8,"f":4,"w":3.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.5,"p":8,"f":4,"w":4.909090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.0,"p":8,"f":4,"w":6.545454545454546,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.5,"p":8,"f":4,"w":8.181818181818182,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.0,"p":8,"f":4,"w":9.818181818181818,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.5,"p":8,"f":4,"w":11.454545454545455,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.0,"p":8,"f":4,"w":13.090909090909092,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.5,"p":8,"f":4,"w":14.727272727272727,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.0,"p":8,"f":4,"w":16.363636363636363,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.5,"p":8,"f":4,"w":18.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.0,"p":8,"f":4,"w":19.636363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.5,"p":8,"f":4,"w":21.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.0,"p":8,"f":4,"w":22.90909090909091,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.5,"p":8,"f":4,"w":24.545454545454547,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.0,"p":8,"f":4,"w":26.181818181818183,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.5,"p":8,"f":4,"w":27.818181818181817,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.0,"p":8,"f":4,"w":29.454545454545453,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.5,"p":8,"f":4,"w":31.09090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.0,"p":8,"f":4,"w":32.72727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.5,"p":8,"f":4,"w":34.36363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":14.0,"p":8,"f":4,"w":36.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null}
+        ],
+        "profile": {
+          "title": "Synthetic pressure hold",
+          "beverage_type": "espresso",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "pressure",
+              "pressure": "8",
+              "seconds": "30",
+              "temperature": "92",
+              "limiter": {
+                "value": "2"
+              }
+            }
+          ]
+        },
+        "doseG": 18,
+        "yieldG": 36,
+        "targetYieldG": 36,
+        "targetTimeS": [
+          20,
+          30
+        ],
+        "stopReason": "targetWeight",
+        "feedback": {
+          "sourBitter": -2,
+          "body": -1,
+          "enjoyment": 5,
+          "notes": null
+        },
+        "notes": null,
+        "bean": null,
+        "installedProfiles": [
+          "Synthetic pressure hold"
+        ],
+        "history": []
+      },
+      "labels": {
+        "supportedOutcomes": [
+          "grind-finer"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ],
+        "source": "sensory",
+        "taste": {
+          "sourBitter": -2,
+          "body": -1,
+          "enjoyment": 5
+        }
+      }
+    },
+    {
+      "id": "taste-conflict",
+      "session": "crossed-pressure-session",
+      "recipe": "crossed-pressure-recipe",
+      "profileFamily": "flat-pressure",
+      "pumpMode": "pressure",
+      "split": "dev",
+      "input": {
+        "points": [
+          {"t":0.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":0.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.5,"p":8,"f":4,"w":1.6363636363636365,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.0,"p":8,"f":4,"w":3.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.5,"p":8,"f":4,"w":4.909090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.0,"p":8,"f":4,"w":6.545454545454546,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.5,"p":8,"f":4,"w":8.181818181818182,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.0,"p":8,"f":4,"w":9.818181818181818,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.5,"p":8,"f":4,"w":11.454545454545455,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.0,"p":8,"f":4,"w":13.090909090909092,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.5,"p":8,"f":4,"w":14.727272727272727,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.0,"p":8,"f":4,"w":16.363636363636363,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.5,"p":8,"f":4,"w":18.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.0,"p":8,"f":4,"w":19.636363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.5,"p":8,"f":4,"w":21.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.0,"p":8,"f":4,"w":22.90909090909091,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.5,"p":8,"f":4,"w":24.545454545454547,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.0,"p":8,"f":4,"w":26.181818181818183,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.5,"p":8,"f":4,"w":27.818181818181817,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.0,"p":8,"f":4,"w":29.454545454545453,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.5,"p":8,"f":4,"w":31.09090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.0,"p":8,"f":4,"w":32.72727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.5,"p":8,"f":4,"w":34.36363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":14.0,"p":8,"f":4,"w":36.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null}
+        ],
+        "profile": {
+          "title": "Synthetic pressure hold",
+          "beverage_type": "espresso",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "pressure",
+              "pressure": "8",
+              "seconds": "30",
+              "temperature": "92",
+              "limiter": {
+                "value": "2"
+              }
+            }
+          ]
+        },
+        "doseG": 18,
+        "yieldG": 36,
+        "targetYieldG": 36,
+        "targetTimeS": [
+          20,
+          30
+        ],
+        "stopReason": "targetWeight",
+        "feedback": {
+          "sourBitter": 2,
+          "body": 2,
+          "enjoyment": 6,
+          "notes": null
+        },
+        "notes": null,
+        "bean": null,
+        "installedProfiles": [
+          "Synthetic pressure hold"
+        ],
+        "history": []
+      },
+      "labels": {
+        "supportedOutcomes": [
+          "abstain"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ],
+        "source": "sensory",
+        "taste": {
+          "sourBitter": 2,
+          "body": 2,
+          "enjoyment": 6
+        }
+      }
+    },
+    {
+      "id": "taste-absent",
+      "session": "crossed-pressure-session",
+      "recipe": "crossed-pressure-recipe",
+      "profileFamily": "flat-pressure",
+      "pumpMode": "pressure",
+      "split": "dev",
+      "input": {
+        "points": [
+          {"t":0.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":0.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.5,"p":8,"f":4,"w":1.6363636363636365,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.0,"p":8,"f":4,"w":3.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.5,"p":8,"f":4,"w":4.909090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.0,"p":8,"f":4,"w":6.545454545454546,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.5,"p":8,"f":4,"w":8.181818181818182,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.0,"p":8,"f":4,"w":9.818181818181818,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.5,"p":8,"f":4,"w":11.454545454545455,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.0,"p":8,"f":4,"w":13.090909090909092,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.5,"p":8,"f":4,"w":14.727272727272727,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.0,"p":8,"f":4,"w":16.363636363636363,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.5,"p":8,"f":4,"w":18.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.0,"p":8,"f":4,"w":19.636363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.5,"p":8,"f":4,"w":21.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.0,"p":8,"f":4,"w":22.90909090909091,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.5,"p":8,"f":4,"w":24.545454545454547,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.0,"p":8,"f":4,"w":26.181818181818183,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.5,"p":8,"f":4,"w":27.818181818181817,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.0,"p":8,"f":4,"w":29.454545454545453,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.5,"p":8,"f":4,"w":31.09090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.0,"p":8,"f":4,"w":32.72727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.5,"p":8,"f":4,"w":34.36363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":14.0,"p":8,"f":4,"w":36.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null}
+        ],
+        "profile": {
+          "title": "Synthetic pressure hold",
+          "beverage_type": "espresso",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "pressure",
+              "pressure": "8",
+              "seconds": "30",
+              "temperature": "92",
+              "limiter": {
+                "value": "2"
+              }
+            }
+          ]
+        },
+        "doseG": 18,
+        "yieldG": 36,
+        "targetYieldG": 36,
+        "targetTimeS": [
+          20,
+          30
+        ],
+        "stopReason": "targetWeight",
+        "feedback": null,
+        "notes": null,
+        "bean": null,
+        "installedProfiles": [
+          "Synthetic pressure hold"
+        ],
+        "history": []
+      },
+      "labels": {
+        "supportedOutcomes": [
+          "grind-finer"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ],
+        "source": "synthetic-injected",
+        "injection": "A flat 8 bar pressure hold maintains 4 mL/s against the recipe’s 2 mL/s flow limiter. No taste is supplied. Only a small finer trial is supported.",
+        "observations": [
+          {
+            "id": "sustained-flow-overshoot",
+            "kind": "gushed",
+            "phase": "pouring",
+            "controlledVariable": "pressure",
+            "expected": "required"
+          }
+        ]
+      }
+    },
+    {
+      "id": "taste-notes-only",
+      "session": "crossed-pressure-session",
+      "recipe": "crossed-pressure-recipe",
+      "profileFamily": "flat-pressure",
+      "pumpMode": "pressure",
+      "split": "dev",
+      "input": {
+        "points": [
+          {"t":0.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":0.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":1.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":2.5,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.0,"p":8,"f":4,"w":0.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":3.5,"p":8,"f":4,"w":1.6363636363636365,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.0,"p":8,"f":4,"w":3.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":4.5,"p":8,"f":4,"w":4.909090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.0,"p":8,"f":4,"w":6.545454545454546,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":5.5,"p":8,"f":4,"w":8.181818181818182,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.0,"p":8,"f":4,"w":9.818181818181818,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":6.5,"p":8,"f":4,"w":11.454545454545455,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.0,"p":8,"f":4,"w":13.090909090909092,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":7.5,"p":8,"f":4,"w":14.727272727272727,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.0,"p":8,"f":4,"w":16.363636363636363,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":8.5,"p":8,"f":4,"w":18.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.0,"p":8,"f":4,"w":19.636363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":9.5,"p":8,"f":4,"w":21.272727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.0,"p":8,"f":4,"w":22.90909090909091,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":10.5,"p":8,"f":4,"w":24.545454545454547,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.0,"p":8,"f":4,"w":26.181818181818183,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":11.5,"p":8,"f":4,"w":27.818181818181817,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.0,"p":8,"f":4,"w":29.454545454545453,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":12.5,"p":8,"f":4,"w":31.09090909090909,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.0,"p":8,"f":4,"w":32.72727272727273,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":13.5,"p":8,"f":4,"w":34.36363636363637,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null},
+          {"t":14.0,"p":8,"f":4,"w":36.0,"temp":92,"tp":8,"tf":null,"targetTemp":92,"frame":0,"substate":"pouring","weightFlow":null}
+        ],
+        "profile": {
+          "title": "Synthetic pressure hold",
+          "beverage_type": "espresso",
+          "steps": [
+            {
+              "name": "Pour",
+              "pump": "pressure",
+              "pressure": "8",
+              "seconds": "30",
+              "temperature": "92",
+              "limiter": {
+                "value": "2"
+              }
+            }
+          ]
+        },
+        "doseG": 18,
+        "yieldG": 36,
+        "targetYieldG": 36,
+        "targetTimeS": [
+          20,
+          30
+        ],
+        "stopReason": "targetWeight",
+        "feedback": null,
+        "notes": "Maybe the finish could be brighter.",
+        "bean": null,
+        "installedProfiles": [
+          "Synthetic pressure hold"
+        ],
+        "history": []
+      },
+      "labels": {
+        "supportedOutcomes": [
+          "abstain"
+        ],
+        "forbiddenClaims": [
+          "inferred-taste",
+          "unqualified-diagnosis",
+          "multiple-next-shot-changes"
+        ],
+        "source": "sensory",
+        "taste": {
+          "notes": "Maybe the finish could be brighter."
+        }
+      }
+    }
+  ]
+}

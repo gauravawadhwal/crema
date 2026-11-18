@@ -183,7 +183,10 @@ export const ReviewBody = z.object({
   volumeCountStartFrame: z.union([z.string().max(30), z.number()]).nullish(),
   targetTimeS: z.tuple([z.number().min(0).max(600), z.number().min(0).max(600)]).nullable(),
   timeBasis: z.enum(["recorded", "recipe", "guide"]).nullish(),
-  stopReason: z.string().max(120).nullable(), feedback: TasteFeedback.extend({ notes: z.string().max(1000).nullable() }).nullable(), bean: BeanInfo.nullable(),
+  stopReason: z.string().max(120).nullable(), feedback: TasteFeedback.extend({
+    sourBitter: TasteFeedback.shape.sourBitter.nullable(), body: TasteFeedback.shape.body.nullable(),
+    notes: z.string().max(1000).nullable(),
+  }).nullable(), bean: BeanInfo.nullable(),
   notes: z.string().max(1000).nullable().optional(),
   installedProfiles: z.array(z.string().min(1).max(160)).max(200), history: z.array(ReviewHistory).max(20).nullable().transform(v => v ?? []),
   fullTrace: FullReviewTraceWire.optional(),

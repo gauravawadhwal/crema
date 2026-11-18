@@ -67,7 +67,7 @@ describe("Decaid replay mapping", () => {
     expect(decaidReviewInput(shot)).toMatchObject({ targetTimeS: findProfile("Adaptive v2")!.recipe.timeS, timeBasis: "guide" });
     shot.workflow.profile.beverage_type = "manual";
     shot.annotations.actualYield = -1;
-    expect(decaidReviewInput(shot)).toMatchObject({ yieldG: null, targetTimeS: null, timeBasis: null, feedback: null, notes: "Sweet." });
+    expect(decaidReviewInput(shot)).toMatchObject({ yieldG: null, targetTimeS: null, timeBasis: null, feedback: { sourBitter: 0, body: 1, enjoyment: 9, notes: null }, notes: "Sweet." });
     const bare = { measurements: [sample(1000, 5, 3)] };
     expect(decaidReviewInput(bare)).toMatchObject({ yieldG: 3, points: [{ t: 0 }], profile: null, feedback: null });
   });

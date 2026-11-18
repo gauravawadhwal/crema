@@ -277,8 +277,8 @@ describe("harness", () => {
     const c = loadCases("review").find(x => x.id === "review-history-grind-progress")!;
     const run = await runCase("review", c, { kind: "llm", provider: new MockProvider() }, 0, { today, judge: judgeProvider });
     expect(run.calls).toHaveLength(1);
-    expect(run.calls[0].schemaName).toBe("ShotReview");
-    expect(run.calls[0].prompt).toContain("HISTORY COMPARISON");
+    expect(run.calls[0].schemaName).toBe("CurveNarrative");
+    expect(run.calls[0].prompt).toContain("EVIDENCE (keys are evidence IDs)");
     expect(run.calls[0].prompt).toContain('"previousDurationS":22');
     expect(seen).toHaveLength(1);
     expect(seen[0]).toContain(run.calls[0].prompt);
@@ -290,11 +290,11 @@ describe("harness", () => {
     expect(run.judgeCalls).toHaveLength(1);
     const summary = summarize("review", [run]);
     expect(summary.headline["judge: diagnostic quality"]).toBe(1);
-    expect(summary.headline["grounded history comparison"]).toBe(0);
+    expect(summary.headline["grounded history comparison"]).toBe(1);
     const historicalText = "HISTORICAL FIELD GUIDE: sourBitter -2 means sour; +2 means bitter. Example only: 77 s is not this case's time.";
     const saved: ResultsFile = {
       meta: { task: "review", subject: "mock", provider: "mock", model: null, judge: "mock", startedAt: today.toISOString(), git: { commit: "test", dirty: false }, repeats: 1, filter: null, prompts: { historical: { schemaName: "ShotReview", text: historicalText } } },
-      summary, records: [{ ...run, calls: [{ ...run.calls[0], systemHash: "historical" }] }],
+      summary, records: [{ ...run, calls: [{ ...run.calls[0], schemaName: "ShotReview", systemHash: "historical" }] }],
     };
     const loaded = unpackResults(JSON.parse(JSON.stringify(packResults(saved))));
     await rejudge("review", loaded.records[0], judgeProvider, loaded.meta.prompts);

@@ -1,28 +1,9 @@
-import { stoppedEarly, type ShotAnalysisMetrics, type ShotFacts } from "../profiles/analysis.js";
-import type { ReviewInput, ReviewResult, ShotReviewData } from "./review-types.js";
+import { stoppedEarly, type ShotFacts } from "../profiles/analysis.js";
+import type { CurveReview, ReviewInput, ReviewResult, ShotReviewData } from "./review-types.js";
 import type { DialInAdvice } from "../schema.js";
-import { historySentence } from "./review-history.js";
+import { historyCurveSentence, historySentence } from "./review-history.js";
+import { alignTaste, grindAdvice } from "./review-taste.js";
 import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "./review-evidence.js";
-
-function grindAdvice(direction: "finer" | "coarser", reason: string): DialInAdvice {
-  const finer = direction === "finer";
-  return {
-    change: finer ? "Grind finer" : "Grind coarser",
-    grindDelta: finer ? "finer" : "coarser",
-    yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: reason,
-  };
-}
-
-function tasteAdvice(input: ReviewInput): DialInAdvice | null {
-  const f = input.feedback;
-  if (!f) return null;
-  if (f.sourBitter <= -1) return grindAdvice("finer", "You reported sourness. Try one small finer step with dose and yield fixed; taste whether the sharpness softens before changing again.");
-  if (f.sourBitter >= 1) return grindAdvice("coarser", "You reported bitterness. Try one small coarser step with dose and yield fixed; taste whether the bitter finish softens before changing again.");
-  if (f.body <= -1) return { change: "Shorten the yield by 3 g for more body", grindDelta: "same", yieldDeltaG: -3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted thin; a slightly shorter yield may add body." };
-  if (f.body >= 2) return { change: "Lengthen the yield by 3 g for more clarity", grindDelta: "same", yieldDeltaG: 3, tempDeltaC: 0, switchProfile: null, reasoning: "The shot tasted heavy; a slightly longer yield may add clarity." };
-  if (f.sourBitter === 0 && f.body === 0) return { change: "Keep it as it is", grindDelta: "same", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null, reasoning: "You marked the taste and body as balanced." };
-  return null;
-}
 
 const STOPS: Record<string, string> = {
   targetWeight: "stopped at the target weight", targetVolume: "stopped at the target volume",
@@ -42,56 +23,6 @@ export function factsSentence(f: ShotFacts): string | null {
   if (!parts.length) return null;
   const sentence = parts.join(" ") + (stop ? `, ${stop}` : "");
   return sentence[0].toUpperCase() + sentence.slice(1) + ".";
-}
-
-export function recordingLimitSummary(input: ReviewInput, metrics: ShotAnalysisMetrics): string {
-  if (metrics.recordedPoints === 0) return "No shot curve was recorded. Check that Decaid is recording, then repeat the recipe and taste it before changing grind from telemetry.";
-  const knownShortYield = input.targetYieldG != null && input.targetYieldG > 0 && input.yieldG != null && input.yieldG < 0.8 * input.targetYieldG;
-  if (knownShortYield && stoppedEarly(input)) return "This shot was stopped early, so its short recording cannot establish a grind problem. Keep the recipe for a full repeat when ready, then compare taste before adjusting.";
-  return "This recording is too short or sparse for a reliable curve assessment. Repeat with recording active; any immediate adjustment should rest on reported taste, not this curve.";
-}
-
-function rulesSummary(evidence: ReviewEvidence, input: ReviewInput, direction: "finer" | "coarser" | null, conflict: boolean): string {
-  const a = evidence.analysis;
-  const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
-  const temp = a.issues.find((i) => i.kind === "off_target_temp");
-  const phases = a.facts.phaseEvidence.phases;
-  const measured = phases.filter(p => p.controlledError.value != null).sort((a, b) => b.controlledError.coveredS - a.controlledError.coveredS)[0];
-  if (!a.metrics.enoughTelemetry && !a.metrics.observedWindows) {
-    const limit = recordingLimitSummary(input, a.metrics);
-    return measured?.controlledError.coveredS >= 1 ? `${limit} ${shortPhaseSentence(measured)}` : limit;
-  }
-  const lines = [paceSentence(a.facts)];
-  const main = phases.filter(p => p.substate == null || /^pour/i.test(p.substate))
-    .reduce<(typeof phases)[number] | null>((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
-  const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
-  const eligible = new Set(a.faultWindows.map(w => w.frame));
-  const tracking = highFlow ? highFlowSentence(a.facts, main) : trackingSentence(a.facts, eligible);
-  if (tracking) lines.push(tracking);
-  else if (curveIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
-  else if (a.wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
-  else if (a.metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
-  else if (input.profile?.beverage_type === "manual") lines.push("Manual control has no fixed automatic target to judge; repeat the same controller sequence to compare.");
-  else if (!input.profile) lines.push("The recorded profile is missing, so target tracking is unknown; check the saved profile before changing grind.");
-  else if (measured) lines.push(shortPhaseSentence(measured));
-  else if (phases.some(p => p.pressureCrest.value != null)) {
-    lines.push(`Pressure peaked at ${a.facts.peakPressureBar?.toFixed(1)} bar. A target comparison needs reliable phase data.`);
-  } else lines.push("The recording did not provide enough paired target and response data for comparison.");
-  if (a.issues.some((i) => i.kind === "channeling")) lines.push("Inlet flow rose gradually while pressure held near its target.");
-  if (temp && a.metrics.meanTemperatureOffsetC != null) {
-    const d = a.metrics.meanTemperatureOffsetC;
-    lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} °C ${d > 0 ? "above" : "below"} its target.`);
-  }
-  const history = historySentence(evidence.history);
-  if (history) lines.push(history);
-  if (!input.feedback && input.notes?.trim()) lines.push("The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.");
-  else if (conflict) lines.push(input.feedback
-    ? "Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind."
-    : "The mechanical signals point toward opposite changes; repeat this recipe and check puck prep before changing grind.");
-  else if (direction === "finer") lines.push("Try one small finer grind step; keep dose and yield fixed and check for slower flow and better taste.");
-  else if (direction === "coarser") lines.push("Try one small coarser grind step; keep dose and yield fixed and check for freer flow and better taste.");
-  else if (input.profile && input.profile.beverage_type !== "manual" && !curveIssue && !temp && !history) lines.push("Keep this recipe for a repeat; taste decides whether it needs changing.");
-  return lines.filter(Boolean).join(" ");
 }
 
 const grams = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1)} g`;
@@ -134,30 +65,36 @@ export function trackingSentence(f: ShotFacts, faultFrames: ReadonlySet<number>)
   return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}${limitNote}.`;
 }
 
-function shortPhaseSentence(phase: ShotFacts["phaseEvidence"]["phases"][number]) {
+export function shortPhaseSentence(phase: ShotFacts["phaseEvidence"]["phases"][number]) {
   const name = phase.purpose.value === "bloom_or_pause" ? "bloom" : phase.purpose.value === "decline" ? "decline" : "phase";
   return `During the ${name}, ${phase.mode.value} differed from the recorded command by ${phase.controlledError.value!.absoluteMean.toFixed(1)} ${phase.controlledUnit} on average over ${phase.controlledError.coveredS.toFixed(1)} s.`;
 }
 
-function highFlowSentence(facts: ShotFacts, phase: ShotFacts["phaseEvidence"]["phases"][number]) {
+export function highFlowSentence(phase: ShotFacts["phaseEvidence"]["phases"][number]) {
   const hold = phase.steadyHold;
   const mean = hold.value!;
   const peak = phase.pressureCrest.value;
   const droop = phase.pressureDroopAtHeldFlowBar.value;
-  const onset = facts.phaseEvidence.firstSustainedBeverage.value;
-  const rate = facts.phaseEvidence.cupRateAfterOnsetGS.value;
   const first = `Inlet flow averaged ${mean.meanResponse.toFixed(1)} mL/s against the ${mean.meanCommand.toFixed(1)} mL/s target over ${hold.coveredS.toFixed(1)} s`;
   const pressure = peak ? `, with pressure peaking at ${peak.pressureBar.toFixed(1)} bar` : "";
   const late = droop != null && droop >= 0.2 ? ` and easing by ${droop.toFixed(1)} bar late` : "";
-  const cup = onset?.previousBelowGramS != null && rate != null
-    ? ` The cup reached 1 g after ${onset.brewElapsedS.toFixed(1)} s, then gained about ${rate.toFixed(1)} g/s.` : "";
-  return `${first}${pressure}${late}.${cup}`;
+  return `${first}${pressure}${late}.`;
+}
+
+export function cupOnsetSentence(facts: ShotFacts): string | null {
+  const { firstSustainedBeverage, cupRateAfterOnsetGS } = facts.phaseEvidence;
+  const onset = firstSustainedBeverage.value;
+  if (!onset) return null;
+  const elapsed = onset.brewElapsedS.toFixed(1);
+  const rate = cupRateAfterOnsetGS.value;
+  const crossing = onset.previousBelowGramS == null ? `The first usable reading of at least 1 g was at ${elapsed} s` : `The cup reached 1 g after ${elapsed} s`;
+  return `${crossing}${rate == null ? "" : `, then gained about ${rate.toFixed(1)} g/s`}.`;
 }
 
 const FAST = ["gushed", "pressure_shortfall", "fast_shot"];
 const SLOW = ["choked", "flow_shortfall", "slow_shot"];
 
-function fastReason(kinds: string[]): string {
+export function fastReason(kinds: string[]): string {
   const why = [
     kinds.includes("fast_shot") && "the shot ran faster than its expected window",
     kinds.includes("pressure_shortfall") && "pressure fell short of the profile's target",
@@ -166,7 +103,7 @@ function fastReason(kinds: string[]): string {
   return `${capitalize(joinAnd(why))}, consistent with low puck resistance. Try one small finer step with dose and yield fixed; look for more pressure or a slower pour, then taste before changing again.`;
 }
 
-function slowReason(kinds: string[]): string {
+export function slowReason(kinds: string[]): string {
   const why = [
     kinds.includes("slow_shot") && "the shot ran slower than its expected window",
     kinds.includes("flow_shortfall") && "flow fell short of the profile's target",
@@ -178,48 +115,112 @@ function slowReason(kinds: string[]): string {
 const capitalize = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s;
 const joinAnd = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 
-/** Deterministic, local shot review. It never changes machine settings. */
-export function rulesReview(input: ReviewInput, evidence = buildReviewEvidence(input)): ShotReviewData {
-  const analysis = evidence.analysis;
-  const issues = analysis.issues;
-  const kinds = issues.map((i) => i.kind);
-  // Signs of too little puck resistance (grind finer) and too much (grind coarser).
-  const hasFast = kinds.some((k) => FAST.includes(k));
-  const hasSlow = kinds.some((k) => SLOW.includes(k));
-  const manual = input.profile?.beverage_type === "manual";
-  let nextShot: DialInAdvice | null = null;
-  let conflict = false;
-
-  if (input.feedback) {
-    const tasted = tasteAdvice(input);
-    // A mechanical curve and taste can point to opposite grind changes. Keep
-    // the evidence visible, but don't pick a blind direction between them.
-    conflict = (hasSlow && input.feedback.sourBitter <= -1) || (hasFast && input.feedback.sourBitter >= 1);
-    const explicitBalance = input.feedback.sourBitter === 0 && input.feedback.body === 0;
-    if (!conflict && (explicitBalance || (!manual && input.profile != null))) nextShot = tasted;
-  } else if (!input.notes?.trim() && !manual && input.profile != null && hasFast && !hasSlow) {
-    nextShot = grindAdvice("finer", fastReason(kinds));
-  } else if (!input.notes?.trim() && !manual && input.profile != null && hasSlow && !hasFast) {
-    nextShot = grindAdvice("coarser", slowReason(kinds));
-  }
-
-  const direction = nextShot?.grindDelta.endsWith("finer") ? "finer" : nextShot?.grindDelta.endsWith("coarser") ? "coarser" : null;
-  const summary = rulesSummary(evidence, input, input.feedback ? null : direction, conflict || (hasFast && hasSlow));
-  let confidence: ShotReviewData["confidence"] = "low";
-  if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
-  if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";
-  if (conflict) confidence = "low";
+/** Only measured evidence and bounded, non-sensory context cross into the curve stage. */
+export function curveStageInput(input: ReviewInput, evidence: ReviewEvidence) {
+  const type = input.profile?.beverage_type;
+  const profile: "espresso" | "manual" | "unknown" = type === "manual" ? "manual" :
+    input.profile?.title?.trim() && (!type || type === "espresso") ? "espresso" : "unknown";
   return {
-    summary,
-    wentWell: analysis.wentWell,
-    issues,
-    nextShot,
-    confidence,
-    askTaste: input.feedback == null,
+    evidence, profile,
+    earlyStop: stoppedEarly(evidence.analysis.facts),
+    bean: input.bean ? { roastLevel: input.bean.roastLevel?.value ?? null, processKind: input.bean.processKind ?? null } : null,
   };
 }
 
+export type CurveStageInput = ReturnType<typeof curveStageInput>;
+
+function prioritizedIssues(issues: ShotReviewData["issues"]) {
+  const priority = (kind: string) => kind === "fast_shot" || kind === "slow_shot" ? 1 : 0;
+  const severity = { warning: 0, caution: 1, info: 2 };
+  return [...issues].sort((a, b) => priority(a.kind) - priority(b.kind) ||
+    severity[a.severity] - severity[b.severity] || (a.fromS ?? 0) - (b.fromS ?? 0)).slice(0, 12);
+}
+
+function curveSummary(stage: CurveStageInput) {
+  const { evidence, profile, earlyStop } = stage;
+  const { facts, metrics, issues, wentWell, faultWindows } = evidence.analysis;
+  const { phases } = facts.phaseEvidence;
+  const measured = phases.filter(p => p.controlledError.value != null).sort((a, b) => b.controlledError.coveredS - a.controlledError.coveredS)[0];
+  const hasRecording = metrics.enoughTelemetry || metrics.observedWindows > 0;
+  if (!hasRecording) {
+    if (!metrics.recordedPoints) return "No shot curve was recorded.";
+    const shortYield = facts.targetYieldG != null && facts.yieldG != null && facts.yieldG < 0.8 * facts.targetYieldG;
+    const limit = shortYield && earlyStop ? "This shot was stopped early, so a full repeat is needed to assess the curve." :
+      "This recording is too short or sparse for a reliable curve assessment.";
+    return measured?.controlledError.coveredS >= 1 ? `${limit} ${shortPhaseSentence(measured)}` : limit;
+  }
+  const main = phases.filter(p => p.substate == null || /^pour/i.test(p.substate))
+    .reduce<(typeof phases)[number] | null>((best, p) => p.steadyHold.value && (!best || p.durationS > best.durationS) ? p : best, null);
+  const highFlow = main?.mode.value === "flow" && (main.steadyHold.value?.meanCommand ?? 0) > 3;
+  const tracking = highFlow ? highFlowSentence(main) : trackingSentence(facts, new Set(faultWindows.map(w => w.frame)));
+  const hydraulicIssue = issues.some(i => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
+  const lines: (string | null)[] = [];
+  if (tracking) lines.push(tracking);
+  else if (hydraulicIssue) lines.push("Pressure or flow stayed well away from the profile's target for a sustained stretch.");
+  else if (wentWell.length) lines.push("Where a step held a steady target, pressure or flow followed it without a sustained problem.");
+  else if (metrics.observedWindows) lines.push("Where a step held a steady target, pressure or flow missed it by more than a fifth, though not by enough to call a fault.");
+  else if (profile === "manual") lines.push("Manual control has no fixed automatic target to judge.");
+  else if (measured) lines.push(shortPhaseSentence(measured));
+  else if (facts.peakPressureBar != null) lines.push(`Pressure peaked at ${facts.peakPressureBar.toFixed(1)} bar. A target comparison needs reliable phase data.`);
+  else lines.push("The recording lacks enough paired target and response data for comparison.");
+  if (issues.some(i => i.kind === "channeling")) lines.push("Inlet flow rose gradually while pressure held near its target.");
+  lines.push(cupOnsetSentence(facts));
+  if (issues.some(i => i.kind === "off_target_temp") && metrics.meanTemperatureOffsetC != null) {
+    const d = metrics.meanTemperatureOffsetC;
+    lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} °C ${d > 0 ? "above" : "below"} its target.`);
+  }
+  const recovery = (main ?? measured)?.temperature.value?.lateMedianOffsetC.value;
+  if (highFlow && recovery != null && Math.abs(recovery) >= 0.05) {
+    lines.push(`Late in the pour, temperature was ${Math.abs(recovery).toFixed(1)} °C ${recovery > 0 ? "above" : "below"} target.`);
+  }
+  if (profile === "unknown") lines.push("Check the recorded profile before comparing targets or changing grind.");
+  return lines.filter(Boolean).join(" ");
+}
+
+/** Mechanical conclusions and the initial experiment are fixed before alignment. */
+export function rulesCurveReview(stage: CurveStageInput): CurveReview {
+  const { evidence, profile } = stage;
+  const { facts, metrics, issues, wentWell } = evidence.analysis;
+  const kinds = issues.map(i => i.kind);
+  const finer = kinds.some(k => FAST.includes(k));
+  const coarser = kinds.some(k => SLOW.includes(k));
+  let nextShot: DialInAdvice | null = null;
+  if (profile === "espresso" && finer !== coarser) {
+    nextShot = finer ? grindAdvice("finer", fastReason(kinds)) : grindAdvice("coarser", slowReason(kinds));
+  }
+  const check = !metrics.recordedPoints ? "Check that Decaid is recording, then repeat the same recipe." :
+    !metrics.enoughTelemetry && !metrics.observedWindows ? "Repeat with recording active for the full shot." :
+    finer && coarser ? "The mechanical signals point toward opposite grind changes. Repeat this recipe with consistent puck prep." :
+    profile === "manual" ? "Repeat the same controller sequence and compare the pressure and flow." :
+    profile === "unknown" ? "Check which profile was recorded before changing grind." :
+    evidence.history.curves.phase ? "Repeat the same setup and check whether the cup fill and pressure crest recur." :
+    "Repeat the same recipe with consistent puck prep and check whether the pour repeats.";
+  return {
+    summary: curveSummary(stage),
+    history: historyCurveSentence(evidence.history),
+    timing: [paceSentence(facts), historySentence(evidence.history)].filter(Boolean).join(" ") || null,
+    wentWell, issues: prioritizedIssues(issues), finer, coarser,
+    confidence: metrics.observedWindows > 0 && (issues.length > 0 || wentWell.length > 0) ? "medium" : "low",
+    limitation: "Shot curves show how the machine and puck responded. They cannot identify the cause of a change or tell you how the shot tasted.",
+    nextShot, check, narrative: null,
+  };
+}
+
+/** Keep the original review fields usable by older skins and saved reports. */
+export function finishReview(input: ReviewInput, stage: CurveStageInput, curve: CurveReview, source: string, notes?: Parameters<typeof alignTaste>[2]): ReviewResult {
+  const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, stage.profile === "espresso");
+  const summary = [curve.summary, curve.history, curve.timing, curve.narrative?.text, alignment.summary,
+    nextShot ? null : alignment.check].filter(Boolean).join(" ");
+  const review = { summary, issues: curve.issues, wentWell: curve.wentWell, confidence: curve.confidence, nextShot, askTaste };
+  return { review, curve, taste: alignment, source, evidence: projectReviewEvidence(stage.evidence) };
+}
+
+export function rulesReview(input: ReviewInput, evidence = buildReviewEvidence(input)): ShotReviewData {
+  const stage = curveStageInput(input, evidence);
+  return finishReview(input, stage, rulesCurveReview(stage), "rules").review;
+}
+
 export function rulesReviewResult(input: ReviewInput, fullTrace?: FullReviewTrace): ReviewResult {
-  const evidence = buildReviewEvidence(input, fullTrace);
-  return { review: rulesReview(input, evidence), source: "rules", evidence: projectReviewEvidence(evidence) };
+  const stage = curveStageInput(input, buildReviewEvidence(input, fullTrace));
+  return finishReview(input, stage, rulesCurveReview(stage), "rules");
 }
