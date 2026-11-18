@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { reviewFixture } from "../evals/lib/review-fixtures.js";
 import { createApp } from "../server/app.js";
 import { ProviderChain } from "../server/llm/index.js";
 import type { LlmProvider } from "../server/llm/types.js";
@@ -70,6 +71,37 @@ describe("shot review backend", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).source).toBe("mock");
     expect(JSON.parse(prompt.split("RECENT HISTORY FOR THIS BAG (bounded, enjoyment 0..10):\n")[1])).toEqual(history);
+  });
+
+  it("sends a high-flow hold and its unsampled pressure crest as measured facts without adding faults", async () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const hidden = shot.points.find(p => p.t > 8 && p.t < 11 && !downsampleReviewPoints(shot.points).includes(p))!;
+    hidden.p = 3.45;
+    let prompt = "";
+    const app = createApp({ llm: provider(value => { prompt = value; return cleanReview(); }) });
+    const response = await app.request("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(shot) });
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.source).toBe("mock");
+    expect(result.review.issues.map((issue: { kind: string }) => issue.kind)).toEqual(["off_target_temp"]);
+    const facts = JSON.parse(prompt.split("SHOT FACTS (measured by code from every sample; null means not measured):\n")[1].split("\n\n")[0]);
+    const sampled = JSON.parse(prompt.split("SHOT CURVES (approximately 50 samples; all available phase starts retained):\n")[1].split("\n\n")[0]);
+    expect(facts.gradedWindows).toBe(1);
+    expect(facts.phaseEvidence.phases[1]).toMatchObject({ mode: { value: "flow" }, controlledError: { value: { absoluteMean: 0 } },
+      pressureCrest: { value: { tS: hidden.t, pressureBar: 3.45 } } });
+    expect(facts.phaseEvidence.firstSustainedBeverage.value.countedVolumeMl).toMatchObject({ value: null, reason: "counter_not_available" });
+    expect(sampled.some((p: ReviewPoint) => p.t === hidden.t)).toBe(false);
+  });
+
+  it("bounds per-phase prompt facts when the recorded frame changes on every sample", async () => {
+    const shot = reviewFixture("high-flow-tracked");
+    shot.points = shot.points.filter(p => p.frame !== 4).map((p, i) => ({ ...p, frame: i % 2 }));
+    let prompt = "";
+    await reviewShot(provider(value => { prompt = value; return cleanReview(); }), shot);
+    const facts = JSON.parse(prompt.split("SHOT FACTS (measured by code from every sample; null means not measured):\n")[1].split("\n\n")[0]);
+    expect(facts.phaseEvidence.phases.length + facts.phaseEvidence.omittedPhaseCount).toBe(shot.points.length);
+    expect(facts.phaseEvidence.phases.length).toBe(12);
+    expect(facts.phaseEvidence.finish.lastObservedPhase.value.toS).toBe(21);
   });
 
   it("asks for missing taste and never asks again when both taste ratings were supplied", async () => {

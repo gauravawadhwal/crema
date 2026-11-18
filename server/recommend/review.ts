@@ -1,5 +1,5 @@
 import type { ProviderChain } from "../llm/index.js";
-import { analyzeShot, type ShotAnalysisMetrics } from "../profiles/analysis.js";
+import { analyzeShot, type ShotAnalysisMetrics, type ShotFacts } from "../profiles/analysis.js";
 import { findProfile } from "../profiles/catalog.js";
 import { ShotReview, type ShotReview as ShotReviewType } from "../schema.js";
 import { recordingLimitSummary, rulesReview } from "./review-local.js";
@@ -140,8 +140,7 @@ function validateReview(out: ShotReviewType, findings: ReviewIssue[], input: Rev
     out.confidence = "low";
     out.summary = recordingLimitSummary(input, metrics);
   } else if (metrics.observedWindows === 0) {
-    // The shot is well recorded, but no step could be graded against its target.
-    // Keep the model's description; it can't be confident about tracking.
+    // Preserve conservative confidence when no window qualified for fault checks.
     out.confidence = tasted ? (out.confidence === "high" ? "medium" : out.confidence) : "low";
   }
   return out;
@@ -153,19 +152,34 @@ function fallback(input: ReviewInput): ReviewResult {
   return { review, source: "rules" };
 }
 
+function reviewFacts(facts: ShotFacts, metrics: ShotAnalysisMetrics) {
+  const { weightGlitches, phaseEvidence, pourSteps, ...measured } = facts;
+  // Corrupt frame metadata can alternate every sample. Keep the largest phases
+  // in the prompt while calculating the facts and findings from the whole trace.
+  const limit = 12;
+  const phases = phaseEvidence.phases.length <= limit ? phaseEvidence.phases :
+    [...phaseEvidence.phases].sort((a, b) => b.durationS - a.durationS).slice(0, limit).sort((a, b) => a.index - b.index);
+  const primarySteps = pourSteps.length <= limit ? pourSteps : [...pourSteps].sort((a, b) => b.durationS - a.durationS).slice(0, limit);
+  return {
+    ...measured, ...(weightGlitches ? { weightGlitches } : {}), pourSteps: primarySteps,
+    phaseEvidence: { ...phaseEvidence, phases, omittedPhaseCount: phaseEvidence.phases.length - phases.length },
+    gradedWindows: pourSteps.filter(step => step.steadyTarget).length,
+    meanTemperatureOffsetC: metrics.meanTemperatureOffsetC == null ? null : Math.round(metrics.meanTemperatureOffsetC * 10) / 10,
+  };
+}
+
 export async function reviewShot(llm: ProviderChain, input: ReviewInput): Promise<ReviewResult> {
   const analysis = analyzeShot(input);
   const findings = prioritizeFindings(analysis.issues as ReviewIssue[]);
-  const { weightGlitches, ...measured } = analysis.facts;
   const historyComparison = compareReviewHistory(input, analysis.facts);
-  const supported = rulesReview(input).nextShot;
-  const withoutTaste = rulesReview({ ...input, feedback: null, notes: null }).nextShot;
+  const supported = rulesReview(input, analysis).nextShot;
+  const withoutTaste = rulesReview({ ...input, feedback: null, notes: null }, analysis).nextShot;
   const boundaries = {
     profileSupportsChanges: input.profile != null && input.profile.beverage_type !== "manual",
     withoutTasteGrindDirection: withoutTaste?.grindDelta ?? null,
     tasteCurveConflict: !!input.feedback && supported == null && findings.some(f => [...FAST_KINDS, ...SLOW_KINDS].includes(f.kind)),
   };
-  const facts = { ...measured, ...(weightGlitches ? { weightGlitches } : {}), gradedWindows: analysis.metrics.observedWindows, meanTemperatureOffsetC: analysis.metrics.meanTemperatureOffsetC == null ? null : Math.round(analysis.metrics.meanTemperatureOffsetC * 10) / 10 };
+  const facts = reviewFacts(analysis.facts, analysis.metrics);
   try {
     const prompt = [
       `COFFEE (authoritative supplied snapshot; null means unknown):\n${JSON.stringify(input.bean)}`,

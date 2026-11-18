@@ -17,6 +17,9 @@ export interface ReviewPoint {
   frame: number | null;
   substate: string | null;
   weightFlow: number | null;
+  /** Offline Decaid metadata, outside the existing review request. */
+  countedVolumeMl?: number | null;
+  scaleSampleS?: number | null;
 }
 
 export interface ReviewInput {
@@ -31,6 +34,9 @@ export interface ReviewInput {
   doseG: number | null;
   yieldG: number | null;
   targetYieldG: number | null;
+  /** Offline Decaid metadata, outside the existing review request. */
+  annotatedYieldG?: number | null;
+  volumeCountStartFrame?: string | number;
   targetTimeS: [number, number] | null;
   /** Where the time window came from; a profile guide is an approximation. */
   timeBasis?: "recorded" | "recipe" | "guide" | null;

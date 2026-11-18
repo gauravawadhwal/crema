@@ -9,6 +9,8 @@ export const REVIEW_FIXTURES = [
   "history-grind-progress", "history-same-grind-drift", "history-confounded", "history-incomplete",
   "history-profile-change", "history-grind-slower", "time-taste-conflict", "history-missing-grind",
   "notes-injection", "notes-sour", "notes-sour-injection", "notes-sour-choke", "notes-negation",
+  "high-flow-tracked", "high-flow-capped", "pressure-ramp", "dynamic-bloom", "preempted-decline",
+  "phase-gap", "scale-jump", "stale-scale", "all-zero-import",
 ] as const;
 export type ReviewFixture = typeof REVIEW_FIXTURES[number];
 
@@ -173,6 +175,66 @@ export function reviewFixture(name: ReviewFixture): ReviewInput {
   if (name === "notes-negation") {
     input.feedback = null;
     input.notes = "It was not sour; it had a harsh bitter finish.";
+  }
+  if (name === "high-flow-tracked" || name === "high-flow-capped" || name === "scale-jump" ||
+      name === "stale-scale" || name === "all-zero-import" || name === "phase-gap") {
+    const capped = name === "high-flow-capped";
+    input.profile = { title: "High flow recipe", beverage_type: "espresso", steps: [
+      { name: "Fill", pump: "flow", flow: "4.5", transition: "fast", seconds: "2", sensor: "coffee", temperature: 92,
+        exit: { type: "pressure", condition: "over", value: 2 }, limiter: { value: "8.6", range: "0.6" } },
+      { name: "Pour", pump: "flow", flow: "4.5", transition: "fast", seconds: "40", sensor: "coffee", temperature: 92,
+        limiter: { value: "8.6", range: "0.6" } },
+    ] };
+    input.points = points.filter(p => p.t <= 21).map(p => {
+      const brewT = p.t - 1;
+      const prep = brewT < 0;
+      return {
+        ...p, frame: prep ? 4 : brewT < 2 ? 0 : 1, substate: prep ? "preparingForShot" : "pouring",
+        tp: 0, tf: prep ? 2 : 4.5, f: prep ? 2 : capped ? 3 : 4.5,
+        p: prep ? 10 : capped ? 8.5 : brewT <= 10 ? 0.4 + 0.3 * brewT : 3.4 - 0.1 * (brewT - 10),
+        w: Math.max(0, brewT - 6) * (capped ? 2 : 4.8), countedVolumeMl: Math.max(0, brewT) * (capped ? 3 : 4.5),
+        temp: 98, targetTemp: 98, groupTemp: prep ? 88 : Math.min(91, 52 + 2 * brewT), targetGroupTemp: 92,
+      };
+    });
+    input.annotatedYieldG = input.yieldG = input.targetYieldG = capped ? 29 : 69;
+    input.volumeCountStartFrame = 0;
+    if (name === "scale-jump") {
+      input.points.find(p => p.t === 8)!.w = 90;
+    } else if (name === "stale-scale") {
+      input.points.forEach(p => { p.scaleSampleS = 0; });
+    } else if (name === "all-zero-import") {
+      input.points = input.points.filter(p => p.frame !== 4);
+      input.points.forEach(p => { p.frame = 0; p.tp = -1; });
+      input.stopReason = null;
+    } else if (name === "phase-gap") {
+      input.points = input.points.filter(p => p.t <= 7.25 || p.t >= 13);
+      input.stopReason = "apiStop";
+      input.targetYieldG = 100;
+    }
+  }
+  if (name === "pressure-ramp" || name === "dynamic-bloom" || name === "preempted-decline") {
+    input.profile = { title: "Pressure recipe", beverage_type: "espresso", steps: [
+      { name: "Fill", pump: "flow", flow: "5", seconds: "4", sensor: "water", temperature: 92 },
+      { name: "Dynamic bloom", pump: "flow", flow: "0", seconds: "3", transition: "smooth", sensor: "water", temperature: 92 },
+      { name: "Hold", pump: "pressure", pressure: "6", seconds: "6", sensor: "water", temperature: 92 },
+      { name: "Decline", pump: "pressure", pressure: "3", seconds: "12", transition: "smooth", sensor: "water", temperature: 85 },
+    ] };
+    input.points = points.filter(p => p.t <= (name === "preempted-decline" ? 10 : 25)).map(p => {
+      const t = p.t;
+      const frame = t < 4 ? 0 : name === "preempted-decline" ? 2 : t < 7 ? 1 : t < 13 ? 2 : 3;
+      const tp = frame < 2 ? -1 : frame === 2 ? 6 : 6 - 0.25 * (t - 13);
+      const tf = frame === 0 ? 5 : frame === 1 ? Math.max(0, 4 - 2 * (t - 4)) : -1;
+      return {
+        ...p, frame, substate: frame === 0 ? "preinfusion" : "pouring", tp, tf,
+        p: frame === 0 ? 1 : frame === 1 ? 2 - 0.5 * (t - 4) : tp - (frame === 3 ? 0.1 : 0),
+        f: frame < 2 ? tf : 1.2 + 0.05 * (t - 7), w: Math.max(0, t - 3) * 1.5,
+        temp: frame === 3 ? 89 : 92, targetTemp: frame === 3 ? 85 : 92, groupTemp: 91, targetGroupTemp: 91,
+      };
+    });
+    if (name === "dynamic-bloom") input.points = input.points.filter(p => (p.frame ?? Infinity) <= 2);
+    if (name === "pressure-ramp") input.stopReason = "apiStop";
+    input.annotatedYieldG = input.yieldG = input.points.at(-1)!.w! + 0.5;
+    input.targetYieldG = name === "pressure-ramp" ? 40 : input.yieldG;
   }
   return input;
 }

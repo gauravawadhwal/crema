@@ -189,6 +189,21 @@ the provider chain and returns `{review, source}` with rules fallback. The model
 receives sampled curves, the recorded profile, observations and bounded earlier-shot
 context. Missing measurements/taste are null. Suggested changes are advisory only.
 
+Phase evidence groups contiguous frame and machine substate readings on the shot
+clock and excludes preparation. It compares the active pump channel with its
+logged command, including ramps. Each time window reports covered seconds.
+Cup-rate windows require adjacent usable weights, and temperature offsets use
+the sensor selected by the recorded step. Limiter occupancy and the pressure
+to inlet-flow ratio describe the observed response. The existing diagnostic
+windows decide which findings can fire.
+
+Local review uses the full recording and can read counted volume, scale
+timestamps and annotated yield from Decaid. AI shot facts use every sample
+accepted by the existing 1,800-point request before the smaller curve sample
+is selected for the prompt. Fields unavailable in that request carry a reason.
+The prompt keeps at most twelve phase summaries, prioritizing elapsed duration
+when the trace contains more.
+
 Saved reviews use version 1 at `annotations.extras.crema.review` and carry creation
 time and source. Reopening a shot reads that value without making an AI call;
 Review again explicitly replaces it. Chart shading and follow-up chat are deferred.

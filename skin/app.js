@@ -345,12 +345,13 @@ function makeLiveApi(conn) {
   const optionalNumber = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
 
   // ---- shots ----
-  const shotPoints = (full) => {
+  const shotPoints = (full, includeLocalEvidence = false) => {
     const m = full.measurements || [];
     const t0 = m.map((x) => Date.parse(x.machine?.timestamp)).find(Number.isFinite);
     if (t0 == null) return [];
     const points = m.filter((x) => x.machine).map((x) => ({ t: (Date.parse(x.machine.timestamp) - t0) / 1000, p: x.machine.pressure ?? null, f: x.machine.flow ?? null, w: x.scale?.weight ?? null, temp: x.machine.mixTemperature ?? null, tp: x.machine.targetPressure ?? null, tf: x.machine.targetFlow ?? null,
-      targetTemp: x.machine.targetMixTemperature ?? null, groupTemp: x.machine.groupTemperature ?? null, targetGroupTemp: x.machine.targetGroupTemperature ?? null, frame: x.machine.profileFrame ?? null, substate: x.machine.state?.substate ?? null, weightFlow: x.scale?.weightFlow ?? null }));
+      targetTemp: x.machine.targetMixTemperature ?? null, groupTemp: x.machine.groupTemperature ?? null, targetGroupTemp: x.machine.targetGroupTemperature ?? null, frame: x.machine.profileFrame ?? null, substate: x.machine.state?.substate ?? null, weightFlow: x.scale?.weightFlow ?? null,
+      ...(includeLocalEvidence ? { countedVolumeMl: x.volume ?? null, scaleSampleS: optionalNumber((Date.parse(x.scale?.timestamp) - t0) / 1000) } : {}) }));
     const ordered = [];
     for (const point of points) {
       if (!Number.isFinite(point.t) || point.t < 0) continue;
@@ -720,8 +721,7 @@ function makeLiveApi(conn) {
     async review(shotId, feedback = null, bean = null) {
       await annotationWrites.get(shotId);
       const full = await j(D(`/shots/${encodeURIComponent(shotId)}`));
-      const recorded = shotPoints(full);
-      const points = recorded.length <= 1800 ? recorded : Array.from({ length: 1800 }, (_, i) => recorded[Math.round(i * (recorded.length - 1) / 1799)]);
+      const points = shotPoints(full, true);
       const ctx = full.workflow?.context ?? {};
       const profile = full.workflow?.profile ?? null;
       const batchId = ctx.beanBatchId ?? null;
@@ -743,10 +743,15 @@ function makeLiveApi(conn) {
       };
       let result = null;
       if (aiOn() && points.length) {
-        try { result = await cremaCall(() => post(C("/api/review"), input, { timeoutMs: AI_WAIT.review })); }
+        const bounded = points.length <= 1800 ? points : Array.from({ length: 1800 }, (_, i) => points[Math.round(i * (points.length - 1) / 1799)]);
+        const requestPoints = bounded.map(({ countedVolumeMl, scaleSampleS, ...point }) => point);
+        try { result = await cremaCall(() => post(C("/api/review"), { ...input, points: requestPoints }, { timeoutMs: AI_WAIT.review })); }
         catch (e) { console.warn("AI shot review failed; using the rules review", e); }
       }
-      if (!result?.review) result = { review: E.rulesReview(input), source: "rules" };
+      if (!result?.review) result = { review: E.rulesReview({
+        ...input, annotatedYieldG: recordedReviewNumber(full.annotations?.actualYield, 0, 500),
+        volumeCountStartFrame: profile?.target_volume_count_start,
+      }), source: "rules" };
       const saved = { version: 1, review: result.review, source: result.source || "rules", createdAt: new Date().toISOString() };
       const crema = { review: saved };
       if (feedback) { crema.sourBitter = feedback.sourBitter; crema.body = feedback.body; }

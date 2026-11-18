@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { reviewFixture, type ReviewFixture } from "../evals/lib/review-fixtures.js";
 import type { ProfileLike } from "../server/profiles/curve.js";
 import { analyzeShot } from "../server/profiles/analysis.js";
 import { rulesReview } from "../server/recommend/review-local.js";
@@ -284,3 +285,159 @@ describe("real Decaid shot shapes", () => {
   });
 });
 
+
+describe("recorded phase evidence", () => {
+  it("describes a short fill and a 4.5 mL/s hold, excluding preparation from the brew", () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const { facts, metrics, issues } = analyzeShot(shot);
+    const evidence = facts.phaseEvidence;
+    expect(facts).toMatchObject({ brewStartS: 1, durationS: 20, peakPressureBar: 3.4, firstDripsS: 7.3 });
+    expect(evidence.phases.map(({ frame, fromS, toS }) => [frame, fromS, toS])).toEqual([[0, 1, 2.75], [1, 3, 21]]);
+    const [fill, pour] = evidence.phases;
+    expect(fill.purpose.value).toBe("fill_or_soak");
+    expect(fill.plan.value).toMatchObject({ transition: "fast", exit: { type: "pressure", value: 2 } });
+    expect(fill.controlledError).toMatchObject({ coveredS: 1.75, value: { absoluteMean: 0, signedMean: 0 } });
+    expect(pour.mode).toMatchObject({ value: "flow", source: "recorded" });
+    expect(pour.controlledUnit).toBe("mL/s");
+    expect(pour.controlledError).toMatchObject({ coveredS: 18, reason: "covered", value: { absoluteMean: 0, signedMean: 0 } });
+    expect(pour.capLikeTime.value).toEqual({ seconds: 0, shareOfCoveredTime: 0 });
+    expect(pour.pressureCrest.value).toMatchObject({ tS: 11, pressureBar: 3.4, inletFlowMlS: 4.5, pressurePerInletFlowProxyBarPerMlS: { value: 0.756 } });
+    expect(pour.lateHydraulics.value).toMatchObject({ medianPressureBar: 2.65, medianInletFlowMlS: 4.5 });
+    expect(pour.pressureDroopAtHeldFlowBar.value).toBe(0.75);
+    // Weight first exceeds 1 g at 7.25 s, rises linearly at 4.8 g/s, and
+    // the pressure is still on the 0.3 bar/s climb toward its 11 s crest.
+    expect(evidence.firstSustainedBeverage).toMatchObject({ value: {
+      tS: 7.25, previousBelowGramS: 7, confirmedThroughS: 7.75, pressureBar: 2.275,
+      pressureAtPreviousBelowGramBar: 2.2, pressureAtConfirmationBar: 2.425,
+      countedVolumeMl: { value: 28.125, source: "recorded" },
+    }, reason: "three_consecutive_gram_readings" });
+    expect(evidence.cupRateBeforeOnsetGS).toMatchObject({ value: 0, coveredS: 2 });
+    expect(evidence.cupRateAfterOnsetGS).toMatchObject({ value: 4.8, coveredS: 2 });
+    expect(fill.temperature.value).toMatchObject({ sensor: "group", entry: { value: { offsetC: -40 } },
+      stateBoundaryDeltaC: { value: { fromS: 0.75, toS: 1, deltaC: -36 }, reason: "adjacent_readings_across_state_change" } });
+    expect(pour.temperature.value).toMatchObject({ atOnset: { value: { offsetC: -27.5 } }, lateMedianOffsetC: { value: -5 } });
+    expect(evidence.finish).toMatchObject({ annotatedYieldG: { value: 69 }, lastRecordedWeightG: { value: 67.2 },
+      yieldToDoseRatio: { value: 3.833 }, volumeCountStartFrame: { value: 0 }, stopSource: { value: "targetWeight" } });
+    expect(facts.pourSteps.map(step => step.steadyTarget)).toEqual([false, true]);
+    expect(metrics.observedWindows).toBe(0); // High-flow holds remain excluded from diagnostic grading.
+    expect(issues.map(i => i.kind)).toEqual(["off_target_temp"]);
+    const review = rulesReview(shot);
+    expect(review.summary).toContain("4.5 mL/s against a 4.5 mL/s");
+    expect(review.summary).toContain("peaking at 3.4 bar");
+    expect(review.summary).toContain("then gained about 4.8 g/s");
+    expect(review.summary).not.toMatch(/No step held a steady target/);
+    expect(review.nextShot).toBeNull();
+  });
+
+  it("measures time at either cap without making a 4.5 mL/s shortfall a fault", () => {
+    const shot = reviewFixture("high-flow-capped");
+    const { facts, issues } = analyzeShot(shot);
+    const pour = facts.phaseEvidence.phases[1];
+    expect(pour.controlledError.value).toEqual({ absoluteMean: 1.5, signedMean: -1.5 });
+    expect(pour.capLikeTime.value).toEqual({ seconds: 18, shareOfCoveredTime: 1 });
+    expect(pour.pressureDroopAtHeldFlowBar.value).toBeNull();
+    expect(issues.map(i => i.kind)).toEqual(["off_target_temp"]);
+    expect(rulesReview(shot).summary).toContain("near the 8.6 bar limit for 18.0 s");
+
+    const mirrored = analyzeShot(reviewFixture("limited-pressure-shortfall")).facts.phaseEvidence.phases[1];
+    expect(mirrored.capLikeTime.value).toEqual({ seconds: 16, shareOfCoveredTime: 1 });
+    expect(mirrored.plan.value?.limiter?.unit).toBe("mL/s");
+  });
+
+  it("integrates irregular intervals and interpolates the simultaneous cap thresholds", () => {
+    const shot = reviewFixture("high-flow-tracked");
+    shot.points = [[0, 6, 5.5], [1, 8, 3.5], [1.5, 8, 3.5]].map(([t, p, f]) => ({
+      ...shot.points[12], t, p, f, w: null, weightFlow: null,
+    }));
+    const phase = analyzeShot(shot).facts.phaseEvidence.phases[0];
+    // Residual goes linearly from +1 to -1 for one second, then stays at -1 for half a second.
+    expect(phase.controlledError).toMatchObject({ coveredS: 1.5, value: { absoluteMean: 0.667, signedMean: -0.333 } });
+    // Pressure crosses 7.74 bar at 0.87 s and flow crosses 3.6 mL/s at 0.95 s.
+    expect(phase.capLikeTime.value).toEqual({ seconds: 0.55, shareOfCoveredTime: 0.367 });
+  });
+
+  it("keeps a phase aligned when an isolated handoff sample logs the opposite controller", () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const handoff = shot.points.find(p => p.t === 10)!;
+    handoff.tf = 0;
+    handoff.tp = 6;
+    const phase = analyzeShot(shot).facts.phaseEvidence.phases[1];
+    expect(phase.mode.value).toBe("flow");
+    expect(phase.loggedCommand.value).toMatchObject({ min: 4.5, max: 4.5 });
+    expect(phase.controlledError).toMatchObject({ coveredS: 17.5, reason: "partial_missing_readings_or_gaps", value: { absoluteMean: 0 } });
+  });
+
+  it("reports a gradual inlet rise at held pressure and preserves existing fault kinds", () => {
+    const { facts, issues } = analyzeShot(reviewFixture("channeling"));
+    const phase = facts.phaseEvidence.phases[0];
+    expect(phase.earlyHydraulics.value).toMatchObject({ medianPressureBar: 9, medianInletFlowMlS: 0.975 });
+    expect(phase.lateHydraulics.value).toMatchObject({ medianPressureBar: 9, medianInletFlowMlS: 2.725 });
+    expect(phase.controlledError.value?.absoluteMean).toBe(0);
+    expect(issues.map(i => i.kind)).toEqual(["channeling"]);
+    expect(rulesReview(reviewFixture("channeling")).summary).toContain("Inlet flow rose gradually while pressure held");
+    for (const [name, expected] of [
+      ["choke", ["choked"]], ["gusher", ["gushed"]], ["flow-shortfall", ["flow_shortfall"]], ["fast-time", ["fast_shot"]],
+    ] as const) expect(analyzeShot(reviewFixture(name)).issues.map(i => i.kind)).toEqual(expected);
+  });
+
+  it("compares a decline against its live ramp and shows a deliberate mix temperature step", () => {
+    const { facts, issues } = analyzeShot(reviewFixture("pressure-ramp"));
+    const phase = facts.phaseEvidence.phases[3];
+    expect(phase.purpose.value).toBe("decline");
+    expect(phase.loggedCommand.value).toMatchObject({ entry: 6, last: 3 });
+    expect(phase.controlledError).toMatchObject({ coveredS: 12, value: { absoluteMean: 0.1, signedMean: -0.1 } });
+    expect(phase.steadyHold).toMatchObject({ value: null, reason: "changing_logged_command" });
+    expect(phase.temperature.value).toMatchObject({ sensor: "mix", entry: { value: { targetC: 85, offsetC: 4 } },
+      lateMedianOffsetC: { value: 4 }, targetChangeAtEntryC: { value: -7 } });
+    expect(facts.phaseEvidence.finish.stopSource.value).toBe("apiStop");
+    expect(issues).toEqual([]);
+  });
+
+  it("includes a dynamic bloom and separates an unobserved intermediate phase from a weight-preempted decline", () => {
+    const bloomResult = analyzeShot(reviewFixture("dynamic-bloom"));
+    const bloom = bloomResult.facts.phaseEvidence.phases[1];
+    expect(bloom.purpose.value).toBe("bloom_or_pause");
+    expect(bloom.loggedCommand.value).toMatchObject({ entry: 4, last: 0 });
+    expect(bloom.controlledError.value?.absoluteMean).toBe(0);
+    expect(bloom.cupGainG.value).toBe(4.125);
+    expect(bloomResult.issues).toEqual([]);
+
+    const stopped = analyzeShot(reviewFixture("preempted-decline"));
+    const finish = stopped.facts.phaseEvidence.finish;
+    expect(finish.lastObservedPhase.value).toMatchObject({ frame: 2, toS: 10 });
+    expect(finish.unobservedPlanPhases.value).toEqual([
+      { frame: 1, name: "Dynamic bloom", status: "skipped_or_unrecorded" },
+      { frame: 3, name: "Decline", status: "preempted_by_weight_stop" },
+    ]);
+    expect(finish.lastRecordedWeightG.value).toBe(10.5);
+    expect(finish.annotatedYieldG.value).toBe(11);
+    expect(stopped.issues).toEqual([]);
+  });
+
+  it("reports elapsed-time coverage and withholds cup windows across gaps, stale samples and jumps", () => {
+    const evidence = (name: ReviewFixture) => analyzeShot(reviewFixture(name)).facts.phaseEvidence;
+    const missingScale = evidence("missing-scale");
+    expect(missingScale.firstSustainedBeverage.reason).toBe("no_scale_readings");
+    expect(missingScale.phases[0].controlledError.value?.absoluteMean).toBe(0);
+    expect(missingScale.phases[0].cupRateLateGS.reason).toBe("no_scale_readings");
+    expect(missingScale.finish.lastRecordedWeightG.value).toBeNull();
+    expect(evidence("scale-jump").cupRateAfterOnsetGS).toMatchObject({ value: null, reason: "weight_jump" });
+    expect(evidence("scale-jump").phases[1].cupRateLateGS.value).toBe(4.8);
+    expect(evidence("stale-scale").firstSustainedBeverage).toMatchObject({ value: null, reason: "stale_scale_sample" });
+    const gap = evidence("phase-gap");
+    expect(gap.phases[1].controlledError).toMatchObject({ coveredS: 12.25, reason: "partial_missing_readings_or_gaps" });
+    expect(gap.firstSustainedBeverage).toMatchObject({ value: null, reason: "scale_gap" });
+    expect(evidence("no-data").finish.lastObservedPhase.reason).toBe("no_brew_samples");
+  });
+
+  it("keeps measured landmarks with ambiguous all-zero imports or manual controller traces", () => {
+    const imported = analyzeShot(reviewFixture("all-zero-import")).facts.phaseEvidence;
+    expect(imported.phases[0].mode).toMatchObject({ value: null, reason: "all_frames_zero_only_pouring_plan_alignment_ambiguous" });
+    expect(imported.phases[0].pressureCrest.value?.pressureBar).toBe(3.4);
+    expect(imported.firstSustainedBeverage.value?.tS).toBe(7.25);
+    expect(imported.finish.unobservedPlanPhases.value).toBeNull();
+    const manual = analyzeShot(reviewFixture("manual")).facts.phaseEvidence;
+    expect(manual.phases[0].controlledError.reason).toBe("manual_control");
+    expect(manual.phases[0].inletFlowMlS.value?.timeWeightedMean).toBe(2);
+  });
+});

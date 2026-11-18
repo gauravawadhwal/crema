@@ -351,8 +351,8 @@ function makeDemoApi() {
       if (!s) throw new Error("Shot not found");
       if (feedback) { s.taste = { sourBitter: feedback.sourBitter, body: feedback.body }; if (feedback.enjoyment != null) s.enjoyment = feedback.enjoyment; }
       const byTime = new Map();
-      for (const p of s.points || []) if (Number.isFinite(p.t) && p.t >= 0) byTime.set(p.t, { t: p.t, p: p.p ?? null, f: p.f ?? null, w: p.w ?? null, temp: p.temp ?? null, tp: p.tp ?? null, tf: p.tf ?? null, targetTemp: p.targetTemp ?? null, frame: Number.isInteger(p.frame) ? p.frame : null, substate: p.substate ?? null, weightFlow: p.weightFlow ?? null });
-      const points = [...byTime.values()].sort((a, b) => a.t - b.t).slice(-1800);
+      for (const p of s.points || []) if (Number.isFinite(p.t) && p.t >= 0) byTime.set(p.t, { t: p.t, p: p.p ?? null, f: p.f ?? null, w: p.w ?? null, temp: p.temp ?? null, tp: p.tp ?? null, tf: p.tf ?? null, targetTemp: p.targetTemp ?? null, groupTemp: p.groupTemp ?? null, targetGroupTemp: p.targetGroupTemp ?? null, frame: Number.isInteger(p.frame) ? p.frame : null, substate: p.substate ?? null, weightFlow: p.weightFlow ?? null });
+      const points = [...byTime.values()].sort((a, b) => a.t - b.t);
       const bag = s.batch ? all.find((b) => b.batch === s.batch) : null;
       const history = s.batch ? shots.filter((x) => x.batch === s.batch && x.id !== s.id && Date.parse(x.timestamp) < Date.parse(s.timestamp)).sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 10) : [];
       const { durationS: _durationS, ...recordedContext } = recordedReviewContext(s.profile ?? null, points, s.grinderSetting);
@@ -364,7 +364,7 @@ function makeDemoApi() {
           ...recordedReviewContext(x.profile ?? null, x.points ?? [], x.grinderSetting), doseG: recordedReviewNumber(x.doseG, 0, 60), yieldG: recordedReviewNumber(x.yieldG, 0, 500),
           targetYieldG: recordedReviewNumber(x.targetYieldG ?? x.profile?.target_weight, 0, 500), stopReason: x.stopReason ?? null,
           enjoyment: x.enjoyment ?? null, notes: x.notes?.slice(0, 500) || null, review: x.review?.review?.summary?.slice(0, 1000) ?? null })) };
-      const saved = { version: 1, review: CE.rulesReview(input), source: "rules", createdAt: new Date().toISOString() };
+      const saved = { version: 1, review: CE.rulesReview({ ...input, annotatedYieldG: s.yieldG ?? null }), source: "rules", createdAt: new Date().toISOString() };
       s.review = saved; saveDemoReview(s); return clone(saved);
     },
     async feedback(shotId, beanId, fb) {
