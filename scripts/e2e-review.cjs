@@ -214,7 +214,7 @@ const openShot = async (page, id, selector) => {
     await waitForPage(async (id) => (await S.api.shot(id))?.review?.source === "rules", shotId);
     check(true, "server failure falls back to saved rules review");
     const final = await evalPage(async (id) => S.api.shot(id), shotId);
-    check(final.review?.review?.summary && final.review.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
+    check(final.review?.review?.summary && final.review.version === 2 && final.review.evidence?.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
     // Taste taps stick in the after-shot panel too: saved on tap, no review needed (same code as the detail).
     await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}`);
     await page.waitForFunction(() => typeof showAfterShot === "function" && S.api);

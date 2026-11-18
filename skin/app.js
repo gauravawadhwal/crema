@@ -426,8 +426,8 @@ function makeLiveApi(conn) {
       }
       if (!items.length || offset + items.length >= (page.total ?? 0)) break;
     }
-    const hydrated = await Promise.all(earlier.map(async (s) => await fullShot(s.id).catch(() => null) ?? s));
-    return hydrated.filter((s) => s.workflow?.context?.beanBatchId === batchId && Date.parse(s.timestamp) < before)
+    const hydrated = await Promise.all(earlier.map((s) => fullShot(s.id).catch(() => null)));
+    return hydrated.filter((s) => s && s.workflow?.context?.beanBatchId === batchId && Date.parse(s.timestamp) < before)
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).map((s) => {
         const ctx = s.workflow?.context ?? {}, profile = s.workflow?.profile ?? null;
         const points = shotPoints(s, true), saved = s.annotations?.extras?.crema?.review;
