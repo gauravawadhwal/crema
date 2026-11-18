@@ -104,6 +104,30 @@ async function clickThrough(b, url, [name, vp, scheme]) {
   await step("taste", async () => {
     await p.click('#sb [data-v="-1"]'); await p.click('#bd [data-v="0"]'); await p.click("#reviewShot");
     await p.waitForSelector("#reviewBox .advice", { timeout: 5000 }); await snap("3-after", true);
+    const version = await p.evaluate(() => Object.values(JSON.parse(localStorage.getItem("crema:demo-reviews")))
+      .find(entry => entry.shot.id.startsWith("demo-shot-"))?.review);
+    if (version?.version !== 2 || version.evidence?.version !== 1) throw new Error("new review did not save versioned evidence");
+  });
+  await step("read a saved v1 shot review", async () => {
+    const result = await p.evaluate(async () => {
+      const key = "crema:demo-reviews", before = localStorage.getItem(key);
+      try {
+        const saved = { version: 1, source: "rules", createdAt: "2000-01-01T00:00:00Z",
+          review: { summary: "Synthetic saved review", issues: [], wentWell: [], confidence: "low", nextShot: null, askTaste: true } };
+        localStorage.setItem(key, JSON.stringify({ ...JSON.parse(before ?? "{}"), s0: saved, s1: { review: saved } }));
+        const demo = makeDemoApi();
+        return await Promise.all(["s0", "s1"].map(async id => {
+          const shot = await demo.shot(id);
+          return { html: reviewHtml(shot.review, shot), review: shot.review };
+        }));
+      } finally {
+        if (before == null) localStorage.removeItem(key);
+        else localStorage.setItem(key, before);
+      }
+    });
+    if (result.some(entry => entry.review?.version !== 1 || "evidence" in entry.review || !entry.html.includes("Synthetic saved review"))) {
+      throw new Error("v1 review did not render as saved");
+    }
   });
   await step("steam", async () => {
     await p.click('[data-presets="steam"]'); await p.click('[data-preset="steam:0"]'); await p.click('[data-run="steam"]');

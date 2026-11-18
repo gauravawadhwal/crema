@@ -1,5 +1,6 @@
 import type { ProfileLike } from "../profiles/curve.js";
 import type { BeanInfo, DialInAdvice, TasteFeedback } from "../schema.js";
+import type { ReviewEvidence, ReviewTraceSummary } from "./review-evidence.js";
 
 /** Recorded observations. Null means unavailable, never a measured zero. */
 export interface ReviewPoint {
@@ -17,9 +18,11 @@ export interface ReviewPoint {
   frame: number | null;
   substate: string | null;
   weightFlow: number | null;
-  /** Offline Decaid metadata, outside the existing review request. */
+  /** The machine's counted inlet volume, and the scale time relative to the machine trace. */
   countedVolumeMl?: number | null;
   scaleSampleS?: number | null;
+  /** Pairing age in seconds. It describes timing between snapshots. */
+  scaleAgeS?: number | null;
 }
 
 export interface ReviewInput {
@@ -29,14 +32,16 @@ export interface ReviewInput {
   tempC?: number | null;
   /** Stable profile shape, ignoring absolute temperature and target yield edits. */
   profileShape?: string | null;
+  batchId?: string | null;
+  targetWaterMl?: number | null;
   points: ReviewPoint[];
   profile: ProfileLike | null;
   doseG: number | null;
   yieldG: number | null;
   targetYieldG: number | null;
-  /** Offline Decaid metadata, outside the existing review request. */
+  /** Provenance separate from yieldG, which can fall back to a scale reading. */
   annotatedYieldG?: number | null;
-  volumeCountStartFrame?: string | number;
+  volumeCountStartFrame?: string | number | null;
   targetTimeS: [number, number] | null;
   /** Where the time window came from; a profile guide is an approximation. */
   timeBasis?: "recorded" | "recipe" | "guide" | null;
@@ -50,6 +55,7 @@ export interface ReviewInput {
     timestamp: string; profileTitle?: string | null; profileShape?: string | null;
     doseG?: number | null; yieldG?: number | null; targetYieldG?: number | null;
     durationS?: number | null; grinderSetting?: string | null; tempC?: number | null; stopReason?: string | null;
+    batchId?: string | null; targetWaterMl?: number | null; trace?: ReviewTraceSummary | null;
     enjoyment?: number | null; notes?: string | null; review?: string | null;
   }[];
 }
@@ -72,5 +78,7 @@ export interface ShotReviewData {
   askTaste: boolean;
 }
 
-export interface ReviewResult { review: ShotReviewData; source: string }
-export interface SavedReview extends ReviewResult { version: 1; createdAt: string }
+export interface ReviewResult { review: ShotReviewData; source: string; evidence: ReviewEvidence }
+export type SavedReview =
+  | { version: 1; review: ShotReviewData; source: string; createdAt: string }
+  | (ReviewResult & { version: 2; createdAt: string });

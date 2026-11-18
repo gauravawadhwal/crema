@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { REVIEW_POINT_LIMIT } from "./recommend/review-evidence.js";
+import { FullReviewTraceWire, ReviewIssue, ReviewTraceWire } from "./recommend/review-wire.js";
+export { ReviewIssue } from "./recommend/review-wire.js";
 
 /**
  * Where a fact came from. The bag in your hand is the source of truth for
@@ -130,7 +133,8 @@ export const ReviewPoint = z.object({
   t: z.number().min(0).max(600),
   p: reading(-0.5, 20).transform((v) => v == null ? null : Math.max(0, v)),
   f: reading(-0.5, 20).transform((v) => v == null ? null : Math.max(0, v)),
-  w: reading(-5, 500),
+  // Retain a bounded negative sentinel so both review paths see a scale jump.
+  w: z.number().nullable().transform(v => v != null && v < -5 ? -6 : v != null && v > 500 ? null : v),
   temp: reading(0, 150),
   tp: reading(0, 20),
   tf: reading(0, 20),
@@ -142,6 +146,9 @@ export const ReviewPoint = z.object({
   frame: z.number().int().min(0).max(100).nullable(),
   substate: z.string().max(80).nullable(),
   weightFlow: reading(-20, 100),
+  countedVolumeMl: reading(0, 5000).optional(),
+  scaleSampleS: reading(-600, 1200).optional(),
+  scaleAgeS: reading(-600, 600).optional(),
 });
 
 const ReviewProfileStep = z.object({
@@ -160,28 +167,42 @@ const ReviewHistory = z.object({
   grinderSetting: z.string().max(120).nullish(), tempC: z.number().min(0).max(150).nullish(),
   stopReason: z.string().max(120).nullish(), targetYieldG: z.number().min(0).max(500).nullish(),
   yieldG: z.number().min(0).max(500).nullish(), enjoyment: z.number().min(0).max(10).nullish(), notes: z.string().max(500).nullish(), review: z.string().max(1000).nullish(),
+  batchId: z.string().min(1).max(160).nullish(), targetWaterMl: z.number().min(0).max(5000).nullish(), trace: ReviewTraceWire.nullish(),
 });
 export const ReviewBody = z.object({
   timestamp: z.string().max(80).nullish(), grinderSetting: z.string().max(120).nullish(),
   tempC: z.number().min(0).max(150).nullish(), profileShape: z.string().max(20000).nullish(),
-  points: z.array(ReviewPoint).max(1800).superRefine((points, ctx) => {
+  batchId: z.string().min(1).max(160).nullish(), targetWaterMl: z.number().min(0).max(5000).nullish(),
+  points: z.array(ReviewPoint).max(REVIEW_POINT_LIMIT).superRefine((points, ctx) => {
     for (let i = 1; i < points.length; i++) if (points[i].t <= points[i - 1].t) ctx.addIssue({ code: "custom", path: [i, "t"], message: "times must increase without duplicates" });
   }), profile: ReviewProfile,
   // The skin falls back to the last cup weight for yield, which a cup bump can leave negative.
   doseG: z.number().min(0).max(60).nullable(), yieldG: reading(0, 500),
   targetYieldG: z.number().min(0).max(500).nullable(),
+  annotatedYieldG: reading(0, 500).nullish(),
+  volumeCountStartFrame: z.union([z.string().max(30), z.number()]).nullish(),
   targetTimeS: z.tuple([z.number().min(0).max(600), z.number().min(0).max(600)]).nullable(),
   timeBasis: z.enum(["recorded", "recipe", "guide"]).nullish(),
   stopReason: z.string().max(120).nullable(), feedback: TasteFeedback.extend({ notes: z.string().max(1000).nullable() }).nullable(), bean: BeanInfo.nullable(),
   notes: z.string().max(1000).nullable().optional(),
-  installedProfiles: z.array(z.string().min(1).max(160)).max(200), history: z.array(ReviewHistory).max(20),
+  installedProfiles: z.array(z.string().min(1).max(160)).max(200), history: z.array(ReviewHistory).max(20).nullable().transform(v => v ?? []),
+  fullTrace: FullReviewTraceWire.optional(),
+}).superRefine(({ fullTrace, points, doseG, yieldG, targetYieldG, stopReason }, ctx) => {
+  if (!fullTrace) return;
+  const { analysis: { metrics, facts, faultWindows, issues }, phaseCount } = fullTrace;
+  const end = points.at(-1)?.t ?? 0;
+  if (points.length !== REVIEW_POINT_LIMIT || metrics.recordedPoints <= points.length ||
+      phaseCount < facts.phaseEvidence.phases.length || phaseCount > metrics.recordedPoints ||
+      metrics.observedWindows !== faultWindows.length || metrics.usableTemperaturePoints > metrics.recordedPoints ||
+      facts.doseG !== (doseG || null) || facts.yieldG !== (yieldG || null) ||
+      facts.targetYieldG !== (targetYieldG || null) || facts.stopReason !== stopReason ||
+      facts.phaseEvidence.phases.some(p => p.fromS > p.toS || p.toS > end + 0.001 || p.index >= phaseCount || p.id !== `phase-${p.index}`) ||
+      issues.some(i => i.fromS != null && i.toS != null && (i.fromS > i.toS || i.toS > end))) {
+    ctx.addIssue({ code: "custom", path: ["fullTrace"], message: "full trace does not match this bounded recording" });
+  }
 });
 export type ReviewBody = z.infer<typeof ReviewBody>;
 
-export const ReviewIssue = z.object({
-  kind: z.string().min(1).max(60), what: z.string().min(1).max(300), evidence: z.string().min(1).max(500),
-  severity: z.enum(["info", "caution", "warning"]), fromS: z.number().min(0).max(600).nullable(), toS: z.number().min(0).max(600).nullable(),
-});
 export const ShotReview = z.object({
   summary: z.string().min(1).max(500), wentWell: z.array(z.string().min(1).max(240)).max(6), issues: z.array(ReviewIssue).max(12),
   nextShot: DialInAdvice.nullable(), confidence: z.enum(["low", "medium", "high"]), askTaste: z.boolean(),

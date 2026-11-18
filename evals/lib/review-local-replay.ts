@@ -4,8 +4,9 @@ import { z } from "zod";
 import { shotFacts } from "../../server/profiles/analysis.js";
 import { findProfile } from "../../server/profiles/catalog.js";
 import type { ProfileLike } from "../../server/profiles/curve.js";
+import { fullReviewTrace, REVIEW_POINT_LIMIT, summarizeReviewTrace } from "../../server/recommend/review-evidence.js";
 import type { ReviewInput, ReviewPoint } from "../../server/recommend/review-types.js";
-import { ReviewBody, type Recipe } from "../../server/schema.js";
+import { ReviewBody, ReviewPoint as PointSchema, type Recipe } from "../../server/schema.js";
 import type { ReviewEvalCase } from "./review-ablation.js";
 import { PumpMode, validateReviewLabels } from "./review-labels.js";
 
@@ -16,8 +17,9 @@ const DecaidShot = z.object({
   id: text, timestamp: text, stopReason: text,
   workflow: z.object({
     // Retain recorded profile metadata for the same shape comparison as the skin.
-    profile: z.custom<ProfileLike>((value) => ReviewBody.shape.profile.unwrap().safeParse(value).success).nullish(),
-    context: z.object({ beanBatchId: text, grinderSetting: numeric, targetDoseWeight: numeric, targetYield: numeric, targetTimeS: z.unknown().optional(), stopReason: text }).nullish(),
+    profile: z.custom<ProfileLike & { target_volume?: string | number }>((value) => ReviewBody.shape.profile.unwrap().safeParse(value).success).nullish(),
+    context: z.object({ beanBatchId: text, grinderSetting: numeric, targetDoseWeight: numeric, targetYield: numeric,
+      targetWaterVolume: numeric, targetTimeS: z.unknown().optional(), stopReason: text }).nullish(),
   }).nullish(),
   annotations: z.object({
     actualDoseWeight: numeric, actualYield: numeric, enjoyment: reading, espressoNotes: text, stopReason: text,
@@ -32,7 +34,8 @@ const DecaidShot = z.object({
       targetFlow: reading, targetMixTemperature: reading, groupTemperature: reading, targetGroupTemperature: reading,
       profileFrame: reading, state: z.object({ substate: text }).nullish(),
     }).nullish(),
-    scale: z.object({ weight: reading, weightFlow: reading }).nullish(),
+    scale: z.object({ timestamp: text, weight: reading, weightFlow: reading }).nullish(),
+    volume: reading,
   })).nullish(),
 }).refine((value) => value.measurements != null || !!value.id, "expected a Decaid shot recording");
 type DecaidShot = z.infer<typeof DecaidShot>;
@@ -41,12 +44,13 @@ type DecaidShot = z.infer<typeof DecaidShot>;
 function recordedPoints(shot: DecaidShot) {
   const points: ReviewPoint[] = [];
   let start: number | undefined;
-  for (const { machine, scale } of shot.measurements ?? []) {
+  for (const { machine, scale, volume } of shot.measurements ?? []) {
     if (!machine) continue;
     const timestamp = Date.parse(machine.timestamp ?? "");
     if (!Number.isFinite(timestamp)) continue;
     start ??= timestamp;
     const t = (timestamp - start) / 1000;
+    const scaleAt = Date.parse(scale?.timestamp ?? "");
     const last = points.at(-1);
     if (t < 0 || (last && t < last.t)) continue;
     const point = {
@@ -55,6 +59,8 @@ function recordedPoints(shot: DecaidShot) {
       targetTemp: machine.targetMixTemperature ?? null, groupTemp: machine.groupTemperature ?? null,
       targetGroupTemp: machine.targetGroupTemperature ?? null, frame: machine.profileFrame ?? null,
       substate: machine.state?.substate ?? null, weightFlow: scale?.weightFlow ?? null,
+      countedVolumeMl: volume ?? null, scaleSampleS: Number.isFinite(scaleAt) ? (scaleAt - start) / 1000 : null,
+      scaleAgeS: Number.isFinite(scaleAt) ? (timestamp - scaleAt) / 1000 : null,
     };
     if (last?.t === t) points[points.length - 1] = point;
     else points.push(point);
@@ -86,6 +92,8 @@ function captured(shot: DecaidShot, points: ReviewPoint[]) {
   const grind = context?.grinderSetting?.toString().trim();
   return {
     profileShape: shape && shape.length <= 20000 ? shape : null,
+    batchId: context?.beanBatchId ?? null,
+    targetWaterMl: bounded(context?.targetWaterVolume ?? profile?.target_volume, 0, 5000),
     grinderSetting: grind && grind.length <= 120 ? grind : null,
     tempC: bounded(profile?.steps?.[0]?.temperature, 0, 150),
     doseG: bounded(annotations?.actualDoseWeight ?? context?.targetDoseWeight, 0, 60),
@@ -126,22 +134,26 @@ interface ReplayContext {
   installedProfiles?: ReviewInput["installedProfiles"];
 }
 
-function reviewInput(shot: DecaidShot, recorded: ReviewPoint[], history: ReviewInput["history"], options: ReplayContext): ReviewInput {
-  const points = recorded.length <= 1800 ? recorded : Array.from({ length: 1800 }, (_, i) => recorded[Math.round(i * (recorded.length - 1) / 1799)]);
+function reviewInput(shot: DecaidShot, points: ReviewPoint[], history: ReviewInput["history"], options: ReplayContext) {
   const observed = captured(shot, points);
   const annotations = shot.annotations;
   const { sourBitter, body } = annotations?.extras?.crema ?? {};
   const profile = shot.workflow?.profile ?? null;
   const manual = profile?.beverage_type === "manual";
   const feedback = !manual && sourBitter != null && body != null ? { sourBitter, body, enjoyment: annotations?.enjoyment ?? null, notes: null } : null;
-  return {
+  const input: ReviewInput = {
     timestamp: shot.timestamp ?? null, ...observed, points, profile, ...timeContext(shot, observed, options.recipe),
+    annotatedYieldG: bounded(annotations?.actualYield, 0, 500), volumeCountStartFrame: profile?.target_volume_count_start ?? null,
     feedback, notes: annotations?.espressoNotes?.slice(0, 1000) ?? null, bean: options.bean ?? null,
     installedProfiles: options.installedProfiles ?? [], history,
   };
+  if (points.length <= REVIEW_POINT_LIMIT) return input;
+  const fullTrace = fullReviewTrace({ ...input, points: input.points.map(p => PointSchema.parse(p)) });
+  const boundedPoints = Array.from({ length: REVIEW_POINT_LIMIT }, (_, i) => points[Math.round(i * (points.length - 1) / (REVIEW_POINT_LIMIT - 1))]);
+  return { ...input, points: boundedPoints, fullTrace };
 }
 
-export function decaidReviewInput(recording: unknown, options: ReplayContext = {}): ReviewInput {
+export function decaidReviewInput(recording: unknown, options: ReplayContext = {}): ReviewInput & { fullTrace?: ReturnType<typeof fullReviewTrace> } {
   const shot = DecaidShot.parse(recording);
   return reviewInput(shot, recordedPoints(shot), [], options);
 }
@@ -164,11 +176,13 @@ function previousShots(shot: DecaidShot, recordings: { shot: DecaidShot; points:
   }).slice(0, 10).map(({ shot: s, points }) => {
     const profile = s.workflow?.profile ?? null;
     const observed = captured(s, points);
-    const { durationS } = shotFacts({ points, profile, ...observed, targetTimeS: null,
+    const normalized = points.map(p => PointSchema.parse(p));
+    const { durationS, phaseEvidence } = shotFacts({ points: normalized, profile, ...observed, targetTimeS: null,
       feedback: null, bean: null, installedProfiles: [], history: [] });
     const saved = s.annotations?.extras?.crema?.review;
     return {
       ...observed, timestamp: s.timestamp!, profileTitle: profile?.title ?? null, durationS: bounded(durationS, 0, 600),
+      trace: summarizeReviewTrace(normalized, phaseEvidence),
       enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes?.slice(0, 500) ?? null,
       review: (saved?.review?.summary ?? saved?.summary)?.slice(0, 1000) ?? null,
     };
@@ -200,8 +214,9 @@ export function loadLocalReviewShots(directory = process.env.CREMA_LOCAL_SHOTS_D
     try {
       const sidecar = file.slice(0, -5) + LABEL_SUFFIX;
       const meta = files.has(sidecar) ? LocalLabels.parse(read(sidecar)) : undefined;
+      const { fullTrace, ...input } = ReviewBody.parse(reviewInput(shot, points, previousShots(shot, recordings), {}));
       return {
-        id, input: ReviewBody.parse(reviewInput(shot, points, previousShots(shot, recordings), {})),
+        id, input, fullTrace,
         sampleTimes: points.map((p) => p.t),
         profileFamily: meta?.profileFamily ?? "unlabelled", pumpMode: meta?.pumpMode ?? "unknown",
         labels: meta ? validateReviewLabels(meta.labels, "local") : undefined,

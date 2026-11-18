@@ -201,10 +201,10 @@ export function createApp(deps: { llm: ProviderChain; decaidUrl?: string | null;
     let decoded: unknown;
     try { decoded = JSON.parse(raw); }
     catch { return c.json({ error: "invalid JSON request body" }, 400); }
-    const body = ReviewBody.parse(decoded);
+    const { fullTrace, ...body } = ReviewBody.parse(decoded);
     // The currently installed profile snapshot is authoritative. The server
     // never substitutes a catalogue profile with the same title.
-    return c.json(await reviewShot(llm, body));
+    return c.json(await reviewShot(llm, body, fullTrace));
   });
 
   /** Download a roaster product photo once and serve it from here (works when the tablet is offline). */

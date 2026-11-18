@@ -5,7 +5,8 @@ import type { PhaseLandmark } from "../../server/profiles/phase-evidence.js";
 import { reviewCurveSection } from "../../server/recommend/review-curve.js";
 import type { LlmProvider } from "../../server/llm/types.js";
 import { reviewShot } from "../../server/recommend/review.js";
-import { rulesReview } from "../../server/recommend/review-local.js";
+import { rulesReviewResult } from "../../server/recommend/review-local.js";
+import type { FullReviewTrace, ReviewEvidence } from "../../server/recommend/review-evidence.js";
 import type { ReviewInput, ShotReviewData } from "../../server/recommend/review-types.js";
 import { RecordingProvider } from "./recorder.js";
 import { legacyReviewCurveSection } from "./review-legacy-curve.js";
@@ -15,6 +16,7 @@ import { scoreReview, summarizeReviewMetrics, type ReviewEvalOutput, type Review
 export interface ReviewEvalCase {
   id: string;
   input: ReviewInput;
+  fullTrace?: FullReviewTrace;
   profileFamily: string;
   pumpMode: PumpMode;
   labels?: ReviewLabels;
@@ -29,13 +31,13 @@ interface VariantOutput {
 }
 
 type Variant =
-  | { status: "ready"; run: (input: ReviewInput, llm: ProviderChain | null) => Promise<VariantOutput> }
+  | { status: "ready"; run: (input: ReviewInput, llm: ProviderChain | null, fullTrace?: FullReviewTrace) => Promise<VariantOutput> }
   | { status: "pending"; reason: string };
 
 export const VARIANT_NAMES = ["old", "facts-only", "facts-plus-anchored", "two-stage"] as const;
 export type VariantName = typeof VARIANT_NAMES[number];
 
-export function normalizeLegacyReview(review: ShotReviewData, input: ReviewInput): ReviewEvalOutput {
+export function normalizeLegacyReview(review: ShotReviewData, input: ReviewInput, evidence?: ReviewEvidence): ReviewEvalOutput {
   const outcomes: ReviewEvalOutput["outcomes"] = [];
   const advice = review.nextShot;
   if (advice?.grindDelta.endsWith("finer")) outcomes.push("grind-finer");
@@ -65,6 +67,18 @@ export function normalizeLegacyReview(review: ShotReviewData, input: ReviewInput
     }
     return { kind: issue.kind, phase: point?.substate ?? undefined, controlledVariable, onsetS: issue.fromS ?? undefined };
   });
+  const curves = evidence?.history.curves;
+  if (curves?.reason === "comparable_phases" && curves.phase) {
+    figures.push({ id: "history.comparable.peak", unit: "bar", value: curves.phase.peakPressureBar },
+      { id: "history.comparable.count", unit: "shots", value: curves.usableCount });
+    if (curves.mass.reason === "covered_same_phase_crossings" && curves.mass.current) {
+      figures.push({ id: "history.mass.current", unit: "bar", value: curves.mass.current.pressureBar },
+        { id: "history.mass.delivered", unit: "g", value: curves.mass.current.massG });
+      for (const [i, ref] of curves.references.entries()) {
+        if (ref.mass) figures.push({ id: `history.mass.previous-${i + 1}`, unit: "bar", value: ref.mass.pressureBar });
+      }
+    }
+  }
   return { events, figures, outcomes, claims: { "multiple-next-shot-changes": outcomes.length > 1 } };
 }
 
@@ -72,9 +86,9 @@ const pending: Variant = { status: "pending", reason: "not implemented yet" };
 function curveVariant(curveSection?: typeof legacyReviewCurveSection): Variant {
   return {
     status: "ready",
-    async run(input, llm) {
-      const { review, source } = llm ? await reviewShot(llm, input, { curveSection }) : { review: rulesReview(input), source: "rules" };
-      return { review, source, scored: normalizeLegacyReview(review, input), fellBack: llm != null && source === "rules" };
+    async run(input, llm, fullTrace) {
+      const { review, source, evidence } = llm ? await reviewShot(llm, input, fullTrace, { curveSection }) : rulesReviewResult(input, fullTrace);
+      return { review, source, scored: normalizeLegacyReview(review, input, evidence), fellBack: llm != null && source === "rules" };
     },
   };
 }
@@ -86,12 +100,12 @@ export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
   "two-stage": pending,
 };
 
-export async function runReviewVariant(name: VariantName, input: ReviewInput, provider?: LlmProvider) {
+export async function runReviewVariant(name: VariantName, input: ReviewInput, provider?: LlmProvider, fullTrace?: FullReviewTrace) {
   const variant = REVIEW_VARIANTS[name];
   if (variant.status === "pending") return variant;
   const recorder = provider ? new RecordingProvider(provider) : undefined;
   const started = performance.now();
-  const result = await variant.run(input, recorder ? new ProviderChain([recorder]) : null);
+  const result = await variant.run(input, recorder ? new ProviderChain([recorder]) : null, fullTrace);
   const ms = performance.now() - started;
   const calls = recorder?.calls ?? [];
   let tokens: ReviewMetricRow["tokens"] = { input: 0, output: 0 };
@@ -135,7 +149,7 @@ export async function measurePrompt(name: VariantName, input: ReviewInput): Prom
   const curve = section(input, landmarks);
   const seen = visibleTimes(curve);
   const recorder = new RecordingProvider(new MockProvider());
-  await reviewShot(new ProviderChain([recorder]), structuredClone(input), { curveSection: name === "old" ? () => curve : undefined });
+  await reviewShot(new ProviderChain([recorder]), structuredClone(input), undefined, { curveSection: name === "old" ? () => curve : undefined });
   const counts = Object.fromEntries(MEASURED_LANDMARKS.map((kind) => [kind, { kept: 0, total: 0 }])) as LandmarkCounts;
   for (const landmark of landmarks) {
     if (!(landmark.kind in counts)) continue;
@@ -177,7 +191,7 @@ export async function runReviewAblation(cases: readonly ReviewEvalCase[], names:
     }
     const records: AblationRecord[] = [];
     for (const c of cases) {
-      const result = await runReviewVariant(name, structuredClone(c.input), provider);
+      const result = await runReviewVariant(name, structuredClone(c.input), provider, c.fullTrace);
       if (result.status !== "ready") throw new Error(`Variant ${name}: ${result.reason}`);
       const { ms, tokens, fellBack, scored, source, promptHashes } = result;
       const score = c.labels && scoreReview(c.labels, scored, c.sampleTimes ?? c.input.points.map((p) => p.t));

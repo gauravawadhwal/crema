@@ -28,6 +28,8 @@ var CremaEngine = (() => {
     DEFAULT_SETTINGS: () => DEFAULT_SETTINGS,
     GRIND_STEPS: () => GRIND_STEPS,
     NOT_READY: () => NOT_READY,
+    REVIEW_EVIDENCE_VERSION: () => REVIEW_EVIDENCE_VERSION,
+    REVIEW_POINT_LIMIT: () => REVIEW_POINT_LIMIT,
     adoptPatch: () => adoptPatch,
     afterStartSent: () => afterStartSent,
     analyzeShot: () => analyzeShot,
@@ -35,7 +37,9 @@ var CremaEngine = (() => {
     baseline: () => baseline,
     beanTraits: () => beanTraits,
     findProfile: () => findProfile,
+    fullReviewTrace: () => fullReviewTrace,
     gramsUsed: () => gramsUsed,
+    historyCurveSentence: () => historyCurveSentence,
     inferRoast: () => inferRoast,
     isStarting: () => isStarting,
     loadDecision: () => loadDecision,
@@ -54,6 +58,7 @@ var CremaEngine = (() => {
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
     rulesReview: () => rulesReview,
+    rulesReviewResult: () => rulesReviewResult,
     sameGrind: () => sameGrind,
     saveBeanPatch: () => saveBeanPatch,
     shotAcrossOnLoss: () => shotAcrossOnLoss,
@@ -74,6 +79,7 @@ var CremaEngine = (() => {
     stopReason: () => stopReason,
     strip: () => strip,
     suggestRecipe: () => suggestRecipe,
+    summarizeReviewTrace: () => summarizeReviewTrace,
     toPastShot: () => toPastShot,
     trackNewRows: () => trackNewRows,
     waitingForRecipe: () => waitingForRecipe,
@@ -1078,7 +1084,9 @@ var CremaEngine = (() => {
   function shotSim(profile, { resistance = 1 } = {}) {
     const steps = profile.steps?.length ? profile.steps : outlineProfile("", "flat-pressure").steps;
     const manual = profile.beverage_type === "manual";
+    const countStart = num(profile.target_volume_count_start) ?? 0;
     let t = 0, frame = 0, frameStart = 0, p = 0, f = 0, w = 0, water = 0, from = { p: null, f: null };
+    let countedVolumeMl = 0;
     let done = false, out = { tp: null, tf: null, frame: 0, temp: null };
     const FILL = 18;
     return {
@@ -1129,6 +1137,7 @@ var CremaEngine = (() => {
           p = Math.max(0, p);
           f = Math.max(0, f);
           water += f * dt;
+          if (frame >= countStart) countedVolumeMl += f * dt;
           if (water > FILL + 4) w += f * dt * 0.92;
           t += dt;
           out = { tp: pump === "pressure" ? goal : null, tf: pump === "flow" ? goal : null, frame, temp: num(s.temperature) };
@@ -1144,7 +1153,7 @@ var CremaEngine = (() => {
             }
           }
         }
-        return { t, p, f, w, ...out };
+        return { t, p, f, w, ...out, countedVolumeMl };
       }
     };
   }
@@ -1267,7 +1276,7 @@ var CremaEngine = (() => {
     const cross = a / (a - b);
     return a < 0 ? [cross, 1] : [0, cross];
   }
-  function capTime(points, command, actual, other, limit, landmarks) {
+  function capTime(points, command, actual, other, limit, landmarks2) {
     const start = points[0].t, end = points.at(-1).t;
     const pairs = intervals(points, (p) => [command(p), actual(p), other(p)], start, end);
     const covered = coverage(pairs);
@@ -1284,9 +1293,9 @@ var CremaEngine = (() => {
       if (!span) continue;
       const { lo, hi } = span;
       seconds += dt * (hi - lo);
-      if (!landmarks) continue;
+      if (!landmarks2) continue;
       if (lo > 0 || pairs[i - 1]?.after === before && spans[i - 1]?.hi !== 1) {
-        landmarks.push({
+        landmarks2.push({
           kind: "cap_like_start",
           confidence: "medium",
           t: before.t + dt * lo,
@@ -1295,7 +1304,7 @@ var CremaEngine = (() => {
         });
       }
       if (hi < 1 || pairs[i + 1]?.before === after && spans[i + 1]?.lo !== 0) {
-        landmarks.push({
+        landmarks2.push({
           kind: "cap_like_end",
           confidence: "medium",
           t: before.t + dt * hi,
@@ -1369,10 +1378,11 @@ var CremaEngine = (() => {
     let previousScaleS;
     return points.flatMap((p) => {
       const actual = weight(p);
-      const sampleS = p.scaleSampleS ?? p.t;
-      const stale = p.scaleSampleS != null && (Math.abs(p.t - sampleS) > SCALE_GAP_S || previousScaleS != null && sampleS < previousScaleS);
-      if (!stale && p.scaleSampleS != null && sampleS === previousScaleS && isBrewPoint(p, hasState)) return [];
-      previousScaleS = p.scaleSampleS ?? previousScaleS;
+      const hasClock = p.scaleSampleS != null || p.scaleAgeS != null;
+      const sampleS = p.scaleSampleS ?? p.t - (p.scaleAgeS ?? 0);
+      const stale = p.scaleAgeS != null && Math.abs(p.scaleAgeS) > SCALE_GAP_S || hasClock && (Math.abs(p.t - sampleS) > SCALE_GAP_S || previousScaleS != null && sampleS < previousScaleS);
+      if (!stale && actual != null && hasClock && sampleS === previousScaleS && isBrewPoint(p, hasState)) return [];
+      if (hasClock) previousScaleS = sampleS;
       if (!isBrewPoint(p, hasState)) return [{ p, w: null, sampleS, reason: "not_brewing" }];
       return [{ p, w: stale ? null : actual, sampleS, reason: stale ? "stale_scale_sample" : (p.w ?? 0) < -5 ? "weight_jump" : actual == null ? "missing_or_invalid_weight" : "recorded_weight" }];
     });
@@ -1385,7 +1395,55 @@ var CremaEngine = (() => {
     if (b.w - a.w > Math.max(5, 15 * dt) || a.w - b.w > Math.max(2, 8 * dt)) return "weight_jump";
     return null;
   }
-  function firstBeverage(rows, hasScale, brewStartS, landmarks) {
+  function measureMassCheckpoints(points, phases) {
+    const rows = scaleRows(points, points.some((p) => p.substate));
+    const first = rows.findIndex((row) => row.reason !== "not_brewing");
+    const checkpoints = [];
+    const start = rows[first];
+    if (!start || start.w == null || Math.abs(start.w) >= 1) {
+      return { checkpoints, reason: !start || !rows.some((row) => row.w != null) ? "no_scale_readings" : "no_near_zero_brew_start" };
+    }
+    const grid = [1, 2, ...Array.from({ length: 100 }, (_, i) => (i + 1) * 5)];
+    let next = 0, phaseIndex = 0, machineIndex = 0;
+    let highWeight = start.w;
+    let reason = "recording_ended";
+    for (let i = first + 1; i < rows.length && next < grid.length; i++) {
+      const a = rows[i - 1], b = rows[i];
+      if (b.reason === "not_brewing") break;
+      const fault = scaleEdge(a, b);
+      if (fault) {
+        reason = fault;
+        break;
+      }
+      if (b.w < highWeight - 0.5) {
+        reason = "weight_drop_or_reset";
+        break;
+      }
+      highWeight = Math.max(highWeight, b.w);
+      while (phaseIndex + 1 < phases.length && b.p.t > phases[phaseIndex].toS + 5e-4) phaseIndex++;
+      const phase = phases[phaseIndex];
+      for (; next < grid.length && grid[next] <= b.w; next++) {
+        if (!phase?.plan.value || phase.frame == null || a.p.t < phase.fromS - 5e-4 || a.w >= grid[next]) continue;
+        const fraction = (grid[next] - a.w) / (b.w - a.w);
+        const t = interpolate(a.sampleS, b.sampleS, fraction);
+        while (machineIndex < points.length && points[machineIndex].t < t) machineIndex++;
+        const right = points[machineIndex], left = right?.t === t ? right : points[machineIndex - 1];
+        if (!left || !right || left.t < phase.fromS - 5e-4 || right.t > phase.toS + 5e-4 || right.t - left.t > SCALE_GAP_S) continue;
+        const pa = pressure(left), pb = pressure(right);
+        if (pa == null || pb == null) continue;
+        const crossingBar = left === right ? pa : interpolate(pa, pb, (t - left.t) / (right.t - left.t));
+        checkpoints.push({
+          massG: grid[next],
+          frame: phase.frame,
+          phaseElapsedS: rounded(Math.max(0, t - phase.fromS)),
+          brewElapsedS: rounded(Math.max(0, t - start.p.t)),
+          pressureBar: rounded(crossingBar)
+        });
+      }
+    }
+    return { checkpoints, reason };
+  }
+  function firstBeverage(rows, hasScale, brewStartS, landmarks2) {
     let rejected = "no_three_consecutive_gram_readings";
     for (let i = 0; brewStartS != null && i + 2 < rows.length; i++) {
       const [a, b, c] = [rows[i], rows[i + 1], rows[i + 2]];
@@ -1399,7 +1457,7 @@ var CremaEngine = (() => {
       }
       const p = a.p;
       const volume = positive(p.countedVolumeMl);
-      landmarks?.push({
+      landmarks2?.push({
         kind: "first_sustained_beverage",
         t: p.t,
         at: p,
@@ -1513,7 +1571,7 @@ var CremaEngine = (() => {
     if (/ramp|rise|pressure up/i.test(name) || delta != null && delta > 0.25) return "ramp";
     return mode ? "hold_or_pour" : null;
   }
-  function describePhase(run, index, step, alignmentReason, scale, hasScale, hasState, onset, landmarks) {
+  function describePhase(run, index, step, alignmentReason, scale, hasScale, hasState, onset, landmarks2) {
     const xs = run.points, first = xs[0], last = xs.at(-1);
     const span = last.t - first.t;
     const pump = step?.pump?.toLowerCase();
@@ -1534,7 +1592,7 @@ var CremaEngine = (() => {
     const delta = measurement?.entry != null && measurement.last != null ? measurement.last - measurement.entry : null;
     const purpose = phasePurpose(first, step, mode, delta);
     if (first !== last && (purpose === "ramp" || purpose === "decline")) {
-      landmarks?.push({
+      landmarks2?.push({
         kind: purpose === "ramp" ? "planned_rise" : "planned_decline",
         t: first.t,
         confidence: "medium",
@@ -1547,7 +1605,7 @@ var CremaEngine = (() => {
     const early = hydraulicWindow(xs, first.t, earlyEnd), late = hydraulicWindow(xs, lateStart, last.t);
     const crestPoint = pressurePeak(xs);
     const crest = pressureCrest(crestPoint);
-    const cap2 = mode && limit != null ? capTime(xs, command, actual, other, limit, landmarks) : windowEvidence(null, first.t, last.t, 0, mode ? "no_configured_limiter" : alignmentReason);
+    const cap2 = mode && limit != null ? capTime(xs, command, actual, other, limit, landmarks2) : windowEvidence(null, first.t, last.t, 0, mode ? "no_configured_limiter" : alignmentReason);
     const controlledError = mode ? residual(xs, command, actual) : windowEvidence(null, first.t, last.t, 0, alignmentReason);
     const settled = xs.filter((p) => p.t - first.t >= 2);
     const paired = settled.filter((p) => (command(p) ?? 0) > 0 && actual(p) != null);
@@ -1581,10 +1639,10 @@ var CremaEngine = (() => {
       "inferred",
       heldFlow ? "crest_minus_late_median_at_similar_tracked_inlet_flow" : "no_covered_crest_to_late_comparison_at_held_flow"
     );
-    if (landmarks && crestPoint) {
+    if (landmarks2 && crestPoint) {
       const at = xs.indexOf(crestPoint);
       if (at > 0 && at < xs.length - 1) {
-        landmarks.push({
+        landmarks2.push({
           kind: "phase_pressure_crest",
           confidence: "high",
           t: crestPoint.t,
@@ -1594,7 +1652,7 @@ var CremaEngine = (() => {
         });
       }
       if (decline.value != null && decline.value > 0) {
-        landmarks.push({
+        landmarks2.push({
           kind: "pressure_droop_at_held_flow",
           confidence: "medium",
           t: lateStart,
@@ -1618,6 +1676,7 @@ var CremaEngine = (() => {
     const cupRateLateGS = cupRate(scale, lateStart, last.t, hasScale);
     const massFault = massRows.slice(1).map((row, i) => scaleEdge(massRows[i], row)).find(Boolean);
     return {
+      id: `phase-${index}`,
       index,
       frame: first.frame,
       substate: first.substate,
@@ -1635,7 +1694,7 @@ var CremaEngine = (() => {
         maximumS: profileNumber(step.seconds),
         temperatureC: profileNumber(step.temperature),
         limiter: limit == null ? null : { value: limit, unit: mode === "flow" ? "bar" : mode === "pressure" ? "mL/s" : null, range: profileNumber(step.limiter?.range) },
-        exit: step.exit ?? null,
+        exit: step.exit ? { type: step.exit.type ?? null, condition: step.exit.condition ?? null, value: step.exit.value ?? null } : null,
         weightG: positive(profileNumber(step.weight)),
         volumeMl: positive(profileNumber(step.volume))
       } : null, "recorded", step ? "recorded_profile_configuration" : alignmentReason),
@@ -1664,7 +1723,7 @@ var CremaEngine = (() => {
   function ambiguousZeroFrames(input, points) {
     return (input.profile?.steps?.length ?? 0) !== 1 && points.length > 0 && points.every((p) => p.frame === 0 && /^pour/i.test(p.substate ?? ""));
   }
-  function measurePhases(input, points, landmarks) {
+  function measurePhases(input, points, landmarks2) {
     const hasState = points.some((p) => p.substate);
     const runs = phaseRuns(points, hasState);
     const steps = input.profile?.steps ?? [];
@@ -1674,7 +1733,7 @@ var CremaEngine = (() => {
     const hasScale = brew.some((p) => p.w != null || p.weightFlow != null);
     const scale = scaleRows(points, hasState);
     const first = brew[0], last = brew.at(-1);
-    const onset = firstBeverage(scale, hasScale, first?.t, landmarks);
+    const onset = firstBeverage(scale, hasScale, first?.t, landmarks2);
     const phases = runs.map((run, index) => {
       const frame = run.points[0].frame;
       const step = !alignmentReason && frame != null && Number.isInteger(frame) ? steps[frame] : void 0;
@@ -1690,7 +1749,7 @@ var CremaEngine = (() => {
         hasScale,
         hasState,
         onset.point,
-        landmarks
+        landmarks2
       );
     });
     const rateBoundary = onset.point?.t ?? null;
@@ -1707,18 +1766,18 @@ var CremaEngine = (() => {
     });
     const dose = positive(input.doseG), suppliedYield = positive(input.yieldG);
     const annotated = positive(input.annotatedYieldG);
-    const lastScale = last ? scale.find((row) => row.p === last) : void 0;
+    const lastScale = last ? scale.findLast((row) => row.p.t <= last.t && last.t - row.p.t <= SCALE_GAP_S) : void 0;
     const previousScale = lastScale ? scale[scale.indexOf(lastScale) - 1] : void 0;
     const finalWeightJump = previousScale && lastScale && scaleEdge(previousScale, lastScale) === "weight_jump";
     const lastScaleValue = finalWeightJump ? null : lastScale?.w ?? null;
-    if (landmarks) {
+    if (landmarks2) {
       const start = points[0], end = points.at(-1);
-      if (start) landmarks.push({ kind: "recording_start", t: start.t, confidence: "high", after: start });
-      if (end) landmarks.push({ kind: "recording_end", t: end.t, confidence: "high", before: end });
+      if (start) landmarks2.push({ kind: "recording_start", t: start.t, confidence: "high", after: start });
+      if (end) landmarks2.push({ kind: "recording_end", t: end.t, confidence: "high", before: end });
       const crest = pressurePeak(brew);
       if (crest) {
         const index = points.indexOf(crest);
-        landmarks.push({
+        landmarks2.push({
           kind: "brew_pressure_crest",
           confidence: "high",
           t: crest.t,
@@ -1736,7 +1795,7 @@ var CremaEngine = (() => {
         const fromLimiter = ending?.plan.value?.limiter ?? null;
         const toLimiter = starting?.plan.value?.limiter ?? null;
         const limitChanged = fromLimiter?.value !== toLimiter?.value || fromLimiter?.unit !== toLimiter?.unit || fromLimiter?.range !== toLimiter?.range;
-        landmarks.push({
+        landmarks2.push({
           kind: "phase_boundary",
           t: point.t,
           before: prev,
@@ -1753,7 +1812,7 @@ var CremaEngine = (() => {
         if (!prev || !isBrewPoint(prev.p, hasState) || !isBrewPoint(row.p, hasState)) continue;
         const reason = scaleEdge(prev, row);
         if (reason === "weight_jump" || reason === "scale_gap" || reason === "stale_scale_sample") {
-          landmarks.push({
+          landmarks2.push({
             kind: reason === "weight_jump" ? reason : "scale_gap",
             confidence: "high",
             t: row.p.t,
@@ -1765,7 +1824,7 @@ var CremaEngine = (() => {
       if (last) {
         const index = points.indexOf(last);
         const reason = input.stopReason;
-        landmarks.push({
+        landmarks2.push({
           kind: "stop",
           confidence: reason ? "medium" : "low",
           t: last.t,
@@ -1786,14 +1845,27 @@ var CremaEngine = (() => {
         before?.value != null && after?.value != null ? "difference_between_covered_before_and_after_slopes" : "both_onset_rate_windows_required"
       ),
       scaleClock: evidence(
-        hasScale ? brew.some((p) => p.scaleSampleS != null) ? "scale_timestamps_checked" : "machine_timestamps_only" : null,
+        hasScale ? brew.some((p) => p.scaleSampleS != null) ? "scale_timestamps_checked" : brew.some((p) => p.scaleAgeS != null) ? "scale_age_checked" : "machine_timestamps_only" : null,
         "recorded",
         hasScale ? "cup_windows_use_recording_clock" : "no_scale_readings"
       ),
+      scaleAvailability: {
+        weightSamples: scale.filter((row) => row.w != null).length,
+        staleSamples: scale.filter((row) => row.reason === "stale_scale_sample").length,
+        pairingAgeS: evidence(roundedReading(brew.reduce((max, p) => {
+          if (weight(p) == null) return max;
+          const age = p.scaleAgeS ?? (p.scaleSampleS != null ? p.t - p.scaleSampleS : null);
+          return age == null ? max : Math.max(max ?? 0, Math.abs(age));
+        }, null)), "inferred", brew.some((p) => weight(p) != null && (p.scaleAgeS != null || p.scaleSampleS != null)) ? "max_absolute_scale_pairing_age" : "no_timestamp_or_age_for_recorded_weight")
+      },
+      thermalAvailability: {
+        mixSamples: brew.filter((p) => reading(p.temp, 0, 150) != null).length,
+        groupSamples: brew.filter((p) => reading(p.groupTemp, 0, 150) != null).length
+      },
       finish: {
         annotatedYieldG: evidence(annotated, "recorded", annotated != null ? "shot_annotation" : input.annotatedYieldG === null ? "no_positive_yield_annotation" : "annotation_provenance_not_available"),
         suppliedYieldG: evidence(suppliedYield, "recorded", suppliedYield != null ? "supplied_shot_yield_may_include_last_weight_fallback" : "no_positive_yield"),
-        lastRecordedWeightG: evidence(lastScaleValue, "recorded", lastScaleValue != null ? "last_brew_sample" : hasScale ? finalWeightJump ? "weight_jump" : lastScale?.reason ?? "no_fresh_final_weight" : "no_scale_readings"),
+        lastRecordedWeightG: evidence(lastScaleValue, "recorded", lastScaleValue != null ? lastScale?.p === last ? "last_brew_sample" : "last_fresh_paired_scale_sample" : hasScale ? finalWeightJump ? "weight_jump" : lastScale?.reason ?? "no_fresh_final_weight" : "no_scale_readings"),
         yieldToDoseRatio: evidence(dose && suppliedYield ? rounded(suppliedYield / dose) : null, "inferred", dose && suppliedYield ? "supplied_yield_divided_by_dose" : "positive_dose_and_yield_required"),
         stopSource: evidence(input.stopReason, "recorded", input.stopReason ? "recorded_stop_reason" : "stop_reason_missing"),
         lastObservedPhase: evidence(
@@ -1861,7 +1933,7 @@ var CremaEngine = (() => {
     if (!finite(target) || !finite(actual) || target <= 0 || skipFaultChecks(input.profile, step, target)) return null;
     return { pump, target, actual, step };
   }
-  function analyzeShot(input, landmarks) {
+  function analyzeShot(input, landmarks2) {
     const issues = [];
     const profile = input.profile;
     const points = [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
@@ -2034,7 +2106,7 @@ var CremaEngine = (() => {
       const avg = w.actuals.reduce((a, b) => a + b, 0) / w.actuals.length;
       return Math.abs(avg / w.target - 1) <= 0.2;
     });
-    const facts = shotFacts(input, points, landmarks);
+    const facts = shotFacts(input, points, landmarks2);
     const lastT = points.at(-1)?.t ?? 0;
     const window = facts.expectedTimeS;
     if (judged && facts.timeTargetComparable && window && facts.durationS != null && facts.timeDeltaS != null) {
@@ -2086,7 +2158,7 @@ var CremaEngine = (() => {
     };
   }
   var round2 = (n, places = 1) => n == null ? null : Math.round(n * 10 ** places) / 10 ** places;
-  function shotFacts(input, sorted, landmarks) {
+  function shotFacts(input, sorted, landmarks2) {
     const points = sorted ?? [...input.points].filter((p) => finite(p.t)).sort((a, b) => a.t - b.t);
     const phased = points.some((p) => p.substate);
     const brewing = points.filter((p) => isBrewPoint(p, phased));
@@ -2094,7 +2166,7 @@ var CremaEngine = (() => {
     const avg = (xs) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
     const pour = phased ? brewing.filter((p) => /^pour/i.test(p.substate)) : brewing;
     const preinfusion = phased ? brewing.filter((p) => /^preinfusion/i.test(p.substate)) : [];
-    const phaseEvidence = measurePhases(input, points, landmarks);
+    const phaseEvidence = measurePhases(input, points, landmarks2);
     const firstDripsS = phaseEvidence.firstSustainedBeverage.value?.tS ?? null;
     const pressures = brewing.map((p) => p.p).filter(finite);
     const doseG = finite(input.doseG) && input.doseG > 0 ? input.doseG : null;
@@ -2207,14 +2279,94 @@ var CremaEngine = (() => {
   }
 
   // server/recommend/review-history.ts
+  var MIN_COMPARATORS = 2;
+  var MIN_QUARTILES = 5;
   var positive2 = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
   var setting = (s) => s?.trim() || null;
   var rounded2 = (n) => Math.round(n * 10) / 10;
-  function compareReviewHistory(input, facts) {
+  var stopLabel = (s) => {
+    const value = s?.toLowerCase().trim();
+    return value && ["appstop", "apistop", "userstop", "manual"].includes(value) ? "user" : value || null;
+  };
+  var changedSetting = (a, b) => a && b ? !sameGrind(a, b) : null;
+  var targetStop = (reason) => reason === "targetweight" || reason === "targetvolume";
+  function distribution(values) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const quantile = (fraction) => {
+      const index = (sorted.length - 1) * fraction, lo = Math.floor(index), hi = Math.ceil(index);
+      return rounded2(sorted[lo] + (index - lo) * (sorted[hi] - sorted[lo]));
+    };
+    return { count: sorted.length, median: quantile(0.5), q1: quantile(0.25), q3: quantile(0.75) };
+  }
+  function compareCurves(out, input, comparable, current) {
+    if (!input.batchId) {
+      out.reason = "bag_unverified";
+      return;
+    }
+    const phase = current?.phases.reduce((best, p) => !best || p.durationS > best.durationS ? p : best, null);
+    if (!phase || !current) {
+      out.reason = "current_phase_unusable";
+      return;
+    }
+    out.phase = phase;
+    out.firstGramBrewElapsedS = current.firstGramBrewElapsedS;
+    out.cupRateAfterOnsetGS = current.cupRateAfterOnsetGS;
+    const candidates = comparable.flatMap((p) => {
+      const trace = p.trace;
+      const previousPhase = trace?.version === current.version ? trace.phases.find((x) => x.frame === phase.frame) : null;
+      return trace && previousPhase ? [{ p, trace, phase: previousPhase }] : [];
+    });
+    out.usableCount = candidates.length;
+    out.reason = candidates.length < MIN_COMPARATORS ? "fewer_than_two_usable_phases" : "comparable_phases";
+    const midpointG = (input.yieldG ?? 0) / 2;
+    const support = current.mass.checkpoints.filter((p) => p.frame === phase.frame).map((point) => ({
+      point,
+      matches: candidates.map((c) => c.trace.mass.checkpoints.find((p) => p.frame === point.frame && p.massG === point.massG) ?? null)
+    })).map((row) => ({ ...row, count: row.matches.filter(Boolean).length })).filter((row) => row.count > 0).sort((a, b) => b.count - a.count || Math.abs(a.point.massG - midpointG) - Math.abs(b.point.massG - midpointG))[0];
+    out.mass = {
+      reason: !support ? "no_common_covered_mass" : support.count < MIN_COMPARATORS ? "fewer_than_two_usable_crossings" : "covered_same_phase_crossings",
+      currentCoverage: current.mass.reason,
+      usableCount: support?.count ?? 0,
+      current: support?.point ?? null
+    };
+    const references = candidates.map(({ p, phase: phase2, trace }, i) => ({
+      timestamp: p.timestamp,
+      durationS: p.durationS,
+      grinderSetting: setting(p.grinderSetting),
+      grindChanged: changedSetting(setting(p.grinderSetting), setting(input.grinderSetting)),
+      stopReason: p.stopReason ?? null,
+      completionBasis: targetStop(stopLabel(p.stopReason)) ? "recorded_target_stop" : "recorded_yield_near_target",
+      phase: phase2,
+      firstGramBrewElapsedS: trace.firstGramBrewElapsedS,
+      cupRateAfterOnsetGS: trace.cupRateAfterOnsetGS,
+      mass: support?.matches[i] ?? null
+    }));
+    out.references = references;
+    if (references.length >= MIN_QUARTILES) {
+      const pressuresAtMass = references.flatMap((r) => r.mass ? [r.mass.pressureBar] : []);
+      out.statistics = {
+        peakPressureBar: distribution(references.map((r) => r.phase.peakPressureBar)),
+        peakPhaseElapsedS: distribution(references.map((r) => r.phase.peakPhaseElapsedS)),
+        pressureAtMassBar: pressuresAtMass.length >= MIN_QUARTILES ? distribution(pressuresAtMass) : null
+      };
+    }
+  }
+  function compareReviewHistory(input, facts, trace) {
     const out = {
       status: input.history.length ? "insufficient" : "none",
       comparableCount: 0,
-      excluded: { profile: 0, dose: 0, yield: 0, temperature: 0, incomplete: 0, missing: 0, chronology: 0 },
+      excluded: { bag: 0, profile: 0, dose: 0, yield: 0, temperature: 0, stop: 0, incomplete: 0, missing: 0, chronology: 0 },
+      bagBasis: input.batchId ? "recorded_batch" : input.batchId === void 0 ? "legacy_skin_history" : "no_recorded_batch",
+      curves: {
+        reason: input.history.length ? "no_comparable_recipe" : "no_history",
+        usableCount: 0,
+        phase: null,
+        firstGramBrewElapsedS: null,
+        cupRateAfterOnsetGS: null,
+        mass: { reason: "no_common_covered_mass", currentCoverage: null, usableCount: 0, current: null },
+        references: [],
+        statistics: null
+      },
       latest: null,
       recentRangeS: null
     };
@@ -2222,17 +2374,24 @@ var CremaEngine = (() => {
     const currentAt = Date.parse(input.timestamp ?? "");
     const currentKnown = input.profile != null && input.profile.beverage_type !== "manual" && !!input.profileShape && positive2(facts.durationS) && positive2(facts.doseG) && positive2(facts.yieldG) && positive2(input.tempC) && Number.isFinite(currentAt);
     const comparable = [];
+    const seen = /* @__PURE__ */ new Set();
+    const currentStop = stopLabel(input.stopReason);
     for (const p2 of input.history.slice(0, 20)) {
       if (!currentKnown || !p2.profileShape || !positive2(p2.durationS) || !positive2(p2.doseG) || !positive2(p2.yieldG) || !positive2(p2.tempC)) {
         out.excluded.missing++;
         continue;
       }
       const at = Date.parse(p2.timestamp);
-      if (!Number.isFinite(at) || at >= currentAt) {
+      if (!Number.isFinite(at) || at >= currentAt || seen.has(at)) {
         out.excluded.chronology++;
         continue;
       }
-      if (stoppedEarly(input) || stoppedEarly({ yieldG: p2.yieldG, targetYieldG: p2.targetYieldG ?? null, stopReason: p2.stopReason ?? null }) || positive2(input.targetYieldG) && facts.yieldG < 0.8 * input.targetYieldG || positive2(p2.targetYieldG) && p2.yieldG < 0.8 * p2.targetYieldG) {
+      if (input.batchId !== void 0 && (!input.batchId || p2.batchId !== input.batchId)) {
+        out.excluded.bag++;
+        continue;
+      }
+      const previousStop = stopLabel(p2.stopReason);
+      if (stoppedEarly(input) || stoppedEarly({ yieldG: p2.yieldG, targetYieldG: p2.targetYieldG ?? null, stopReason: p2.stopReason ?? null }) || currentStop === "error" || previousStop === "error" || positive2(input.targetYieldG) && facts.yieldG < 0.8 * input.targetYieldG || positive2(p2.targetYieldG) && p2.yieldG < 0.8 * p2.targetYieldG) {
         out.excluded.incomplete++;
         continue;
       }
@@ -2256,12 +2415,21 @@ var CremaEngine = (() => {
         out.excluded.temperature++;
         continue;
       }
+      if (input.batchId && (currentStop === "user" || previousStop === "user" || !targetStop(currentStop) && !positive2(input.targetYieldG) || !targetStop(previousStop) && !positive2(p2.targetYieldG))) {
+        out.excluded.incomplete++;
+        continue;
+      }
+      if (input.batchId && (currentStop && previousStop && currentStop !== previousStop || input.targetWaterMl != null && p2.targetWaterMl != null && Math.abs(input.targetWaterMl - p2.targetWaterMl) > 2)) {
+        out.excluded.stop++;
+        continue;
+      }
+      seen.add(at);
       comparable.push(p2);
     }
     comparable.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
     out.comparableCount = comparable.length;
     if (!comparable.length) {
-      out.status = out.excluded.profile + out.excluded.dose + out.excluded.yield + out.excluded.temperature > 0 ? "confounded" : "insufficient";
+      out.status = out.excluded.bag + out.excluded.profile + out.excluded.dose + out.excluded.yield + out.excluded.temperature + out.excluded.stop > 0 ? "confounded" : "insufficient";
       return out;
     }
     out.status = "comparable";
@@ -2275,10 +2443,11 @@ var CremaEngine = (() => {
       previousGrind,
       currentGrind,
       // A numeric direction does not establish which way this grinder gets finer.
-      grindChanged: previousGrind && currentGrind ? !sameGrind(previousGrind, currentGrind) : null
+      grindChanged: changedSetting(previousGrind, currentGrind)
     };
     const times = comparable.map((p2) => p2.durationS);
     out.recentRangeS = [Math.min(...times), Math.max(...times)];
+    compareCurves(out.curves, input, comparable, trace);
     return out;
   }
   function historySentence(h) {
@@ -2287,9 +2456,143 @@ var CremaEngine = (() => {
       const change = p.grindChanged === true ? `with grind ${p.previousGrind} \u2192 ${p.currentGrind}` : p.grindChanged === false ? "at the same recorded setting" : "with grind history unknown";
       return `On the same recipe, time went from ${p.previousDurationS} to ${p.currentDurationS} s ${change}; repeat before attributing a cause.`;
     }
+    if (h.excluded.stop) return "The earlier shot had a different recorded stop condition, so its timing cannot isolate a grind effect.";
+    if (h.excluded.bag) return "The earlier shot was from a different or unverified bag.";
     if (h.status === "confounded") return "The earlier recipe or profile changed, so history cannot isolate a grind effect; repeat this recipe before drawing a trend.";
     if (h.status === "insufficient") return "Recorded timing or recipe details are missing, so history cannot establish a grind trend; repeat with the setting noted.";
     return null;
+  }
+  function historyCurveSentence(h) {
+    const { phase, usableCount, references, statistics, mass } = h.curves;
+    if (!phase || usableCount < MIN_COMPARATORS) return h.bagBasis === "recorded_batch" && h.comparableCount > 0 ? `Phase comparison needs two usable earlier curves. ${usableCount} of ${h.comparableCount} matching recordings qualified.` : null;
+    const earlier = (values) => `${values.map((x) => x.toFixed(1)).join(", ")} bar`;
+    const ranges = (stat) => `a median of ${stat.median.toFixed(1)} bar (middle half ${stat.q1.toFixed(1)}\u2013${stat.q3.toFixed(1)} bar)`;
+    const peaks = statistics ? ranges(statistics.peakPressureBar) : earlier(references.map((r) => r.phase.peakPressureBar));
+    const lines = [`Pressure peaked at ${phase.peakPressureBar.toFixed(1)} bar in the matched phase, versus ${peaks} across ${usableCount} earlier shots.`];
+    if (mass.current && mass.usableCount >= MIN_COMPARATORS) {
+      const atMass = statistics?.pressureAtMassBar ? ranges(statistics.pressureAtMassBar) : earlier(references.flatMap((r) => r.mass ? [r.mass.pressureBar] : []));
+      lines.push(`At ${mass.current.massG} g in the cup, pressure was ${mass.current.pressureBar.toFixed(1)} bar versus ${atMass} across ${mass.usableCount} earlier shots.`);
+    }
+    const changed = [...new Set(references.flatMap((r) => r.grindChanged && r.grinderSetting ? [r.grinderSetting] : []))];
+    if (changed.length) lines.push(changed.length <= 4 ? `This shot recorded setting ${h.latest?.currentGrind}; earlier settings included ${changed.join(", ")}.` : "Recorded grinder settings differed across these shots.");
+    return lines.join(" ");
+  }
+
+  // server/recommend/review-evidence.ts
+  var REVIEW_EVIDENCE_VERSION = 1;
+  var REVIEW_POINT_LIMIT = 1800;
+  var REVIEW_PHASE_LIMIT = 12;
+  var FULL_TRACE_PHASE_LIMIT = 40;
+  var units = {
+    time: "s",
+    pressure: "bar",
+    inletFlow: "mL/s",
+    cupMass: "g",
+    cupRate: "g/s",
+    temperature: "\xB0C",
+    countedInletVolume: "mL"
+  };
+  var round3 = (n) => Math.round(n * 1e3) / 1e3;
+  function selectedPhases(phases, limit = REVIEW_PHASE_LIMIT) {
+    if (phases.length <= limit) return phases;
+    const middle = phases.slice(1, -1).sort((a, b) => b.durationS - a.durationS).slice(0, limit - 2);
+    return [phases[0], ...middle.sort((a, b) => a.index - b.index), phases.at(-1)];
+  }
+  function summarizeReviewTrace(points, evidence2) {
+    const phases = evidence2.phases;
+    const counts = /* @__PURE__ */ new Map();
+    for (const p of phases) if (p.frame != null) counts.set(p.frame, (counts.get(p.frame) ?? 0) + 1);
+    return {
+      version: REVIEW_EVIDENCE_VERSION,
+      phases: phases.flatMap((p) => {
+        const peak = p.pressureCrest.value;
+        if (p.frame == null || counts.get(p.frame) !== 1 || !p.plan.value || !peak || p.pressureBar.coveredS < 1 || p.pressureBar.coveredS + 2e-3 < 0.8 * p.durationS) return [];
+        return [{
+          frame: p.frame,
+          durationS: p.durationS,
+          pressureCoveredS: p.pressureBar.coveredS,
+          peakPressureBar: peak.pressureBar,
+          peakPhaseElapsedS: round3(peak.tS - p.fromS),
+          latePressureBar: p.lateHydraulics.value?.medianPressureBar ?? null,
+          lateInletFlowMlS: p.lateHydraulics.value?.medianInletFlowMlS ?? null,
+          capLikeShare: p.capLikeTime.value?.shareOfCoveredTime ?? null
+        }];
+      }),
+      firstGramBrewElapsedS: evidence2.firstSustainedBeverage.value?.brewElapsedS ?? null,
+      cupRateAfterOnsetGS: evidence2.cupRateAfterOnsetGS.value,
+      mass: measureMassCheckpoints(points, phases)
+    };
+  }
+  function fullReviewTrace(input, landmarks2) {
+    const analysis = analyzeShot(input, landmarks2);
+    const phaseEvidence = analysis.facts.phaseEvidence;
+    const phaseCount = phaseEvidence.phases.length;
+    const trace = summarizeReviewTrace(input.points, phaseEvidence);
+    if (input.points.length > REVIEW_POINT_LIMIT) {
+      phaseEvidence.phases = selectedPhases(phaseEvidence.phases, FULL_TRACE_PHASE_LIMIT);
+      if (analysis.facts.pourSteps.length > 200) {
+        analysis.facts.pourSteps = [...analysis.facts.pourSteps].sort((a, b) => Number(b.steadyTarget) - Number(a.steadyTarget) || b.durationS - a.durationS).slice(0, 200);
+      }
+    }
+    return { version: REVIEW_EVIDENCE_VERSION, analysis, phaseCount, trace };
+  }
+  function landmarks(facts, phases) {
+    if (facts.brewStartS == null) return [];
+    const out = [];
+    const start = phases[0]?.fromS ?? facts.brewStartS;
+    const add = (id, tS, phase, source, reason) => {
+      out.push({
+        id,
+        phaseId: phase?.id ?? null,
+        tS,
+        brewElapsedS: round3(tS - start),
+        phaseElapsedS: phase ? round3(tS - phase.fromS) : null,
+        source,
+        reason
+      });
+    };
+    for (const phase of phases) {
+      add(`${phase.id}-start`, phase.fromS, phase, "recorded", phase.phaseReason);
+      add(`${phase.id}-end`, phase.toS, phase, "recorded", "last_observed_sample_in_phase");
+      const crest = phase.pressureCrest.value;
+      if (crest) add(`${phase.id}-pressure-crest`, crest.tS, phase, "recorded", phase.pressureCrest.reason);
+    }
+    const onset = facts.phaseEvidence.firstSustainedBeverage;
+    if (onset.value) {
+      const { tS } = onset.value;
+      add("first-sustained-gram", tS, phases.find((p) => p.fromS <= tS && p.toS >= tS), "inferred", onset.reason);
+    }
+    const last = facts.phaseEvidence.finish.lastObservedPhase.value;
+    if (last) add("last-brew-sample", last.toS, phases.find((p) => p.index === last.index), "recorded", "last_brew_sample_may_precede_stop");
+    return out.sort((a, b) => a.tS - b.tS);
+  }
+  function buildReviewEvidence(input, full = fullReviewTrace(input)) {
+    const { analysis, trace } = full;
+    const { facts } = analysis;
+    const phases = selectedPhases(facts.phaseEvidence.phases);
+    const timeSource = facts.expectedTimeSource;
+    return {
+      version: REVIEW_EVIDENCE_VERSION,
+      units,
+      analysis,
+      omittedPhaseCount: full.phaseCount - phases.length,
+      landmarks: landmarks(facts, phases),
+      expectedTime: {
+        value: facts.expectedTimeS,
+        source: timeSource === "guide" ? "guide-derived" : timeSource === "recorded" ? "recorded" : timeSource ? "inferred" : null,
+        reason: timeSource ?? "no_comparable_time_window_available"
+      },
+      history: compareReviewHistory(input, facts, trace)
+    };
+  }
+  function projectReviewEvidence(evidence2) {
+    const { analysis } = evidence2;
+    const { facts } = analysis;
+    return { ...evidence2, analysis: { ...analysis, facts: {
+      ...facts,
+      phaseEvidence: { ...facts.phaseEvidence, phases: selectedPhases(facts.phaseEvidence.phases) },
+      pourSteps: facts.pourSteps.length <= REVIEW_PHASE_LIMIT ? facts.pourSteps : [...facts.pourSteps].sort((a, b) => b.durationS - a.durationS).slice(0, REVIEW_PHASE_LIMIT)
+    } } };
   }
 
   // server/recommend/review-local.ts
@@ -2320,7 +2623,8 @@ var CremaEngine = (() => {
     if (knownShortYield && stoppedEarly(input)) return "This shot was stopped early, so its short recording cannot establish a grind problem. Keep the recipe for a full repeat when ready, then compare taste before adjusting.";
     return "This recording is too short or sparse for a reliable curve assessment. Repeat with recording active; any immediate adjustment should rest on reported taste, not this curve.";
   }
-  function rulesSummary(a, input, direction, conflict) {
+  function rulesSummary(evidence2, input, direction, conflict) {
+    const a = evidence2.analysis;
     const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
     const temp = a.issues.find((i) => i.kind === "off_target_temp");
     const phases = a.facts.phaseEvidence.phases;
@@ -2349,7 +2653,7 @@ var CremaEngine = (() => {
       const d = a.metrics.meanTemperatureOffsetC;
       lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} \xB0C ${d > 0 ? "above" : "below"} its target.`);
     }
-    const history = historySentence(compareReviewHistory(input, a.facts));
+    const history = historySentence(evidence2.history);
     if (history) lines.push(history);
     if (!input.feedback && input.notes?.trim()) lines.push("The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.");
     else if (conflict) lines.push(input.feedback ? "Taste and curve point opposite ways; repeat this recipe and check puck prep before changing grind." : "The mechanical signals point toward opposite changes; repeat this recipe and check puck prep before changing grind.");
@@ -2428,7 +2732,8 @@ var CremaEngine = (() => {
   }
   var capitalize = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
   var joinAnd = (xs) => xs.length <= 1 ? xs[0] ?? "" : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
-  function rulesReview(input, analysis = analyzeShot(input)) {
+  function rulesReview(input, evidence2 = buildReviewEvidence(input)) {
+    const analysis = evidence2.analysis;
     const issues = analysis.issues;
     const kinds = issues.map((i) => i.kind);
     const hasFast = kinds.some((k) => FAST.includes(k));
@@ -2447,7 +2752,7 @@ var CremaEngine = (() => {
       nextShot = grindAdvice("coarser", slowReason(kinds));
     }
     const direction = nextShot?.grindDelta.endsWith("finer") ? "finer" : nextShot?.grindDelta.endsWith("coarser") ? "coarser" : null;
-    const summary = rulesSummary(analysis, input, input.feedback ? null : direction, conflict || hasFast && hasSlow);
+    const summary = rulesSummary(evidence2, input, input.feedback ? null : direction, conflict || hasFast && hasSlow);
     let confidence = "low";
     if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
     if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";
@@ -2460,6 +2765,10 @@ var CremaEngine = (() => {
       confidence,
       askTaste: input.feedback == null
     };
+  }
+  function rulesReviewResult(input, fullTrace) {
+    const evidence2 = buildReviewEvidence(input, fullTrace);
+    return { review: rulesReview(input, evidence2), source: "rules", evidence: projectReviewEvidence(evidence2) };
   }
 
   // server/control/shot.ts

@@ -1,7 +1,8 @@
-import { analyzeShot, stoppedEarly, type ShotAnalysis, type ShotAnalysisMetrics, type ShotFacts } from "../profiles/analysis.js";
-import type { ReviewInput, ShotReviewData } from "./review-types.js";
+import { stoppedEarly, type ShotAnalysisMetrics, type ShotFacts } from "../profiles/analysis.js";
+import type { ReviewInput, ReviewResult, ShotReviewData } from "./review-types.js";
 import type { DialInAdvice } from "../schema.js";
-import { compareReviewHistory, historySentence } from "./review-history.js";
+import { historySentence } from "./review-history.js";
+import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "./review-evidence.js";
 
 function grindAdvice(direction: "finer" | "coarser", reason: string): DialInAdvice {
   const finer = direction === "finer";
@@ -50,7 +51,8 @@ export function recordingLimitSummary(input: ReviewInput, metrics: ShotAnalysisM
   return "This recording is too short or sparse for a reliable curve assessment. Repeat with recording active; any immediate adjustment should rest on reported taste, not this curve.";
 }
 
-function rulesSummary(a: ShotAnalysis, input: ReviewInput, direction: "finer" | "coarser" | null, conflict: boolean): string {
+function rulesSummary(evidence: ReviewEvidence, input: ReviewInput, direction: "finer" | "coarser" | null, conflict: boolean): string {
+  const a = evidence.analysis;
   const curveIssue = a.issues.some((i) => !["off_target_temp", "fast_shot", "slow_shot"].includes(i.kind));
   const temp = a.issues.find((i) => i.kind === "off_target_temp");
   const phases = a.facts.phaseEvidence.phases;
@@ -80,7 +82,7 @@ function rulesSummary(a: ShotAnalysis, input: ReviewInput, direction: "finer" | 
     const d = a.metrics.meanTemperatureOffsetC;
     lines.push(`Temperature averaged ${Math.abs(d).toFixed(1)} °C ${d > 0 ? "above" : "below"} its target.`);
   }
-  const history = historySentence(compareReviewHistory(input, a.facts));
+  const history = historySentence(evidence.history);
   if (history) lines.push(history);
   if (!input.feedback && input.notes?.trim()) lines.push("The saved note may change this interpretation; confirm taste before choosing a grind change from the curve alone.");
   else if (conflict) lines.push(input.feedback
@@ -177,7 +179,8 @@ const capitalize = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s;
 const joinAnd = (xs: string[]) => xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 
 /** Deterministic, local shot review. It never changes machine settings. */
-export function rulesReview(input: ReviewInput, analysis = analyzeShot(input)): ShotReviewData {
+export function rulesReview(input: ReviewInput, evidence = buildReviewEvidence(input)): ShotReviewData {
+  const analysis = evidence.analysis;
   const issues = analysis.issues;
   const kinds = issues.map((i) => i.kind);
   // Signs of too little puck resistance (grind finer) and too much (grind coarser).
@@ -201,7 +204,7 @@ export function rulesReview(input: ReviewInput, analysis = analyzeShot(input)): 
   }
 
   const direction = nextShot?.grindDelta.endsWith("finer") ? "finer" : nextShot?.grindDelta.endsWith("coarser") ? "coarser" : null;
-  const summary = rulesSummary(analysis, input, input.feedback ? null : direction, conflict || (hasFast && hasSlow));
+  const summary = rulesSummary(evidence, input, input.feedback ? null : direction, conflict || (hasFast && hasSlow));
   let confidence: ShotReviewData["confidence"] = "low";
   if (analysis.metrics.observedWindows >= 1 && (input.feedback || issues.length)) confidence = "medium";
   if (analysis.metrics.observedWindows >= 2 && input.feedback && !conflict && issues.length <= 1) confidence = "high";
@@ -214,4 +217,9 @@ export function rulesReview(input: ReviewInput, analysis = analyzeShot(input)): 
     confidence,
     askTaste: input.feedback == null,
   };
+}
+
+export function rulesReviewResult(input: ReviewInput, fullTrace?: FullReviewTrace): ReviewResult {
+  const evidence = buildReviewEvidence(input, fullTrace);
+  return { review: rulesReview(input, evidence), source: "rules", evidence: projectReviewEvidence(evidence) };
 }

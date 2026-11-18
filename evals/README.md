@@ -119,12 +119,13 @@ stage will author and freeze new, unseen cases for the actual holdout.
 npx tsx evals/review.ts cross --fixture history-grind-progress
 npx tsx evals/review.ts cross --fixture history-grind-progress --provider mock
 npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/demonstration.json --provider rules
+npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/comparable-history.json --provider rules
 ```
 
 `cross` takes a synthetic fixture from `evals/lib/review-fixtures.ts`. It crosses
 seven current taste settings with three recorded history taste settings. All
 21 cells keep telemetry and mechanical history fixed. The `curveStage` adapter
-currently returns deterministic analysis facts and issues. The pending curve-only
+returns the versioned deterministic evidence, including history. The pending curve-only
 review test can use this adapter when the new stage is ready. Passing the optional
 `--provider` also checks the returned findings, their order and confidence.
 The legacy review exposes one confidence for the entire review. Its rules path
@@ -160,7 +161,9 @@ The legacy adapter uses issue window starts as onset predictions, projected onto
 recorded phase and pump at that sample. It has no peak timestamps. It extracts
 figures from the deterministic shortfall evidence, with IDs such as
 `pressure_shortfall.frame-1.measured` and suffixes `target`, `measured` or
-`peak` (peak value). It checks multiple structured next-shot changes. Semantic
+`peak` (peak value). The comparable-history fixture checks the measured
+pressure crest, reference count and pressures at the same delivered mass
+from the typed history evidence. It checks multiple structured next-shot changes. Semantic
 claims in prose, including taste inference and diagnosis qualification, remain
 unassessed unless an adapter supplies adjudicated claims. The legacy wording
 grader and optional judge still cover narrative quality separately.

@@ -1,5 +1,5 @@
 import { deepStrictEqual } from "node:assert";
-import { analyzeShot } from "../../server/profiles/analysis.js";
+import { buildReviewEvidence } from "../../server/recommend/review-evidence.js";
 import type { ReviewInput, ReviewIssue, ShotReviewData } from "../../server/recommend/review-types.js";
 
 const noTaste = { feedback: null, notes: null };
@@ -32,8 +32,7 @@ export function crossedTasteInputs(input: ReviewInput) {
 
 /** Switch this adapter when the curve-only review becomes available. */
 export function curveStage(input: ReviewInput): unknown {
-  const { facts, issues } = analyzeShot(input);
-  return { facts, issues };
+  return buildReviewEvidence(input);
 }
 
 export async function assertCurveStageInvariant(input: ReviewInput, stage: (input: ReviewInput) => unknown = curveStage) {
