@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "id": "lever-reed-scheduled",
+  "session": "lever-reed-session",
+  "recipe": "lever-reed-recipe",
+  "family": "lever",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.5, "seconds": 5, "substate": "preinfusion", "limiter": {"value": 4.5}},
+      {"name": "Hold", "pump": "pressure", "target": 7.2, "seconds": 6},
+      {"name": "Finish", "pump": "pressure", "target": 5.8, "seconds": 28, "transition": "smooth", "limiter": {"value": 1.9}}
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "timeS": 55,
+    "weightG": 39
+  },
+  "puck": {
+    "resistance": 3.3
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "At about 11 s the pressure command begins a scheduled decline. Inlet sits at the configured 1.9 mL/s ceiling and measured pressure falls below the moving command. This is the same measured drop as the flat-command sibling. Establish the schedule from the logged command and the shortfall from the residual.",
+    "unknowableWhen": [
+      "Under a flow ceiling, inlet cannot show how much faster it would run uncapped. The falling pressure at capped inlet does not establish grind, channeling or flavour."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "ramp-entry",
+        "kind": "planned_decline",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            11,
+            11.35
+          ]
+        }
+      },
+      {
+        "id": "no-channeling-finding",
+        "kind": "channeling",
+        "expected": "forbidden"
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}

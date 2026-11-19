@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "id": "lever-willow-scale-gap",
+  "session": "lever-willow-session",
+  "recipe": "lever-willow-recipe",
+  "family": "lever",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.5, "seconds": 5, "substate": "preinfusion", "limiter": {"value": 4.5}},
+      {"name": "Hold", "pump": "pressure", "target": 6, "seconds": 20},
+      {"name": "Finish", "pump": "pressure", "target": 4, "seconds": 6, "transition": "smooth"},
+      {"name": "Tail", "pump": "pressure", "target": 4, "seconds": 10}
+    ]
+  },
+  "doseG": 19,
+  "stop": {
+    "timeS": 55,
+    "weightG": 51
+  },
+  "puck": {
+    "resistance": 3
+  },
+  "interventions": [
+    {
+      "kind": "scale-loss",
+      "atS": 25.5,
+      "untilS": 29.5
+    }
+  ],
+  "grading": {
+    "consequence": "The machine still logs and tracks its pressure ramp from about 25 s. Cup weight and scale flow disappear after 25.5 s on the scale clock and resume just after 29.5 s. A specific next check is to repeat the recipe with a continuously recording scale and compare cup flow over the ramp.",
+    "unknowableWhen": [
+      "Cup-rate changes within the missing interval cannot be determined. Do not bridge the gap, substitute inlet flow for cup flow or infer puck failure from missing readings."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "ramp-entry",
+        "kind": "planned_decline",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            25,
+            25.35
+          ]
+        }
+      },
+      {
+        "id": "scale-resumption",
+        "kind": "scale_gap",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            29.5,
+            29.95
+          ]
+        }
+      },
+      {
+        "id": "no-pressure-shortfall",
+        "kind": "pressure_shortfall",
+        "expected": "forbidden"
+      },
+      {
+        "id": "no-channeling-finding",
+        "kind": "channeling",
+        "expected": "forbidden"
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}
