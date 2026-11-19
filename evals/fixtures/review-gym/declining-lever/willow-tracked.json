@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "id": "lever-willow-tracked",
+  "session": "lever-willow-session",
+  "recipe": "lever-willow-recipe",
+  "family": "lever",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.5, "seconds": 5, "substate": "preinfusion", "limiter": {"value": 4.5}},
+      {"name": "Hold", "pump": "pressure", "target": 6, "seconds": 20},
+      {"name": "Finish", "pump": "pressure", "target": 4, "seconds": 6, "transition": "smooth"},
+      {"name": "Tail", "pump": "pressure", "target": 4, "seconds": 10}
+    ]
+  },
+  "doseG": 19,
+  "stop": {
+    "timeS": 55,
+    "weightG": 51
+  },
+  "puck": {
+    "resistance": 3
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "Near 25 s the logged pressure command starts dropping from 6 toward 4 bar. Measured pressure follows the executed part of that ramp. Use the paired command in bar, and keep inlet flow in mL/s as separate evidence.",
+    "unknowableWhen": [
+      "Without a paired pressure command and reading, the pressure fall alone cannot establish adherence.",
+      "Sweetness, extraction yield and puck defects require evidence beyond the measured ramp."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "beverage-onset",
+        "kind": "first_sustained_beverage",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            7.6,
+            8.3
+          ]
+        }
+      },
+      {
+        "id": "ramp-entry",
+        "kind": "planned_decline",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            25,
+            25.35
+          ]
+        }
+      },
+      {
+        "id": "no-pressure-shortfall",
+        "kind": "pressure_shortfall",
+        "expected": "forbidden"
+      },
+      {
+        "id": "no-channeling-finding",
+        "kind": "channeling",
+        "expected": "forbidden"
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}

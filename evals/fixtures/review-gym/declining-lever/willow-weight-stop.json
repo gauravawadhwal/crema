@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "id": "lever-willow-weight-stop",
+  "session": "lever-willow-session",
+  "recipe": "lever-willow-recipe",
+  "family": "lever",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.5, "seconds": 5, "substate": "preinfusion", "limiter": {"value": 4.5}},
+      {"name": "Hold", "pump": "pressure", "target": 6, "seconds": 20},
+      {"name": "Finish", "pump": "pressure", "target": 4, "seconds": 6, "transition": "smooth"},
+      {"name": "Tail", "pump": "pressure", "target": 4, "seconds": 10}
+    ]
+  },
+  "doseG": 19,
+  "stop": {
+    "timeS": 55,
+    "weightG": 35
+  },
+  "puck": {
+    "resistance": 3
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "The recorded weight stop ends the shot around 23–25 s, in the 6 bar hold. The decline is in the loaded plan but never executes. Do not score the unreached target as a pressure fault or call for a grind change based on it.",
+    "unknowableWhen": [
+      "Adherence to an unexecuted decline is unknowable. Without the recorded stop reason, frame coverage alone cannot identify what ended the shot."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "observed-stop",
+        "kind": "stop",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            23.35,
+            24.75
+          ]
+        }
+      },
+      {
+        "id": "no-executed-decline",
+        "kind": "planned_decline",
+        "expected": "forbidden"
+      },
+      {
+        "id": "no-pressure-shortfall",
+        "kind": "pressure_shortfall",
+        "expected": "forbidden"
+      },
+      {
+        "id": "no-channeling-finding",
+        "kind": "channeling",
+        "expected": "forbidden"
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}

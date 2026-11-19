@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "id": "lever-reed-load-change",
+  "session": "lever-reed-session",
+  "recipe": "lever-reed-recipe",
+  "family": "lever",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.5, "seconds": 5, "substate": "preinfusion", "limiter": {"value": 4.5}},
+      {"name": "Hold", "pump": "pressure", "target": 7.2, "seconds": 6},
+      {"name": "Finish", "pump": "pressure", "target": 5.8, "seconds": 28, "transition": "smooth", "limiter": {"value": 1.9}}
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "timeS": 55,
+    "weightG": 39
+  },
+  "puck": {
+    "resistance": 3.3
+  },
+  "interventions": [
+    {
+      "kind": "low-resistance",
+      "atS": 18,
+      "factor": 0.86
+    }
+  ],
+  "grading": {
+    "consequence": "An additional pressure drop occurs near 18 s while the logged ramp continues smoothly. Inlet remains at its configured 1.9 mL/s ceiling, and cup delivery stays steady. Describe the extra pressure shortfall while flow is limited and allow abstention about its cause.",
+    "unknowableWhen": [
+      "The flow ceiling masks the cup-flow response to lower resistance. The pressure change under capped flow cannot distinguish a preparation defect, grind or other causes, or establish channeling."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "fill-pressure-ceiling",
+        "kind": "cap_like_start",
+        "expected": "required",
+        "timing": {
+          "type": "windowed-event",
+          "onsetS": [
+            2.9,
+            3.3
+          ]
+        },
+        "phase": "preinfusion",
+        "controlledVariable": "flow"
+      },
+      {
+        "id": "ramp-entry",
+        "kind": "planned_decline",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [
+            11,
+            11.35
+          ]
+        }
+      },
+      {
+        "id": "capped-shortfall",
+        "kind": "cap_like_start",
+        "expected": "required",
+        "timing": {
+          "type": "windowed-event",
+          "onsetS": [
+            17.7,
+            18.3
+          ]
+        },
+        "phase": "pouring",
+        "controlledVariable": "pressure"
+      },
+      {
+        "id": "no-channeling-finding",
+        "kind": "channeling",
+        "expected": "forbidden"
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}
