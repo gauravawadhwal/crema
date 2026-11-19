@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "id": "flat-pressure-fast-fill-nominal",
+  "session": "flat-pressure-fast-fill",
+  "recipe": "flat-pressure-fast-fill-18-36",
+  "family": "flat-pressure",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 7, "seconds": 5, "substate": "preinfusion", "limiter": { "value": 9 } },
+      { "name": "Pour", "pump": "pressure", "target": 9, "seconds": 40, "limiter": { "value": 3.5 } }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 45
+  },
+  "puck": {
+    "resistance": 5.35
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "After the 7 mL/s fill command, the pour tracks 9 bar. Inlet and cup flow rise gently through the hold and the shot stops near 36 g.",
+    "unknowableWhen": [
+      "Without valid pressure and inlet readings, tracking and the hydraulic response cannot be established.",
+      "Without scale readings, first sustained beverage and final mass are unknown."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      { "id": "pressure-tracking", "kind": "pressure_tracking", "phase": "pouring", "controlledVariable": "pressure", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [5, 7] } },
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [6.8, 8.1] } },
+      { "id": "weight-stop", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [25, 29.5] } },
+      { "id": "no-choked", "kind": "choked", "expected": "forbidden" },
+      { "id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
+      { "id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden" },
+      { "id": "no-channeling", "kind": "channeling", "expected": "forbidden" }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}

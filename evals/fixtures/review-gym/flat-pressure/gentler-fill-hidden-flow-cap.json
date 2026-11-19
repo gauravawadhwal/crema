@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "id": "flat-pressure-gentler-fill-hidden-flow-cap",
+  "session": "flat-pressure-gentler-fill",
+  "recipe": "flat-pressure-gentler-fill-18-36",
+  "family": "flat-pressure",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 6, "seconds": 5, "substate": "preinfusion", "limiter": { "value": 8.5 } },
+      { "name": "Pour", "pump": "pressure", "target": 9, "seconds": 40 }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 45
+  },
+  "puck": {
+    "resistance": 5.6
+  },
+  "interventions": [
+    {
+      "kind": "flow-cap",
+      "atS": 10,
+      "maxMlS": 1.1
+    }
+  ],
+  "grading": {
+    "consequence": "Near 10 s, inlet flattens near 1.1 mL/s while pressure drops from about 9 bar to below 6.2 bar under the unchanged 9 bar command. Cup delivery slows and the shot still stops near 36 g.",
+    "unknowableWhen": [
+      "The flat inlet and pressure shortfall are observable. The Pour frame has no logged inlet limiter. Pump delivery and puck resistance cannot be isolated under the plateau, so grade the regime and accept abstention on cause.",
+      "Missing scale data removes confirmation of the cup slowdown and yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      { "id": "inlet-plateau", "kind": "inlet_flow_plateau", "phase": "pouring", "controlledVariable": "pressure", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [10, 10.4] } },
+      { "id": "pressure-shortfall", "kind": "pressure_shortfall", "phase": "pouring", "controlledVariable": "pressure", "expected": "required" },
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [7.2, 8.8] } },
+      { "id": "weight-stop", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [37.5, 40.5] } },
+      { "id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden" },
+      { "id": "no-choked", "kind": "choked", "expected": "forbidden" },
+      { "id": "no-channeling", "kind": "channeling", "expected": "forbidden" }
+    ],
+    "figures": [
+      { "id": "pressure_shortfall.frame-2.target", "unit": "bar", "value": 9, "tolerance": 0.1 },
+      { "id": "inlet-plateau", "unit": "ml/s", "value": 1.1, "tolerance": 0.1 }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}
