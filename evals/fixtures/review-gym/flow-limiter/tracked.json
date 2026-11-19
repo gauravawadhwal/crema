@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "flow-limiter-tracked",
+  "session": "synth-long-flow",
+  "recipe": "synth-long-flow-recipe",
+  "family": "allonge",
+  "profile": {
+    "temperatureC": 91.5,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 4, "seconds": 2, "limiter": { "value": 9.4, "range": 0 }, "substate": "preinfusion" },
+      { "name": "Pour", "pump": "flow", "target": 4.5, "seconds": 26, "limiter": { "value": 9.4, "range": 0 } },
+      { "name": "Finish", "pump": "flow", "target": 4.5, "seconds": 37, "limiter": { "value": 9.4, "range": 0 } }
+    ]
+  },
+  "doseG": 19,
+  "stop": {
+    "weightG": 105,
+    "timeS": 65
+  },
+  "puck": {
+    "resistance": 0.66
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "During the two main frames the measured inlet tracks the 4.5 mL/s command and pressure crests around 3 bar, well below the 9.4 bar ceiling. The final frame is reached before the recorded weight stop.",
+    "unknowableWhen": [
+      "Without overlapping valid pressure and inlet readings, the operating regime is uncertain.",
+      "Telemetry does not identify grind, preparation, or a distribution defect as the cause."
+    ],
+    "observations": [
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [6.1, 6.6] } },
+      { "id": "false-cap-entry", "kind": "cap_like_start", "expected": "forbidden" },
+      { "id": "inlet-shortfall", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring", "controlledVariable": "flow" },
+      { "id": "pressure-target-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
+      { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" }
+    ],
+    "acceptCauseAbstention": true,
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}

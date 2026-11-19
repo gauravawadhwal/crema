@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "id": "flow-limiter-capped",
+  "session": "synth-ceiling-flow",
+  "recipe": "synth-ceiling-flow-recipe",
+  "family": "allonge",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 4.5, "seconds": 0.8, "limiter": { "value": 9.6, "range": 0 }, "substate": "preinfusion", "transition": "smooth" },
+      { "name": "Pour", "pump": "flow", "target": 4.5, "seconds": 64.2, "limiter": { "value": 9.6, "range": 0 } }
+    ]
+  },
+  "doseG": 21,
+  "stop": {
+    "weightG": 103.6,
+    "timeS": 65
+  },
+  "puck": {
+    "resistance": 3.75
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "Around 4.6–5.0 s, pressure nears the 9.6 bar ceiling and actual inlet drops below the unchanged 4.5 mL/s command. This is a nominal limiter-controlled response for this synthetic load.",
+    "unknowableWhen": [
+      "Without overlapping valid pressure and inlet readings, the operating regime is uncertain.",
+      "Pressure near the ceiling cannot identify why the puck required that hydraulic load.",
+      "A gap around the first gram can prevent confirmation of beverage onset."
+    ],
+    "observations": [
+      { "id": "cap-entry", "kind": "cap_like_start", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": { "type": "windowed-event", "onsetS": [4.6, 5] } },
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [7.5, 8] } },
+      { "id": "pressure-target-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
+      { "id": "blanket-choke", "kind": "choked", "expected": "forbidden" }
+    ],
+    "figures": [
+      { "id": "pour.inlet-command", "unit": "ml/s", "value": 4.5, "tolerance": 0.05 },
+      { "id": "pour.pressure-ceiling", "unit": "bar", "value": 9.6, "tolerance": 0.05 }
+    ],
+    "acceptCauseAbstention": true,
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}

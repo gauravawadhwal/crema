@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "id": "flow-limiter-restriction",
+  "session": "synth-long-flow",
+  "recipe": "synth-long-flow-recipe",
+  "family": "allonge",
+  "profile": {
+    "temperatureC": 91.5,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 4, "seconds": 2, "limiter": { "value": 9.4, "range": 0 }, "substate": "preinfusion" },
+      { "name": "Pour", "pump": "flow", "target": 4.5, "seconds": 26, "limiter": { "value": 9.4, "range": 0 } },
+      { "name": "Finish", "pump": "flow", "target": 4.5, "seconds": 37, "limiter": { "value": 9.4, "range": 0 } }
+    ]
+  },
+  "doseG": 19,
+  "stop": {
+    "weightG": 105,
+    "timeS": 65
+  },
+  "puck": {
+    "resistance": 0.66
+  },
+  "interventions": [
+    { "kind": "restriction", "factor": 5.75 }
+  ],
+  "grading": {
+    "consequence": "Around 4.4–4.7 s, pressure approaches the 9.4 bar ceiling while inlet falls below the unchanged 4.5 mL/s command. The subsequent pour stays flow-deficient with pressure near the ceiling, unlike its tracked-flow control.",
+    "unknowableWhen": [
+      "Without overlapping valid pressure and inlet readings, the operating regime is uncertain.",
+      "The ceiling constrains the pressure response. The recorded inlet deficit supports the operating regime but cannot establish the source of the load.",
+      "A gap around the first gram can prevent confirmation of beverage onset."
+    ],
+    "observations": [
+      { "id": "cap-entry", "kind": "cap_like_start", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": { "type": "windowed-event", "onsetS": [4.4, 4.7] } },
+      { "id": "pressure-target-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
+      { "id": "blanket-choke", "kind": "choked", "expected": "forbidden" },
+      { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" }
+    ],
+    "figures": [
+      { "id": "pour.inlet-command", "unit": "ml/s", "value": 4.5, "tolerance": 0.05 },
+      { "id": "pour.pressure-ceiling", "unit": "bar", "value": 9.4, "tolerance": 0.05 }
+    ],
+    "acceptCauseAbstention": true,
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}
