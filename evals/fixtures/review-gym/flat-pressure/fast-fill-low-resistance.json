@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "id": "flat-pressure-fast-fill-low-resistance",
+  "session": "flat-pressure-fast-fill",
+  "recipe": "flat-pressure-fast-fill-18-36",
+  "family": "flat-pressure",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 7, "seconds": 5, "substate": "preinfusion", "limiter": { "value": 9 } },
+      { "name": "Pour", "pump": "pressure", "target": 9, "seconds": 40, "limiter": { "value": 3.5 } }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 45
+  },
+  "puck": {
+    "resistance": 5.35
+  },
+  "interventions": [
+    {
+      "kind": "low-resistance",
+      "factor": 0.72
+    }
+  ],
+  "grading": {
+    "consequence": "After wetting, pressure tracks 9 bar with higher inlet and cup flow than the matched control. The first sustained gram and the 36 g stop both occur sooner.",
+    "unknowableWhen": [
+      "Without valid pressure and inlet readings, tracking and the hydraulic response cannot be established.",
+      "Missing scale readings remove cup corroboration. Held pressure with higher inlet supports easier flow. The trace cannot identify a grind change, bypass or channeling as the cause."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      { "id": "pressure-tracking", "kind": "pressure_tracking", "phase": "pouring", "controlledVariable": "pressure", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [5, 7] } },
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.4, 7] } },
+      { "id": "weight-stop", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [18.5, 22.5] } },
+      { "id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
+      { "id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden" },
+      { "id": "no-choked", "kind": "choked", "expected": "forbidden" }
+    ],
+    "supportedOutcomes": [
+      "abstain",
+      "grind-finer"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ]
+  }
+}
