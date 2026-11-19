@@ -1,0 +1,88 @@
+{
+ "profileFamily": "pressure-decline",
+ "pumpMode": "pressure",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "A command-independent authority envelope is 9.0 bar until 16 s, then falls linearly to 6.0 bar at 28 s, after the measured hold; the flat 9.0 bar command stays active while measured pressure falls up to 3.00 bar below it. Measured telemetry is identical across this pair; only the recorded command differs. Why authority fell is unknowable from telemetry, so no tracking-failure cause may be diagnosed.",
+  "observations": [
+   {
+    "id": "measured-pressure-decline",
+    "kind": "measured-pressure-decline",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "pressure",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      16.75,
+      16.75
+     ]
+    }
+   },
+   {
+    "id": "pressure-tracking-failure-diagnosis",
+    "kind": "pressure-tracking-failure-diagnosis",
+    "expected": "forbidden",
+    "controlledVariable": "pressure"
+   },
+   {
+    "id": "authority-cause-identification",
+    "kind": "authority-cause-identification",
+    "expected": "forbidden",
+    "controlledVariable": "pressure"
+   },
+   {
+    "id": "pressure-below-flat-command",
+    "kind": "pressure-below-flat-command",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "pressure",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      17.25,
+      17.25
+     ],
+     "peakS": [
+      28.0,
+      32.0
+     ]
+    }
+   },
+   {
+    "id": "decline-matches-command",
+    "kind": "decline-matches-command",
+    "expected": "forbidden",
+    "controlledVariable": "pressure"
+   }
+  ],
+  "figures": [
+   {
+    "id": "peak-command-gap",
+    "unit": "bar",
+    "value": 3.0,
+    "tolerance": 0.06
+   },
+   {
+    "id": "terminal-pressure",
+    "unit": "bar",
+    "value": 6.0,
+    "tolerance": 0.05
+   },
+   {
+    "id": "measured-decline-magnitude",
+    "unit": "bar",
+    "value": 3.0,
+    "tolerance": 0.08
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

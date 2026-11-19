@@ -1,0 +1,138 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`production evidence against independent labels > a1 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [],
+  "observations": [
+    "flow-tracks-command",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > a2 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [],
+  "observations": [
+    "pressure-limiter-binding",
+    "inlet-below-command",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > b1 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "peak-command-gap",
+  ],
+  "observations": [
+    "measured-pressure-decline",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > b2 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "peak-command-gap",
+  ],
+  "observations": [
+    "measured-pressure-decline",
+    "pressure-below-flat-command",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > c1 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "sampled-flow-under-cap",
+  ],
+  "observations": [
+    "flow-limited-under-pressure-command",
+    "pressure-below-active-command-at-flow-cap",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > c2 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "sampled-flow-under-cap",
+  ],
+  "observations": [
+    "flow-limited-under-pressure-command",
+    "pressure-below-active-command-at-flow-cap",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > d1 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [],
+  "observations": [],
+}
+`;
+
+exports[`production evidence against independent labels > d2 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "last-scale-sample-before-gap",
+    "first-scale-sample-after-gap",
+    "observed-scale-delta-across-gap",
+    "untrusted-terminal-scale-reading",
+  ],
+  "observations": [
+    "scale-dropout",
+    "scale-resumes-after-dropout",
+    "downward-discontinuity-consistent-with-tare-or-cup-change",
+    "terminal-scale-reading-untrusted",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > e1 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "pause-peak-weight-flow",
+    "pause-inlet-volume",
+    "first-cup-time",
+  ],
+  "observations": [
+    "restart-flow-resumed",
+    "first-cup-observed",
+    "pause-drip-carryover",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > e2 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "pause-peak-weight-flow",
+    "pause-inlet-volume",
+    "first-cup-time",
+  ],
+  "observations": [
+    "restart-flow-resumed",
+    "first-cup-observed",
+  ],
+}
+`;
+
+exports[`production evidence against independent labels > f1 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "previous-sample-weight",
+  ],
+  "observations": [],
+}
+`;
+
+exports[`production evidence against independent labels > f2 preserves the documented coverage and tolerances 1`] = `
+{
+  "figures": [
+    "previous-sample-weight",
+  ],
+  "observations": [],
+}
+`;

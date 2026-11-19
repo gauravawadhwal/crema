@@ -1,0 +1,80 @@
+{
+ "profileFamily": "allonge-high-flow",
+ "pumpMode": "flow",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden effective resistance is 0.8 bar per mL/s; inlet holds 4.5 mL/s near 3.60 bar and the 8.6 bar limiter never binds. Expected claims are limited to command tracking and limiter state. The physical origin of the resistance and puck condition are unknowable from telemetry, so channeling, grind, and cup-quality claims are forbidden.",
+  "observations": [
+   {
+    "id": "flow-tracks-command",
+    "kind": "flow-tracks-command",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      7.25,
+      7.25
+     ]
+    }
+   },
+   {
+    "id": "pressure-limiter-binding",
+    "kind": "pressure-limiter-binding",
+    "expected": "forbidden",
+    "controlledVariable": "pressure"
+   },
+   {
+    "id": "inlet-below-command",
+    "kind": "inlet-below-command",
+    "expected": "forbidden",
+    "controlledVariable": "flow"
+   },
+   {
+    "id": "puck-fault-diagnosis",
+    "kind": "puck-fault-diagnosis",
+    "expected": "forbidden"
+   },
+   {
+    "id": "grind-change-prescription",
+    "kind": "grind-change-prescription",
+    "expected": "forbidden"
+   }
+  ],
+  "figures": [
+   {
+    "id": "hold-mean-flow",
+    "unit": "mL/s",
+    "value": 4.5,
+    "tolerance": 0.05
+   },
+   {
+    "id": "hold-mean-pressure",
+    "unit": "bar",
+    "value": 3.6,
+    "tolerance": 0.1
+   },
+   {
+    "id": "hold-flow-deficit",
+    "unit": "mL/s",
+    "value": 0.0,
+    "tolerance": 0.05
+   },
+   {
+    "id": "terminal-weight",
+    "unit": "g",
+    "value": 108.2,
+    "tolerance": 0.5
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

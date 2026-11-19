@@ -1,0 +1,2633 @@
+{
+ "id": "c1",
+ "timestamp": "2031-03-04T08:00:00.000Z",
+ "stopReason": "machineEnded",
+ "workflow": {
+  "profile": {
+   "title": "Profile C",
+   "beverage_type": "espresso",
+   "steps": [
+    {
+     "name": "phase-1",
+     "pump": "pressure",
+     "transition": "fast",
+     "pressure": 8.0,
+     "seconds": 20.0,
+     "temperature": 93.0,
+     "exit": {
+      "type": "pressure",
+      "condition": "over",
+      "value": 6.4
+     },
+     "limiter": {
+      "value": 2.2,
+      "range": 0.0
+     }
+    },
+    {
+     "name": "phase-2",
+     "pump": "flow",
+     "transition": "fast",
+     "flow": 2.4,
+     "seconds": 10.0,
+     "temperature": 93.0
+    },
+    {
+     "name": "phase-3",
+     "pump": "pressure",
+     "transition": "fast",
+     "pressure": 5.5,
+     "seconds": 8.0,
+     "temperature": 93.0
+    }
+   ]
+  },
+  "context": {
+   "beanBatchId": "batch-c",
+   "grinderSetting": "setting-12",
+   "targetDoseWeight": 18.0
+  }
+ },
+ "annotations": {
+  "actualDoseWeight": 18.0,
+  "actualYield": 37.61
+ },
+ "measurements": [
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:00.000Z",
+    "pressure": 0.0,
+    "flow": 0.0,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:00.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 0.0
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:00.250Z",
+    "pressure": 1.001,
+    "flow": 1.748,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:00.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 0.285
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:00.500Z",
+    "pressure": 1.277,
+    "flow": 2.029,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:00.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 0.768
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:00.750Z",
+    "pressure": 1.435,
+    "flow": 2.08,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:00.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 1.283
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:01.000Z",
+    "pressure": 1.573,
+    "flow": 2.094,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:01.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 1.805
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:01.250Z",
+    "pressure": 1.71,
+    "flow": 2.103,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:01.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 2.33
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:01.500Z",
+    "pressure": 1.846,
+    "flow": 2.11,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:01.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 2.857
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:01.750Z",
+    "pressure": 1.982,
+    "flow": 2.115,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:01.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 3.385
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:02.000Z",
+    "pressure": 2.119,
+    "flow": 2.12,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:02.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 3.914
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:02.250Z",
+    "pressure": 2.257,
+    "flow": 2.125,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:02.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 4.445
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:02.500Z",
+    "pressure": 2.394,
+    "flow": 2.129,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:02.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 4.977
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:02.750Z",
+    "pressure": 2.532,
+    "flow": 2.133,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:02.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 5.51
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:03.000Z",
+    "pressure": 2.67,
+    "flow": 2.136,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:03.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 6.043
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:03.250Z",
+    "pressure": 2.808,
+    "flow": 2.139,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:03.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 6.578
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:03.500Z",
+    "pressure": 2.947,
+    "flow": 2.142,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:03.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 7.113
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:03.750Z",
+    "pressure": 3.085,
+    "flow": 2.144,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:03.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 7.648
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:04.000Z",
+    "pressure": 3.224,
+    "flow": 2.146,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:04.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 8.185
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:04.250Z",
+    "pressure": 3.363,
+    "flow": 2.148,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:04.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 8.722
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:04.500Z",
+    "pressure": 3.502,
+    "flow": 2.15,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:04.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 9.259
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:04.750Z",
+    "pressure": 3.641,
+    "flow": 2.152,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:04.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 9.797
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:05.000Z",
+    "pressure": 3.78,
+    "flow": 2.154,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:05.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 10.335
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:05.250Z",
+    "pressure": 3.92,
+    "flow": 2.156,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:05.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 10.874
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:05.500Z",
+    "pressure": 4.059,
+    "flow": 2.157,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:05.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 11.413
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:05.750Z",
+    "pressure": 4.199,
+    "flow": 2.158,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:05.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 11.952
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:06.000Z",
+    "pressure": 4.339,
+    "flow": 2.16,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:06.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 12.492
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:06.250Z",
+    "pressure": 4.478,
+    "flow": 2.161,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:06.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 13.032
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:06.500Z",
+    "pressure": 4.618,
+    "flow": 2.162,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:06.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 13.572
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:06.750Z",
+    "pressure": 4.758,
+    "flow": 2.163,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:06.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 14.113
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:07.000Z",
+    "pressure": 4.898,
+    "flow": 2.164,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:07.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 14.654
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:07.250Z",
+    "pressure": 5.038,
+    "flow": 2.165,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:07.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 15.195
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:07.500Z",
+    "pressure": 5.178,
+    "flow": 2.166,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:07.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 15.737
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:07.750Z",
+    "pressure": 5.319,
+    "flow": 2.167,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:07.750Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 16.278
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:08.000Z",
+    "pressure": 5.459,
+    "flow": 2.168,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:08.000Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 16.82
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:08.250Z",
+    "pressure": 5.599,
+    "flow": 2.168,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:08.250Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 17.362
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:08.500Z",
+    "pressure": 5.74,
+    "flow": 2.169,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:08.500Z",
+    "weight": 0.0,
+    "weightFlow": 0.0
+   },
+   "volume": 17.904
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:08.750Z",
+    "pressure": 5.88,
+    "flow": 2.17,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:08.750Z",
+    "weight": 0.05,
+    "weightFlow": 0.365
+   },
+   "volume": 18.447
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:09.000Z",
+    "pressure": 6.02,
+    "flow": 2.171,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:09.000Z",
+    "weight": 0.23,
+    "weightFlow": 0.834
+   },
+   "volume": 18.989
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:09.250Z",
+    "pressure": 6.161,
+    "flow": 2.171,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:09.250Z",
+    "weight": 0.5,
+    "weightFlow": 1.181
+   },
+   "volume": 19.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:09.500Z",
+    "pressure": 6.301,
+    "flow": 2.172,
+    "mixTemperature": 93.0,
+    "targetPressure": 8.0,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 0,
+    "state": {
+     "substate": "preinfusion"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:09.500Z",
+    "weight": 0.84,
+    "weightFlow": 1.439
+   },
+   "volume": 20.075
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:09.750Z",
+    "pressure": 6.666,
+    "flow": 2.248,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:09.750Z",
+    "weight": 1.23,
+    "weightFlow": 1.63
+   },
+   "volume": 20.621
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:10.000Z",
+    "pressure": 7.12,
+    "flow": 2.347,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:10.000Z",
+    "weight": 1.67,
+    "weightFlow": 1.801
+   },
+   "volume": 21.199
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:10.250Z",
+    "pressure": 7.339,
+    "flow": 2.365,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:10.250Z",
+    "weight": 2.15,
+    "weightFlow": 1.945
+   },
+   "volume": 21.789
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:10.500Z",
+    "pressure": 7.515,
+    "flow": 2.369,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:10.500Z",
+    "weight": 2.65,
+    "weightFlow": 2.055
+   },
+   "volume": 22.38
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:10.750Z",
+    "pressure": 7.684,
+    "flow": 2.37,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:10.750Z",
+    "weight": 3.18,
+    "weightFlow": 2.136
+   },
+   "volume": 22.973
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:11.000Z",
+    "pressure": 7.852,
+    "flow": 2.371,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:11.000Z",
+    "weight": 3.73,
+    "weightFlow": 2.197
+   },
+   "volume": 23.565
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:11.250Z",
+    "pressure": 8.019,
+    "flow": 2.371,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:11.250Z",
+    "weight": 4.28,
+    "weightFlow": 2.242
+   },
+   "volume": 24.158
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:11.500Z",
+    "pressure": 8.187,
+    "flow": 2.372,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:11.500Z",
+    "weight": 4.85,
+    "weightFlow": 2.276
+   },
+   "volume": 24.751
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:11.750Z",
+    "pressure": 8.354,
+    "flow": 2.372,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:11.750Z",
+    "weight": 5.42,
+    "weightFlow": 2.301
+   },
+   "volume": 25.344
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:12.000Z",
+    "pressure": 8.522,
+    "flow": 2.373,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:12.000Z",
+    "weight": 6.0,
+    "weightFlow": 2.319
+   },
+   "volume": 25.937
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:12.250Z",
+    "pressure": 8.618,
+    "flow": 2.394,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:12.250Z",
+    "weight": 6.58,
+    "weightFlow": 2.335
+   },
+   "volume": 26.533
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:12.500Z",
+    "pressure": 8.636,
+    "flow": 2.399,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:12.500Z",
+    "weight": 7.17,
+    "weightFlow": 2.351
+   },
+   "volume": 27.133
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:12.750Z",
+    "pressure": 8.639,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:12.750Z",
+    "weight": 7.76,
+    "weightFlow": 2.364
+   },
+   "volume": 27.732
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:13.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:13.000Z",
+    "weight": 8.35,
+    "weightFlow": 2.373
+   },
+   "volume": 28.332
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:13.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:13.250Z",
+    "weight": 8.95,
+    "weightFlow": 2.38
+   },
+   "volume": 28.932
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:13.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:13.500Z",
+    "weight": 9.54,
+    "weightFlow": 2.385
+   },
+   "volume": 29.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:13.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:13.750Z",
+    "weight": 10.14,
+    "weightFlow": 2.389
+   },
+   "volume": 30.132
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:14.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:14.000Z",
+    "weight": 10.74,
+    "weightFlow": 2.392
+   },
+   "volume": 30.732
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:14.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:14.250Z",
+    "weight": 11.34,
+    "weightFlow": 2.394
+   },
+   "volume": 31.332
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:14.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:14.500Z",
+    "weight": 11.94,
+    "weightFlow": 2.396
+   },
+   "volume": 31.932
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:14.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:14.750Z",
+    "weight": 12.54,
+    "weightFlow": 2.397
+   },
+   "volume": 32.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:15.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:15.000Z",
+    "weight": 13.13,
+    "weightFlow": 2.398
+   },
+   "volume": 33.132
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:15.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:15.250Z",
+    "weight": 13.73,
+    "weightFlow": 2.398
+   },
+   "volume": 33.732
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:15.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:15.500Z",
+    "weight": 14.33,
+    "weightFlow": 2.399
+   },
+   "volume": 34.332
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:15.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:15.750Z",
+    "weight": 14.93,
+    "weightFlow": 2.399
+   },
+   "volume": 34.932
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:16.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:16.000Z",
+    "weight": 15.53,
+    "weightFlow": 2.399
+   },
+   "volume": 35.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:16.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:16.250Z",
+    "weight": 16.13,
+    "weightFlow": 2.399
+   },
+   "volume": 36.132
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:16.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:16.500Z",
+    "weight": 16.73,
+    "weightFlow": 2.4
+   },
+   "volume": 36.732
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:16.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:16.750Z",
+    "weight": 17.33,
+    "weightFlow": 2.4
+   },
+   "volume": 37.332
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:17.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:17.000Z",
+    "weight": 17.93,
+    "weightFlow": 2.4
+   },
+   "volume": 37.932
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:17.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:17.250Z",
+    "weight": 18.53,
+    "weightFlow": 2.4
+   },
+   "volume": 38.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:17.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:17.500Z",
+    "weight": 19.13,
+    "weightFlow": 2.4
+   },
+   "volume": 39.132
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:17.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:17.750Z",
+    "weight": 19.73,
+    "weightFlow": 2.4
+   },
+   "volume": 39.732
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:18.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:18.000Z",
+    "weight": 20.33,
+    "weightFlow": 2.4
+   },
+   "volume": 40.332
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:18.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:18.250Z",
+    "weight": 20.93,
+    "weightFlow": 2.4
+   },
+   "volume": 40.932
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:18.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:18.500Z",
+    "weight": 21.53,
+    "weightFlow": 2.4
+   },
+   "volume": 41.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:18.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:18.750Z",
+    "weight": 22.13,
+    "weightFlow": 2.4
+   },
+   "volume": 42.132
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:19.000Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:19.000Z",
+    "weight": 22.73,
+    "weightFlow": 2.4
+   },
+   "volume": 42.732
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:19.250Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:19.250Z",
+    "weight": 23.33,
+    "weightFlow": 2.4
+   },
+   "volume": 43.332
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:19.500Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": null,
+    "targetFlow": 2.4,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 1,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:19.500Z",
+    "weight": 23.93,
+    "weightFlow": 2.4
+   },
+   "volume": 43.932
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:19.750Z",
+    "pressure": 8.64,
+    "flow": 2.4,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:19.750Z",
+    "weight": 24.53,
+    "weightFlow": 2.4
+   },
+   "volume": 44.532
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:20.000Z",
+    "pressure": 6.076,
+    "flow": 1.688,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:20.000Z",
+    "weight": 25.12,
+    "weightFlow": 2.312
+   },
+   "volume": 45.018
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:20.250Z",
+    "pressure": 5.606,
+    "flow": 1.557,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:20.250Z",
+    "weight": 25.67,
+    "weightFlow": 2.136
+   },
+   "volume": 45.419
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:20.500Z",
+    "pressure": 5.519,
+    "flow": 1.533,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:20.500Z",
+    "weight": 26.17,
+    "weightFlow": 1.983
+   },
+   "volume": 45.804
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:20.750Z",
+    "pressure": 5.504,
+    "flow": 1.529,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:20.750Z",
+    "weight": 26.65,
+    "weightFlow": 1.866
+   },
+   "volume": 46.187
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:21.000Z",
+    "pressure": 5.501,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:21.000Z",
+    "weight": 27.1,
+    "weightFlow": 1.778
+   },
+   "volume": 46.569
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:21.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:21.250Z",
+    "weight": 27.53,
+    "weightFlow": 1.713
+   },
+   "volume": 46.951
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:21.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:21.500Z",
+    "weight": 27.95,
+    "weightFlow": 1.665
+   },
+   "volume": 47.333
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:21.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:21.750Z",
+    "weight": 28.36,
+    "weightFlow": 1.629
+   },
+   "volume": 47.714
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:22.000Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:22.000Z",
+    "weight": 28.76,
+    "weightFlow": 1.603
+   },
+   "volume": 48.096
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:22.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:22.250Z",
+    "weight": 29.16,
+    "weightFlow": 1.583
+   },
+   "volume": 48.478
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:22.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:22.500Z",
+    "weight": 29.55,
+    "weightFlow": 1.569
+   },
+   "volume": 48.86
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:22.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:22.750Z",
+    "weight": 29.95,
+    "weightFlow": 1.558
+   },
+   "volume": 49.242
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:23.000Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:23.000Z",
+    "weight": 30.33,
+    "weightFlow": 1.55
+   },
+   "volume": 49.624
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:23.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:23.250Z",
+    "weight": 30.72,
+    "weightFlow": 1.544
+   },
+   "volume": 50.006
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:23.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:23.500Z",
+    "weight": 31.11,
+    "weightFlow": 1.54
+   },
+   "volume": 50.388
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:23.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:23.750Z",
+    "weight": 31.49,
+    "weightFlow": 1.537
+   },
+   "volume": 50.77
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:24.000Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:24.000Z",
+    "weight": 31.87,
+    "weightFlow": 1.535
+   },
+   "volume": 51.152
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:24.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:24.250Z",
+    "weight": 32.26,
+    "weightFlow": 1.533
+   },
+   "volume": 51.534
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:24.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:24.500Z",
+    "weight": 32.64,
+    "weightFlow": 1.531
+   },
+   "volume": 51.916
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:24.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:24.750Z",
+    "weight": 33.02,
+    "weightFlow": 1.531
+   },
+   "volume": 52.298
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:25.000Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:25.000Z",
+    "weight": 33.41,
+    "weightFlow": 1.53
+   },
+   "volume": 52.68
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:25.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:25.250Z",
+    "weight": 33.79,
+    "weightFlow": 1.529
+   },
+   "volume": 53.062
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:25.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:25.500Z",
+    "weight": 34.17,
+    "weightFlow": 1.529
+   },
+   "volume": 53.444
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:25.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:25.750Z",
+    "weight": 34.55,
+    "weightFlow": 1.529
+   },
+   "volume": 53.826
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:26.000Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:26.000Z",
+    "weight": 34.93,
+    "weightFlow": 1.528
+   },
+   "volume": 54.208
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:26.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:26.250Z",
+    "weight": 35.32,
+    "weightFlow": 1.528
+   },
+   "volume": 54.589
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:26.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:26.500Z",
+    "weight": 35.7,
+    "weightFlow": 1.528
+   },
+   "volume": 54.971
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:26.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:26.750Z",
+    "weight": 36.08,
+    "weightFlow": 1.528
+   },
+   "volume": 55.353
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:27.000Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:27.000Z",
+    "weight": 36.46,
+    "weightFlow": 1.528
+   },
+   "volume": 55.735
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:27.250Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:27.250Z",
+    "weight": 36.84,
+    "weightFlow": 1.528
+   },
+   "volume": 56.117
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:27.500Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:27.500Z",
+    "weight": 37.23,
+    "weightFlow": 1.528
+   },
+   "volume": 56.499
+  },
+  {
+   "machine": {
+    "timestamp": "2031-03-04T08:00:27.750Z",
+    "pressure": 5.5,
+    "flow": 1.528,
+    "mixTemperature": 93.0,
+    "targetPressure": 5.5,
+    "targetFlow": null,
+    "targetMixTemperature": 93.0,
+    "groupTemperature": 92.0,
+    "targetGroupTemperature": 92.0,
+    "profileFrame": 2,
+    "state": {
+     "substate": "pouring"
+    }
+   },
+   "scale": {
+    "timestamp": "2031-03-04T08:00:27.750Z",
+    "weight": 37.61,
+    "weightFlow": 1.528
+   },
+   "volume": 56.881
+  }
+ ]
+}

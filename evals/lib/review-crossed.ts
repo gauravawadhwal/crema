@@ -49,8 +49,9 @@ export async function mockCurveStage(input: ReviewInput) {
   const provider = new RecordingProvider(new MockProvider());
   const { curve } = await reviewShot(new ProviderChain([provider]), input);
   const call = provider.calls.find(c => c.schemaName === "CurveNarrative");
-  if (!call) throw new Error("Fixture did not exercise the narrative provider");
-  return { input: { systemHash: call.systemHash, prompt: call.prompt }, output: curve };
+  // A short recording can take the rules path. Crossing taste must leave
+  // that routing decision invariant as well as any prompt that was sent.
+  return { input: call ? { systemHash: call.systemHash, prompt: call.prompt } : null, output: curve };
 }
 
 export async function assertCurveStageInvariant(input: ReviewInput, stage: (input: ReviewInput) => unknown = curveStage) {

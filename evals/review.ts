@@ -12,6 +12,7 @@ import { checkReviewHoldout, freezeReviewHoldout, loadReviewDataset, selectRevie
 import { REVIEW_VARIANTS, VARIANT_NAMES, runReviewAblation } from "./lib/review-ablation.js";
 import { assertCurveStageInvariant, mockCurveStage } from "./lib/review-crossed.js";
 import { loadLocalReviewShots } from "./lib/review-local-replay.js";
+import { loadIndependentReviewDataset } from "./lib/review-independent.js";
 import { reviewAblationMarkdown, type ReviewAblationReport } from "./lib/review-ablation-report.js";
 
 const { values: args, positionals } = parseArgs({
@@ -30,8 +31,8 @@ const { values: args, positionals } = parseArgs({
 });
 
 const usage = `Usage: npx tsx evals/review.ts <command>
-  cross  [--fixture <legacy synthetic fixture>] [--provider rules|mock]
-  run    --dataset <file> [--split dev|holdout] [--purpose tune|evaluate]
+  cross  [--fixture <legacy synthetic fixture> | --dataset <file|independent>] [--provider rules|mock]
+  run    --dataset <file|independent> [--split dev|holdout] [--purpose tune|evaluate]
          [--variant <name>] [--provider rules|mock] [--out <dir>] [--manifest <file>]
   freeze --dataset <file> --manifest <new file>
   check  --dataset <file> --manifest <frozen file>
@@ -40,6 +41,9 @@ const usage = `Usage: npx tsx evals/review.ts <command>
 const variants = [...new Set(args.variant?.map((name) => z.enum(VARIANT_NAMES).parse(name)) ?? VARIANT_NAMES)];
 const providerName = z.enum(["rules", "mock"]).parse(args.provider ?? "rules");
 const provider = providerName === "mock" ? new MockProvider() : undefined;
+const loadDataset = (name: string) => name === "independent"
+  ? loadIndependentReviewDataset()
+  : loadReviewDataset(JSON.parse(readFileSync(name, "utf8")));
 
 async function main() {
   if (args.help || positionals.length !== 1) {
@@ -48,13 +52,22 @@ async function main() {
   }
   const command = z.enum(["cross", "run", "freeze", "check", "replay"]).parse(positionals[0]);
   if (command === "cross") {
-    const fixture = z.enum(REVIEW_FIXTURES).parse(args.fixture ?? "history-grind-progress");
-    const input = reviewFixture(fixture);
-    await assertCurveStageInvariant(input);
-    console.log(`Curve stage invariant across crossed taste inputs for ${fixture}`);
-    if (provider) {
-      await assertCurveStageInvariant(input, mockCurveStage);
-      console.log("Mock curve narrative prompt and output are byte-identical");
+    if (args.dataset && args.fixture) throw new Error("Specify either --dataset or --fixture");
+    const legacyFixture = () => {
+      const id = z.enum(REVIEW_FIXTURES).parse(args.fixture ?? "history-grind-progress");
+      return [{ id, input: reviewFixture(id) }];
+    };
+    const cases = args.dataset ? loadDataset(args.dataset).cases.filter((c) => c.split === "dev") : legacyFixture();
+    if (!cases.length) throw new Error("No dev cases to cross");
+    for (const { id, input } of cases) {
+      try {
+        await assertCurveStageInvariant(input);
+        if (provider) await assertCurveStageInvariant(input, mockCurveStage);
+      } catch (error) {
+        throw new Error(`Crossed taste check failed for ${id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      console.log(`Curve stage invariant across crossed taste inputs for ${id}`);
+      if (provider) console.log("Mock curve output and any narrative prompt are byte-identical");
     }
     return 0;
   }
@@ -69,8 +82,8 @@ async function main() {
     return 0;
   }
 
-  if (!args.dataset) throw new Error("Specify --dataset <file>");
-  const dataset = loadReviewDataset(JSON.parse(readFileSync(args.dataset, "utf8")));
+  if (!args.dataset) throw new Error("Specify --dataset <file|independent>");
+  const dataset = loadDataset(args.dataset);
   if (command === "freeze" || command === "check") {
     if (!args.manifest) throw new Error("Specify --manifest <file>");
     const manifest = command === "freeze" ? freezeReviewHoldout(dataset, args.manifest) : checkReviewHoldout(dataset, args.manifest);

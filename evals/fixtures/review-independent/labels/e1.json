@@ -1,0 +1,121 @@
+{
+ "profileFamily": "bloom-restart",
+ "pumpMode": "flow",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden retained capacity is 12 mL with unchanged commands and timing; previously stored water drains 6.29 g into the cup during the zero-flow pause. Drips are stored-water release, not an error. Where water is held and why its release differs are unknowable from telemetry.",
+  "observations": [
+   {
+    "id": "zero-flow-pause",
+    "kind": "zero-flow-pause",
+    "expected": "required",
+    "phase": "preinfusion",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      8.0,
+      8.0
+     ]
+    }
+   },
+   {
+    "id": "restart-flow-resumed",
+    "kind": "restart-flow-resumed",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      18.5,
+      18.5
+     ]
+    }
+   },
+   {
+    "id": "first-cup-observed",
+    "kind": "first-cup-observed",
+    "expected": "required",
+    "phase": "preinfusion",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      5.0,
+      5.0
+     ]
+    }
+   },
+   {
+    "id": "drip-as-fault",
+    "kind": "drip-as-fault",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   },
+   {
+    "id": "puck-fault-diagnosis",
+    "kind": "puck-fault-diagnosis",
+    "expected": "forbidden"
+   },
+   {
+    "id": "pause-drip-carryover",
+    "kind": "pause-drip-carryover",
+    "expected": "required",
+    "phase": "preinfusion",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "windowed-event",
+     "onsetS": [
+      8.0,
+      8.0
+     ],
+     "peakS": [
+      8.0,
+      8.0
+     ]
+    }
+   }
+  ],
+  "figures": [
+   {
+    "id": "pause-cup-gain",
+    "unit": "g",
+    "value": 6.287,
+    "tolerance": 0.2
+   },
+   {
+    "id": "pause-peak-weight-flow",
+    "unit": "g/s",
+    "value": 1.969,
+    "tolerance": 0.15
+   },
+   {
+    "id": "pause-inlet-volume",
+    "unit": "mL",
+    "value": 0.0,
+    "tolerance": 0.01
+   },
+   {
+    "id": "first-cup-time",
+    "unit": "s",
+    "value": 5.0,
+    "tolerance": 0.25
+   },
+   {
+    "id": "terminal-weight",
+    "unit": "g",
+    "value": 42.815,
+    "tolerance": 0.5
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

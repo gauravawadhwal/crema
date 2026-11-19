@@ -1,0 +1,69 @@
+{
+ "profileFamily": "classic-pressure-hold",
+ "pumpMode": "pressure",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden intervention: none. The scale reports continuously across the whole shot, so no scale event onset exists. Absolute calibration requires an external reference.",
+  "observations": [
+   {
+    "id": "scale-continuous-whole-shot",
+    "kind": "scale-continuous-whole-shot",
+    "expected": "required",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "windowed-event",
+     "onsetS": [
+      0.0,
+      0.0
+     ]
+    }
+   },
+   {
+    "id": "scale-dropout-reported",
+    "kind": "scale-dropout-reported",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   },
+   {
+    "id": "downward-scale-discontinuity-reported",
+    "kind": "downward-scale-discontinuity-reported",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   }
+  ],
+  "figures": [
+   {
+    "id": "scale-coverage-start",
+    "unit": "s",
+    "value": 0.0,
+    "tolerance": 0.25
+   },
+   {
+    "id": "scale-coverage-end",
+    "unit": "s",
+    "value": 30.0,
+    "tolerance": 0.25
+   },
+   {
+    "id": "scale-null-samples",
+    "unit": "samples",
+    "value": 0,
+    "tolerance": 0
+   },
+   {
+    "id": "terminal-scale-indication",
+    "unit": "g",
+    "value": 49.58,
+    "tolerance": 0.05
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

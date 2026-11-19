@@ -192,6 +192,27 @@ closely related shots by session and recipe. Cases that share either group must
 stay in the same split, including chains linked by both kinds of group. The
 loader rejects crossed groups and repeated case IDs.
 
+### Independent synthetic recordings
+
+The `independent` dataset replays 12 independently authored Decaid
+recordings from [six matched pairs](fixtures/review-independent/design.md).
+Both arms of each public pair are in the dev split. The runner uses the Decaid
+recording mapper and validates the sidecar labels as synthetic injected truth.
+
+```sh
+proof=$(mktemp -d)
+npx tsx evals/review.ts cross --dataset independent --provider rules
+npx tsx evals/review.ts cross --dataset independent --provider mock
+npx tsx evals/review.ts run --dataset independent --provider rules --out "$proof"
+npx tsx evals/review.ts run --dataset independent --provider mock --out "$proof"
+```
+
+Mock crossing checks that the curve output, any narrative prompt and the
+decision to call the narrative provider stay invariant. The short `f2`
+recording takes the rules path. The [fixture notes](fixtures/review-independent/README.md)
+cover regeneration, and the [design report](fixtures/review-independent/design.md#production-evidence)
+records the baseline coverage gaps.
+
 ### Seeded synthetic shot gym
 
 ```sh

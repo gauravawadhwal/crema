@@ -1,0 +1,142 @@
+{
+ "profileFamily": "adaptive-limiter-handoff",
+ "pumpMode": "mixed",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden intervention: none; the profile runs to completion. Frame 1 commands 8.0 bar with a 2.2 mL/s limiter and a conditional exit above 6.4 bar (20 s maximum), then 2.4 mL/s for 10 s, then 5.5 bar for 8 s. Expected consequence: pressure stays short of command at the flow cap, and the first flow-mode sample follows a sample pair bracketing 6.4 bar. Not inferable without device events: the exact crossing time, the exact cause of the handoff, or the motive of any API stop; a terminal early stop does not establish a puck fault. If pressure, flow or frame channels are absent, the corresponding limiter, handoff and frame-completion claims are unsupported.",
+  "observations": [
+   {
+    "id": "flow-limited-under-pressure-command",
+    "kind": "flow-limited-under-pressure-command",
+    "expected": "required",
+    "phase": "preinfusion",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "windowed-event",
+     "onsetS": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "id": "pressure-below-active-command-at-flow-cap",
+    "kind": "pressure-below-active-command-at-flow-cap",
+    "expected": "required",
+    "phase": "preinfusion",
+    "controlledVariable": "pressure",
+    "timing": {
+     "type": "windowed-event",
+     "onsetS": [
+      0.5,
+      0.5
+     ]
+    }
+   },
+   {
+    "id": "flow-mode-handoff-bracket-consistent-with-configured-threshold",
+    "kind": "flow-mode-handoff-bracket-consistent-with-configured-threshold",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "pressure",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      9.5,
+      9.75
+     ]
+    }
+   },
+   {
+    "id": "exact-threshold-crossing-time-asserted",
+    "kind": "exact-threshold-crossing-time-asserted",
+    "expected": "forbidden",
+    "controlledVariable": "pressure"
+   },
+   {
+    "id": "exact-handoff-cause-asserted",
+    "kind": "exact-handoff-cause-asserted",
+    "expected": "forbidden",
+    "controlledVariable": "pressure"
+   },
+   {
+    "id": "final-frame-completed",
+    "kind": "final-frame-completed",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "time",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      27.75,
+      27.75
+     ]
+    }
+   },
+   {
+    "id": "early-stop-reported",
+    "kind": "early-stop-reported",
+    "expected": "forbidden",
+    "controlledVariable": "time"
+   }
+  ],
+  "figures": [
+   {
+    "id": "configured-exit-threshold",
+    "unit": "bar",
+    "value": 6.4,
+    "tolerance": 0.05
+   },
+   {
+    "id": "handoff-bracket-lower-pressure",
+    "unit": "bar",
+    "value": 6.3,
+    "tolerance": 0.15
+   },
+   {
+    "id": "handoff-bracket-upper-pressure",
+    "unit": "bar",
+    "value": 6.67,
+    "tolerance": 0.15
+   },
+   {
+    "id": "handoff-bracket-lower-time",
+    "unit": "s",
+    "value": 9.5,
+    "tolerance": 0.25
+   },
+   {
+    "id": "handoff-bracket-upper-time",
+    "unit": "s",
+    "value": 9.75,
+    "tolerance": 0.25
+   },
+   {
+    "id": "sampled-flow-under-cap",
+    "unit": "mL/s",
+    "value": 2.14,
+    "tolerance": 0.1
+   },
+   {
+    "id": "last-frame-reached",
+    "unit": "frame",
+    "value": 2,
+    "tolerance": 0
+   },
+   {
+    "id": "stop-time",
+    "unit": "s",
+    "value": 27.75,
+    "tolerance": 0.25
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}
