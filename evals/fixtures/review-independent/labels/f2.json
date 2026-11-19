@@ -1,0 +1,101 @@
+{
+ "profileFamily": "turbo-weight-stop",
+ "pumpMode": "pressure",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "The only injected change is a 24 g target. Reported weight moves from 23.93 g to 24.87 g at 9.25 s, so the first sampled crossing stops the shot; the stop truncates the plan before the planned final frame. The exact crossing between samples and any post-stop drip are unknowable from telemetry, and the short time is not a fault.",
+  "observations": [
+   {
+    "id": "target-weight-stop",
+    "kind": "target-weight-stop",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      9.25,
+      9.25
+     ]
+    }
+   },
+   {
+    "id": "generic-fast-shot-fault",
+    "kind": "generic-fast-shot-fault",
+    "expected": "forbidden",
+    "controlledVariable": "time"
+   },
+   {
+    "id": "puck-fault-diagnosis",
+    "kind": "puck-fault-diagnosis",
+    "expected": "forbidden"
+   },
+   {
+    "id": "target-truncates-plan",
+    "kind": "target-truncates-plan",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "time",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      9.25,
+      9.25
+     ]
+    }
+   },
+   {
+    "id": "planned-final-phase-reached",
+    "kind": "planned-final-phase-reached",
+    "expected": "forbidden",
+    "controlledVariable": "time"
+   }
+  ],
+  "figures": [
+   {
+    "id": "target-weight",
+    "unit": "g",
+    "value": 24.0,
+    "tolerance": 0.001
+   },
+   {
+    "id": "previous-sample-weight",
+    "unit": "g",
+    "value": 23.93,
+    "tolerance": 0.02
+   },
+   {
+    "id": "terminal-weight",
+    "unit": "g",
+    "value": 24.87,
+    "tolerance": 0.02
+   },
+   {
+    "id": "target-overshoot",
+    "unit": "g",
+    "value": 0.87,
+    "tolerance": 0.02
+   },
+   {
+    "id": "terminal-frame",
+    "unit": "frame",
+    "value": 1,
+    "tolerance": 0
+   },
+   {
+    "id": "terminal-time",
+    "unit": "s",
+    "value": 9.25,
+    "tolerance": 0.25
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

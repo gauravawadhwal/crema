@@ -1,0 +1,109 @@
+{
+ "profileFamily": "bloom-restart",
+ "pumpMode": "flow",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden retained capacity is 30 mL with unchanged commands and timing; no cup mass is added during the zero-flow pause and first cup mass appears after restart. Drips are stored-water release, not an error. Where water is held and why its release differs are unknowable from telemetry.",
+  "observations": [
+   {
+    "id": "zero-flow-pause",
+    "kind": "zero-flow-pause",
+    "expected": "required",
+    "phase": "preinfusion",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      8.0,
+      8.0
+     ]
+    }
+   },
+   {
+    "id": "restart-flow-resumed",
+    "kind": "restart-flow-resumed",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      18.5,
+      18.5
+     ]
+    }
+   },
+   {
+    "id": "first-cup-observed",
+    "kind": "first-cup-observed",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      22.0,
+      22.0
+     ]
+    }
+   },
+   {
+    "id": "drip-as-fault",
+    "kind": "drip-as-fault",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   },
+   {
+    "id": "puck-fault-diagnosis",
+    "kind": "puck-fault-diagnosis",
+    "expected": "forbidden"
+   },
+   {
+    "id": "pause-drip-carryover",
+    "kind": "pause-drip-carryover",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   }
+  ],
+  "figures": [
+   {
+    "id": "pause-cup-gain",
+    "unit": "g",
+    "value": 0.0,
+    "tolerance": 0.2
+   },
+   {
+    "id": "pause-peak-weight-flow",
+    "unit": "g/s",
+    "value": 0.0,
+    "tolerance": 0.15
+   },
+   {
+    "id": "pause-inlet-volume",
+    "unit": "mL",
+    "value": 0.0,
+    "tolerance": 0.01
+   },
+   {
+    "id": "first-cup-time",
+    "unit": "s",
+    "value": 22.0,
+    "tolerance": 0.25
+   },
+   {
+    "id": "terminal-weight",
+    "unit": "g",
+    "value": 24.872,
+    "tolerance": 0.5
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

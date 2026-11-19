@@ -1,0 +1,88 @@
+{
+ "profileFamily": "allonge-high-flow",
+ "pumpMode": "flow",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden effective resistance is 2.6 bar per mL/s; pressure holds near 8.60 bar at the limiter while inlet settles near 3.31 mL/s under a 4.5 mL/s command. Expected claims are limited to command tracking and limiter state. The physical origin of the resistance and puck condition are unknowable from telemetry, so channeling, grind, and cup-quality claims are forbidden.",
+  "observations": [
+   {
+    "id": "pressure-limiter-binding",
+    "kind": "pressure-limiter-binding",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "pressure",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      5.25,
+      5.25
+     ]
+    }
+   },
+   {
+    "id": "inlet-below-command",
+    "kind": "inlet-below-command",
+    "expected": "required",
+    "phase": "pouring",
+    "controlledVariable": "flow",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      5.75,
+      5.75
+     ]
+    }
+   },
+   {
+    "id": "flow-tracks-command",
+    "kind": "flow-tracks-command",
+    "expected": "forbidden",
+    "controlledVariable": "flow"
+   },
+   {
+    "id": "puck-fault-diagnosis",
+    "kind": "puck-fault-diagnosis",
+    "expected": "forbidden"
+   },
+   {
+    "id": "grind-change-prescription",
+    "kind": "grind-change-prescription",
+    "expected": "forbidden"
+   }
+  ],
+  "figures": [
+   {
+    "id": "hold-mean-flow",
+    "unit": "mL/s",
+    "value": 3.308,
+    "tolerance": 0.05
+   },
+   {
+    "id": "hold-mean-pressure",
+    "unit": "bar",
+    "value": 8.6,
+    "tolerance": 0.1
+   },
+   {
+    "id": "hold-flow-deficit",
+    "unit": "mL/s",
+    "value": 1.192,
+    "tolerance": 0.05
+   },
+   {
+    "id": "terminal-weight",
+    "unit": "g",
+    "value": 80.559,
+    "tolerance": 0.5
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}

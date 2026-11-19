@@ -1,0 +1,126 @@
+{
+ "profileFamily": "classic-pressure-hold",
+ "pumpMode": "pressure",
+ "labels": {
+  "source": "synthetic-injected",
+  "injection": "Hidden intervention: one scale reset sequence at 12.10 s with a persistent 11.2101 g downward offset; scale readings are null from 12.25 s to 14.75 s and resume at 15.00 s. Machine behaviour and true cup mass match the clean arm. Expected consequence: a dropout followed by a downward discontinuity consistent with a tare or cup change. Not inferable from the trace alone: a firmware reset, the offset size, cup dynamics across the gap, or the true terminal yield.",
+  "observations": [
+   {
+    "id": "scale-dropout",
+    "kind": "scale-dropout",
+    "expected": "required",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      12.25,
+      12.25
+     ]
+    }
+   },
+   {
+    "id": "scale-resumes-after-dropout",
+    "kind": "scale-resumes-after-dropout",
+    "expected": "required",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      15.0,
+      15.0
+     ]
+    }
+   },
+   {
+    "id": "downward-discontinuity-consistent-with-tare-or-cup-change",
+    "kind": "downward-discontinuity-consistent-with-tare-or-cup-change",
+    "expected": "required",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      15.0,
+      15.0
+     ]
+    }
+   },
+   {
+    "id": "terminal-scale-reading-untrusted",
+    "kind": "terminal-scale-reading-untrusted",
+    "expected": "required",
+    "controlledVariable": "yield",
+    "timing": {
+     "type": "raw-landmark",
+     "onsetS": [
+      30.0,
+      30.0
+     ]
+    }
+   },
+   {
+    "id": "firmware-reset-concluded",
+    "kind": "firmware-reset-concluded",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   },
+   {
+    "id": "exact-offset-size-asserted",
+    "kind": "exact-offset-size-asserted",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   },
+   {
+    "id": "cup-dynamics-across-gap-asserted",
+    "kind": "cup-dynamics-across-gap-asserted",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   },
+   {
+    "id": "true-terminal-yield-asserted",
+    "kind": "true-terminal-yield-asserted",
+    "expected": "forbidden",
+    "controlledVariable": "yield"
+   }
+  ],
+  "figures": [
+   {
+    "id": "last-scale-sample-before-gap",
+    "unit": "s",
+    "value": 12.0,
+    "tolerance": 0.25
+   },
+   {
+    "id": "first-scale-sample-after-gap",
+    "unit": "s",
+    "value": 15.0,
+    "tolerance": 0.25
+   },
+   {
+    "id": "scale-null-samples",
+    "unit": "samples",
+    "value": 11,
+    "tolerance": 0
+   },
+   {
+    "id": "observed-scale-delta-across-gap",
+    "unit": "g",
+    "value": -4.76,
+    "tolerance": 0.02
+   },
+   {
+    "id": "untrusted-terminal-scale-reading",
+    "unit": "g",
+    "value": 38.37,
+    "tolerance": 0.05
+   }
+  ],
+  "supportedOutcomes": [
+   "abstain"
+  ],
+  "forbiddenClaims": [
+   "inferred-taste",
+   "unqualified-diagnosis",
+   "multiple-next-shot-changes"
+  ]
+ }
+}
