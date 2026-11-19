@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "id": "bloom-trickle-low-resistance",
+  "session": "bloom-trickle-session",
+  "recipe": "bloom-trickle-recipe",
+  "family": "bloom",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 4, "seconds": 8, "substate": "preinfusion", "limiter": {"value": 3.5, "range": 0.3}},
+      {"name": "Reduced-flow pause", "pump": "flow", "target": 0.3, "seconds": 36, "substate": "preinfusion"},
+      {"name": "Restart ramp", "pump": "flow", "target": 2, "seconds": 6, "transition": "smooth", "limiter": {"value": 9, "range": 0.5}},
+      {"name": "Extract", "pump": "flow", "target": 2, "seconds": 30, "limiter": {"value": 9, "range": 0.5}}
+    ]
+  },
+  "doseG": 20,
+  "stop": {
+    "timeS": 100,
+    "weightG": 40
+  },
+  "puck": {
+    "resistance": 4
+  },
+  "interventions": [
+    {
+      "kind": "low-resistance",
+      "atS": 44,
+      "factor": 0.55
+    }
+  ],
+  "grading": {
+    "consequence": "The pause and drips follow the nominal pattern. After the 44 s restart, extraction still tracks 2 mL/s while the pressure crest is about 4 bar around 51 s, compared with about 7 to 8 bar in the nominal group. Grade low extraction pressure at tracked flow and allow abstention on its cause.",
+    "unknowableWhen": [
+      "If the logged flow command and frame schedule are unavailable, the drop and restart alone cannot establish a planned pause.",
+      "A lower observed pressure crest at matched inlet flow cannot identify grind, preparation, or the presence of channeling. Without valid pressure and inlet streams, the low-pressure tracking regime is unavailable.",
+      "If scale samples are missing, stale, or discontinuous around a crossing, abstain on first sustained beverage timing and any cup-rate estimate spanning the gap.",
+      "Hydraulics and cup mass alone do not establish channeling, sweetness, or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pause-entry", "kind": "phase_boundary", "expected": "required", "phase": "preinfusion", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [8, 8.3]}},
+      {"id": "restart-entry", "kind": "phase_boundary", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [44, 44.3]}},
+      {"id": "restart-ramp", "kind": "planned_rise", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [44, 44.3]}},
+      {"id": "low-crest", "kind": "brew_pressure_crest", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [50.8, 51.3]}},
+      {"id": "pause-flow-fault", "kind": "flow_shortfall", "expected": "forbidden", "phase": "preinfusion", "controlledVariable": "flow"},
+      {"id": "pressure-tracking-fault", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden"},
+      {"id": "pour-flow-fault", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring", "controlledVariable": "flow"}
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis",
+      "multiple-next-shot-changes"
+    ]
+  }
+}

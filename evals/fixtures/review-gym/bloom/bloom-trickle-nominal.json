@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "id": "bloom-trickle-nominal",
+  "session": "bloom-trickle-session",
+  "recipe": "bloom-trickle-recipe",
+  "family": "bloom",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 4, "seconds": 8, "substate": "preinfusion", "limiter": {"value": 3.5, "range": 0.3}},
+      {"name": "Reduced-flow pause", "pump": "flow", "target": 0.3, "seconds": 36, "substate": "preinfusion"},
+      {"name": "Restart ramp", "pump": "flow", "target": 2, "seconds": 6, "transition": "smooth", "limiter": {"value": 9, "range": 0.5}},
+      {"name": "Extract", "pump": "flow", "target": 2, "seconds": 30, "limiter": {"value": 9, "range": 0.5}}
+    ]
+  },
+  "doseG": 20,
+  "stop": {
+    "timeS": 100,
+    "weightG": 40
+  },
+  "puck": {
+    "resistance": 4
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "The 4 mL/s Fill encounters its pressure ceiling. Near 8 s the planned 0.3 mL/s pause begins. Settled pause pressure is about 1.2 bar and cup mass rises to about 8 g before the restart ramp at 44 s. Beverage during this pause is expected. Settled extraction follows the 2 mL/s command.",
+    "unknowableWhen": [
+      "If the logged flow command and frame schedule are unavailable, the drop and restart alone cannot establish a planned pause.",
+      "If scale samples are missing, stale, or discontinuous around a crossing, abstain on first sustained beverage timing and any cup-rate estimate spanning the gap.",
+      "Hydraulics and cup mass alone do not establish channeling, sweetness, or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pause-entry", "kind": "phase_boundary", "expected": "required", "phase": "preinfusion", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [8, 8.3]}},
+      {"id": "restart-entry", "kind": "phase_boundary", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [44, 44.3]}},
+      {"id": "restart-ramp", "kind": "planned_rise", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [44, 44.3]}},
+      {"id": "pause-flow-fault", "kind": "flow_shortfall", "expected": "forbidden", "phase": "preinfusion", "controlledVariable": "flow"},
+      {"id": "pressure-tracking-fault", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden"},
+      {"id": "pour-flow-fault", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring", "controlledVariable": "flow"}
+    ],
+    "figures": [
+      {"id": "settled-pause-inlet-flow", "unit": "mL/s", "value": 0.3, "tolerance": 0.03},
+      {"id": "settled-pause-pressure", "unit": "bar", "value": 1.2, "tolerance": 0.1}
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis",
+      "multiple-next-shot-changes"
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "id": "bloom-zero-restart-restriction",
+  "session": "bloom-zero-session",
+  "recipe": "bloom-zero-recipe",
+  "family": "bloom",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 4, "seconds": 10, "substate": "preinfusion", "limiter": {"value": 3.5, "range": 0.3}},
+      {"name": "Bloom pause", "pump": "flow", "target": 0, "seconds": 30, "substate": "preinfusion"},
+      {"name": "Restart", "pump": "flow", "target": 1.2, "seconds": 14, "weightG": 8, "limiter": {"value": 9, "range": 0.5}},
+      {"name": "Ramp", "pump": "flow", "target": 2.1, "seconds": 5, "transition": "smooth", "limiter": {"value": 9, "range": 0.5}},
+      {"name": "Extract", "pump": "flow", "target": 2.1, "seconds": 40, "limiter": {"value": 9, "range": 0.5}}
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "timeS": 100,
+    "weightG": 36
+  },
+  "puck": {
+    "resistance": 3.6
+  },
+  "interventions": [
+    {
+      "kind": "restriction",
+      "atS": 40,
+      "factor": 2.8
+    }
+  ],
+  "grading": {
+    "consequence": "The planned pause ends around 40 s. During Restart, pressure approaches the 9 bar limiter and inlet settles around 0.9 mL/s against the 1.2 mL/s flow command. After the ramp it stays near 1 mL/s against 2.1 mL/s, delaying the weight stop. Grade this as pressure-limited flow delivery and allow abstention on the cause.",
+    "unknowableWhen": [
+      "Near the pressure ceiling, pressure and flow can establish the limiting regime but cannot identify grind, preparation, or any other source of resistance.",
+      "Without the logged flow command and configured limiter, low flow at high pressure cannot establish a limiter-related shortfall.",
+      "If scale samples are missing, stale, or discontinuous around a crossing, abstain on first sustained beverage timing and any cup-rate estimate spanning the gap.",
+      "Hydraulics and cup mass alone do not establish channeling, sweetness, or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pause-entry", "kind": "phase_boundary", "expected": "required", "phase": "preinfusion", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [10, 10.35]}},
+      {"id": "restart-entry", "kind": "phase_boundary", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [40, 40.35]}},
+      {"id": "restart-cap-entry", "kind": "cap_like_start", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [40.65, 41]}},
+      {"id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [41.2, 43]}},
+      {"id": "planned-ramp", "kind": "planned_rise", "expected": "required", "phase": "pouring", "controlledVariable": "flow", "timing": {"type": "raw-landmark", "onsetS": [49.2, 51.2]}},
+      {"id": "pause-flow-fault", "kind": "flow_shortfall", "expected": "forbidden", "phase": "preinfusion", "controlledVariable": "flow"},
+      {"id": "pressure-tracking-fault", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden"},
+      {"id": "blanket-choke", "kind": "choked", "expected": "forbidden", "phase": "pouring", "controlledVariable": "flow"}
+    ],
+    "figures": [
+      {"id": "restart-limiter", "unit": "bar", "value": 9, "tolerance": 0},
+      {"id": "restart-inlet-command", "unit": "mL/s", "value": 1.2, "tolerance": 0}
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis",
+      "multiple-next-shot-changes"
+    ]
+  }
+}
