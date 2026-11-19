@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "fixed-flow-scale-loss",
+  "session": "fixed-flow-session-b",
+  "recipe": "fixed-flow-1p35",
+  "family": "fixed-flow",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 91,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.2, "seconds": 2.9, "substate": "preinfusion", "limiter": {"value": 9, "range": 0.4}},
+      {"name": "Pour", "pump": "flow", "target": 1.35, "seconds": 42.1, "limiter": {"value": 9, "range": 0.4}}
+    ]
+  },
+  "doseG": 15,
+  "stop": {"timeS": 45, "weightG": 25},
+  "puck": {"resistance": 6},
+  "interventions": [{"kind": "scale-loss", "atS": 7, "untilS": 15}],
+  "grading": {
+    "consequence": "Scale readings disappear on the sampled clock near 7.1 seconds and resume around 15.2 seconds with beverage already in the cup. Pressure still crests near 8 bar and eases at a tracked 1.35 mL/s. A repeat with scale connection and continuous weight logging can resolve cup onset.",
+    "unknowableWhen": [
+      "The first sustained gram and cup rate across the gap cannot be established. Inlet flow cannot substitute for cup flow.",
+      "The pressure and inlet traces retain enough coverage to describe the operating regime.",
+      "Pressure and inlet flow do not establish a physical cause, flavour or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pour-pressure-crest", "kind": "phase_pressure_crest", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [6.4, 9.1]}},
+      {"id": "crest-to-late-pressure-drop", "kind": "pressure_droop_at_held_flow", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "windowed-event", "onsetS": [23.0, 24.4]}},
+      {"id": "scale-readings-disappear", "kind": "scale_readings_missing", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [7.0, 7.35]}},
+      {"id": "no-confirmed-cup-onset", "kind": "first_sustained_beverage", "expected": "forbidden"},
+      {"id": "no-cap-engagement", "kind": "cap_like_start", "expected": "forbidden"},
+      {"id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden"},
+      {"id": "no-channeling-finding", "kind": "channeling", "expected": "forbidden"}
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis", "multiple-next-shot-changes"]
+  }
+}

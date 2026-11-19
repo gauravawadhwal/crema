@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "id": "fixed-flow-low-pressure",
+  "session": "fixed-flow-session-a",
+  "recipe": "fixed-flow-1p5",
+  "family": "fixed-flow",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5, "seconds": 3, "substate": "preinfusion"},
+      {"name": "Pour", "pump": "flow", "target": 1.5, "seconds": 42}
+    ]
+  },
+  "doseG": 17,
+  "stop": {"timeS": 45, "weightG": 29},
+  "puck": {"resistance": 5},
+  "interventions": [{"kind": "low-resistance", "atS": 0, "factor": 0.5}],
+  "grading": {
+    "consequence": "Pressure stays below 4 bar across fill and pour. The pour still tracks 1.5 mL/s, with about 1.47 g/s late cup delivery and the same onset window and weight stop as the nominal. The low pressure is the measured response at the commanded inlet flow.",
+    "unknowableWhen": [
+      "Without valid inlet readings, low pressure cannot be placed in a tracked-flow regime.",
+      "Low pressure at matched inlet is consistent with easy passage. These traces cannot distinguish grind, preparation, bypass or other physical mechanisms."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pour-pressure-crest", "kind": "phase_pressure_crest", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [7.3, 9.0]}},
+      {"id": "beverage-onset", "kind": "first_sustained_beverage", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [9.4, 10.5]}},
+      {"id": "no-abrupt-pressure-drop", "kind": "pressure_step_at_held_flow", "expected": "forbidden"},
+      {"id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden"},
+      {"id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "no-channeling-finding", "kind": "channeling", "expected": "forbidden"}
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis", "multiple-next-shot-changes"]
+  }
+}

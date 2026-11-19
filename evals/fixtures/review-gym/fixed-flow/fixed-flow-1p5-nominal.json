@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "fixed-flow-1p5-nominal",
+  "session": "fixed-flow-session-a",
+  "recipe": "fixed-flow-1p5",
+  "family": "fixed-flow",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5, "seconds": 3, "substate": "preinfusion"},
+      {"name": "Pour", "pump": "flow", "target": 1.5, "seconds": 42}
+    ]
+  },
+  "doseG": 17,
+  "stop": {"timeS": 45, "weightG": 29},
+  "puck": {"resistance": 5},
+  "interventions": [],
+  "grading": {
+    "consequence": "During the 1.5 mL/s pour, inlet tracks its command. Pressure crests at 7.4–7.8 bar, then gradually eases to about 6.5–6.9 bar late in the pour. The 29 g weight stop follows about 29 seconds from brew start.",
+    "unknowableWhen": [
+      "Without paired pressure and inlet readings, the pressure response at held flow cannot be established.",
+      "Pressure and inlet flow do not establish a physical cause, flavour or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pour-pressure-crest", "kind": "phase_pressure_crest", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [7.3, 9.0]}},
+      {"id": "beverage-onset", "kind": "first_sustained_beverage", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [9.4, 10.5]}},
+      {"id": "crest-to-late-pressure-drop", "kind": "pressure_droop_at_held_flow", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "windowed-event", "onsetS": [23.0, 24.4]}},
+      {"id": "no-abrupt-pressure-drop", "kind": "pressure_step_at_held_flow", "expected": "forbidden"},
+      {"id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden"},
+      {"id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "no-channeling-finding", "kind": "channeling", "expected": "forbidden"}
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis", "multiple-next-shot-changes"]
+  }
+}

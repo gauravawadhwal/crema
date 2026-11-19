@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "fixed-flow-capped",
+  "session": "fixed-flow-session-b",
+  "recipe": "fixed-flow-1p35",
+  "family": "fixed-flow",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 91,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.2, "seconds": 2.9, "substate": "preinfusion", "limiter": {"value": 9, "range": 0.4}},
+      {"name": "Pour", "pump": "flow", "target": 1.35, "seconds": 42.1, "limiter": {"value": 9, "range": 0.4}}
+    ]
+  },
+  "doseG": 15,
+  "stop": {"timeS": 45, "weightG": 25},
+  "puck": {"resistance": 6},
+  "interventions": [{"kind": "restriction", "atS": 12, "factor": 1.75}],
+  "grading": {
+    "consequence": "Near 12 seconds, measured pressure rises to the 9 bar limiter as measured inlet falls below its unchanged 1.35 mL/s command. Late inlet is about 0.94–0.98 mL/s. The weight stop still occurs near 25 g, several seconds later than in the nominal.",
+    "unknowableWhen": [
+      "At the limiter, the pressure plateau cannot establish the magnitude or cause of the underlying resistance change. Grade the cap-limited flow regime and accept abstention on cause.",
+      "Without paired flow, pressure and limiter context, the capped regime cannot be established."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "beverage-onset", "kind": "first_sustained_beverage", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [9.9, 11.0]}},
+      {"id": "cap-entry", "kind": "cap_like_start", "expected": "required", "timing": {"type": "windowed-event", "onsetS": [11.8, 12.3]}},
+      {"id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "no-unqualified-choke", "kind": "choked", "expected": "forbidden"},
+      {"id": "no-channeling-finding", "kind": "channeling", "expected": "forbidden"}
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis", "multiple-next-shot-changes"]
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "id": "fixed-flow-1p35-nominal",
+  "session": "fixed-flow-session-b",
+  "recipe": "fixed-flow-1p35",
+  "family": "fixed-flow",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 91,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5.2, "seconds": 2.9, "substate": "preinfusion", "limiter": {"value": 9, "range": 0.4}},
+      {"name": "Pour", "pump": "flow", "target": 1.35, "seconds": 42.1, "limiter": {"value": 9, "range": 0.4}}
+    ]
+  },
+  "doseG": 15,
+  "stop": {"timeS": 45, "weightG": 25},
+  "puck": {"resistance": 6},
+  "interventions": [],
+  "grading": {
+    "consequence": "The 1.35 mL/s inlet command is met. Pressure crests near 8 bar and eases to 7.1–7.5 bar late in the pour, below the 9 bar limiter. Beverage onset remains visible before the 25 g weight stop.",
+    "unknowableWhen": [
+      "Without paired pressure and inlet readings, the pressure response at held flow cannot be established.",
+      "Pressure and inlet flow do not establish a physical cause, flavour or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "pour-pressure-crest", "kind": "phase_pressure_crest", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [6.4, 9.1]}},
+      {"id": "beverage-onset", "kind": "first_sustained_beverage", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [9.9, 11.0]}},
+      {"id": "crest-to-late-pressure-drop", "kind": "pressure_droop_at_held_flow", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "windowed-event", "onsetS": [23.0, 24.4]}},
+      {"id": "no-abrupt-pressure-drop", "kind": "pressure_step_at_held_flow", "expected": "forbidden"},
+      {"id": "no-cap-engagement", "kind": "cap_like_start", "expected": "forbidden"},
+      {"id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden"},
+      {"id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "no-channeling-finding", "kind": "channeling", "expected": "forbidden"}
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis", "multiple-next-shot-changes"]
+  }
+}

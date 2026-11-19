@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "id": "fixed-flow-abrupt-pressure-drop",
+  "session": "fixed-flow-session-a",
+  "recipe": "fixed-flow-1p5",
+  "family": "fixed-flow",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 93,
+    "steps": [
+      {"name": "Fill", "pump": "flow", "target": 5, "seconds": 3, "substate": "preinfusion"},
+      {"name": "Pour", "pump": "flow", "target": 1.5, "seconds": 42}
+    ]
+  },
+  "doseG": 17,
+  "stop": {"timeS": 45, "weightG": 29},
+  "puck": {"resistance": 5},
+  "interventions": [{"kind": "low-resistance", "atS": 16, "factor": 0.6}],
+  "grading": {
+    "consequence": "Between adjacent samples around 16 seconds in the pour, pressure drops from about 7.1–7.5 bar to 4.2–4.4 bar and stays lower, while commanded and measured inlet remain near 1.5 mL/s. Cup delivery remains near its pre-drop rate. Describe the sustained pressure step at held inlet.",
+    "unknowableWhen": [
+      "Without paired pressure and inlet samples bracketing the step, the size or abruptness of the change and stability of inlet flow cannot be established.",
+      "Pressure and inlet flow do not establish a physical cause, flavour or extraction yield."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {"id": "beverage-onset", "kind": "first_sustained_beverage", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [9.4, 10.5]}},
+      {"id": "abrupt-pour-pressure-drop", "kind": "pressure_step_at_held_flow", "phase": "pouring", "controlledVariable": "flow", "expected": "required", "timing": {"type": "raw-landmark", "onsetS": [16.0, 16.3]}},
+      {"id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden"},
+      {"id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden"},
+      {"id": "no-channeling-finding", "kind": "channeling", "expected": "forbidden"}
+    ],
+    "supportedOutcomes": ["abstain"],
+    "forbiddenClaims": ["inferred-taste", "unqualified-diagnosis", "multiple-next-shot-changes"]
+  }
+}
