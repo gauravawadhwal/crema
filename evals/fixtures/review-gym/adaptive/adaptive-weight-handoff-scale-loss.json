@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "id": "adaptive-weight-handoff-scale-loss",
+  "session": "adaptive-weight-handoff",
+  "recipe": "adaptive-weight-handoff-recipe",
+  "family": "adaptive",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {
+        "name": "Fill",
+        "pump": "flow",
+        "target": 4,
+        "seconds": 8,
+        "limiter": {
+          "value": 3.0,
+          "range": 0.5
+        },
+        "exit": {
+          "type": "pressure",
+          "condition": "over",
+          "value": 2.0
+        },
+        "substate": "preinfusion"
+      },
+      {
+        "name": "Ramp",
+        "pump": "pressure",
+        "target": 8.8,
+        "seconds": 7.0,
+        "limiter": {
+          "value": 2.33,
+          "range": 0.3
+        },
+        "weightG": 5
+      },
+      {
+        "name": "Main",
+        "pump": "flow",
+        "target": 2.0,
+        "seconds": 20,
+        "limiter": {
+          "value": 9.0,
+          "range": 0.5
+        }
+      },
+      {
+        "name": "Taper",
+        "pump": "flow",
+        "target": 1.5,
+        "seconds": 8,
+        "limiter": {
+          "value": 8.0,
+          "range": 0.5
+        }
+      }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 45
+  },
+  "puck": {
+    "resistance": 4.12
+  },
+  "interventions": [
+    {
+      "kind": "scale-loss",
+      "atS": 8.1,
+      "untilS": 15
+    }
+  ],
+  "grading": {
+    "consequence": "The pressure-to-flow change is visible around 10.7–11.1 s. Scale readings are absent across that change and first beverage cannot be timed. Flow later tracks about 2.0 mL/s and the recorded weight stop preempts Taper.",
+    "unknowableWhen": [
+      "The trace records the adjacent frames and the configured exit. A threshold crossing can fall between samples, and the recording has no per-step trigger field.",
+      "With the scale missing across the handoff, its sampled bracket overlaps the 7 s timeout. The 5 g exit and timeout are both compatible. Repeat with a connected, tared scale and bracket the handoff before assigning a trigger."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "fill-to-pressure",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "pressure",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [3.7, 4.1]
+        }
+      },
+      {
+        "id": "pressure-to-flow",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [10.7, 11.1]
+        }
+      },
+      {
+        "id": "definite-channeling",
+        "kind": "channeling",
+        "expected": "forbidden"
+      },
+      {
+        "id": "stop-in-main",
+        "kind": "stop",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [26.1, 26.8]
+        }
+      },
+      {
+        "id": "taper-preempted",
+        "kind": "unreached_final_phase",
+        "expected": "required",
+        "controlledVariable": "flow"
+      },
+      {
+        "id": "taper-start",
+        "kind": "phase_boundary",
+        "expected": "forbidden",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [22, 25]
+        }
+      },
+      {
+        "id": "onset-during-gap",
+        "kind": "first_sustained_beverage",
+        "expected": "forbidden"
+      },
+      {
+        "id": "certain-weight-exit",
+        "kind": "confirmed_exit_cause",
+        "expected": "forbidden",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [10.7, 11.1]
+        }
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis",
+      "multiple-next-shot-changes"
+    ]
+  }
+}

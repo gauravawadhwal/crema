@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "id": "adaptive-flow-handoff-hidden-flow-cap",
+  "session": "adaptive-flow-handoff",
+  "recipe": "adaptive-flow-handoff-recipe",
+  "family": "adaptive",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {
+        "name": "Fill",
+        "pump": "flow",
+        "target": 4,
+        "seconds": 8,
+        "limiter": {
+          "value": 3.0,
+          "range": 0.5
+        },
+        "exit": {
+          "type": "pressure",
+          "condition": "over",
+          "value": 2.0
+        },
+        "substate": "preinfusion"
+      },
+      {
+        "name": "Rise",
+        "pump": "pressure",
+        "target": 8.7,
+        "seconds": 10,
+        "limiter": {
+          "value": 2.36,
+          "range": 0.3
+        },
+        "exit": {
+          "type": "flow",
+          "condition": "under",
+          "value": 2.14
+        }
+      },
+      {
+        "name": "Main",
+        "pump": "flow",
+        "target": 2.1,
+        "seconds": 16,
+        "limiter": {
+          "value": 9.0,
+          "range": 0.5
+        }
+      },
+      {
+        "name": "Taper",
+        "pump": "flow",
+        "target": 1.7,
+        "seconds": 18,
+        "limiter": {
+          "value": 8.5,
+          "range": 0.5
+        }
+      }
+    ]
+  },
+  "doseG": 18.5,
+  "stop": {
+    "weightG": 37,
+    "timeS": 45
+  },
+  "puck": {
+    "resistance": 4.35
+  },
+  "interventions": [
+    {
+      "kind": "flow-cap",
+      "atS": 14.5,
+      "maxMlS": 1.5
+    }
+  ],
+  "grading": {
+    "consequence": "In Main the logged inlet command holds 2.1 mL/s. Around 14.5 s measured inlet falls near 1.5 mL/s, with pressure falling below 6.5 bar and staying clear of its 9 bar ceiling. Taper is still observed and the recorded weight stop comes later.",
+    "unknowableWhen": [
+      "The trace records the adjacent frames and the configured exit. A threshold crossing can fall between samples, and the recording has no per-step trigger field.",
+      "The co-drop shows a delivery shortfall under the logged flow command. The sampled trace does not identify a hidden capacity limit or a puck or pump fault."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "fill-to-pressure",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "pressure",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [3.7, 4.1]
+        }
+      },
+      {
+        "id": "pressure-to-flow",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [6.4, 7.0]
+        }
+      },
+      {
+        "id": "definite-channeling",
+        "kind": "channeling",
+        "expected": "forbidden"
+      },
+      {
+        "id": "taper-start",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [22.3, 22.9]
+        }
+      },
+      {
+        "id": "drop-in-main",
+        "kind": "inlet_flow_drop_at_held_command",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [14.4, 14.9]
+        }
+      },
+      {
+        "id": "pressure-control-fault",
+        "kind": "pressure_shortfall",
+        "expected": "forbidden",
+        "controlledVariable": "pressure",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [14, 21]
+        }
+      },
+      {
+        "id": "stop",
+        "kind": "stop",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [30.3, 31.8]
+        }
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis",
+      "multiple-next-shot-changes"
+    ],
+    "figures": [
+      {
+        "id": "main.inlet-command",
+        "unit": "mL/s",
+        "value": 2.1,
+        "tolerance": 0.05
+      },
+      {
+        "id": "main.pressure-ceiling",
+        "unit": "bar",
+        "value": 9.0,
+        "tolerance": 0.05
+      }
+    ]
+  }
+}

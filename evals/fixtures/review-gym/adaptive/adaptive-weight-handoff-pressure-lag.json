@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "id": "adaptive-weight-handoff-pressure-lag",
+  "session": "adaptive-weight-handoff",
+  "recipe": "adaptive-weight-handoff-recipe",
+  "family": "adaptive",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 92,
+    "steps": [
+      {
+        "name": "Fill",
+        "pump": "flow",
+        "target": 4,
+        "seconds": 8,
+        "limiter": {
+          "value": 3.0,
+          "range": 0.5
+        },
+        "exit": {
+          "type": "pressure",
+          "condition": "over",
+          "value": 2.0
+        },
+        "substate": "preinfusion"
+      },
+      {
+        "name": "Ramp",
+        "pump": "pressure",
+        "target": 8.8,
+        "seconds": 7.0,
+        "limiter": {
+          "value": 2.33,
+          "range": 0.3
+        },
+        "weightG": 5
+      },
+      {
+        "name": "Main",
+        "pump": "flow",
+        "target": 2.0,
+        "seconds": 20,
+        "limiter": {
+          "value": 9.0,
+          "range": 0.5
+        }
+      },
+      {
+        "name": "Taper",
+        "pump": "flow",
+        "target": 1.5,
+        "seconds": 8,
+        "limiter": {
+          "value": 8.0,
+          "range": 0.5
+        }
+      }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 45
+  },
+  "puck": {
+    "resistance": 4.12
+  },
+  "interventions": [
+    {
+      "kind": "sensor-lag",
+      "channel": "pressure",
+      "delayS": 0.6
+    }
+  ],
+  "grading": {
+    "consequence": "The first pressure-controlled sample still reads about 0.48 bar. Pressure readings above the configured 2.0 bar exit appear later in the sampled trace. The frame and command change remain visible, and the shot ends in Main at the recorded weight stop.",
+    "unknowableWhen": [
+      "The trace records the adjacent frames and the configured exit. A threshold crossing can fall between samples, and the recording has no per-step trigger field.",
+      "The pressure channel may trail the frame and command clock. The apparent late crossing cannot establish a premature exit or identify the sensor fault. Check synchronization before repeating the same recipe."
+    ],
+    "acceptCauseAbstention": true,
+    "observations": [
+      {
+        "id": "fill-to-pressure",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "pressure",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [3.7, 4.1]
+        }
+      },
+      {
+        "id": "pressure-to-flow",
+        "kind": "phase_boundary",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [10.7, 11.1]
+        }
+      },
+      {
+        "id": "definite-channeling",
+        "kind": "channeling",
+        "expected": "forbidden"
+      },
+      {
+        "id": "stop-in-main",
+        "kind": "stop",
+        "expected": "required",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [26.1, 26.8]
+        }
+      },
+      {
+        "id": "taper-preempted",
+        "kind": "unreached_final_phase",
+        "expected": "required",
+        "controlledVariable": "flow"
+      },
+      {
+        "id": "taper-start",
+        "kind": "phase_boundary",
+        "expected": "forbidden",
+        "controlledVariable": "flow",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [22, 25]
+        }
+      },
+      {
+        "id": "first-gram",
+        "kind": "first_sustained_beverage",
+        "expected": "required",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [8.7, 9.4]
+        }
+      },
+      {
+        "id": "certain-fill-trigger",
+        "kind": "confirmed_exit_cause",
+        "expected": "forbidden",
+        "timing": {
+          "type": "raw-landmark",
+          "onsetS": [3.7, 4.1]
+        }
+      }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis",
+      "multiple-next-shot-changes"
+    ]
+  }
+}
