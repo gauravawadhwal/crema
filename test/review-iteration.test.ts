@@ -98,6 +98,21 @@ describe("iteration against synthetic audit controls", () => {
     },
   );
 
+  it("credits justified abstention only from the narrative stating the limit and naming the gap", async () => {
+    const c = { ...caseWith(), gap: "scale" };
+    expect((await grade(null, c)).score.abstention).toBe(false);
+    expect((await grade(null, c)).score.critical).toContain("unsupported-no-abstention");
+    expect((await grade(correct, c)).score.abstention).toBe(false);
+    const stated = await grade("The scale weight is unavailable, so the yield cannot be judged.", c);
+    expect(stated.score.abstention).toBe(true);
+    expect(stated.score.critical).not.toContain("unsupported-no-abstention");
+    const baseline = row(c, stated.score);
+    const lost = row(c, (await grade(null, c)).score);
+    const comparison = compareEpisodes([c], 1, pins, [baseline], [lost], "screen", { offline: true, hardJudge: false });
+    expect(comparison.accepted).toBe(false);
+    expect(comparison.failures).toContain("lost justified abstention");
+  });
+
   it("rejects missing, duplicate, changed-input and changed-scorer records", async () => {
     const c = caseWith();
     const first = row(c, (await grade(correct, c)).score);

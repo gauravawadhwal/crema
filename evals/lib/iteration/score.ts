@@ -165,8 +165,7 @@ export function scoreEpisode(c: IterationCase, result: ReviewResult, trace: Phas
   const nominal = c.nominal ?? (required.length === 0 && labels.observations.some(o => o.expected === "forbidden"));
   const gap = c.gap;
   const abstention = gap ?
-    (rules ? outputs.outcomes.length === 0 : abstaining.test(text) && new RegExp(`\\b${gap}\\b`, "i").test(text) || !result.evidence.analysis.metrics.enoughTelemetry &&
-      result.evidence.analysis.metrics.observedWindows === 0) : null;
+    (rules ? outputs.outcomes.length === 0 : abstaining.test(text) && new RegExp(`\\b${gap}\\b`, "i").test(text)) : null;
   if (abstention === false) critical.push("unsupported-no-abstention");
   if (assessed.supportedOutcome === false) critical.push("unsupported-outcome");
   if (assessed.forbiddenHits.length) critical.push("forbidden-event");
