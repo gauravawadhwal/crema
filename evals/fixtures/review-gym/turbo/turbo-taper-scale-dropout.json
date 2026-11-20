@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "id": "turbo-taper-scale-dropout",
+  "session": "turbo-taper-session",
+  "recipe": "turbo-taper",
+  "family": "turbo",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 90,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 6.5, "seconds": 4, "substate": "preinfusion", "limiter": { "value": 5.8 } },
+      { "name": "Hold", "pump": "pressure", "target": 5.4, "seconds": 8.3 },
+      { "name": "Decline", "pump": "pressure", "target": 4.3, "seconds": 10, "transition": "smooth" }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 26
+  },
+  "puck": {
+    "resistance": 1.7
+  },
+  "interventions": [
+    {
+      "kind": "scale-loss",
+      "atS": 7
+    }
+  ],
+  "grading": {
+    "consequence": "The first sustained gram is visible before scale samples disappear around 7 s. Logged and measured pressure still show a planned decline after 12 s, with readable inlet flow throughout. A scale-specific repeat can recover late cup rate and final mass.",
+    "unknowableWhen": [
+      "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
+      "Without the logged pressure command and frame alignment, a falling measured pressure cannot establish a planned decline.",
+      "The late scale readings are missing. Final beverage mass, ratio and late cup rate cannot be corroborated, even if the controller reports a weight stop. Machine inlet is in mL/s and cannot substitute for beverage g/s."
+    ],
+    "observations": [
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5, 5.85] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [14.8, 16.7] } },
+      { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
+      { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
+      { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },
+      { "id": "decline-entry", "kind": "planned_decline", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [12.3, 12.65] } },
+      { "id": "pressure-under-command", "kind": "pressure_shortfall", "expected": "forbidden", "phase": "pouring" },
+      { "id": "scale-coverage-loss", "kind": "scale_gap", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [7, 7.45] } }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ],
+    "acceptCauseAbstention": true
+  }
+}

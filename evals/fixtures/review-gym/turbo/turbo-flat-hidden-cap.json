@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "id": "turbo-flat-hidden-cap",
+  "session": "turbo-flat-session",
+  "recipe": "turbo-flat",
+  "family": "turbo",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 89,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 6.5, "seconds": 4.4, "substate": "preinfusion", "limiter": { "value": 5.8 } },
+      { "name": "Pour", "pump": "pressure", "target": 5.2, "seconds": 23 }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 26
+  },
+  "puck": {
+    "resistance": 1.65
+  },
+  "interventions": [
+    {
+      "kind": "flow-cap",
+      "atS": 7,
+      "maxMlS": 2.65
+    }
+  ],
+  "grading": {
+    "consequence": "Around 7 s in the pressure hold, inlet falls to a plateau near 2.65 mL/s and group pressure drops below the unchanged 5.2 bar command. Describe the persistent pressure deficit and inlet plateau. A low inlet alone does not establish a cap or a flow-command shortfall.",
+    "unknowableWhen": [
+      "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
+      "The recorded hold exposes no flow-limiter setpoint. Grade the pressure deficit and plateau and accept abstention on what limited delivery. Without paired samples after the change, the two responses cannot be confirmed together."
+    ],
+    "observations": [
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.2, 5.75] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [17.9, 18.7] } },
+      { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
+      { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
+      { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },
+      { "id": "pressure-under-command", "kind": "pressure_shortfall", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [7, 8] }, "phase": "pouring", "controlledVariable": "pressure" }
+    ],
+    "figures": [
+      { "id": "pressure_shortfall.frame-2.target", "unit": "bar", "value": 5.2, "tolerance": 0.05 },
+      { "id": "pressure_shortfall.frame-2.measured", "unit": "bar", "value": 4.2, "tolerance": 0.2 },
+      { "id": "pour.inlet-plateau", "unit": "ml/s", "value": 2.65, "tolerance": 0.05 }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ],
+    "acceptCauseAbstention": true
+  }
+}
