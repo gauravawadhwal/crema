@@ -735,3 +735,5 @@ different provider; measure each one separately.
 ```bash
 for t in identify recommend dialin; do npx tsx evals/compare.ts --markdown evals/baselines/$t.claude-cli-opus.json evals/baselines/$t.claude-cli-sonnet.json evals/baselines/$t.claude-cli-haiku.json evals/baselines/$t.codex-cli-gpt-6-luna.json evals/baselines/$t.gemini-api-gemini-3.5-flash-lite.json $(ls evals/baselines/$t.rules.json 2>/dev/null); done
 ```
+
+See [Shot review gym iteration](ITERATION.md) for the offline demonstration and approved real-provider workflow.

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, openSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { z } from "zod";
 import { ReviewBody } from "../../server/schema.js";
 import { PumpMode, validateReviewLabels } from "./review-labels.js";
@@ -67,6 +67,7 @@ interface RunSelection {
   manifest?: string;
   provider: string;
   variants: readonly string[];
+  singleUse?: boolean;
 }
 
 export function selectReviewCases(dataset: ReviewDataset, run: RunSelection) {
@@ -82,9 +83,23 @@ export function selectReviewCases(dataset: ReviewDataset, run: RunSelection) {
   if (split === "holdout" && run.manifest && manifest) {
     // Append before execution so failed or interrupted attempts are counted.
     const log = `${run.manifest}.runs.jsonl`;
-    appendFileSync(log, JSON.stringify({ startedAt: new Date().toISOString(), dataset: dataset.id, demonstration: dataset.demonstration,
-      manifest: fingerprint(manifest), cases: cases.length, provider: run.provider, variants: run.variants }) + "\n", { mode: 0o600 });
-    holdoutRunCount = readFileSync(log, "utf8").split("\n").filter(Boolean).length;
+    // Serialize history checks and the append across both evaluation commands.
+    const guard = `${run.manifest}.attempt.lock`;
+    const fd = openSync(guard, "wx", 0o600);
+    try {
+      const retired = `${run.manifest}.retired`;
+      if (existsSync(retired)) throw new Error("Frozen holdout panel is retired");
+      if (run.singleUse) {
+        if (existsSync(log)) throw new Error("Frozen holdout panel already has attempt history");
+        writeFileSync(retired, "", { flag: "wx", mode: 0o600 });
+      }
+      appendFileSync(log, JSON.stringify({ startedAt: new Date().toISOString(), dataset: dataset.id, demonstration: dataset.demonstration,
+        manifest: fingerprint(manifest), cases: cases.length, provider: run.provider, variants: run.variants }) + "\n", { mode: 0o600 });
+      holdoutRunCount = readFileSync(log, "utf8").split("\n").filter(Boolean).length;
+    } finally {
+      closeSync(fd);
+      unlinkSync(guard);
+    }
   }
   return { cases, holdoutRunCount };
 }
