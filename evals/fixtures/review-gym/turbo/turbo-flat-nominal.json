@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "turbo-flat-nominal",
+  "session": "turbo-flat-session",
+  "recipe": "turbo-flat",
+  "family": "turbo",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 89,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 6.5, "seconds": 4.4, "substate": "preinfusion", "limiter": { "value": 5.8 } },
+      { "name": "Pour", "pump": "pressure", "target": 5.2, "seconds": 23 }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 26
+  },
+  "puck": {
+    "resistance": 1.65
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "After the short fill, pressure tracks the 5.2 bar command while inlet is around 3–4 mL/s in the main pour. The first gram appears near 5 s and the 36 g target-weight stop ends the short pour. The duration alone cannot establish a hydraulic fault.",
+    "unknowableWhen": [
+      "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield."
+    ],
+    "observations": [
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.2, 5.75] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [15.4, 16.5] } },
+      { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
+      { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
+      { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },
+      { "id": "pressure-under-command", "kind": "pressure_shortfall", "expected": "forbidden", "phase": "pouring" }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ],
+    "acceptCauseAbstention": true
+  }
+}

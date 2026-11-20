@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "id": "turbo-taper-nominal",
+  "session": "turbo-taper-session",
+  "recipe": "turbo-taper",
+  "family": "turbo",
+  "split": "dev",
+  "profile": {
+    "temperatureC": 90,
+    "steps": [
+      { "name": "Fill", "pump": "flow", "target": 6.5, "seconds": 4, "substate": "preinfusion", "limiter": { "value": 5.8 } },
+      { "name": "Hold", "pump": "pressure", "target": 5.4, "seconds": 8.3 },
+      { "name": "Decline", "pump": "pressure", "target": 4.3, "seconds": 10, "transition": "smooth" }
+    ]
+  },
+  "doseG": 18,
+  "stop": {
+    "weightG": 36,
+    "timeS": 26
+  },
+  "puck": {
+    "resistance": 1.7
+  },
+  "interventions": [],
+  "grading": {
+    "consequence": "The first gram appears near 5 s. Pressure follows the 5.4 bar hold and the planned decline after 12 s, with inlet around 3–4 mL/s late in the shot. The 36 g target-weight stop ends an intentionally short pour.",
+    "unknowableWhen": [
+      "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
+      "Without the logged pressure command and frame alignment, a falling measured pressure cannot establish a planned decline."
+    ],
+    "observations": [
+      { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5, 5.85] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [14.8, 16.7] } },
+      { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
+      { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
+      { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },
+      { "id": "decline-entry", "kind": "planned_decline", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [12.3, 12.65] } },
+      { "id": "pressure-under-command", "kind": "pressure_shortfall", "expected": "forbidden", "phase": "pouring" }
+    ],
+    "supportedOutcomes": [
+      "abstain"
+    ],
+    "forbiddenClaims": [
+      "inferred-taste",
+      "unqualified-diagnosis"
+    ],
+    "acceptCauseAbstention": true
+  }
+}
