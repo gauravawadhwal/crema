@@ -45,6 +45,8 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
       return;
     }
     const evaluate = fn => page.evaluate(fn);
+    // A sheet's element that reuses an id from the page behind it is found by `$` in the page instead.
+    const duplicateIds = () => evaluate(() => { const seen = new Set(), dup = new Set(); for (const el of document.querySelectorAll('[id]')) (seen.has(el.id) ? dup : seen).add(el.id); return [...dup]; });
     const wf = () => evaluate(() => fetch(S.api.info.decaidUrl + '/api/v1/workflow').then(r => r.json()));
     const loaded = async () => { await page.click('#loadBtn'); await page.waitForFunction(() => S.loaded); };
     await page.goto(url + '#brew'); await page.waitForSelector('#noBagBrew');
@@ -56,7 +58,9 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     check(await page.isDisabled('[data-run="espresso"]'), 'No bag without a selected profile cannot start a stale recipe');
     await page.click('a[href="#profiles"].primary');
     await page.waitForFunction(() => S.library?.length);
-    await evaluate(() => showProfile(S.library.find(p => !p.manual).id)); await page.click('#baglessProfile');
+    await evaluate(() => showProfile(S.library.find(p => !p.manual).id));
+    check(!(await duplicateIds()).length, 'an open profile sheet shares no ids with the page behind it: ' + (await duplicateIds()).join(', '));
+    await page.click('#baglessProfile');
     check(await evaluate(() => { const lp = S.library.find(p => !p.manual); return S.noBag && !S.current && S.next.direct && S.next.tempC === lp.tempC && S.next.yieldG === lp.targetWeight; }), 'empty shelf brews from the installed profile settings');
     await loaded();
     let current = await wf();
@@ -181,8 +185,11 @@ const check = (ok, label) => { assert.ok(ok, label); console.log('ok  ', label);
     await page.waitForFunction(() => S.plan?.timed === 'shot' && /Dashed: what .* timed from your last shot/.test(document.querySelector('#chartEmpty').textContent), null, { timeout: 8000 });
     check(await evaluate(() => !S.ghost && document.querySelector('#chartEmpty').textContent.includes('timed from your last shot')), 'built demo: the Brew chart shows the profile, timed from the last shot with it, and no reference by default');
     await evaluate(() => showProfile(nextProfile().id));
-    await page.waitForFunction(() => document.querySelectorAll('#planSteps li').length > 1 && /Step times from your shot/.test(document.querySelector('#planNote').textContent));
+    // Read the sheet's own list. It once shared an id with the Brew screen's step rail, so
+    // its steps landed in the rail until the next repaint and the sheet listed none.
+    await page.waitForFunction(() => document.querySelectorAll('#sheet .plan-steps li').length === nextProfile().profile.steps.length && /Step times from your shot/.test(document.querySelector('#sheet').textContent), null, { timeout: 8000 });
     check(true, 'built demo: the profile sheet lists the steps, timed from a shot');
+    check(!(await duplicateIds()).length && await evaluate(() => !document.querySelector('#view-brew #planSteps li')), 'built demo: the profile sheet shares no ids with the Brew screen and leaves its step rail alone: ' + (await duplicateIds()).join(', '));
     await evaluate(() => closeSheet());
     await evaluate(async () => { const s = (await S.api.shotPage(0, 40)).items.find(x => x.batch === S.current.batch); await setReference(S.current, s.id); });
     check(await evaluate(() => !!S.ghost && !!document.querySelector('#clearRef')), 'built demo: a reference shot shows faintly with Remove in the legend');

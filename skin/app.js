@@ -3195,7 +3195,7 @@ function profilePlanHtml(lp) {
   return `<div class="plan-box"><div class="row between"><span class="label">What it asks the machine for</span><span class="muted small" id="planNote"></span></div>
     <canvas class="plan-chart" id="planChart" role="img" aria-label="Pressure and flow targets of ${esc(lp.title)}, step by step"></canvas>
     <div class="legend small"><span><span class="swatch" style="background:var(--pressure)"></span>Pressure (bar)</span><span><span class="swatch" style="background:var(--flow)"></span>Flow (ml/s)</span><span><span class="swatch" style="background:var(--temp)"></span>Temp (70–100 °C)</span></div>
-    <ol class="plan-steps small" id="planSteps"></ol></div>`;
+    <ol class="plan-steps small" id="profilePlanSteps"></ol></div>`;
 }
 function drawProfilePlan(lp) {
   const canvas = $("#planChart");
@@ -3208,7 +3208,7 @@ function drawProfilePlan(lp) {
     $("#planNote").textContent = plan.timed === "shot"
       ? `Step times from your shot of ${new Date(timing.shot.timestamp).toLocaleDateString([], { day: "numeric", month: "short" })}`
       : `Each step at its time limit${plan.total > shown ? `; first ${shown} s shown` : ""}. Most end sooner.`;
-    $("#planSteps").innerHTML = plan.steps.map((st) => `<li><b>${esc(st.name)}</b>: ${st.pump} ${st.smooth ? "ramps to" : "at"} ${fmt1(st.target)} ${unit(st)}${st.tempC != null ? `, ${fmt1(st.tempC)} °C` : ""}, up to ${fmt1(st.limitS)} s${plan.timed === "shot" ? ` (took ${fmt1(st.end - st.start)} s)` : ""}.${st.exit ? ` ${esc(st.exit)}.` : ""}${st.cap ? ` ${esc(st.cap)}.` : ""}</li>`).join("");
+    $("#profilePlanSteps").innerHTML = plan.steps.map((st) => `<li><b>${esc(st.name)}</b>: ${st.pump} ${st.smooth ? "ramps to" : "at"} ${fmt1(st.target)} ${unit(st)}${st.tempC != null ? `, ${fmt1(st.tempC)} °C` : ""}, up to ${fmt1(st.limitS)} s${plan.timed === "shot" ? ` (took ${fmt1(st.end - st.start)} s)` : ""}.${st.exit ? ` ${esc(st.exit)}.` : ""}${st.cap ? ` ${esc(st.cap)}.` : ""}</li>`).join("");
   };
   requestAnimationFrame(() => draw(E.profileCurve(lp.profile)));
   planTiming(lp).then((timing) => { if (timing) requestAnimationFrame(() => draw(E.profileCurve(lp.profile, timing.durations), timing)); });
