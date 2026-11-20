@@ -13,6 +13,7 @@ import { REVIEW_VARIANTS, VARIANT_NAMES, runReviewAblation } from "./lib/review-
 import { assertCurveStageInvariant, mockCurveStage } from "./lib/review-crossed.js";
 import { loadLocalReviewShots } from "./lib/review-local-replay.js";
 import { loadIndependentReviewDataset } from "./lib/review-independent.js";
+import { caseDigests, makeEvalManifest, scorerFingerprint } from "./lib/manifest.js";
 import { reviewAblationMarkdown, type ReviewAblationReport } from "./lib/review-ablation-report.js";
 
 const { values: args, positionals } = parseArgs({
@@ -102,10 +103,21 @@ async function main() {
   const git = (args: string[]) => execFileSync("git", args, { cwd: ROOT_DIR, encoding: "utf8" }).trim();
   const commit = git(["rev-parse", "HEAD"]);
   const dirty = git(["status", "--porcelain"]) !== "";
-  const { cases, holdoutRunCount } = selectReviewCases(dataset, { split, purpose, manifest: args.manifest, provider: providerName, variants });
+  const { cases, holdoutRunCount, panel } = selectReviewCases(dataset, {
+    split, purpose, manifest: args.manifest, provider: providerName, variants,
+    attemptsDirectory: process.env.CREMA_HOLDOUT_ATTEMPTS_DIR,
+  });
+  if (panel) {
+    const evaluated = await runReviewAblation(cases, variants, provider);
+    console.log(JSON.stringify({ panel, verdict: "inconclusive", promotionEligible: evaluated.some(v => v.status === "ready" && v.promotionEligible) }));
+    return 1;
+  }
+  const manifest = makeEvalManifest(cases.map(c => caseDigests(c.id,
+    { session: c.session, recipe: c.recipe, family: c.profileFamily, pump: c.pumpMode, split: c.split }, { input: c.input, fullTrace: c.fullTrace, samples: c.input.points.map(p => p.t) }, c.labels)),
+    cases.map(c => ({ caseId: c.id, repeat: 0 })), scorerFingerprint("ablation"));
   const report: ReviewAblationReport = {
     meta: { task: "review-ablation", dataset: dataset.id, demonstration: dataset.demonstration, split, purpose,
-      provider: providerName, startedAt: start.toISOString(), git: { commit, dirty }, holdoutRunCount },
+      provider: providerName, startedAt: start.toISOString(), manifest, git: { commit, dirty }, holdoutRunCount },
     variants: await runReviewAblation(cases, variants, provider),
   };
 

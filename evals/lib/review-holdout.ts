@@ -1,5 +1,6 @@
-import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { digest } from "./manifest.js";
 import { z } from "zod";
 import { ReviewBody } from "../../server/schema.js";
 import { PumpMode, validateReviewLabels } from "./review-labels.js";
@@ -16,22 +17,22 @@ const Manifest = z.strictObject({
 });
 type Manifest = z.infer<typeof Manifest>;
 
-const fingerprint = (fixture: unknown) => createHash("sha256").update(JSON.stringify(fixture)).digest("hex");
-
 export function loadReviewDataset(value: unknown) {
   const raw = Dataset.parse(value);
   const ids = new Set<string>();
-  const groups = { session: new Map<string, string>(), recipe: new Map<string, string>() };
+  const groups = { session: new Map<string, string>(), recipe: new Map<string, string>(), recording: new Map<string, string>() };
   const cases = raw.cases.map((entry) => {
     const c = ReviewCase.parse(entry);
     if (ids.has(c.id)) throw new Error(`Duplicate fixture id: ${c.id}`);
     ids.add(c.id);
-    for (const field of ["session", "recipe"] as const) {
-      const split = groups[field].get(c[field]);
-      if (split && split !== c.split) throw new Error(`Split crosses ${field} group ${c[field]}`);
-      groups[field].set(c[field], c.split);
+    const { fullTrace, ...input } = c.input;
+    const keys = { session: c.session, recipe: c.recipe, recording: digest(input.points) };
+    for (const field of ["session", "recipe", "recording"] as const) {
+      const split = groups[field].get(keys[field]);
+      if (split && split !== c.split) throw new Error(`Split crosses ${field} group`);
+      groups[field].set(keys[field], c.split);
     }
-    return { ...c, labels: validateReviewLabels(c.labels, "synthetic"), hash: fingerprint(entry) };
+    return { ...c, input, fullTrace, labels: validateReviewLabels(c.labels, "synthetic", input.points.map(p => p.t)), hash: digest(entry) };
   });
   return { id: raw.id, demonstration: raw.demonstration, cases };
 }
@@ -67,6 +68,7 @@ interface RunSelection {
   manifest?: string;
   provider: string;
   variants: readonly string[];
+  attemptsDirectory?: string;
 }
 
 export function selectReviewCases(dataset: ReviewDataset, run: RunSelection) {
@@ -80,11 +82,30 @@ export function selectReviewCases(dataset: ReviewDataset, run: RunSelection) {
 
   let holdoutRunCount: number | undefined;
   if (split === "holdout" && run.manifest && manifest) {
+    // Protected evaluation is a single reserved attempt per sealed panel.
+    // The custodian supplies the same private ledger for every invocation.
+    if (!dataset.demonstration) {
+      if (!run.attemptsDirectory || !path.isAbsolute(run.attemptsDirectory)) {
+        throw new Error("Protected holdout requires a custodian-owned absolute attempts directory");
+      }
+      if (run.variants.length !== 1) throw new Error("Nominate one variant for a protected holdout");
+      const panel = digest(manifest);
+      const cohort = digest(cases.map(c => digest(c.input.points)).sort());
+      const attempt = path.join(run.attemptsDirectory, `${cohort}.json`);
+      try {
+        writeFileSync(attempt, JSON.stringify({ panel, startedAt: new Date().toISOString(), provider: run.provider, variants: run.variants }) + "\n",
+          { flag: "wx", mode: 0o600 });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") throw new Error("Protected holdout already has a reserved attempt");
+        throw error;
+      }
+      return { cases, holdoutRunCount: 1, panel };
+    }
     // Append before execution so failed or interrupted attempts are counted.
     const log = `${run.manifest}.runs.jsonl`;
     appendFileSync(log, JSON.stringify({ startedAt: new Date().toISOString(), dataset: dataset.id, demonstration: dataset.demonstration,
-      manifest: fingerprint(manifest), cases: cases.length, provider: run.provider, variants: run.variants }) + "\n", { mode: 0o600 });
+      manifest: digest(manifest), cases: cases.length, provider: run.provider, variants: run.variants }) + "\n", { mode: 0o600 });
     holdoutRunCount = readFileSync(log, "utf8").split("\n").filter(Boolean).length;
   }
-  return { cases, holdoutRunCount };
+  return { cases, holdoutRunCount, panel: undefined };
 }

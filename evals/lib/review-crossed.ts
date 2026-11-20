@@ -64,6 +64,7 @@ export async function assertCurveStageInvariant(input: ReviewInput, stage: (inpu
 }
 
 export interface MechanicalReview {
+  summary?: string;
   findings: readonly ReviewIssue[];
   confidence: ShotReviewData["confidence"];
 }
@@ -82,7 +83,8 @@ export async function checkModelStage(input: ReviewInput, stage: (input: ReviewI
     const findings = JSON.stringify([...sequence].sort()) === JSON.stringify(sorted);
     const order = findings ? JSON.stringify(sequence) === JSON.stringify(expected) : null;
     const confidence = actual.confidence === baseline.confidence;
-    if (!findings || order === false || !confidence) changes.push({ variant: variant.id, findings, order, confidence });
+    const summary = actual.summary === baseline.summary;
+    if (!findings || order === false || !confidence || !summary) changes.push({ variant: variant.id, findings, order, confidence, summary });
   }
   return changes;
 }

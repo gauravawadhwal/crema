@@ -14,6 +14,7 @@ export interface Check {
   /** 0..1, defaults to 1 or 0 from pass. */
   score?: number;
   critical?: boolean;
+  diagnostic?: boolean;
   detail?: string;
 }
 
@@ -27,7 +28,7 @@ export interface Grade {
 }
 
 export function finalize(checks: Check[], labels: Grade["labels"] = {}, passThreshold = 0): Grade {
-  const scores = checks.map((c) => c.score ?? (c.pass ? 1 : 0));
+  const scores = checks.filter(c => !c.diagnostic).map((c) => c.score ?? (c.pass ? 1 : 0));
   const score = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const pass = checks.every((c) => !c.critical || c.pass) && score >= passThreshold;
   return { checks, score: Math.round(score * 1000) / 1000, pass, labels };

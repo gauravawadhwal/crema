@@ -220,7 +220,7 @@ export function loadLocalReviewShots(directory = process.env.CREMA_LOCAL_SHOTS_D
         id, input, fullTrace,
         sampleTimes: points.map((p) => p.t),
         profileFamily: meta?.profileFamily ?? "unlabelled", pumpMode: meta?.pumpMode ?? "unknown",
-        labels: meta ? validateReviewLabels(meta.labels, "local") : undefined,
+        labels: meta ? validateReviewLabels(meta.labels, "local", points.map(p => p.t)) : undefined,
       };
     } catch {
       throw new Error(`Invalid review input or labels for ${id}`);

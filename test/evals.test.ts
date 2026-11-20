@@ -265,42 +265,38 @@ describe("harness", () => {
     expect(abstain("There is not enough recorded telemetry; check the recording connection and repeat before changing the grind.")).toBe(true);
   });
 
-  it("judges and rejudges a shot review against the actual shipped prompt", async () => {
-    const seen: string[] = [];
+  it("uses the same canonical judge evidence across arms and during regrade", async () => {
+    const seen: { caseEvidence: unknown; answer: unknown }[] = [];
     const judgeProvider: LlmProvider = {
       id: "mock", billing: "test",
       async structured(req: StructuredRequest<any>) {
-        seen.push(req.prompt);
-        return req.schema.parse({ contradictions: [], inventedFigures: [], specificity: 3, actionable: 3, plainLanguage: 4, comment: "test verdict" });
+        seen.push(JSON.parse(req.prompt));
+        return req.schema.parse({ contradictions: [], inventedFigures: [], specificity: 3, actionable: 3, plainLanguage: 4, comment: "test verdict",
+          assessment: { numericEvidence: { status: "pass" }, causalRestraint: { status: "pass" },
+            tasteGrounding: { status: "pass" }, adviceAlignment: { status: "pass" } } });
       },
     };
     const c = loadCases("review").find(x => x.id === "review-history-grind-progress")!;
     const run = await runCase("review", c, { kind: "llm", provider: new MockProvider() }, 0, { today, judge: judgeProvider });
-    expect(run.calls).toHaveLength(1);
+    const rules = await runCase("review", c, { kind: "rules" }, 0, { today, judge: judgeProvider });
     expect(run.calls[0].schemaName).toBe("CurveNarrative");
-    expect(run.calls[0].prompt).toContain("EVIDENCE (keys are evidence IDs)");
-    expect(run.calls[0].prompt).toContain('"previousDurationS":22');
-    expect(seen).toHaveLength(1);
-    expect(seen[0]).toContain(run.calls[0].prompt);
-    expect(seen[0]).not.toContain("flat-pressure-v1");
-    await rejudge("review", run, judgeProvider);
-    expect(seen).toHaveLength(2);
-    expect(seen[1]).toContain(run.calls[0].prompt);
-    expect(run.judge?.comment).toBe("test verdict");
-    expect(run.judgeCalls).toHaveLength(1);
+    expect(seen[0].caseEvidence).toEqual(seen[1].caseEvidence);
+    expect(seen[0].answer).toEqual(run.output);
+    expect(seen[1].answer).toEqual(rules.output);
+    expect(rules.judgeProvenance).toEqual(run.judgeProvenance);
+    expect(JSON.stringify(seen[0])).not.toContain("ASSISTANT SYSTEM INSTRUCTIONS");
+    expect(JSON.stringify(seen[0])).not.toContain("acceptableMove");
     const summary = summarize("review", [run]);
     expect(summary.headline["judge: diagnostic quality"]).toBe(1);
     expect(summary.headline["grounded history comparison"]).toBe(1);
-    const historicalText = "HISTORICAL FIELD GUIDE: sourBitter -2 means sour; +2 means bitter. Example only: 77 s is not this case's time.";
     const saved: ResultsFile = {
-      meta: { task: "review", subject: "mock", provider: "mock", model: null, judge: "mock", startedAt: today.toISOString(), git: { commit: "test", dirty: false }, repeats: 1, filter: null, prompts: { historical: { schemaName: "ShotReview", text: historicalText } } },
-      summary, records: [{ ...run, calls: [{ ...run.calls[0], schemaName: "ShotReview", systemHash: "historical" }] }],
+      meta: { task: "review", subject: "mock", provider: "mock", model: null, judge: "mock", startedAt: today.toISOString(), git: { commit: "test", dirty: false }, repeats: 1, filter: null, prompts: {} },
+      summary, records: [run, rules],
     };
     const loaded = unpackResults(JSON.parse(JSON.stringify(packResults(saved))));
-    await rejudge("review", loaded.records[0], judgeProvider, loaded.meta.prompts);
-    expect(seen[2]).toContain(historicalText);
-    expect(seen[2]).toContain(run.calls[0].prompt);
-    expect(seen[2]).not.toContain("You help a Decent DE1 owner decide");
+    loaded.records[0].calls[0].prompt = "Historical subject instructions with an unrelated example.";
+    for (const record of loaded.records) await rejudge("review", record, judgeProvider, c);
+    expect(seen.slice(2)).toEqual(seen.slice(0, 2));
   });
 
   it("runs the rules baseline and grades it", async () => {

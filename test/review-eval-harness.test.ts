@@ -87,8 +87,8 @@ describe("crossed taste", () => {
       return { findings: [issue, second], confidence: "low" };
     });
     expect(changes).toHaveLength(6);
-    expect(changes).toContainEqual({ variant: "high-enjoyment/liked", findings: true, order: false, confidence: false });
-    expect(changes).toContainEqual({ variant: "instructions-only/unrated", findings: false, order: null, confidence: true });
+    expect(changes).toContainEqual({ variant: "high-enjoyment/liked", findings: true, order: false, confidence: false, summary: true });
+    expect(changes).toContainEqual({ variant: "instructions-only/unrated", findings: false, order: null, confidence: true, summary: true });
   });
 
   it("exercises the legacy mock model and exposes the legacy rules confidence change", async () => {
@@ -100,7 +100,7 @@ describe("crossed taste", () => {
       return { findings: result.review.issues, confidence: result.review.confidence };
     });
     expect(await run(mock)).toEqual([]);
-    expect(await run()).toContainEqual({ variant: "sour-and-thin/unrated", findings: true, order: true, confidence: false });
+    expect(await run()).toContainEqual({ variant: "sour-and-thin/unrated", findings: true, order: true, confidence: false, summary: true });
   });
 
   it("keeps the curve-only model input and result byte-identical across crossed taste inputs", async () => {
@@ -127,9 +127,9 @@ describe("labelled review metrics", () => {
     const score = scoreReview(labels, output, [0, 1.8, 2, 3, 5, 8]);
     expect(score.events[0]).toMatchObject({ id: "drops", matched: true, onsetErrorS: expect.closeTo(0.2), peakErrorS: null });
     expect(score.events[1]).toMatchObject({ id: "rise", matched: true, onsetErrorS: 1, peakErrorS: 1 });
-    expect(score.falseAlarms).toEqual(["first_drips", "flow_rise", "flow_rise", "choke"]);
+    expect(score.falseAlarms).toEqual(["first_drips", "flow_rise", "choke"]);
     expect(score.forbiddenHits).toEqual(["no-choke"]);
-    expect(score.unscoredEvents).toBe(1);
+    expect(score.unscoredEvents).toBe(2);
   });
 
   it("matches repeated event kinds one-to-one without letting a broad label consume a constrained hit", () => {
@@ -212,11 +212,11 @@ describe("review ablation registry and report", () => {
     const variants = await runReviewAblation(cases, ["old", "facts-plus-anchored", "facts-only", "two-stage"]);
     const [old, anchored, pending, twoStage] = variants;
     expect(pending).toMatchObject({ status: "pending", reason: "not implemented yet" });
-    expect(twoStage).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 } } });
-    expect(old).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
+    expect(twoStage).toMatchObject({ status: "ready", summary: { detectorEvidence: { numericConsistency: { passed: 1, total: 1 } } } });
+    expect(old).toMatchObject({ status: "ready", summary: { detectorEvidence: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 } },
       families: [{ family: "flat-flow" }, { family: "flat-pressure" }],
       records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });
-    expect(anchored).toMatchObject({ status: "ready", summary: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 },
+    expect(anchored).toMatchObject({ status: "ready", summary: { detectorEvidence: { numericConsistency: { passed: 1, total: 1 }, fallbackRate: 0 } },
       records: [{ caseId: "demo-steady", source: "rules" }, { caseId: "demo-shortfall", source: "rules" }] });
     const report = reviewAblationMarkdown({ meta: { task: "review-ablation", dataset: "demo", demonstration: true, split: "dev",
       purpose: "tune", provider: "rules", startedAt: "2000-01-01T00:00:00Z", git: { commit: "abcdef", dirty: false } }, variants });
@@ -224,8 +224,8 @@ describe("review ablation registry and report", () => {
     expect(report).toContain("### flat-pressure");
     expect(report).toContain("Numeric consistency 1/1");
     expect(report).toContain("not implemented yet");
-    expect(report).toMatch(/Mean prompt size [\d.]+ chars of curve, [\d.]+ chars in total, across 2 runs/);
-    expect(report).toMatch(/Landmarks visible to the model first_sustained_beverage \d+\/\d+, brew_pressure_crest/);
+    expect(report).toMatch(/Counterfactual mean prompt size [\d.]+ chars of curve, [\d.]+ chars in total, across 2 runs/);
+    expect(report).toMatch(/Landmarks in counterfactual rendering first_sustained_beverage \d+\/\d+, brew_pressure_crest/);
     const recorder = new RecordingProvider(new MockProvider());
     const mock = await runReviewVariant("old", cases[0].input, recorder);
     expect(mock).toMatchObject({ status: "ready", source: "mock", tokens: null, fellBack: false, promptHashes: [expect.any(String)] });
@@ -328,6 +328,12 @@ describe("frozen review holdout", () => {
     const files = readdirSync(dir);
     const json = files.find((file) => file.includes("-review-ablation-") && file.endsWith(".json"))!;
     expect(files).toContain(json.replace(/\.json$/, ".md"));
-    expect(JSON.parse(readFileSync(path.join(dir, json), "utf8")).meta).toMatchObject({ split: "holdout", holdoutRunCount: 1 });
-  }));
+    const { meta } = JSON.parse(readFileSync(path.join(dir, json), "utf8"));
+    expect(meta).toMatchObject({ split: "holdout", holdoutRunCount: 1, manifest: {
+      scorer: expect.stringMatching(/^[a-f0-9]{64}$/), cases: [{ caseId: "demo-shortfall" }], slots: [{ repeat: 0 }],
+    } });
+    const markdown = readFileSync(path.join(dir, json.replace(/\.json$/, ".md")), "utf8");
+    expect(markdown).toContain(meta.manifest.cases[0].inputDigest);
+    expect(markdown).toContain(meta.manifest.slots[0].digest);
+  }), 30000);
 });

@@ -9,7 +9,10 @@ import { reviewShot } from "../../server/recommend/review.js";
 import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "../../server/recommend/review-evidence.js";
 import { rulesReviewResult } from "../../server/recommend/review-local.js";
 import type { ReviewInput, ReviewResult, ShotReviewData } from "../../server/recommend/review-types.js";
-import { RecordingProvider } from "./recorder.js";
+import { digest } from "./manifest.js";
+import { answerSource } from "./provenance.js";
+import { judgeChecks, judgeReview, reviewJudgeEvidence, reviewJudgeProvenance, reviewJudgeStatus } from "./judge.js";
+import { RecordingProvider, type CallRecord } from "./recorder.js";
 import { legacyReviewCurveSection } from "./review-legacy-curve.js";
 import type { PumpMode, ReviewLabels } from "./review-labels.js";
 import { scoreReview, summarizeReviewMetrics, type ReviewEvalOutput, type ReviewMetricRow } from "./review-metrics.js";
@@ -25,10 +28,9 @@ export interface ReviewEvalCase {
 }
 
 interface VariantOutput {
-  scored: ReviewEvalOutput;
+  detectorEvidence: ReviewEvalOutput;
   review: ShotReviewData;
   source: string;
-  fellBack: boolean;
   stages?: Pick<ReviewResult, "curve" | "taste">;
 }
 
@@ -67,7 +69,7 @@ export function normalizeLegacyReview(review: ShotReviewData, input: ReviewInput
         if (peak !== undefined) figures.push({ id: `${prefix}.peak`, unit, value: Number(peak) });
       }
     }
-    return { kind: issue.kind, phase: point?.substate ?? undefined, controlledVariable, onsetS: issue.fromS ?? undefined };
+    return { kind: issue.kind, phase: point?.substate ?? undefined, controlledVariable, timingBasis: "issue-window", onsetS: issue.fromS ?? undefined };
   });
   const curves = evidence?.history.curves;
   if (curves?.reason === "comparable_phases" && curves.phase) {
@@ -92,10 +94,10 @@ function curveVariant(curveSection?: typeof legacyReviewCurveSection): Variant {
       if (!llm) {
         const evidence = buildReviewEvidence(input, fullTrace);
         const review = legacyRulesReview(input, evidence);
-        return { review, source: "rules", scored: normalizeLegacyReview(review, input, projectReviewEvidence(evidence)), fellBack: false };
+        return { review, source: "rules", detectorEvidence: normalizeLegacyReview(review, input, projectReviewEvidence(evidence)) };
       }
       const { review, source, evidence } = await legacyReviewShot(llm, input, fullTrace, { curveSection });
-      return { review, source, scored: normalizeLegacyReview(review, input, evidence), fellBack: llm != null && source === "rules" };
+      return { review, source, detectorEvidence: normalizeLegacyReview(review, input, evidence) };
     },
   };
 }
@@ -108,7 +110,7 @@ export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
     status: "ready",
     async run(input, llm, fullTrace) {
       const { review, source, evidence, curve, taste } = llm ? await reviewShot(llm, input, fullTrace) : rulesReviewResult(input, fullTrace);
-      return { review, source, stages: { curve, taste }, scored: normalizeLegacyReview(review, input, evidence), fellBack: llm != null && source === "rules" };
+      return { review, source, stages: { curve, taste }, detectorEvidence: normalizeLegacyReview(review, input, evidence) };
     },
   },
 };
@@ -130,18 +132,39 @@ export async function runReviewVariant(name: VariantName, input: ReviewInput, pr
     tokens.input += usage.inputTokens;
     tokens.output += usage.outputTokens;
   }
-  return { status: "ready" as const, ...result, ms, tokens, promptHashes: [...new Set(calls.map((c) => c.systemHash))] };
+  const provenance = answerSource("review", calls, { source: result.source },
+    provider ? { kind: "llm", provider: provider.id } : { kind: "rules" });
+  const authored = provenance === "model" ? authoredReview(result, calls) : undefined;
+  const curveCall = calls.find(call => call.schemaName === "ShotReview" || call.schemaName === "CurveNarrative");
+  return { status: "ready" as const, ...result, fellBack: provenance === "fallback", provenance, authored, curveCall, ms, tokens, promptHashes: [...new Set(calls.map((c) => c.systemHash))] };
+}
+
+function authoredReview(result: VariantOutput, calls: CallRecord[]) {
+  const { review, stages } = result;
+  if (!stages) {
+    const raw = calls.find(call => call.schemaName === "ShotReview")?.output as ShotReviewData | undefined;
+    if (!raw) return undefined;
+    return {
+      summary: raw.summary === review.summary ? raw.summary : undefined,
+      wentWell: review.wentWell.filter(text => raw.wentWell?.includes(text)),
+      nextShot: digest(raw.nextShot) === digest(review.nextShot) ? review.nextShot : undefined,
+    };
+  }
+  const interpretation = stages.curve.narrative;
+  const { report } = (calls.find(call => call.schemaName === "ReviewNotes")?.output ?? {}) as {
+    report?: { notesEvidence: string; notesTaste: string };
+  };
+  // Only count the interpretation and adjustment that survived validation
+  // and taste alignment. A repeat imposed by those stages belongs to rules.
+  const notesAssessment = report && stages.taste.summary.includes(`${report.notesTaste} in the saved note`)
+    ? { quote: report.notesEvidence, reportedTaste: report.notesTaste } : undefined;
+  const nextShot = notesAssessment && review.nextShot?.reasoning.startsWith("You reported a ") ? review.nextShot : undefined;
+  return interpretation || notesAssessment ? { interpretation: interpretation ?? undefined, notesAssessment, nextShot } : undefined;
 }
 
 const MEASURED_LANDMARKS = ["first_sustained_beverage", "brew_pressure_crest", "phase_boundary", "stop", "recording_end"] as const;
 type LandmarkCounts = Record<typeof MEASURED_LANDMARKS[number], { kept: number; total: number }>;
 export interface PromptMeasure { curveChars: number; promptChars: number; landmarks: LandmarkCounts }
-
-const CURVE_SECTIONS: Partial<Record<VariantName, (input: ReviewInput, landmarks: PhaseLandmark[]) => string>> = {
-  old: (input) => legacyReviewCurveSection(input.points),
-  "facts-plus-anchored": (input, landmarks) => reviewCurveSection(input.points, landmarks),
-  "two-stage": (input, landmarks) => reviewCurveSection(input.points, landmarks),
-};
 
 /** Times the model can see in the curve section: every row, and every reading carried by an event. */
 function visibleTimes(section: string) {
@@ -154,20 +177,22 @@ function visibleTimes(section: string) {
   return times;
 }
 
-/** Token-free size and landmark retention for one variant on one recording. */
-export async function measurePrompt(name: VariantName, input: ReviewInput): Promise<PromptMeasure | null> {
-  const section = CURVE_SECTIONS[name];
-  if (!section) return null;
+/** Counterfactual render for rules. For model runs, use the actual wire request. */
+export async function measurePrompt(name: VariantName, input: ReviewInput, fullTrace?: FullReviewTrace, captured?: string) {
+  if (REVIEW_VARIANTS[name].status !== "ready") return null;
   const landmarks: PhaseLandmark[] = [];
-  analyzeShot(input, landmarks);
-  const curve = section(input, landmarks);
+  // Supplied full-trace summaries omit the raw sample brackets, so their
+  // landmark retention denominator cannot be reconstructed from bounded rows.
+  if (!fullTrace) analyzeShot(input, landmarks);
+  let prompt = captured;
+  if (prompt === undefined) {
+    const recorder = new RecordingProvider(new MockProvider());
+    await REVIEW_VARIANTS[name].run(structuredClone(input), new ProviderChain([recorder]), fullTrace);
+    prompt = recorder.calls.find(call => call.schemaName === "ShotReview" || call.schemaName === "CurveNarrative")?.prompt;
+  }
+  const curve = prompt?.match(/^SHOT CURVES[^\n]*\n[^\n]+/m)?.[0];
+  if (!curve || !prompt) return null;
   const seen = visibleTimes(curve);
-  const recorder = new RecordingProvider(new MockProvider());
-  const llm = new ProviderChain([recorder]);
-  if (name === "two-stage") {
-    await reviewShot(llm, structuredClone(input));
-    if (!recorder.calls.some(call => call.schemaName === "CurveNarrative")) return null;
-  } else await legacyReviewShot(llm, structuredClone(input), undefined, { curveSection: name === "old" ? () => curve : undefined });
   const counts = Object.fromEntries(MEASURED_LANDMARKS.map((kind) => [kind, { kept: 0, total: 0 }])) as LandmarkCounts;
   for (const landmark of landmarks) {
     if (!(landmark.kind in counts)) continue;
@@ -176,7 +201,7 @@ export async function measurePrompt(name: VariantName, input: ReviewInput): Prom
     bucket.total++;
     if (readings.every((p) => seen.has(p.t))) bucket.kept++;
   }
-  return { curveChars: curve.length, promptChars: recorder.calls[0]?.prompt.length ?? 0, landmarks: counts };
+  return { curveChars: curve.length, promptChars: prompt.length, landmarks: counts };
 }
 
 export function summarizePrompt(records: { prompt: PromptMeasure | null }[]) {
@@ -190,16 +215,66 @@ export function summarizePrompt(records: { prompt: PromptMeasure | null }[]) {
   };
 }
 
-interface AblationRecord extends ReviewMetricRow {
+interface ReviewerScore {
+  status: "rules-control" | "no-model-answer" | "unassessed" | "invalid-citation" | "unavailable" | "pass" | "fail";
+  supportedOutcome: boolean | null;
+  adjudication?: {
+    evidenceDigest: string;
+    rubricDigest: string;
+    verdict?: Awaited<ReturnType<typeof judgeReview>>;
+  };
+}
+
+async function scoreReviewer(result: Extract<Awaited<ReturnType<typeof runReviewVariant>>, { status: "ready" }>,
+  c: ReviewEvalCase, decision: boolean | null, judge?: LlmProvider): Promise<ReviewerScore> {
+  if (result.provenance === "rules") return { status: "rules-control", supportedOutcome: null };
+  if (result.provenance !== "model") return { status: "no-model-answer", supportedOutcome: null };
+  const answer = result.authored;
+  const supportedOutcome = answer && "nextShot" in answer && answer.nextShot !== undefined ? decision : null;
+  if (!answer || !judge) return { status: supportedOutcome === false ? "fail" : "unassessed", supportedOutcome };
+  const evidence = reviewJudgeEvidence(c.input, c.fullTrace);
+  const provenance = reviewJudgeProvenance(evidence);
+  let verdict;
+  try {
+    verdict = await judgeReview(new ProviderChain([judge]), evidence, answer);
+  } catch {
+    return { status: "unavailable", supportedOutcome, adjudication: provenance };
+  }
+  const assessment = reviewJudgeStatus(verdict, evidence, answer);
+  const adjudication = { ...provenance, verdict };
+  if (assessment === "invalid-citation") return { status: assessment, supportedOutcome, adjudication };
+  const failed = supportedOutcome === false || judgeChecks(verdict, true).some(check => check.critical && !check.pass);
+  const coverage = assessment === "assessed" && (c.labels?.supportedOutcomes == null || supportedOutcome !== null);
+  return { status: failed ? "fail" : coverage ? "pass" : "unassessed", supportedOutcome, adjudication };
+}
+
+export interface AblationRecord extends ReviewMetricRow {
   prompt: PromptMeasure | null;
   caseId: string;
+  repeat: number;
   profileFamily: string;
   source: string;
   labelSource?: ReviewLabels["source"];
   promptHashes: string[];
+  reviewerScore: ReviewerScore;
+  fallbackUtility: boolean | null;
 }
 
-export async function runReviewAblation(cases: readonly ReviewEvalCase[], names: readonly VariantName[], provider?: LlmProvider) {
+function summarizeRecords(records: AblationRecord[]) {
+  const count = (status: ReviewerScore["status"]) => records.filter(r => r.reviewerScore.status === status).length;
+  const outcomes = records.flatMap(r => r.reviewerScore.supportedOutcome === null ? [] : [r.reviewerScore.supportedOutcome]);
+  const { abstention: _abstention, supportedOutcomes: _outcomes, forbiddenClaims: _claims, ...detectorEvidence } = summarizeReviewMetrics(records);
+  return {
+    detectorEvidence,
+    reviewer: { passed: count("pass"), failed: count("fail"), unassessed: count("unassessed"),
+      invalidCitation: count("invalid-citation"), unavailable: count("unavailable"), noModelAnswer: count("no-model-answer"),
+      rulesControl: count("rules-control"),
+      supportedOutcomes: { passed: outcomes.filter(Boolean).length, total: outcomes.length } },
+    fallbackUtility: { passed: records.filter(r => r.fallbackUtility === true).length, total: records.filter(r => r.fallbackUtility !== null).length },
+  };
+}
+
+export async function runReviewAblation(cases: readonly ReviewEvalCase[], names: readonly VariantName[], provider?: LlmProvider, judge?: LlmProvider) {
   const results = [];
   for (const name of names) {
     const variant = REVIEW_VARIANTS[name];
@@ -211,19 +286,28 @@ export async function runReviewAblation(cases: readonly ReviewEvalCase[], names:
     for (const c of cases) {
       const result = await runReviewVariant(name, structuredClone(c.input), provider, c.fullTrace);
       if (result.status !== "ready") throw new Error(`Variant ${name}: ${result.reason}`);
-      const { ms, tokens, fellBack, scored, source, promptHashes } = result;
-      const score = c.labels && scoreReview(c.labels, scored, c.sampleTimes ?? c.input.points.map((p) => p.t));
-      records.push({ prompt: await measurePrompt(name, c.input), caseId: c.id, profileFamily: c.profileFamily, pumpMode: c.pumpMode, ms, tokens, fellBack, score, source, labelSource: c.labels?.source, promptHashes });
+      const { ms, tokens, fellBack, detectorEvidence, source, promptHashes } = result;
+      const samples = c.sampleTimes ?? c.input.points.map(p => p.t);
+      const decision = c.labels ? scoreReview(c.labels, detectorEvidence, samples).supportedOutcome : null;
+      const score = c.labels && scoreReview({ ...c.labels, supportedOutcomes: undefined, forbiddenClaims: [] }, detectorEvidence, samples);
+      const prompt = !provider || result.curveCall
+        ? await measurePrompt(name, c.input, c.fullTrace, result.curveCall?.prompt) : null;
+      records.push({ prompt, caseId: c.id, repeat: 0, profileFamily: c.profileFamily, pumpMode: c.pumpMode, ms, tokens, fellBack, score, source,
+        labelSource: c.labels?.source, promptHashes, reviewerScore: await scoreReviewer(result, c, decision, judge),
+        fallbackUtility: fellBack ? decision : null });
     }
-    const families = Array.from(new Set(records.map((r) => r.profileFamily)), (family) => ({
-      family, metrics: summarizeReviewMetrics(records.filter((r) => r.profileFamily === family)),
-      prompt: summarizePrompt(records.filter((r) => r.profileFamily === family)),
+    const families = Array.from(new Set(records.map(r => r.profileFamily)), family => ({
+      family, metrics: summarizeRecords(records.filter(r => r.profileFamily === family)),
+      prompt: summarizePrompt(records.filter(r => r.profileFamily === family)),
     }));
-    const labelSources = Array.from(new Set(records.flatMap((r) => r.labelSource ? [r.labelSource] : [])), (source) => ({
-      source, metrics: summarizeReviewMetrics(records.filter((r) => r.labelSource === source)),
-      prompt: summarizePrompt(records.filter((r) => r.labelSource === source)),
+    const labelSources = Array.from(new Set(records.flatMap(r => r.labelSource ? [r.labelSource] : [])), source => ({
+      source, metrics: summarizeRecords(records.filter(r => r.labelSource === source)),
+      prompt: summarizePrompt(records.filter(r => r.labelSource === source)),
     }));
-    results.push({ name, status: "ready" as const, summary: summarizeReviewMetrics(records), prompt: summarizePrompt(records), families, labelSources, records });
+    // The CLI has no calibrated judge or custodian-approved panel. It produces
+    // diagnostic evidence and cannot issue a promotion verdict.
+    results.push({ name, status: "ready" as const, promotionEligible: false, summary: summarizeRecords(records),
+      prompt: summarizePrompt(records), families, labelSources, records });
   }
   return results;
 }
