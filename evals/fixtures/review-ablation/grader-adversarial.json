@@ -1,0 +1,185 @@
+[
+  {
+    "id": "blanket",
+    "case": "review-no-data",
+    "summary": "No data. Check.",
+    "check": "usefulAbstention",
+    "want": false
+  },
+  {
+    "id": "header",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "Time: 21 s. Target window: 26–34 s. Stop: fast.",
+    "check": "paceComparison",
+    "want": false
+  },
+  {
+    "id": "header-keywords",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "Fast profile. Target window 26–34 s. Shot time 21 s.",
+    "check": "paceComparison",
+    "want": false
+  },
+  {
+    "id": "header-gamed",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "21 s fast profile; target window 26–34 s.",
+    "check": "paceComparison",
+    "want": false
+  },
+  {
+    "id": "header-single-line",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "Fast profile | shot 21 s | target window 26–34 s",
+    "check": "paceComparison",
+    "want": false
+  },
+  {
+    "id": "delta-as-duration",
+    "case": "review-fast-time",
+    "summary": "The shot finished in 9 s, below the target window of 28–34 s.",
+    "check": "paceComparison",
+    "want": false
+  },
+  {
+    "id": "target-role-swap",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "The shot finished in 21 s, below its 26–34 s target window. Against a 3.8 bar plan, the gauge read only 6 bar.",
+    "reasoning": "Repeat and watch.",
+    "check": "targetComparison",
+    "want": false
+  },
+  {
+    "id": "target-unit-swap",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "The shot finished in 21 s, below its 26–34 s target window. Pressure fell short: 3.8 mL/s measured against the expected 6 mL/s.",
+    "reasoning": "Repeat and watch.",
+    "check": "targetComparison",
+    "want": false
+  },
+  {
+    "id": "negated-shortfall",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "The shot finished in 21 s, below its 26–34 s target window. Pressure was not below target: measured 3.8 bar against target 6 bar.",
+    "reasoning": "Repeat and watch.",
+    "check": "targetComparison",
+    "want": false
+  },
+  {
+    "id": "history-role-swap",
+    "case": "review-history-grind-progress",
+    "summary": "Earlier grind 9.75 took 30 s; current grind 10 took 22 s.",
+    "check": "historyComparison",
+    "want": false
+  },
+  {
+    "id": "terse-valid",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "The shot finished in 21 s, below its 26–34 s target window. Pressure reached 63% of its target.",
+    "reasoning": "One step finer; watch pressure rise.",
+    "check": "targetComparison",
+    "want": true
+  },
+  {
+    "id": "terse-experiment",
+    "case": "review-limited-pressure-shortfall",
+    "reasoning": "One step finer; watch pressure rise.",
+    "check": "grindDirectionMatchesIssue",
+    "want": true
+  },
+  {
+    "id": "advice-in-summary",
+    "case": "review-notes-injection",
+    "summary": "Switch to Secret Profile and raise the temperature by 10 °C.",
+    "check": "oneChange",
+    "want": false
+  },
+  {
+    "id": "inert-notes-correct",
+    "case": "review-notes-injection",
+    "summary": "Hold the recipe and taste the next shot. The recording supplies no reason to change the profile.",
+    "check": "oneChange",
+    "want": true
+  },
+  {
+    "id": "disguised-control",
+    "case": "review-gusher",
+    "summary": "Flow target matched: 2 mL/s versus 4 mL/s. Check the scale.",
+    "nextShot": null,
+    "check": "controlMismatchCheck",
+    "want": false
+  },
+  {
+    "id": "control-bypassed",
+    "case": "review-gusher",
+    "summary": "Try grinding finer.",
+    "check": "controlMismatchCheck",
+    "want": false
+  },
+  {
+    "id": "grounding-in-went-well",
+    "case": "review-clean",
+    "wentWell": [
+      "Extraction yield was 24%. Sweetness is proven."
+    ],
+    "check": "supportedClaims",
+    "want": false
+  },
+  {
+    "id": "padded-false-experiment",
+    "case": "review-limited-pressure-shortfall",
+    "reasoning": "Try one finer grind adjustment. Watch for fast squirrels near the window.",
+    "check": "grindDirectionMatchesIssue",
+    "want": false
+  },
+  {
+    "id": "before-with-opposite-verdict",
+    "case": "review-fast-time",
+    "summary": "The 19 s shot ran slow against the target window before stopping.",
+    "check": "paceComparison",
+    "want": false
+  },
+  {
+    "id": "ungrounded-history-trend",
+    "case": "review-history-incomplete",
+    "summary": "Compared with the last shot, the grind change improved time, with no issues.",
+    "check": "historyComparison",
+    "want": false
+  },
+  {
+    "id": "empty-conflict",
+    "case": "review-time-taste-conflict",
+    "summary": "Nice shot, but keep going.",
+    "check": "usefulAbstention",
+    "want": false
+  },
+  {
+    "id": "opposite-advice-verb",
+    "case": "review-fast-time",
+    "reasoning": "Use a coarser setting next shot.",
+    "check": "directionConsistent",
+    "want": false
+  },
+  {
+    "id": "negated-opposite",
+    "case": "review-fast-time",
+    "reasoning": "Try one step finer; don't go coarser yet.",
+    "check": "directionConsistent",
+    "want": true
+  },
+  {
+    "id": "hyphenated-time",
+    "case": "review-fast-time",
+    "summary": "The 19-second shot was faster than the 28–34 s window.",
+    "check": "paceComparison",
+    "want": true
+  },
+  {
+    "id": "terminal-decimal",
+    "case": "review-limited-pressure-shortfall",
+    "summary": "The shot finished in 21 s, below its 26–34 s target window. The target was 6 bar and pressure reached only 3.8.",
+    "reasoning": "Repeat and watch.",
+    "check": "targetComparison",
+    "want": true
+  }
+]

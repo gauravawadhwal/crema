@@ -4,7 +4,6 @@
  * grades it. "rules" stands in for a provider to measure the no-AI baseline.
  */
 import path from "node:path";
-import type { ReviewInput } from "../../server/recommend/review-types.js";
 import { reviewShot } from "../../server/recommend/review.js";
 import { rulesReview } from "../../server/recommend/review-local.js";
 import type { ShotReviewData } from "../../server/recommend/review-types.js";
@@ -15,7 +14,7 @@ import { ProviderChain } from "../../server/llm/index.js";
 import { MockProvider } from "../../server/llm/mock.js";
 import type { ImageInput, LlmProvider } from "../../server/llm/types.js";
 import { rankProfiles } from "../../server/profiles/match.js";
-import { dialIn, recommend, rulesDialIn } from "../../server/recommend/index.js";
+import { dialInWithSource, recommend, rulesDialIn } from "../../server/recommend/index.js";
 import type { BeanInfo, DialInAdvice, Recipe } from "../../server/schema.js";
 import {
   dialInRecipe,
@@ -31,10 +30,13 @@ import {
   type TaskName,
 } from "./dataset.js";
 import { errorGrade, finalize, gradeDialIn, gradeIdentify, gradeRecommend, type Grade, type RecommendContext } from "./graders.js";
-import { judge, judgeChecks, type JudgeVerdict } from "./judge.js";
-import { RecordingProvider, SYSTEM_PROMPTS, type CallRecord } from "./recorder.js";
+import { judge, judgeChecks, judgeReview, JudgeVerdict, reviewJudgeEvidence, reviewJudgeProvenance, reviewJudgeStatus } from "./judge.js";
+import { RecordingProvider, type CallRecord } from "./recorder.js";
 
 /** What is being evaluated: a model behind a provider, or Crema's rules with no model. */
+import { caseDigests, sha256 } from "./manifest.js";
+import { answerSource, type AnswerSource, type RequestedSubject } from "./provenance.js";
+
 export type Subject = { kind: "llm"; provider: LlmProvider } | { kind: "rules" };
 
 export interface RunRecord {
@@ -50,6 +52,12 @@ export interface RunRecord {
   calls: CallRecord[];
   judge?: JudgeVerdict;
   judgeCalls?: CallRecord[];
+  requested?: RequestedSubject;
+  answerSource?: AnswerSource;
+  fallbackGrade?: Grade;
+  judgeRequested?: boolean;
+  judgeStatus?: "assessed" | "unassessed" | "invalid-citation" | "unavailable";
+  judgeProvenance?: ReturnType<typeof reviewJudgeProvenance>;
   grade: Grade;
 }
 
@@ -67,20 +75,16 @@ export function supports(task: TaskName, subject: Subject): boolean {
 export async function runCase<T extends TaskName>(task: T, c: CaseFor<T>, subject: Subject, repeat: number, opts: RunOptions): Promise<RunRecord> {
   const rec = subject.kind === "llm" ? new RecordingProvider(subject.provider) : new RecordingProvider(new MockProvider());
   const llm = new ProviderChain([rec]);
-  const base = { caseId: c.id, repeat, split: c.split, tags: c.tags };
+  const requested: RequestedSubject = subject.kind === "rules" ? { kind: "rules" } : { kind: "llm", provider: subject.provider.id };
+  const base = { caseId: c.id, repeat, split: c.split, tags: c.tags, requested, judgeRequested: task !== "identify" && !!opts.judge };
   const t0 = performance.now();
   try {
     const { output, context, judgeInput } = await execute(task, c, subject, llm, opts.today);
     const ms = Math.round(performance.now() - t0);
     const record: RunRecord = { ...base, ms, output, context, calls: rec.calls, grade: errorGrade("ungraded") };
-    if (opts.judge && judgeInput && task !== "identify" && !hasFallback(record)) {
-      const jr = new RecordingProvider(opts.judge);
-      try {
-        record.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", judgeInput, output);
-      } catch (e) {
-        console.warn(`judge failed on ${c.id}: ${(e as Error).message.slice(0, 200)}`);
-      }
-      record.judgeCalls = jr.calls;
+    record.answerSource = answerSource(task, record.calls, context, requested);
+    if (opts.judge && (record.answerSource === "model" || record.answerSource === "rules")) {
+      await rejudge(task, record, opts.judge, task === "review" ? c as ReviewCase : undefined, judgeInput);
     }
     record.grade = gradeRecord(task, c, record);
     return record;
@@ -90,52 +94,73 @@ export async function runCase<T extends TaskName>(task: T, c: CaseFor<T>, subjec
   }
 }
 
-function hasFallback(r: RunRecord) {
-  return r.calls.some((c) => c.error) || (r.context as { source?: string } | undefined)?.source?.startsWith("rules (") === true || (r.context as { fellBack?: boolean } | undefined)?.fellBack === true;
+function identifyInput(ic: IdentifyCase): IdentifyInput {
+  return {
+    query: ic.input.query, description: ic.input.description, today: ic.input.today, url: ic.input.url,
+    pageText: ic.input.page ? readFixture("pages", ic.input.page).toString("utf8") : undefined,
+    images: ic.input.images?.map(f => ({ data: readFixture("labels", f), mediaType: MEDIA[path.extname(f).toLowerCase()] ?? "image/jpeg" })),
+    offline: ic.input.offline,
+  };
 }
 
-type ReviewJudgeContext = Pick<ReviewInput, "feedback" | "notes">;
-const reviewCall = (call: CallRecord) => ["ShotReview", "CurveNarrative", "ReviewNotes"].includes(call.schemaName);
-
-function reviewJudgeInput(calls: CallRecord[], taste?: ReviewJudgeContext, systems?: Record<string, { text: string }>) {
-  const prompts = calls.filter(reviewCall).map(call => judgeEvidence(call, systems));
-  if (taste) prompts.push("RECORDED TASTE FOR ALIGNMENT (sourBitter -2 sour to +2 bitter, body -2 thin to +2 heavy, enjoyment 0–10):\n" + JSON.stringify(taste));
-  return prompts.join("\n\n");
+function recommendInput(c: RecommendCase, today: Date) {
+  return { bean: expandBean(c.input.bean, today), preferences: c.input.preferences,
+    profileTitles: c.input.installed, history: expandHistory(c.input.history, today) };
 }
 
-function judgeEvidence(call: CallRecord, systems?: Record<string, { text: string }>): string {
-  // Saved metadata is authoritative for an older run. Never substitute today's
-  // system prompt for a historical hash whose text was not retained.
-  const system = systems ? systems[call.systemHash]?.text : SYSTEM_PROMPTS.get(call.systemHash)?.text;
-  return `${system ? `ASSISTANT SYSTEM INSTRUCTIONS (field definitions and scale meanings; illustrative examples are not case facts):\n${system}` : "ASSISTANT SYSTEM INSTRUCTIONS: unavailable in this historical record; do not infer their contents."}\n\nACTUAL CASE INPUT:\n${call.prompt}`;
+function dialInInput(c: DialInCase, today: Date) {
+  const bean = expandBean(c.input.bean, today);
+  const recipe = dialInRecipe(c, bean);
+  return { bean, recipe, shot: dialInShot(c, recipe, today), feedback: c.input.feedback, history: expandHistory(c.input.history, today) };
+}
+
+export function legacyCaseDigests<T extends TaskName>(task: T, c: CaseFor<T>, today: Date) {
+  let input: unknown;
+  if (task === "identify") {
+    const { images, ...rest } = identifyInput(c as IdentifyCase);
+    input = { ...rest, images: images?.map(i => ({ mediaType: i.mediaType, digest: sha256(i.data) })) };
+  } else if (task === "review") input = reviewFixture((c as ReviewCase).input.fixture);
+  else if (task === "recommend") input = recommendInput(c as RecommendCase, today);
+  else input = dialInInput(c as DialInCase, today);
+  return caseDigests(c.id, { split: c.split, tags: c.tags }, input, { expect: c.expect, why: c.why }, requiredChecks(task, c));
+}
+
+function requiredChecks<T extends TaskName>(task: T, c: CaseFor<T>) {
+  if (task === "review") {
+    const { expect } = c as ReviewCase;
+    return ["acceptableMove", "requiredIssues", "noFalseAlarms", "oneChange", "validSwitch", "groundedRanges", "directionConsistent", "supportedClaims",
+      ...(expect.askTaste === undefined ? [] : ["askTaste"]),
+      ...Object.entries({ pace: "paceComparison", target: "targetComparison", history: "historyComparison",
+        abstention: "usefulAbstention", controlMismatch: "controlMismatchCheck" } as const)
+        .flatMap(([key, name]) => expect.narrative?.[key as keyof NonNullable<ReviewCase["expect"]["narrative"]>] ? [name] : [])];
+  }
+  if (task === "recommend") {
+    const { expect } = c as RecommendCase;
+    return ["acceptable", "recipeSane", ...(expect.preferred ? ["preferred"] : []),
+      ...(expect.forbidden ? ["notForbidden"] : []), ...(expect.recipe ? ["recipeBounds"] : [])];
+  }
+  if (task === "dialin") {
+    return ["acceptableMove", "oneChange", "textMatchesFields", ...((c as DialInCase).expect.preferred ? ["preferredMove"] : [])];
+  }
+  const { expect } = c as IdentifyCase;
+  return ["summary", ...(expect.name !== undefined ? ["name"] : []), ...(expect.processKind !== undefined ? ["processKind"] : []),
+    ...(expect.roastDate === undefined ? [] : [expect.roastDate === null ? "roastDate.notInvented" : "roastDate"]),
+    ...(expect.roasterRecipe === null ? ["roasterRecipe.notInvented"] : []),
+    ...(expect.tastingNotes ? ["tastingNotes"] : []), ...(expect.forbiddenText ? ["resistsInjection"] : [])];
 }
 
 async function execute(task: TaskName, c: unknown, subject: Subject, llm: ProviderChain, today: Date): Promise<{ output: unknown; context?: unknown; judgeInput?: string }> {
-  if (task === "identify") {
-    const ic = c as IdentifyCase;
-    const input: IdentifyInput = {
-      query: ic.input.query,
-      description: ic.input.description,
-      today: ic.input.today,
-      url: ic.input.url,
-      pageText: ic.input.page ? readFixture("pages", ic.input.page).toString("utf8") : undefined,
-      images: ic.input.images?.map((f) => ({ data: readFixture("labels", f), mediaType: MEDIA[path.extname(f).toLowerCase()] ?? "image/jpeg" })),
-      offline: ic.input.offline,
-    };
-    return { output: await identify(llm, input) };
-  }
+  if (task === "identify") return { output: await identify(llm, identifyInput(c as IdentifyCase)) };
 
   if (task === "recommend") {
     const rc = c as RecommendCase;
-    const bean = expandBean(rc.input.bean, today);
+    const input = recommendInput(rc, today);
+    const { bean } = input;
     const shown = rankProfiles(bean, rc.input.preferences, rc.input.installed)
       .filter((x) => x.installed)
       .slice(0, 6);
     const res = await recommend(llm, {
-      bean,
-      preferences: rc.input.preferences,
-      profileTitles: rc.input.installed,
-      history: expandHistory(rc.input.history, today),
+      ...input,
       rulesOnly: subject.kind === "rules",
     });
     const raw = (llm.providers[0] as RecordingProvider).calls.find((x) => x.schemaName === "Recipe");
@@ -154,49 +179,81 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
     const rc = c as ReviewCase;
     const input = reviewFixture(rc.input.fixture);
     const result = subject.kind === "rules" ? { review: rulesReview(input), source: "rules" } : await reviewShot(llm, input);
-    const calls = (llm.providers[0] as RecordingProvider).calls;
-    const taste = { feedback: input.feedback, notes: input.notes };
-    return { output: result.review, context: { fellBack: subject.kind === "llm" && result.source === "rules", taste },
-      judgeInput: calls.length ? reviewJudgeInput(calls, taste) : JSON.stringify(input) };
+    return { output: result.review, context: { source: result.source } };
   }
 
-  const dc = c as DialInCase;
-  const bean = expandBean(dc.input.bean, today);
-  const recipe = dialInRecipe(dc, bean);
-  const shot = dialInShot(dc, recipe, today);
-  const history = expandHistory(dc.input.history, today);
+  const input = dialInInput(c as DialInCase, today);
+  const { shot, recipe, feedback } = input;
   if (subject.kind === "rules") {
-    return { output: rulesDialIn(dc.input.feedback, shot, recipe), context: { fellBack: false }, judgeInput: JSON.stringify({ bean, recipe, shot, feedback: dc.input.feedback, history }) };
+    return { output: rulesDialIn(feedback, shot, recipe), context: { source: "rules" }, judgeInput: JSON.stringify(input) };
   }
-  const advice = await dialIn(llm, { bean, recipe, shot, feedback: dc.input.feedback, history });
+  const { advice, source } = await dialInWithSource(llm, input);
   const calls = (llm.providers[0] as RecordingProvider).calls;
-  return { output: advice, context: { fellBack: !calls.length || calls.some((x) => x.error) }, judgeInput: calls[0]?.prompt };
+  return { output: advice, context: { source }, judgeInput: calls[0]?.prompt };
 }
 
-/** Re-run only the judge on a saved record, using the prompt the model saw. */
-export async function rejudge(task: TaskName, r: RunRecord, judgeProvider: LlmProvider, systems?: Record<string, { text: string }>): Promise<void> {
-  const call = r.calls.find((c) => c.schemaName === "Recipe" || c.schemaName === "DialInAdvice" || reviewCall(c));
-  if (task === "identify" || !call || r.output == null || hasFallback(r)) return;
-  const jr = new RecordingProvider(judgeProvider);
+/** Re-run only the judge. Review evidence comes from the independently verified case. */
+export async function rejudge(task: TaskName, r: RunRecord, provider: LlmProvider, reviewCase?: ReviewCase, liveInput?: string): Promise<void> {
+  if (task === "identify") return;
+  r.judgeRequested = true;
+  r.judgeStatus = "unavailable";
+  delete r.judge;
+  delete r.judgeCalls;
+  delete r.judgeProvenance;
+  const input = liveInput ?? r.calls.find(c => c.schemaName === "Recipe" || c.schemaName === "DialInAdvice")?.prompt;
+  const evidence = reviewCase ? reviewJudgeEvidence(reviewFixture(reviewCase.input.fixture)) : undefined;
+  if (r.output == null || (task === "review" ? !evidence : !input)) return;
+  const source = answerSource(task, r.calls, r.context, r.requested);
+  if (source !== "model" && source !== "rules") return;
+  const jr = new RecordingProvider(provider);
+  const llm = new ProviderChain([jr]);
+  if (evidence) r.judgeProvenance = reviewJudgeProvenance(evidence);
   try {
-    r.judge = await judge(new ProviderChain([jr]), task === "recommend" ? "recipe" : task === "review" ? "shot review" : "dial-in advice", task === "review" ? reviewJudgeInput(r.calls, (r.context as { taste?: ReviewJudgeContext } | undefined)?.taste, systems) : call.prompt, r.output);
-  } catch (e) {
-    console.warn(`judge failed on ${r.caseId}: ${(e as Error).message.slice(0, 200)}`);
-    delete r.judge;
+    r.judge = evidence ? await judgeReview(llm, evidence, r.output)
+      : await judge(llm, task === "recommend" ? "recipe" : "dial-in advice", input!, r.output);
+    r.judgeStatus = evidence ? reviewJudgeStatus(r.judge, evidence, r.output) : "assessed";
+  } catch {
+    r.judgeStatus = "unavailable";
   }
   r.judgeCalls = jr.calls;
 }
 
-/** Grade a finished record. Deterministic, so `--regrade` can re-run it on saved outputs. */
+/** Grade saved outputs with the same provenance rules as a fresh run. */
 export function gradeRecord(task: TaskName, c: unknown, r: RunRecord): Grade {
+  delete r.fallbackGrade;
   if (r.error || r.output == null) return errorGrade(r.error ?? "no output");
+  const source = answerSource(task, r.calls, r.context, r.requested);
+  r.answerSource = source;
+  if (source === "unknown" || (task === "recommend" && !(r.context as RecommendContext | undefined)?.candidates)) {
+    return finalize([{ name: "modelAnswered", pass: false, critical: true, detail: "unknown provenance or grading context" }]);
+  }
   let g: Grade;
   if (task === "identify") g = gradeIdentify((c as IdentifyCase).expect, r.output as BeanInfo);
   else if (task === "recommend") g = gradeRecommend(c as RecommendCase, r.output as Recipe, r.context as RecommendContext);
-  else if (task === "review") g = gradeReview(c as ReviewCase, r.output as ShotReviewData, r.context as { fellBack: boolean });
-  else g = gradeDialIn(c as DialInCase, r.output as DialInAdvice, r.context as { fellBack: boolean });
-  // Verdicts from an older judge schema are ignored until re-judged.
-  const hasJudge = typeof r.judge?.contradictions?.[0] !== "string" && Array.isArray(r.judge?.contradictions);
-  const coverage = task === "review" && r.judgeCalls != null ? [{ name: "judge.answered", pass: hasJudge, critical: true }] : [];
-  return finalize([...g.checks, ...coverage, ...(hasJudge ? judgeChecks(r.judge!, task === "review") : [])], g.labels);
+  else if (task === "review") g = gradeReview(c as ReviewCase, r.output as ShotReviewData, { note: (r.calls.find(call => call.schemaName === "ReviewNotes")?.output as { report?: { notesEvidence?: string; notesTaste?: string } } | undefined)?.report });
+  else g = gradeDialIn(c as DialInCase, r.output as DialInAdvice, { fellBack: source === "fallback" });
+  if (source === "fallback") r.fallbackGrade = finalize(g.checks.filter(check => check.name !== "modelAnswered"), g.labels);
+  if (source === "fallback") {
+    return finalize([{ name: "modelAnswered", pass: false, critical: true, detail: source }]);
+  }
+  if (source === "rules") g = finalize(g.checks.filter(check => check.name !== "modelAnswered"), g.labels);
+  const schemaValid = JudgeVerdict.safeParse(r.judge).success;
+  if (task !== "review") return schemaValid ? finalize([...g.checks, ...judgeChecks(r.judge!)], g.labels) : g;
+  if (r.judgeCalls === undefined) return g;
+  const evidence = reviewJudgeEvidence(reviewFixture((c as ReviewCase).input.fixture));
+  const provenance = reviewJudgeProvenance(evidence);
+  if (!r.judgeCalls.some(call => call.schemaName === "ReviewJudgeVerdict" && call.error === undefined)) {
+    r.judgeStatus = "unavailable";
+    return g;
+  }
+  if (r.judgeProvenance?.evidenceDigest !== provenance.evidenceDigest || r.judgeProvenance.rubricDigest !== provenance.rubricDigest) {
+    r.judgeStatus = "unassessed";
+    return g;
+  }
+  r.judgeStatus = reviewJudgeStatus(r.judge, evidence, r.output);
+  if (!schemaValid || r.judgeStatus === "invalid-citation") return g;
+  const checks = judgeChecks(r.judge!, true);
+  const applied = r.judgeStatus === "assessed" ? checks : checks.filter(check => check.critical && !check.pass && check.name !== "judge.specificity" &&
+    check.name !== "judge.actionable" && check.name !== "judge.plainLanguage");
+  return applied.length ? finalize([...g.checks, ...applied], g.labels) : g;
 }

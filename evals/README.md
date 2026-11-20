@@ -30,7 +30,7 @@ npm run eval -- --task dialin --provider claude-cli --model sonnet --repeat 3 --
 ```
 
 ```bash
-npm run eval:compare -- evals/baselines/recommend.claude-cli-opus.json evals/results/<new run>.json --fail-on-regression
+npm run eval:compare -- <reference-with-manifest.json> <candidate-with-manifest.json> --fail-on-regression
 ```
 
 Each run writes `evals/results/<time>-<task>-<subject>.json` (every output,
@@ -38,11 +38,16 @@ every check, every call's tokens, cost and latency) and a `.md` report next to
 it. `evals/results/` is gitignored; promote a run to `evals/baselines/` when it
 becomes the reference to beat.
 
-Options: `--filter <id-substring|tag:name>`, `--split dev|holdout`,
+Options include `--filter <id-substring|tag:name>`, `--split dev|holdout`,
+`--date YYYY-MM-DD` to pin relative case dates,
 `--repeat N`, `--concurrency N`, `--live` (adds the web-search identify cases),
 `--judge provider[:model]`, `--label "prompt v2"`, and `--regrade <file>`, which
-re-grades saved outputs with the current graders and labels without calling a
-model.
+creates a new report with current graders and labels. It records the source
+file's SHA-256 and preserves that file. Regrading requires a manifest and
+refuses removed cases or changed inputs. Add `--judge` to run a new judge
+against the saved answer. The older committed reports without manifests remain
+available for descriptive comparison. Review defaults to the dev split.
+Select the historical panel explicitly with `--split holdout`.
 
 Any provider in `server/llm/` works: `claude-cli`, `codex-cli`,
 `anthropic-api`, `gemini-api` (e.g. `--provider gemini-api --model
@@ -141,28 +146,28 @@ directory supplied with `--out`. Synthetic reference runs can be promoted to
 `evals/baselines/` within this report format. `eval:compare` continues to compare
 the legacy wording/decision reports.
 
-The ablation report shows event precision and recall by kind and profile family,
-one-to-one within timestamp tolerance. Timing MAE measures distance outside the
-reference interval among matched events. Missing peaks have zero timing coverage.
-Unmatched predictions for assessed kinds count as false alarms in the labelled
-case's pump mode. Unlabelled kinds are reported as unscored. The report counts
-justified abstentions where the label permits abstention and unjustified ones
-where the label requires an action. Numeric checks require every claim for a
-labelled figure to have the right value and unit, with at least one occurrence.
-Usage coverage distinguishes zero-token rules runs from calls without reported
-tokens. End-to-end latency is measured around the review call and normalization.
-Fallback rate counts provider-requested runs that returned rules.
+The ablation reports carry case, input, label and repeat digests alongside the
+scorer fingerprint. Detector and evidence metrics check code-generated findings
+and figures, with precision and recall by profile family. The legacy adapter
+uses issue window starts for windowed timing and has no raw onset or peak
+timestamps. A peak value can still be checked. Comparable-history figures
+assess the code's same-mass pressure, pressure crest and reference count.
 
-The legacy adapter uses issue window starts as onset predictions, projected onto
-recorded phase and pump at that sample. It has no peak timestamps. It extracts
-figures from the deterministic shortfall evidence, with IDs such as
-`pressure_shortfall.frame-1.measured` and suffixes `target`, `measured` or
-`peak` (peak value). The comparable-history fixture checks the measured
-pressure crest, reference count and pressures at the same delivered mass
-from the typed history evidence. It checks multiple structured next-shot changes. Semantic
-claims in prose, including taste inference and diagnosis qualification, remain
-unassessed unless an adapter supplies adjudicated claims. The legacy wording
-grader and optional judge still cover narrative quality separately.
+Reviewer assessment uses only model-authored content that reached the answer.
+For the staged variant this includes the accepted curve interpretation and
+any note attribution or adjustment the model supplied and the review adopted.
+The reviewer gets no credit for detector figures, deterministic history prose
+or a change chosen by rules. A scripted independent judge can assess the
+authored answer through the library. The rules and mock CLI reports are
+diagnostic and ineligible for promotion. Missing semantic coverage and invalid
+citations are reported separately. Failed model requests contribute to model
+coverage and fallback rate. Useful fallback decisions have their own labelled
+denominator.
+
+Prompt size and landmark visibility for model runs come from the captured
+subject request. Rules output labels prompt rendering as counterfactual.
+These measurements describe what a request carried. Reviewer assessment
+measures the interpretation the answer actually gives.
 
 ### Label sources and groups
 
@@ -179,11 +184,21 @@ Mechanical labels use `observations` with unique `id`, `kind`, and
 `expected` (`required` or `forbidden`). Add `phase` and `controlledVariable`
 where they are known. A `timing` label specifies `onsetS` and optional
 `peakS` as inclusive `[earliest, latest]` bounds on the shot's sample clock.
-`raw-landmark` bounds must contain a sample and accept the adjacent sample on
-each side. `windowed-event` bounds accept ±1 s beyond each edge. `figures` give
-`id`, `value`, `unit`, and absolute `tolerance`. Any source may specify
-`supportedOutcomes` and `forbiddenClaims`. Sensory labels are used for decision
-and claim checks. They cannot supply mechanical truth.
+Timing bounds must fit the recording. `raw-landmark` bounds must contain a
+sample. Adjacent samples can extend the match by one sample when the gap is
+within the machine telemetry limit. `windowed-event` bounds accept ±1 s beyond
+each edge. Matching maximizes the number of paired events, then minimizes
+total timing error. Unsupported timing has its own coverage count. Use
+`figures` with an ID, value, recognized unit and bounded absolute tolerance.
+Observation and figure IDs are unique within a case, and required and
+forbidden observations must have non-overlapping reference predicates.
+
+Declare `exhaustiveEventKinds` to assess all predictions of those kinds,
+including ones with no expected detections. Omit it to retain coverage for
+the kinds explicitly labelled. Unmatched predictions outside assessed coverage
+are unknown. Set `exhaustiveFigures: true` to reject extra figure IDs in a fully
+adjudicated case. Any label source may declare `supportedOutcomes` and
+`forbiddenClaims`. Sensory reports supply decision and claim evidence.
 
 Label the input independently of the review under test. Synthetic cases have
 an inline `input` in the API's review payload shape, a `profileFamily` and
@@ -293,16 +308,23 @@ npx tsx evals/review.ts run --dataset "$dataset" --manifest "$proof/holdout.json
   --split holdout --purpose evaluate --provider rules --out "$proof"
 ```
 
-`freeze` writes SHA-256 hashes of the full serialized holdout cases, including
-input, group membership and labels, and refuses to overwrite a manifest. The
-check rejects changed, added or removed holdout cases. Freeze the new holdout
-before evaluating and keep that original manifest. Holdout requires explicit
-`--split holdout --purpose evaluate --manifest <file>`. Each verified attempt,
-including one that subsequently fails, appends a JSONL entry beside the
-manifest as `<manifest>.runs.jsonl`. Keep the manifest and log together across
-evaluations. Use dev results for tuning. The guard records declared evaluation
-attempts and checks fixture integrity. Freshness also depends on how the cases
-were acquired and who has seen them.
+`freeze` writes canonical SHA-256 hashes of the full holdout cases and refuses
+to overwrite the manifest. The check rejects changed, added and removed
+cases. Identical normalized recordings cannot cross splits even under
+different session or recipe IDs.
+
+All holdout runs require `--split holdout --purpose evaluate --manifest <file>`.
+The public demonstration records attempts beside the manifest in JSONL and
+can be reused. For a protected panel, the custodian keeps the dataset,
+manifest and results private and sets `CREMA_HOLDOUT_ATTEMPTS_DIR` to one
+durable, access-controlled directory. Nominate a single explicit `--variant`.
+The evaluator reserves the attempt before execution. The ledger records the
+sealed panel digest and keys the reservation on the normalized recording
+cohort, so a copied manifest or relabelled copy cannot restart it in the same
+ledger. A failed or interrupted attempt still counts. The current rules/mock
+CLI returns only an inconclusive promotion verdict and the seal for protected
+panels. A custodian-approved, separately calibrated judge is still required
+for promotion.
 
 ### Replay private Decaid recordings
 
@@ -636,18 +658,26 @@ Graders are code, not models. Each case becomes a list of named checks.
 **Critical** checks are the ones a user would call a wrong answer (wrong
 coffee, invented roast date, forbidden profile, wrong direction, two changes at
 once). A case passes only if every critical check passes; for identify it also
-needs a score of at least 0.75. The score is the mean of all checks, so it
+needs a score of at least 0.75. The score is the mean of the scored checks, so it
 still moves on the non-critical ones (preferred profile, tasting-note recall,
 rationale shape, whether the advice text matches its fields).
 
-`modelAnswered` fails when Crema fell back to its rules because the model
-errored or named a profile it wasn't offered. The fallback hides this from
-users, but the eval shouldn't.
+Model-answer grades require known answer provenance and a successful subject
+completion. Failed requests and unknown historical provenance cannot receive
+model quality credit. Rules controls have their own provenance, and fallback
+utility has its own denominator. Review trial wording heuristics are diagnostics
+outside the ranked score.
 
 ### Model-graded checks (`lib/judge.ts`, optional)
 
-`--judge` adds three non-critical checks to recommend, dialin and review. The judge
-never decides the profile or the move; code does that.
+`--judge` adds non-critical style and grounding checks to recommend and
+dialin. Shot review uses a separate judge with critical evidence checks. Its
+canonical envelope is identical for every source and omits subject prompts,
+model identifiers and grader labels. The judge assesses numeric grounding,
+causal restraint, taste attribution and advice alignment in separate fields.
+Every veto needs exact answer text and canonical evidence. Unavailable or
+incomplete judgments are coverage gaps. Fabricated citations cannot veto an
+answer. Review records retain evidence and rubric digests for rejudging.
 
 - **no contradictions**: nothing in the text conflicts with the input. Each
   finding must quote both the answer and the input words it conflicts with.
@@ -688,8 +718,13 @@ tuned on `dev` cases didn't just learn the dev cases.
 3. Read the failures in the run's `.md` report, fix the prompt or the
    provider adapter, and re-run.
 4. When dev looks good, run the holdout split once to confirm.
-5. Gate it: `--fail-on-regression --tolerance 0.05` exits non-zero if the pass
-   rate or any headline metric drops by more than 5 points.
+5. For a gate, use reference and candidate reports from the same panel and
+   scorer with the same judge settings. `--fail-on-regression --tolerance 0.05`
+   requires matching case, input, label and repeat digests and required
+   check coverage per slot before applying the tolerance. Use
+   `--vary-subject` if the subject settings are the factor under test.
+   Include a judge for model review comparisons. Pin `--date` when the
+   task uses relative dates. The gate reports unpaired rows and check coverage.
 
 The tasks differ in what they need. `identify` is extraction from photos and
 text, plus a web lookup. A small model can do the extraction once code has
@@ -713,8 +748,8 @@ different provider; measure each one separately.
   domains.
 - `npm test` validates every dataset file: schema, unique ids, real profile
   titles, fixtures present.
-- When you change a label, `--regrade` the baselines rather than re-running
-  them.
+- After changing labels, use `--regrade` on captured runs with verified
+  manifests. Compare the newly derived reports on the same label revision.
 
 ## Limits
 

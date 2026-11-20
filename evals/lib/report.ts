@@ -1,3 +1,4 @@
+import { manifestMarkdown, type EvalManifest } from "./manifest.js";
 import type { TaskName } from "./dataset.js";
 import { hash, type CallRecord } from "./recorder.js";
 import type { RunRecord } from "./tasks.js";
@@ -16,6 +17,12 @@ export interface RunMeta {
   /** System prompts used, by hash: a changed hash means a changed prompt. */
   prompts: Record<string, { schemaName: string; text: string }>;
   label?: string;
+  inputDate?: string;
+  subjectSettings?: string;
+  judgeSettings?: string | null;
+  manifest?: EvalManifest;
+  parentDigest?: string;
+  regradedAt?: string;
 }
 
 export interface ResultsFile {
@@ -71,6 +78,9 @@ export interface Summary {
   latencyMs: { p50: number; p95: number; max: number };
   cost: { usdTotal: number | null; usdPerRun: number | null; inputTokens: number; outputTokens: number; calls: number };
   judgeCostUsd: number | null;
+  provenance?: Partial<Record<NonNullable<RunRecord["answerSource"]>, number>>;
+  fallbackUtility?: Rate;
+  judgeCoverage?: { assessed: number; requested: number };
 }
 
 /** Headline metric → the check whose pass rate it is. `!` inverts (failure rate). */
@@ -100,7 +110,6 @@ export const HEADLINES: Record<TaskName, Record<string, string>> = {
     "no false alarms": "noFalseAlarms",
     "one change": "oneChange",
     "grounded ranges": "groundedRanges",
-    "judge answered": "judge.answered",
     "judge: specific interpretation": "judge.specificity",
     "judge: useful next step": "judge.actionable",
     "judge: plain language": "judge.plainLanguage",
@@ -111,6 +120,10 @@ export const HEADLINES: Record<TaskName, Record<string, string>> = {
     "useful experiment": "usefulExperiment",
     "judge: no contradictions": "judge.noContradictions",
     "judge: no invented figures": "judge.noInventedFigures",
+    "judge: numeric evidence": "judge.numericEvidence",
+    "judge: causal restraint": "judge.causalRestraint",
+    "judge: taste grounding": "judge.tasteGrounding",
+    "judge: advice alignment": "judge.adviceAlignment",
     "judge: diagnostic quality": "judge.quality",
   },
   dialin: {
@@ -171,12 +184,18 @@ export function summarize(task: TaskName, records: RunRecord[]): Summary {
     headline[label] = c ? r3(invert ? 1 - c.pass / c.n : c.pass / c.n) : null;
   }
 
+  const provenance: NonNullable<Summary["provenance"]> = {};
+  for (const { answerSource } of records) if (answerSource) provenance[answerSource] = (provenance[answerSource] ?? 0) + 1;
+  const fallbacks = records.filter(r => r.answerSource === "fallback");
   const calls = records.flatMap((r) => r.calls);
   const costs = calls.map((c) => c.usage?.costUsd).filter((x): x is number => x != null);
   const judgeCosts = records.flatMap((r) => r.judgeCalls ?? []).map((c) => c.usage?.costUsd).filter((x): x is number => x != null);
   const ms = records.map((r) => r.ms);
   return {
     cases: byCase.size,
+    provenance,
+    fallbackUtility: { pass: fallbacks.filter(r => r.fallbackGrade?.pass).length, n: fallbacks.filter(r => r.fallbackGrade).length },
+    judgeCoverage: { assessed: records.filter(r => r.judgeStatus === "assessed").length, requested: records.filter(r => r.judgeRequested).length },
     runs: records.length,
     errors: records.filter((r) => r.error).length,
     passRate: r3(passed / (records.length || 1)),
@@ -220,8 +239,14 @@ export function markdownReport(f: ResultsFile): string {
   if (s.cost.outputTokens) lines.push(`| Tokens | ${s.cost.inputTokens.toLocaleString()} in, ${s.cost.outputTokens.toLocaleString()} out |`);
   lines.push("");
 
-  lines.push("## Checks", "", "| Check | Pass |", "|---|---|");
-  for (const [k, v] of Object.entries(s.checks).sort()) lines.push(`| ${k} | ${rate(v)} |`);
+  if (m.subjectSettings) lines.push(`Subject settings digest \`${m.subjectSettings}\``, "");
+  if (m.judgeSettings) lines.push(`Judge settings digest \`${m.judgeSettings}\``, "");
+  if (m.parentDigest) lines.push(`Regraded ${m.regradedAt} from artifact \`${m.parentDigest}\``, "");
+  if (s.fallbackUtility?.n) lines.push(`Fallback utility ${rate(s.fallbackUtility)} among gradable fallback answers`, "");
+  if (m.judge && s.judgeCoverage) lines.push(`Judge assessment coverage ${s.judgeCoverage.assessed}/${s.runs} evaluated slots`, "");
+  if (m.manifest) lines.push(...manifestMarkdown(m.manifest));
+  lines.push("## Checks", "", "| Check | Pass | Coverage |", "|---|---|---|");
+  for (const [k, v] of Object.entries(s.checks).sort()) lines.push(`| ${k} | ${rate(v)} | ${v.n}/${s.runs} |`);
   lines.push("", "## Slices", "", "| Tag | Pass |", "|---|---|");
   for (const [k, v] of Object.entries(s.splits)) lines.push(`| split: ${k} | ${rate(v)} |`);
   for (const [k, v] of Object.entries(s.tags).sort()) lines.push(`| ${k} | ${rate(v)} |`);
