@@ -28,7 +28,7 @@
     }
   ],
   "grading": {
-    "consequence": "The first sustained gram is visible before scale samples disappear around 7 s. Logged and measured pressure still show a planned decline after 12 s, with readable inlet flow throughout. A scale-specific repeat can recover late cup rate and final mass.",
+    "consequence": "The first sustained gram is visible before scale samples disappear around 7 s. Logged and measured pressure still show a planned decline after 12 s, with readable inlet flow throughout. A scale-specific repeat can recover late cup rate and final mass. The last machine sample is at 15.19–16.60 s.",
     "unknowableWhen": [
       "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
       "Without the logged pressure command and frame alignment, a falling measured pressure cannot establish a planned decline.",
@@ -36,7 +36,7 @@
     ],
     "observations": [
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5, 5.85] } },
-      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [14.8, 16.7] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required" },
       { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
       { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
       { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },

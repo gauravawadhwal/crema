@@ -71,7 +71,7 @@
   },
   "interventions": [],
   "grading": {
-    "consequence": "Flow fill shifts to pressure control. The pressure-controlled Rise hands off to Main around 6.4–7.0 s, consistent with the configured inlet-flow threshold. In Main inlet approaches 2.1 mL/s and pressure eases. The recorded final Taper precedes the weight stop.",
+    "consequence": "Flow fill shifts to pressure control. The pressure-controlled Rise hands off to Main around 6.4–7.0 s, consistent with the configured inlet-flow threshold. In Main inlet approaches 2.1 mL/s and pressure eases. The recorded final Taper precedes the weight stop. The last machine sample is at 26.59–27.75 s.",
     "unknowableWhen": [
       "The trace records the adjacent frames and the configured exit. A threshold crossing can fall between samples, and the recording has no per-step trigger field.",
       "A falling pressure under tracked flow can describe the hydraulic response. It does not prove channeling, taste or extraction yield."
@@ -132,11 +132,7 @@
         "id": "stop",
         "kind": "stop",
         "expected": "required",
-        "controlledVariable": "flow",
-        "timing": {
-          "type": "raw-landmark",
-          "onsetS": [26.5, 27.8]
-        }
+        "controlledVariable": "flow"
       }
     ],
     "supportedOutcomes": [

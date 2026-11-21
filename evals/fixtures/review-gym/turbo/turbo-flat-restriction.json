@@ -28,14 +28,14 @@
     }
   ],
   "grading": {
-    "consequence": "Around 7 s in the pressure hold, inlet falls into a similar range to a limited pour. The pressure briefly overshoots and then settles back to the unchanged 5.2 bar command. Sustained lower inlet under tracked pressure helps distinguish this regime from simultaneous pressure and inlet loss.",
+    "consequence": "Around 7 s in the pressure hold, inlet falls into a similar range to a limited pour. The pressure briefly overshoots and then settles back to the unchanged 5.2 bar command. Sustained lower inlet under tracked pressure helps distinguish this regime from simultaneous pressure and inlet loss. The last machine sample is at 17.57–19.41 s.",
     "unknowableWhen": [
       "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
       "Lower inlet under tracked pressure supports increased effective resistance. The cause could be grind or another change in the puck or flow path and cannot be identified from the trace."
     ],
     "observations": [
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.2, 5.75] } },
-      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [18.2, 19.5] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required" },
       { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
       { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
       { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },

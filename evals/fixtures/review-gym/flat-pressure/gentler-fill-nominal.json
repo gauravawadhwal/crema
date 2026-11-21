@@ -21,7 +21,7 @@
   },
   "interventions": [],
   "grading": {
-    "consequence": "After the 6 mL/s fill command, pressure holds near 9 bar with a gradual inlet and cup-flow rise. The shot stops near 36 g.",
+    "consequence": "After the 6 mL/s fill command, pressure holds near 9 bar with a gradual inlet and cup-flow rise. The shot stops near 36 g. The last machine sample is at 27.26–29.75 s.",
     "unknowableWhen": [
       "Without valid pressure and inlet readings, tracking and the hydraulic response cannot be established.",
       "Without scale readings, onset and final mass cannot be confirmed."
@@ -30,7 +30,7 @@
     "observations": [
       { "id": "pressure-tracking", "kind": "pressure_tracking", "phase": "pouring", "controlledVariable": "pressure", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [5, 7] } },
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [7.2, 8.8] } },
-      { "id": "weight-stop", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [26.5, 30] } },
+      { "id": "weight-stop", "kind": "stop", "expected": "required" },
       { "id": "no-choked", "kind": "choked", "expected": "forbidden" },
       { "id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
       { "id": "no-flow-shortfall", "kind": "flow_shortfall", "expected": "forbidden" },

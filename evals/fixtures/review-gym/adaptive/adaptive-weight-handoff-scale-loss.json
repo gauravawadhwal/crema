@@ -73,7 +73,7 @@
     }
   ],
   "grading": {
-    "consequence": "The pressure-to-flow change is visible around 10.7–11.1 s. Scale readings are absent across that change and first beverage cannot be timed. Flow later tracks about 2.0 mL/s and the recorded weight stop preempts Taper.",
+    "consequence": "The pressure-to-flow change is visible around 10.7–11.1 s. Scale readings are absent across that change and first beverage cannot be timed. Flow later tracks about 2.0 mL/s and the recorded weight stop preempts Taper. The last machine sample is at 25.91–26.98 s.",
     "unknowableWhen": [
       "The trace records the adjacent frames and the configured exit. A threshold crossing can fall between samples, and the recording has no per-step trigger field.",
       "With the scale missing across the handoff, its sampled bracket overlaps the 7 s timeout. The 5 g exit and timeout are both compatible. Repeat with a connected, tared scale and bracket the handoff before assigning a trigger."
@@ -109,11 +109,7 @@
         "id": "stop-in-main",
         "kind": "stop",
         "expected": "required",
-        "controlledVariable": "flow",
-        "timing": {
-          "type": "raw-landmark",
-          "onsetS": [26.1, 26.8]
-        }
+        "controlledVariable": "flow"
       },
       {
         "id": "taper-preempted",

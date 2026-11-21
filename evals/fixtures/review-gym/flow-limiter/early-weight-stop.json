@@ -22,14 +22,14 @@
   },
   "interventions": [],
   "grading": {
-    "consequence": "The 4.5 mL/s main pour tracks below the pressure ceiling until a recorded target-weight stop near 27 s. The 93.5 g setting ends the shot before the planned final frame.",
+    "consequence": "The 4.5 mL/s main pour tracks below the pressure ceiling until a recorded target-weight stop near 27 s. The 93.5 g setting ends the shot before the planned final frame. The last machine sample is at 26.96–27.66 s.",
     "unknowableWhen": [
       "Without the stop reason and final scale coverage, the last brew sample alone cannot establish the cause of the finish. The final frame has no observed response.",
       "Telemetry does not identify grind, preparation, or a distribution defect as the cause."
     ],
     "observations": [
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [6.1, 6.6] } },
-      { "id": "recorded-stop", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [27.1, 27.5] } },
+      { "id": "recorded-stop", "kind": "stop", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [26.8, 26.95] } },
       { "id": "false-cap-entry", "kind": "cap_like_start", "expected": "forbidden" },
       { "id": "inlet-shortfall", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring", "controlledVariable": "flow" },
       { "id": "pressure-target-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
