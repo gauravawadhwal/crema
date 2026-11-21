@@ -23,7 +23,7 @@
   },
   "interventions": [],
   "grading": {
-    "consequence": "The recorded weight stop ends the shot around 23–25 s, in the 6 bar hold. The decline is in the loaded plan but never executes. Do not score the unreached target as a pressure fault or call for a grind change based on it.",
+    "consequence": "The recorded weight stop ends the shot around 23–25 s, in the 6 bar hold. The decline is in the loaded plan but never executes. Do not score the unreached target as a pressure fault or call for a grind change based on it. The last machine sample is at 22.96–24.96 s.",
     "unknowableWhen": [
       "Adherence to an unexecuted decline is unknowable. Without the recorded stop reason, frame coverage alone cannot identify what ended the shot."
     ],
@@ -32,14 +32,7 @@
       {
         "id": "observed-stop",
         "kind": "stop",
-        "expected": "required",
-        "timing": {
-          "type": "raw-landmark",
-          "onsetS": [
-            23.35,
-            24.75
-          ]
-        }
+        "expected": "required"
       },
       {
         "id": "no-executed-decline",

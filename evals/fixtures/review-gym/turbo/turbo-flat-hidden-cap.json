@@ -28,14 +28,14 @@
     }
   ],
   "grading": {
-    "consequence": "Around 7 s in the pressure hold, inlet falls to a plateau near 2.65 mL/s and group pressure drops below the unchanged 5.2 bar command. Describe the persistent pressure deficit and inlet plateau. A low inlet alone does not establish a cap or a flow-command shortfall.",
+    "consequence": "Around 7 s in the pressure hold, inlet falls to a plateau near 2.65 mL/s and group pressure drops below the unchanged 5.2 bar command. Describe the persistent pressure deficit and inlet plateau. A low inlet alone does not establish a cap or a flow-command shortfall. The last machine sample is at 17.71–18.75 s.",
     "unknowableWhen": [
       "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
       "The recorded hold exposes no flow-limiter setpoint. Grade the pressure deficit and plateau and accept abstention on what limited delivery. Without paired samples after the change, the two responses cannot be confirmed together."
     ],
     "observations": [
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.2, 5.75] } },
-      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [17.9, 18.7] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required" },
       { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
       { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
       { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },

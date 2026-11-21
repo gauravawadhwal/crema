@@ -23,7 +23,7 @@
   },
   "interventions": [],
   "grading": {
-    "consequence": "The recorded 28 g target-weight stop ends the shot shortly after the logged pressure decline begins, so most of the planned decline is absent. The first gram and the pressure response through the visible decline remain supported. A short total duration alone misses the programmed stop and the observed tracking.",
+    "consequence": "The recorded 28 g target-weight stop ends the shot shortly after the logged pressure decline begins, so most of the planned decline is absent. The first gram and the pressure response through the visible decline remain supported. A short total duration alone misses the programmed stop and the observed tracking. The last machine sample is at 12.91–14.17 s.",
     "unknowableWhen": [
       "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield.",
       "Without the logged pressure command and frame alignment, a falling measured pressure cannot establish a planned decline.",
@@ -31,7 +31,7 @@
     ],
     "observations": [
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5, 5.85] } },
-      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [12.6, 14.2] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required" },
       { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
       { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
       { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },

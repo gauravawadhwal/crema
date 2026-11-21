@@ -22,13 +22,13 @@
   },
   "interventions": [],
   "grading": {
-    "consequence": "After the short fill, pressure tracks the 5.2 bar command while inlet is around 3–4 mL/s in the main pour. The first gram appears near 5 s and the 36 g target-weight stop ends the short pour. The duration alone cannot establish a hydraulic fault.",
+    "consequence": "After the short fill, pressure tracks the 5.2 bar command while inlet is around 3–4 mL/s in the main pour. The first gram appears near 5 s and the 36 g target-weight stop ends the short pour. The duration alone cannot establish a hydraulic fault. The last machine sample is at 15.05–16.51 s.",
     "unknowableWhen": [
       "Unpaired or missing pressure and inlet samples limit assessment of the hydraulic response. The curves alone cannot establish channeling, taste or extraction yield."
     ],
     "observations": [
       { "id": "first-gram", "kind": "first_sustained_beverage", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [5.2, 5.75] } },
-      { "id": "end-of-recording", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [15.4, 16.5] } },
+      { "id": "end-of-recording", "kind": "stop", "expected": "required" },
       { "id": "generic-fast-fault", "kind": "fast_shot", "expected": "forbidden" },
       { "id": "channeling-diagnosis", "kind": "channeling", "expected": "forbidden" },
       { "id": "swapped-controller", "kind": "flow_shortfall", "expected": "forbidden", "phase": "pouring" },

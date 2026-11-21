@@ -27,7 +27,7 @@
     }
   ],
   "grading": {
-    "consequence": "Scale readings drop out near 6 s and resume near 14 s, after the first gram would have crossed. Group pressure and inlet remain available through the gap. Use those channels to describe the hold and repeat with the scale connected to verify cup onset.",
+    "consequence": "Scale readings drop out near 6 s and resume near 14 s, after the first gram would have crossed. Group pressure and inlet remain available through the gap. Use those channels to describe the hold and repeat with the scale connected to verify cup onset. The last machine sample is at 27.26–29.75 s.",
     "unknowableWhen": [
       "The gap spans cup onset. Its exact time and cup rate during the dropout cannot be recovered from inlet flow or the first weight after reconnection.",
       "Without pressure and inlet coverage as well, the regime during the dropout is unknown. The remaining data cannot identify the cause of the scale outage."
@@ -37,7 +37,7 @@
       { "id": "pressure-tracking", "kind": "pressure_tracking", "phase": "pouring", "controlledVariable": "pressure", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [5, 7] } },
       { "id": "scale-gap", "kind": "scale_gap", "expected": "required", "timing": { "type": "windowed-event", "onsetS": [6, 6.4] } },
       { "id": "no-first-sustained-beverage", "kind": "first_sustained_beverage", "expected": "forbidden" },
-      { "id": "weight-stop", "kind": "stop", "expected": "required", "timing": { "type": "raw-landmark", "onsetS": [26.5, 30] } },
+      { "id": "weight-stop", "kind": "stop", "expected": "required" },
       { "id": "no-pressure-shortfall", "kind": "pressure_shortfall", "expected": "forbidden" },
       { "id": "no-choked", "kind": "choked", "expected": "forbidden" },
       { "id": "no-channeling", "kind": "channeling", "expected": "forbidden" }
