@@ -162,9 +162,21 @@ describe("coach phase and temperature verdicts", () => {
 
   it("reserves reported pace figures for finishes about ten seconds outside the window", () => {
     const shot = synthetic([{ step: main, seconds: 20.25 }], { timeBasis: "recorded" });
-    expect(coachOf({ ...shot, targetTimeS: [29, 35] }).notable).toHaveLength(0);
-    expect(coachOf({ ...shot, targetTimeS: [30, 35] }).notable.map(item => item.sentence))
-      .toContain("The shot finished about 10 s ahead of the expected window.");
+    expect(coachOf({ ...shot, targetTimeS: [28.49, 35] }).notable).toHaveLength(0);
+    expect(coachOf({ ...shot, targetTimeS: [28.5, 35] }).notable.map(item => item.sentence))
+      .toContain("The shot finished in about 20 s against a 28.5–35 s expected window.");
+    const earlyLever = synthetic([{ step: main, seconds: 21.75 }], { timeBasis: "recorded", targetTimeS: [30, 45] });
+    expect(coachOf(earlyLever).notable.map(item => item.sentence))
+      .toContain("The shot finished in about 21.5 s against a 30–45 s expected window.");
+  });
+
+  it("names the tracked stages and the departures in a mixed headline", () => {
+    const coach = coachOf(synthetic([
+      { step: fill }, { step: bloom, seconds: 3, readings: t => ({ tf: Math.max(0, 4 - 2 * t), f: Math.max(0, 8 - 5 * t) }) },
+      { step: { ...main, name: "Pressure build" }, seconds: 3, readings: () => ({ p: 5 }) },
+      { step: main }, { step: decline },
+    ]));
+    expect(coach.headline.sentence).toBe("The machine followed the plan through the main pour and finish, with the bloom and pressure build running differently.");
   });
 });
 

@@ -2524,9 +2524,11 @@ var CremaEngine = (() => {
   }
 
   // server/recommend/review-coach.ts
+  var NOTABLE_PACE_GAP_S = 10 - 1.5;
   var fact = (sentence, ...evidenceIds) => ({ sentence, evidenceIds });
   var number2 = (n) => String(Number(n.toFixed(1)));
   var quantity = (n, unit) => `${number2(n)} ${unit}`;
+  var stageNames = (names) => names.length === 1 ? names[0].toLowerCase() : `${names.slice(0, -1).join(", ").toLowerCase()} and ${names.at(-1).toLowerCase()}`;
   var configuredNumber = (value) => value != null && String(value).trim() && Number.isFinite(Number(value)) ? Number(value) : null;
   var coverage2 = (p) => p.controlledError.value != null && p.controlledError.coveredS >= 0.5 && p.controlledError.coveredS + 2e-3 >= 0.8 * p.durationS;
   function phaseName(step, p) {
@@ -2775,9 +2777,12 @@ var CremaEngine = (() => {
       notable.push(fact(`The machine held ${quantity(held.meanCommand, "mL/s")}, with pressure reaching only ${quantity(pressure2, "bar")} under its ${quantity(ceiling, "bar")} ceiling.`, easy.id));
     }
     const paceIssue = curve.issues.find((i) => i.kind === "fast_shot" || i.kind === "slow_shot");
-    const distance = Math.round(Math.abs(facts.timeDeltaS ?? 0));
-    if (paceIssue && distance >= 10) {
-      notable.push(fact(`The shot finished about ${quantity(distance, "s")} ${paceIssue.kind === "fast_shot" ? "ahead of" : "past"} the ${facts.expectedTimeSource === "guide" ? "guide" : "expected window"}.`, "timing"));
+    if (paceIssue && facts.durationS != null && facts.expectedTimeS) {
+      const [lo, hi] = facts.expectedTimeS;
+      if (Math.max(lo - facts.durationS, facts.durationS - hi) >= NOTABLE_PACE_GAP_S) {
+        const basis = facts.expectedTimeSource === "guide" ? "guide" : "expected window";
+        notable.push(fact(`The shot finished in about ${quantity(facts.durationS, "s")} against a ${number2(lo)}\u2013${quantity(hi, "s")} ${basis}.`, "timing", "recording"));
+      }
     }
     const droop = evidence2.phases.find((p) => (p.pressureDroopAtHeldFlowBar.value ?? 0) >= 0.5 && p.pressureCrest.value && p.lateHydraulics.value);
     if (droop && notable.length < 3) notable.push(fact("Pressure eased later even as the machine held flow steady.", droop.id));
@@ -2787,15 +2792,25 @@ var CremaEngine = (() => {
     const patterns = hypotheses(curve, easy);
     const main = stages.filter((row) => row.name !== "Start-up");
     const bad = main.find((row) => row.verdict === "off_plan");
-    const partly = main.find((row) => row.verdict === "partly");
-    const trackedMain = planned.find((row) => row.role === "Main pour" && row.phase.verdict === "on_plan")?.phase;
+    const departures = main.filter((row) => row.verdict === "partly");
+    const partly = departures[0];
+    const mainPour = main.find((row) => row.name === "Main pour");
+    const trackedMain = planned.find((row) => row.role === "Main pour" && row.phase.verdict === "on_plan" && mainPour?.phaseIds.includes(row.phase.id))?.phase;
     const good = main.find((row) => row.name === "Main pour" && row.verdict === "on_plan") ?? trackedMain ?? main.find((row) => row.verdict === "on_plan");
     const goodBuild = planned.find((row) => /build/.test(row.role) && row.phase.verdict === "on_plan")?.phase;
     const preempted = stages.find((row) => row.name === "Finish" && row.sentence === "The shot reached target weight before the planned finish.");
     const between = (row) => goodBuild && bad && stages[0]?.name === "Start-up" && stages[0]?.verdict === "on_plan" ? fact(`The machine followed the plan through the start-up, then missed its target during the ${row.name.toLowerCase()}.`, ...goodBuild.evidenceIds, ...row.evidenceIds) : fact(`The machine ${row.verdict === "off_plan" ? "missed its target" : "only partly followed the plan"} during the ${row.name.toLowerCase()}.`, ...row.evidenceIds);
+    const mixed = () => {
+      const followed = main.flatMap((row) => row.verdict === "on_plan" || row.name === "Main pour" && trackedMain ? [row.name] : []);
+      const differed = departures.flatMap((row) => row.name === "Main pour" && trackedMain ? phases.filter((p) => row.phaseIds.includes(p.id) && p.verdict === "partly").map((p) => p.name) : [row.name]);
+      return fact(
+        `The machine followed the plan through the ${stageNames(followed)}, with the ${stageNames(differed)} running differently.`,
+        ...main.filter((row) => row.verdict === "on_plan" || row.verdict === "partly").flatMap((row) => row.evidenceIds)
+      );
+    };
     const restricted = patterns.find((h) => h.id === "restricted-flow");
     const lateFlow = patterns.find((h) => h.id === "freer-late-flow");
-    const headline = bad ? between(bad) : easy ? fact("The machine held the planned flow, and the fast cup fill at low pressure fits a puck offering little resistance.", easy.id, "cup") : good && restricted && (evidence2.cupRateAfterOnsetGS.value ?? Infinity) < 1 ? fact("The machine followed the main pour plan, and the cup filled slowly once the first gram came through.", ...good.evidenceIds, "cup") : good && lateFlow ? fact("The machine held the planned pressure as flow picked up late in the pour.", ...good.evidenceIds, ...lateFlow.evidenceIds) : partly && good ? fact(`The machine tracked the ${good.name.toLowerCase()} more closely than the ${partly.name.toLowerCase()}.`, ...good.evidenceIds, ...partly.evidenceIds) : partly ? between(partly) : preempted && !good ? fact(preempted.sentence, ...preempted.evidenceIds) : paceIssue ? fact(`The shot finished ${paceIssue.kind === "fast_shot" ? "earlier" : "later"} than the plan's time window.`, "timing") : good ? fact(temperature.verdict === "on_plan" ? "The machine followed the plan through the main phases and temperature held near target." : temperature.verdict === "off_plan" ? "The machine followed the main pour plan with a sustained temperature miss." : temperature.verdict === "partly" ? "The machine followed the main pour plan with some variation in temperature." : "The machine followed the plan through the measured main phases.", ...main.filter((p) => p.verdict === "on_plan").flatMap((p) => p.evidenceIds), "temperature") : fact(!metrics.recordedPoints ? "You have no recorded curve to compare with the plan." : stage.profile === "manual" ? "Your manual shot has no fixed automatic curve to compare against." : "Your recording lacks enough phase data for a verdict against the plan.", "recording");
+    const headline = bad ? between(bad) : easy ? fact("The machine held the planned flow, and the fast cup fill at low pressure fits a puck offering little resistance.", easy.id, "cup") : good && restricted && (evidence2.cupRateAfterOnsetGS.value ?? Infinity) < 1 ? fact("The machine followed the main pour plan, and the cup filled slowly once the first gram came through.", ...good.evidenceIds, "cup") : good && lateFlow ? fact("The machine held the planned pressure as flow picked up late in the pour.", ...good.evidenceIds, ...lateFlow.evidenceIds) : partly && good ? mixed() : partly ? between(partly) : preempted && !good ? fact(preempted.sentence, ...preempted.evidenceIds) : paceIssue ? fact(`The shot finished ${paceIssue.kind === "fast_shot" ? "earlier" : "later"} than the plan's time window.`, "timing") : good ? fact(temperature.verdict === "on_plan" ? "The machine followed the plan through the main phases and temperature held near target." : temperature.verdict === "off_plan" ? "The machine followed the main pour plan with a sustained temperature miss." : temperature.verdict === "partly" ? "The machine followed the main pour plan with some variation in temperature." : "The machine followed the plan through the measured main phases.", ...main.filter((p) => p.verdict === "on_plan").flatMap((p) => p.evidenceIds), "temperature") : fact(!metrics.recordedPoints ? "You have no recorded curve to compare with the plan." : stage.profile === "manual" ? "Your manual shot has no fixed automatic curve to compare against." : "Your recording lacks enough phase data for a verdict against the plan.", "recording");
     return { headline, phases, stages, temperature, notable: notable.slice(0, 3), hypotheses: patterns, history: coachHistory(stage.evidence.history, facts) };
   }
 
