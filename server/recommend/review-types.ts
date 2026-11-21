@@ -103,8 +103,11 @@ export interface TasteAlignment {
 
 interface LegacyReviewResult { review: ShotReviewData; source: string; evidence: ReviewEvidence }
 export interface ReviewResult extends LegacyReviewResult { curve: CurveReview; taste: TasteAlignment }
-export const SHOT_REVIEW_VERSION = 3;
+export type { CoachMechanics, CoachReview } from "../schema.js";
+export interface CoachReviewResult extends ReviewResult { coach: import("../schema.js").CoachReview }
+export const SHOT_REVIEW_VERSION = 4;
 export type SavedReview =
   | { version: 1; review: ShotReviewData; source: string; createdAt: string }
   | (LegacyReviewResult & { version: 2; createdAt: string })
-  | (ReviewResult & { version: typeof SHOT_REVIEW_VERSION; createdAt: string });
+  | (ReviewResult & { version: 3; createdAt: string })
+  | (CoachReviewResult & { version: typeof SHOT_REVIEW_VERSION; createdAt: string });

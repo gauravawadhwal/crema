@@ -1,6 +1,7 @@
 import { deepStrictEqual } from "node:assert";
 import { buildReviewEvidence } from "../../server/recommend/review-evidence.js";
 import { curveStageInput, rulesCurveReview } from "../../server/recommend/review-local.js";
+import { rulesCoachMechanics } from "../../server/recommend/review-coach.js";
 import { reviewShot } from "../../server/recommend/review.js";
 import { MockProvider, mockBean } from "../../server/llm/mock.js";
 import { ProviderChain } from "../../server/llm/index.js";
@@ -41,17 +42,20 @@ export function crossedTasteInputs(input: ReviewInput) {
 
 export function curveStage(input: ReviewInput) {
   const stage = curveStageInput(input, buildReviewEvidence(input));
-  return { input: stage, output: rulesCurveReview(stage) };
+  const curve = rulesCurveReview(stage);
+  return { input: stage, output: { curve, coach: rulesCoachMechanics(stage, curve) } };
 }
 
 /** Include the actual wire prompt in the byte comparison for the mock provider. */
 export async function mockCurveStage(input: ReviewInput) {
   const provider = new RecordingProvider(new MockProvider());
-  const { curve } = await reviewShot(new ProviderChain([provider]), input);
+  const { curve, coach: { headline, phases, stages, temperature, notable, hypotheses, history } } =
+    await reviewShot(new ProviderChain([provider]), input);
   const call = provider.calls.find(c => c.schemaName === "CurveNarrative");
   // A short recording can take the rules path. Crossing taste must leave
   // that routing decision invariant as well as any prompt that was sent.
-  return { input: call ? { systemHash: call.systemHash, prompt: call.prompt } : null, output: curve };
+  return { input: call ? { systemHash: call.systemHash, prompt: call.prompt } : null,
+    output: { curve, coach: { headline, phases, stages, temperature, notable, hypotheses, history } } };
 }
 
 export async function assertCurveStageInvariant(input: ReviewInput, stage: (input: ReviewInput) => unknown = curveStage) {

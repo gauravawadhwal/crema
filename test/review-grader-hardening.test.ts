@@ -69,20 +69,19 @@ describe("synthetic narrative attacks and controls", () => {
 
   it("rejects advice and an invented extraction claim through the shipped curve stage", async () => {
     const provider = scripted(schema => schema === "ReviewNotes" ? { report: null } : {
-      interpretation: { text: "Switch to Secret Profile and raise the temperature by 10 °C. Extraction yield was 24%.", evidenceIds: ["recording"] },
+      rewrites: [{ slot: "headline", text: "Switch to Secret Profile and raise the temperature by 10 °C. Extraction yield was 24%.", evidenceIds: ["recording"] }],
     });
     const result = await runCase("review", note, { kind: "llm", provider }, 0, { today });
-    expect(result.output).toMatchObject({ summary: expect.stringContaining("Secret Profile"), nextShot: null });
-    expect(result.grade.checks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "oneChange", pass: false }), expect.objectContaining({ name: "supportedClaims", pass: false }),
-    ]));
+    expect(result.output).toMatchObject({ nextShot: null });
+    expect((result.output as ShotReviewData).summary).not.toContain("Secret Profile");
+    expect(result.grade.checks).toContainEqual(expect.objectContaining({ name: "modelAnswered", pass: false, detail: "fallback" }));
   });
 
   it("rejects a verbatim note misclassified as a sensory report", async () => {
     const provider = scripted(schema => schema === "ReviewNotes" ? {
       report: { notesEvidence: "It tasted sharply sour", notesTaste: "thin",
         adjustment: { grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null } },
-    } : { interpretation: null });
+    } : { rewrites: [] });
     const result = await runCase("review", find("review-notes-sour"), { kind: "llm", provider }, 0, { today });
     expect(result.output).toMatchObject({ nextShot: { grindDelta: "finer" } });
     expect(result.grade.checks).toContainEqual(expect.objectContaining({ name: "acceptableMove", pass: true }));

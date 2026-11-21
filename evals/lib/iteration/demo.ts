@@ -22,21 +22,27 @@ class IterationMock extends MockProvider {
     if (req.schemaName === "GymProposal") return req.schema.parse({ candidates: [bad, good] });
     if (req.schemaName !== "CurveNarrative") return super.structured(req);
     const recorded = JSON.parse(req.prompt.split("\n").find(line => line.startsWith('{"recording"'))!);
+    const drafts: Record<string, { sentence: string; evidenceIds: string[] }> =
+      JSON.parse(req.prompt.split("\n").find(line => line.startsWith('{"headline"'))!);
     const dose = recorded.recording.facts.doseG as number;
     if (req.system.endsWith(bad.change.kind === "instruction" ? bad.change.text : "")) {
-      return req.schema.parse({ interpretation: null });
+      return req.schema.parse({ rewrites: [] });
     }
     const variant = req.system.endsWith(good.change.kind === "instruction" ? good.change.text : "");
-    const text = dose === 18 || dose === 22 ? "First sustained beverage followed the fill phase."
-      : variant && dose === 19 ? "Pressure stayed close to its cap under the flow command."
-      : variant && (dose === 20 || dose === 24) ? "The planned pressure decline followed the rise."
-      : dose === 21 || dose === 25 ? "Scale readings are unavailable."
-      : null;
-    const ids = Object.keys(recorded).filter(id => /^phase-\d+$/.test(id));
-    const evidenceIds = text?.startsWith("First") ? ["first-sustained-gram"]
-      : text?.startsWith("Pressure") ? ids.filter(id => recorded[id].capLikeTime?.value).slice(0, 4)
-      : text?.startsWith("The planned") ? ids.filter(id => recorded[id].purpose?.value === "decline").slice(0, 4) : ["recording"];
-    return req.schema.parse({ interpretation: text ? { text, evidenceIds } : null });
+    const slots = Object.entries(drafts);
+    const cup = dose === 18 || dose === 22 ? slots.find(([slot, row]) => slot.startsWith("notable-") && row.evidenceIds.includes("cup")) : undefined;
+    const cap = variant && dose === 19 ? slots.find(([slot, row]) => slot.startsWith("stage-") &&
+      row.evidenceIds.some(id => recorded[id]?.capLikeTime?.value?.seconds > 0)) : undefined;
+    const decline = variant && (dose === 20 || dose === 24) ? slots.find(([slot, row]) => slot.startsWith("stage-") &&
+      row.evidenceIds.some(id => recorded[id]?.purpose?.value === "decline")) : undefined;
+    const scale = dose === 21 || dose === 25 ? slots.find(([slot, row]) => slot.startsWith("notable-") && row.sentence.includes("scale readings")) : undefined;
+    const chosen = cup ?? cap ?? decline ?? scale;
+    if (!chosen) return req.schema.parse({ rewrites: [] });
+    const [slot, { sentence, evidenceIds }] = chosen;
+    const text = cup ? sentence.replace("Your cup stayed nearly dry for about", "Your cup reached its first gram after about") :
+      cap ? "Pressure stayed close to its cap under the flow command." :
+      decline ? "The planned pressure decline followed the rise." : sentence;
+    return req.schema.parse({ rewrites: [{ slot, text, evidenceIds }] });
   }
 }
 

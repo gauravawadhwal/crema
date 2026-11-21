@@ -23,7 +23,7 @@ vm.runInNewContext(fs.readFileSync(path.join(root, "skin", "engine.js"), "utf8")
 const engine = engineContext.CremaEngine;
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, "http://localhost").pathname;
-  if (pathname === "/api/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ crema: true, shotReviewVersion: supportsCurveReview ? engine.SHOT_REVIEW_VERSION : undefined, decaidUrl: `http://localhost:${MOCK}` })); }
+  if (pathname === "/api/config") { res.writeHead(200, { "content-type": "application/json" }); return res.end(JSON.stringify({ crema: true, shotReviewVersion: supportsCurveReview ? engine.SHOT_REVIEW_VERSION : 3, decaidUrl: `http://localhost:${MOCK}` })); }
   if (pathname === "/api/review" && req.method === "POST") {
     let raw = ""; req.on("data", (x) => raw += x); req.on("end", () => {
       const input = JSON.parse(raw);
@@ -105,7 +105,9 @@ const openShot = async (page, id, selector) => {
     await page.waitForFunction((id) => S.shots.some((s) => s.id === id), shotId);
     await openShot(page, shotId, "#detailReview");
     const reopenedLabels = await page.locator("#detailReview .label").allTextContents();
-    check(reopenedLabels[0] === "Curve read" && reopenedLabels.includes("Taste alignment"), "saved curve and taste stages reappear on the phone after reload");
+    check(await page.locator("#detailReview .coach-headline").count() === 1 && reopenedLabels.at(-1) === "What to try" &&
+      !reopenedLabels.includes("Your tasting") && !reopenedLabels.includes("Compared with your recent shots"),
+      "saved coach review reappears on the phone and omits missing taste and history");
     await page.goto(`http://localhost:${SKIN}/?full&decaid=${encodeURIComponent(decaid)}#shots`);
     await page.waitForFunction((id) => S.shots.some((s) => s.id === id), manualId);
     await openShot(page, manualId, "#reviewDetail");
@@ -219,12 +221,12 @@ const openShot = async (page, id, selector) => {
     await waitForPage(async (id) => (await S.api.shot(id))?.review?.source === "rules", shotId);
     check(true, "server failure falls back to saved rules review");
     const final = await evalPage(async (id) => S.api.shot(id), shotId);
-    check(final.review?.review?.summary && final.review.version === 3 && final.review.curve && final.review.taste && final.review.evidence?.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
+    check(final.review?.review?.summary && final.review.version === 4 && final.review.coach && final.review.curve && final.review.taste && final.review.evidence?.version === 1 && final.review.createdAt, "review envelope stores version, result, source and time");
     supportsCurveReview = false;
     await page.reload();
     await page.waitForFunction(() => S.api?.ai.on && S.shelfLoaded, null, { timeout: 20000 });
     const legacyServerReview = await evalPage((id) => S.api.review(id, { sourBitter: 0, body: 0, enjoyment: 5, notes: null }), shotId);
-    check(legacyServerReview.version === 3 && legacyServerReview.source === "rules" && reviewCalls.length === 2,
+    check(legacyServerReview.version === 4 && legacyServerReview.source === "rules" && reviewCalls.length === 2,
       "older Crema servers receive no review request, even with taste recorded");
     supportsCurveReview = true;
 
@@ -297,6 +299,18 @@ const openShot = async (page, id, selector) => {
     check(await evalPage(() => S.next.grind === String(+(11 - grindSettings().step).toFixed(3))), "fresh Apply uses the exact displayed target");
     await page.click('#resetRecipe');
     check(await evalPage(() => S.next.grind === "11"), "Reset after refreshed Apply preserves the user's prior edit");
+    const priorYield = await evalPage(() => {
+      const fixture = S.shots.find((shot) => shot.id === "after-shot-apply");
+      const input = { points: [], profile: { title: fixture.profileTitle }, doseG: fixture.doseG, yieldG: fixture.yieldG,
+        targetYieldG: fixture.targetYieldG, targetTimeS: null, stopReason: fixture.stopReason, feedback: { sourBitter: 0, body: -2, enjoyment: null, notes: null },
+        bean: null, installedProfiles: [], history: [] };
+      fixture.review = { version: E.SHOT_REVIEW_VERSION, ...E.rulesReviewResult(input) };
+      showAfterShot(fixture, [], {});
+      return S.next.yieldG;
+    });
+    await page.click('[data-apply-review]');
+    check(await evalPage((previous) => S.next.yieldG === previous - 3, priorYield), "coach review applies the displayed 3 g trial to the draft");
+    await page.click('#resetRecipe');
     check((await page.textContent('#afterResult')).includes('41.6 g in 26.4 s') && (await page.textContent('#afterResult')).includes('Stopped at weight'), "result line and recorded stop reason are shown");
     await page.setViewportSize({ width: 1340, height: 800 });
     check((await page.locator('#liveChart').boundingBox()).height >= 190, "finished chart is at least 190 px at tablet size");

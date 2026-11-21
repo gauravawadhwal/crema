@@ -119,6 +119,7 @@ function makeDemoApi() {
     const b = onShelf[bi % onShelf.length], r = b.recipe;
     const recordedProfile = CE.withTemperature(clone(profileTitled(r.profileTitle)), r.tempC);
     const points = CE.simulateShot(recordedProfile, r.yieldG, { resistance }).map((x) => ({ ...x, temp: x.temp ?? r.tempC,
+      groupTemp: x.temp ?? r.tempC, targetGroupTemp: x.temp ?? r.tempC, targetTemp: x.temp ?? r.tempC,
       scaleSampleS: x.t, scaleAgeS: 0 }));
     const secs = Math.round(points.at(-1).t);
     const generated = {
@@ -202,7 +203,8 @@ function makeDemoApi() {
         sim.substate = x.w < 0.5 ? "preinfusion" : "pouring";
         sim.live = { p, f, tp: x.tp ?? 0, tf: x.tf ?? 0, t, frame: x.frame };
         const w = sim.scale - sim.scaleOffset;
-        sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, tp: sim.live.tp, tf: sim.live.tf, frame: x.frame,
+        sim.samples.push({ t, p, f, w, temp: sim.group - 0.3, groupTemp: sim.group, targetGroupTemp: x.temp, targetTemp: x.temp,
+          tp: sim.live.tp, tf: sim.live.tf, frame: x.frame,
           countedVolumeMl: x.countedVolumeMl, scaleSampleS: t, scaleAgeS: 0 });
         if (target > 0 && w >= target - 1.2) { sim.substate = "pouringDone"; return stop("idle", "targetWeight"); }
         if (puck.done && !manualKind(workflow.profile)) { sim.substate = "pouringDone"; return stop("idle", "machineEnded"); }

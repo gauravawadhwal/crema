@@ -130,7 +130,7 @@ function run(state: string) {
       sim.scaleWeight += s.w - before;
       sim.substate = s.w < 0.5 ? "preinfusion" : "pouring";
       sim.live = { pressure: p, flow: f, targetPressure: s.tp ?? 0, targetFlow: s.tf ?? 0, elapsed: t, profileFrame: s.frame };
-      sim.samples.push({ t, p, f, w: sim.scaleWeight - sim.scaleOffset, cup: s.w, temp: sim.group, tp: s.tp ?? 0, tf: s.tf ?? 0, frame: s.frame,
+      sim.samples.push({ t, p, f, w: sim.scaleWeight - sim.scaleOffset, cup: s.w, temp: sim.group, targetTemp: s.temp, tp: s.tp ?? 0, tf: s.tf ?? 0, frame: s.frame,
         volume: s.countedVolumeMl });
       // stop at weight, with the usual lag
       if ((target > 0 && sim.scaleWeight - sim.scaleOffset >= target - 1.2) || (puck!.done && workflow.profile?.beverage_type !== "manual") || t >= 120) {
@@ -161,7 +161,10 @@ function recordShot(stopReason: string | null = null) {
     timestamp: new Date().toISOString(),
     stopReason,
     measurements: sim.samples.filter((_, i) => i % 2 === 0).map((s) => ({
-      machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" }, flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), targetFlow: s.tf, targetPressure: s.tp, profileFrame: s.frame, mixTemperature: +s.temp.toFixed(1) },
+      machine: { timestamp: new Date(start + s.t * 1000).toISOString(), state: { state: "espresso", substate: "pouring" },
+        flow: +s.f.toFixed(2), pressure: +s.p.toFixed(2), targetFlow: s.tf, targetPressure: s.tp, profileFrame: s.frame,
+        mixTemperature: +(s.temp - 0.3).toFixed(1), groupTemperature: +s.temp.toFixed(1),
+        targetMixTemperature: s.targetTemp, targetGroupTemperature: s.targetTemp },
       scale: { timestamp: new Date(start + s.t * 1000).toISOString(), weight: +s.w.toFixed(1) },
       volume: s.volume,
     })),

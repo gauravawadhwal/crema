@@ -5,6 +5,7 @@ import type { PhaseLandmark } from "../../server/profiles/phase-evidence.js";
 import { reviewCurveSection } from "../../server/recommend/review-curve.js";
 import type { LlmProvider } from "../../server/llm/types.js";
 import { legacyReviewShot, legacyRulesReview } from "./review-legacy.js";
+import { legacyEvalReview } from "./review-coach-compat.js";
 import { reviewShot } from "../../server/recommend/review.js";
 import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "../../server/recommend/review-evidence.js";
 import { rulesReviewResult } from "../../server/recommend/review-local.js";
@@ -109,7 +110,8 @@ export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
   "two-stage": {
     status: "ready",
     async run(input, llm, fullTrace) {
-      const { review, source, evidence, curve, taste } = llm ? await reviewShot(llm, input, fullTrace) : rulesReviewResult(input, fullTrace);
+      const { review, source, evidence, curve, taste } =
+        legacyEvalReview(llm ? await reviewShot(llm, input, fullTrace) : rulesReviewResult(input, fullTrace));
       return { review, source, stages: { curve, taste }, detectorEvidence: normalizeLegacyReview(review, input, evidence) };
     },
   },

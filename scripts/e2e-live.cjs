@@ -938,10 +938,10 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
       const shot = (await S.api.shots(50)).find(s => s.id.startsWith("seed-"));
       const result = await S.api.review(shot.id);
       const reopened = await S.api.shot(shot.id);
-      return { source: result.source, version: result.version, evidence: reopened.review?.evidence?.version,
+      return { source: result.source, version: result.version, evidence: reopened.review?.evidence?.version, coach: !!reopened.review?.coach,
         sameReview: JSON.stringify(result) === JSON.stringify(reopened.review) };
     });
-    check(savedReview.source === "mock" && savedReview.version === 3 && savedReview.evidence === 1 && savedReview.sameReview,
+    check(savedReview.source === "mock" && savedReview.version === 4 && savedReview.coach && savedReview.evidence === 1 && savedReview.sameReview,
       "AI review stores versioned evidence and reads it back through Decaid", JSON.stringify(savedReview));
     await page.goto(`http://localhost:${SKIN}/?full#add`); await page.waitForTimeout(800);
     await page.click("#mode-describe");

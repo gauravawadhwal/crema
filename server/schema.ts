@@ -211,3 +211,45 @@ export const ShotReview = z.object({
   nextShot: DialInAdvice.nullable(), confidence: z.enum(["low", "medium", "high"]), askTaste: z.boolean(),
 });
 export type ShotReview = z.infer<typeof ShotReview>;
+
+const CoachFact = z.object({ sentence: z.string(), evidenceIds: z.array(z.string()).min(1) });
+const CoachReadings = z.object({ start: z.number().nullable(), finish: z.number().nullable(), average: z.number().nullable() });
+const CoachPhase = CoachFact.extend({
+  id: z.string(),
+  name: z.string(), verdict: z.enum(["on_plan", "partly", "off_plan", "not_graded"]),
+  unit: z.enum(["bar", "mL/s", "°C"]).nullable(),
+  expected: CoachReadings.nullable(), actual: CoachReadings.nullable(),
+  ceiling: z.object({ value: z.number(), unit: z.enum(["bar", "mL/s"]) }).nullable(),
+  meanAbsoluteError: z.number().nullable(),
+});
+const CoachStage = CoachFact.extend({
+  name: z.string(), verdict: CoachPhase.shape.verdict, phaseIds: z.array(z.string()).min(1),
+});
+const CoachHypothesis = CoachFact.extend({
+  id: z.string(), label: z.string(), confidence: z.enum(["low", "medium"]),
+  signature: z.enum(["sour_thin", "bitter_heavy", "none"]),
+});
+
+export const CoachMechanics = z.object({
+  headline: CoachFact, phases: z.array(CoachPhase), stages: z.array(CoachStage),
+  temperature: CoachPhase.extend({ phaseIds: z.array(z.string()) }),
+  notable: z.array(CoachFact).max(3), hypotheses: z.array(CoachHypothesis).max(2),
+  history: CoachFact.nullable(),
+});
+export type CoachMechanics = z.infer<typeof CoachMechanics>;
+
+export const CoachReview = CoachMechanics.extend({
+  taste: z.object({
+    sourBitter: z.number().nullable(), body: z.number().nullable(), enjoyment: z.number().nullable(),
+    notes: z.string().nullable(), noteQuote: z.string().nullable(), reported: z.string().nullable(),
+    links: z.array(z.object({
+      hypothesisId: z.string(), status: z.enum(["matches", "does_not_match", "no_link"]), sentence: z.string().nullable(),
+    })),
+  }).nullable(),
+  recommendation: z.object({
+    action: z.string(), expect: z.string(), compare: z.string(),
+    puckCheck: z.enum(["even_distribution", "level_tamp", "consistent_dose", "basket_and_puck_consistency"]).nullable(),
+    adjustment: DialInAdvice.nullable(),
+  }),
+});
+export type CoachReview = z.infer<typeof CoachReview>;

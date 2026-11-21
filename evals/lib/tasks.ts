@@ -5,7 +5,8 @@
  */
 import path from "node:path";
 import { reviewShot } from "../../server/recommend/review.js";
-import { rulesReview } from "../../server/recommend/review-local.js";
+import { rulesReviewResult } from "../../server/recommend/review-local.js";
+import { legacyEvalReview } from "./review-coach-compat.js";
 import type { ShotReviewData } from "../../server/recommend/review-types.js";
 import { reviewFixture } from "./review-fixtures.js";
 import { gradeReview } from "./review-grader.js";
@@ -178,7 +179,7 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
   if (task === "review") {
     const rc = c as ReviewCase;
     const input = reviewFixture(rc.input.fixture);
-    const result = subject.kind === "rules" ? { review: rulesReview(input), source: "rules" } : await reviewShot(llm, input);
+    const result = legacyEvalReview(subject.kind === "rules" ? rulesReviewResult(input) : await reviewShot(llm, input));
     return { output: result.review, context: { source: result.source } };
   }
 

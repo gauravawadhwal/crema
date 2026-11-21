@@ -129,7 +129,7 @@ Both must provide:
 | `apply(beanId, recipe, grinderSetting, batchId)` | Load the recipe onto the machine; null bean id means No bag |
 | `lastShotWith(title, profileShape?)` | The newest shot with the matching title and recorded profile shape, in full, or null. Its `points` carry the step number (`frame`, Decaid's `profileFrame`), which times the profile's graph |
 | `shots(limit)`, `annotate(id, a)` | History (with `points` for charts), ratings and notes. Ratings are Decaid's `enjoyment`, 0–10, used as is (the UI shows half stars) |
-| `review(shotId, feedback?)` | Recorded curves/profile and optional explicit taste → saved `{version: 2, review, evidence, source, createdAt}`. Local checks work without AI; requests never apply settings. Stored in `annotations.extras.crema.review`; unrelated extras are preserved |
+| `review(shotId, feedback?)` | Recorded curves, profile and optional taste → saved version 4 review. Local checks work without AI. Requests never apply settings. Stored in `annotations.extras.crema.review` alongside any unrelated extras |
 | `feedback(shotId, beanId, fb)` | `{advice, source}`, `source` provider id or `"rules"` |
 | `prefs`, `favourites`, `presets`, `maintenance` | `get`/`set` (and `maintenance.done(kind)`); `set` returns the stored value |
 | `machine.*` | `setState`, `tare`, `recipe`, `workflowSettings`, `settings`, `waterThreshold`, `presence`, `schedules`, `display`, `plugins`, `info`, `heartbeat`. `recipe()` is what the machine holds now, as `{profileTitle, doseG, yieldG, tempC, grind, batchId}` (the demo returns null until something is loaded); `workflowSettings` reads and writes only the workflow's `steamSettings`, `hotWaterData` and `rinseData` (never the profile); `settings` is left with fan and USB |
@@ -183,21 +183,27 @@ BeanInfo ──► rules baseline (roast, rest, grind hint)                     
 ## Shot review
 
 `server/profiles/analysis.ts` computes conservative observations from recorded
-samples. `server/recommend/review-local.ts` and `review-taste.ts` are bundled
-with the analysis for the browser. One Review action validates a bounded
-`ReviewInput` at `POST /api/review` and returns `{review, curve, taste, source, evidence}`.
-The curve stage fixes findings, priority, confidence and its initial experiment
-from the recorded mechanics. An optional provider call can add a short explanation
-with validated evidence IDs. Its input excludes ratings, notes, earlier review
-text and bean tasting descriptors. The skin runs both stages locally when
-the connected server does not advertise support for the staged review.
+samples. The browser and server share the review rules. One Review action
+validates a bounded `ReviewInput` at `POST /api/review` and returns
+`{coach, review, curve, taste, source, evidence}`. The mechanical stage produces
+a headline, verdicts for planned phases and temperature, notable points,
+hedged hypotheses and a relevant history comparison. An optional provider call
+can rewrite the headline and coach sentences. Rewrites must cite eligible
+evidence IDs and preserve the measured quantities and units in each draft.
+The card groups phases into brewing stages and shows one short verdict
+sentence for each. Numbers in the wording highlight large misses or notable
+events. Each stage names the saved phase IDs it covers. The saved phase rows
+carry their measured and expected values alongside the prose.
+Ratings, notes, earlier review text and bean tasting descriptors stay outside
+this stage. The skin builds the same review locally when the connected server
+does not advertise the current format.
 
-Taste alignment runs after the curve stage. The recorded scales can endorse
-or change the experiment. Opposing grind directions lead to a repeat. When
-there is a saved note and no taste or body rating, an optional second call can
-interpret a verbatim sensory quote and suggest one bounded trial. Rules can
-show an uninterpreted note and suggest a repeat. Missing readings are null and
-all proposed adjustments are advisory.
+Taste alignment runs after the mechanical sections are fixed. The recorded
+taste and body scales can support or conflict with a hypothesis. A conflict
+leads to a repeat. When there is a saved note and no taste or body rating, an
+optional second call can interpret a verbatim sensory quote and suggest one
+bounded trial. The final section describes one adjustment, a puck-prep check
+or a repeat, and what to compare. Adjustments are advisory.
 
 Phase evidence groups contiguous frame and machine substate readings on the shot
 clock and excludes preparation. It compares the active pump channel with its
@@ -220,14 +226,17 @@ History uses strictly earlier recordings of the captured bag with similar
 profile shape, dose, yield, temperature and stop conditions. References carry
 measured phase summaries. Pressure is compared at shared cup mass within a
 matched phase using adjacent, fresh scale readings. Phase comparisons require
-two usable references, and medians and quartiles require five. Grinder labels
-are recorded context. The same code supplies the displayed comparison for both
-rules and AI.
+two usable references for the legacy aggregate, and medians and quartiles
+require five. The coach section can use one comparable earlier shot when
+timing, pressure at shared cup mass, onset or cup fill differs materially, or
+when both shots depart from the expected time window in the same direction.
+Grinder labels are recorded context and changes in the label cannot establish
+the cause of a difference.
 
-New saved reviews use version 3 at `annotations.extras.crema.review`. They carry
-the curve read, taste alignment, final experiment, evidence projection, creation
-time and source. Versions 1 and 2 still render with the fields they saved.
-Reopening a shot reads its saved review. Review again explicitly replaces it.
+New saved reviews use version 4 at `annotations.extras.crema.review`. They carry
+the coach sections and keep the flat review for earlier skins. Versions 1 to 3
+render their saved fields. Reopening a shot reads its saved review. Review
+again explicitly replaces it.
 The legacy `/api/dialin` now also returns source so provider failures cannot be
 mislabelled as AI answers.
 
