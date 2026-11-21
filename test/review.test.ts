@@ -29,7 +29,7 @@ const provider = (answer: unknown | ((prompt: string, name: string) => unknown) 
   };
   return new ProviderChain([p]);
 };
-const cleanReview = (overrides: Record<string, unknown> = {}) => ({ interpretation: null, report: null, ...overrides });
+const cleanReview = (overrides: Record<string, unknown> = {}) => ({ rewrites: [], report: null, ...overrides });
 const section = (prompt: string, heading: string) => JSON.parse(prompt.split(heading)[1].split("\n")[1]);
 const promptEvidence = (prompt: string) => section(prompt, "EVIDENCE (keys are evidence IDs)");
 
@@ -198,11 +198,13 @@ describe("shot review backend", () => {
   it("validates optional narration IDs and leaves all mechanical output intact on rejection", async () => {
     const shot = reviewFixture("choke");
     const fallback = rulesReviewResult(shot);
-    const interpretation = { text: "The restrictive response persisted through the pour.", evidenceIds: ["finding-1"] };
-    const grounded = await reviewShot(provider(cleanReview({ interpretation })), shot);
+    const interpretation = { text: "This fits water finding it hard to get through your puck.", evidenceIds: ["finding-1"] };
+    const rewrite = { slot: "hypothesis-1", ...interpretation };
+    const grounded = await reviewShot(provider(cleanReview({ rewrites: [rewrite] })), shot);
     expect(grounded.source).toBe("mock");
     expect(grounded.curve).toEqual({ ...fallback.curve, narrative: interpretation });
-    const invalid = await reviewShot(provider(cleanReview({ interpretation: { ...interpretation, evidenceIds: ["finding-99", "constructor"] } })), shot);
+    expect(grounded.coach.hypotheses[0].sentence).toBe(interpretation.text);
+    const invalid = await reviewShot(provider(cleanReview({ rewrites: [{ ...rewrite, evidenceIds: ["finding-99", "constructor"] }] })), shot);
     expect(invalid).toEqual(fallback);
   });
 
@@ -326,8 +328,8 @@ describe("shot review backend", () => {
     // Long, steady telemetry on an unknown profile: nothing to grade, plenty to describe.
     const points = Array.from({ length: 120 }, (_, i) => ({ ...point(i / 4), substate: i < 8 ? "preinfusion" : "pouring" }));
     let prompt = "";
-    const summary = "Pressure stayed close to 8 bar across the recorded pour.";
-    const result = await reviewShot(provider((p: string) => { prompt = p; return cleanReview({ interpretation: { text: summary, evidenceIds: ["phase-1"] }, confidence: "high" }); }), input({ points }));
+    const summary = "Your recording doesn't give you a reliable comparison with the profile.";
+    const result = await reviewShot(provider((p: string) => { prompt = p; return cleanReview({ rewrites: [{ slot: "headline", text: summary, evidenceIds: ["recording"] }], confidence: "high" }); }), input({ points }));
     expect(result.curve.narrative?.text).toBe(summary);
     expect(result.review.wentWell).toEqual(rulesReviewResult(input({ points })).curve.wentWell);
     expect(result.review.confidence).toBe("low");

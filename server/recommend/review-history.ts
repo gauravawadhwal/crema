@@ -9,6 +9,11 @@ type MassPoint = ReviewTraceSummary["mass"]["checkpoints"][number];
 
 const MIN_COMPARATORS = 2;
 const MIN_QUARTILES = 5;
+const COACH_TIME_DIFFERENCE_S = 3;
+const COACH_TIME_DIFFERENCE_SHARE = 0.15;
+const COACH_PRESSURE_DIFFERENCE_BAR = 1;
+const COACH_ONSET_DIFFERENCE_S = 2;
+const COACH_CUP_RATE_DIFFERENCE_G_S = 1;
 
 interface Reference {
   timestamp: string;
@@ -67,6 +72,7 @@ export interface ReviewHistoryComparison {
 const positive = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
 const setting = (s?: string | null) => s?.trim() || null;
 const rounded = (n: number) => Math.round(n * 10) / 10;
+const materialDelta = (a: number, b: number, floor: number) => Math.abs(a - b) + 1e-9 >= floor;
 const stopLabel = (s?: string | null) => {
   const value = s?.toLowerCase().trim();
   return value && ["appstop", "apistop", "userstop", "manual"].includes(value) ? "user" : value || null;
@@ -234,4 +240,46 @@ export function historyCurveSentence(h: ReviewHistoryComparison): string | null 
     `This shot recorded setting ${h.latest?.currentGrind}; earlier settings included ${changed.join(", ")}.` :
     "Recorded grinder settings differed across these shots.");
   return lines.join(" ");
+}
+
+/** One recent match is enough for a descriptive comparison. A repeat needs a shared departure from the plan. */
+export function coachHistory(h: ReviewHistoryComparison, facts: ShotFacts) {
+  const latest = h.latest;
+  if (!latest || h.comparableCount === 0) return null;
+  const { currentDurationS, previousDurationS } = latest;
+  const materialTime = materialDelta(currentDurationS, previousDurationS,
+    Math.max(COACH_TIME_DIFFERENCE_S, COACH_TIME_DIFFERENCE_SHARE * previousDurationS));
+  const settingNote = (changed: boolean | null) => changed ?
+    " The grinder setting changed too, so you can't tell what caused the difference from these shots." : "";
+  const row = (sentence: string, ids: string[] = ["history"]) => ({ sentence, evidenceIds: ids });
+  const time = `Your pour took ${rounded(currentDurationS)} s versus ${rounded(previousDurationS)} s on the last matching recipe.`;
+  if (materialTime) return row(time + settingNote(latest.grindChanged));
+
+  const { phase, mass, firstGramBrewElapsedS, cupRateAfterOnsetGS, references } = h.curves;
+  const previous = references[0];
+  if (phase && previous) {
+    const a = mass.current, b = previous.mass;
+    if (a && b && materialDelta(a.pressureBar, b.pressureBar, COACH_PRESSURE_DIFFERENCE_BAR)) {
+      return row(`At ${a.massG} g in the cup, you were at ${rounded(a.pressureBar)} bar versus ${rounded(b.pressureBar)} bar in the earlier pour.` +
+        settingNote(previous.grindChanged));
+    }
+    if (firstGramBrewElapsedS != null && previous.firstGramBrewElapsedS != null &&
+        materialDelta(firstGramBrewElapsedS, previous.firstGramBrewElapsedS, COACH_ONSET_DIFFERENCE_S)) {
+      return row(`Your cup reached its first gram at ${rounded(firstGramBrewElapsedS)} s versus ${rounded(previous.firstGramBrewElapsedS)} s in the earlier pour.` +
+        settingNote(previous.grindChanged));
+    }
+    if (cupRateAfterOnsetGS != null && previous.cupRateAfterOnsetGS != null &&
+        materialDelta(cupRateAfterOnsetGS, previous.cupRateAfterOnsetGS, COACH_CUP_RATE_DIFFERENCE_G_S)) {
+      return row(`Once your cup started filling, it gained ${rounded(cupRateAfterOnsetGS)} g/s versus ${rounded(previous.cupRateAfterOnsetGS)} g/s in the earlier pour.` +
+        settingNote(previous.grindChanged));
+    }
+  }
+  const window = facts.expectedTimeS;
+  if (window && facts.timeTargetComparable) {
+    const fast = Math.max(currentDurationS, previousDurationS) <= window[0] - 4;
+    const slow = Math.min(currentDurationS, previousDurationS) >= window[1] + 5;
+    if (fast || slow) return row(`Both pours finished ${fast ? "ahead of" : "beyond"} the expected time window. ${time}` +
+      (latest.grindChanged ? " The grinder setting changed too, so you can't tell what kept the pours at that pace." : ""), ["history", "timing"]);
+  }
+  return null;
 }

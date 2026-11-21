@@ -5,6 +5,7 @@ import { analyzeShot } from "../../../server/profiles/analysis.js";
 import type { PhaseLandmark } from "../../../server/profiles/phase-evidence.js";
 import { rulesReviewResult } from "../../../server/recommend/review-local.js";
 import { reviewShot } from "../../../server/recommend/review.js";
+import { legacyEvalReview } from "../review-coach-compat.js";
 import type { LlmProvider, StructuredRequest, Usage } from "../../../server/llm/types.js";
 import { jsonSchemaFor } from "../../../server/llm/types.js";
 import type { z } from "zod";
@@ -93,8 +94,8 @@ async function episode(run: Run, c: IterationCase, repeat: number, pairHash: str
   const meteringMs = () => run.subject instanceof IsolatedCli ? run.subject.meteringMs : 0;
   const start = performance.now();
   const meteringStart = meteringMs();
-  const result = provider ? await reviewShot(new ProviderChain([provider]), c.input, c.fullTrace,
-    { pointBudget: candidate?.change.kind === "point-budget" ? candidate.change.rows : undefined }) : rulesReviewResult(c.input, c.fullTrace);
+  const result = legacyEvalReview(provider ? await reviewShot(new ProviderChain([provider]), c.input, c.fullTrace,
+    { pointBudget: candidate?.change.kind === "point-budget" ? candidate.change.rows : undefined }) : rulesReviewResult(c.input, c.fullTrace));
   const ms = Math.max(0, performance.now() - start - (meteringMs() - meteringStart));
   const askedCurve = calls.some(call => call.name === "CurveNarrative");
   if (providerErrors.length) throw new Error("Provider error or fallback stopped the round", { cause: providerErrors[0] });

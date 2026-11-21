@@ -14,9 +14,10 @@ const productionFile = "server/recommend/review.ts";
 export function candidatePatch(candidate: Candidate, commit: string) {
   const source = execFileSync("git", ["show", `${commit}:${productionFile}`], { cwd: ROOT_DIR, encoding: "utf8" });
   const lines = source.split("\n");
-  const index = lines.findIndex(line => candidate.change.kind === "instruction"
-    ? line.startsWith("Pressure is in bar, inlet flow") && line.endsWith("`;")
-    : line.includes("reviewCurveSection(input.points, landmarks, options?.pointBudget)"));
+  const systemStart = lines.findIndex(line => line.startsWith("const CURVE_SYSTEM = `"));
+  const index = candidate.change.kind === "instruction"
+    ? lines.findIndex((line, i) => systemStart >= 0 && i >= systemStart && line.endsWith("`;"))
+    : lines.findIndex(line => line.includes("reviewCurveSection(input.points, landmarks, options?.pointBudget)"));
   if (index < 0) throw new Error("Cannot produce patch from pinned review");
   const before = lines[index];
   const after = candidate.change.kind === "instruction"

@@ -764,13 +764,13 @@ function makeLiveApi(conn) {
       const limit = E.REVIEW_POINT_LIMIT;
       const fullTrace = points.length > limit ? E.fullReviewTrace(input) : undefined;
       let result = null;
-      // Use the local stages with older servers, whose review prompt received taste and curves together.
+      // Older servers still support brewing. Build the current review locally if their review format differs.
       if (aiOn() && conn.cremaInfo?.shotReviewVersion === E.SHOT_REVIEW_VERSION && points.length) {
         const bounded = fullTrace ? Array.from({ length: limit }, (_, i) => points[Math.round(i * (points.length - 1) / (limit - 1))]) : points;
         try { result = await cremaCall(() => post(C("/api/review"), { ...input, points: bounded, fullTrace }, { timeoutMs: AI_WAIT.review })); }
         catch (e) { console.warn("AI shot review failed; using the rules review", e); }
       }
-      if (!result?.curve || !result.taste || !result.review || result.evidence?.version !== E.REVIEW_EVIDENCE_VERSION) result = E.rulesReviewResult(input, fullTrace);
+      if (!result?.coach || !result.curve || !result.taste || !result.review || result.evidence?.version !== E.REVIEW_EVIDENCE_VERSION) result = E.rulesReviewResult(input, fullTrace);
       const saved = { ...result, version: E.SHOT_REVIEW_VERSION, createdAt: new Date().toISOString() };
       const crema = { review: saved };
       if (feedback?.sourBitter != null) crema.sourBitter = feedback.sourBitter;
@@ -2257,7 +2257,7 @@ function metricsHtml(m) {
   return `<div class="metrics">${m.map(([k, v, u]) => `<div><span class="label">${k}</span><span class="v">${esc(v)}<small class="muted"> ${u}</small></span></div>`).join("")}</div>`;
 }
 // A review proposes one small numeric edit; applying it never loads the machine.
-function reviewAdjustment(advice) {
+function reviewAdjustment(advice, exactDelta = false) {
   if (!S.next || !advice || advice.switchProfile) return null;
   const changes = [];
   if (advice.grindDelta && advice.grindDelta !== "same") {
@@ -2266,7 +2266,9 @@ function reviewAdjustment(advice) {
   }
   for (const [key, delta] of [["yield", advice.yieldDeltaG], ["temp", advice.tempDeltaC], ["dose", advice.doseDeltaG]]) {
     if (Number.isFinite(delta) && delta !== 0) {
-      const f = RECIPE_FIELDS[key], value = recipeValue(key, S.next[f.field] + Math.sign(delta) * f.step);
+      const f = RECIPE_FIELDS[key], proposed = S.next[f.field] + (exactDelta ? delta : Math.sign(delta) * f.step);
+      const value = recipeValue(key, proposed);
+      if (exactDelta && Math.abs(value - proposed) > 1e-6) return null;
       if (value !== S.next[f.field]) changes.push({ key, field: f.field, label: key === "temp" ? "temperature" : key, unit: ` ${f.unit}`, value });
     }
   }
@@ -2317,8 +2319,35 @@ function shotResultPills(shot, context = {}, points = shot?.points || []) {
   const verdict = window && t != null ? `${t < window[0] ? "Fast" : t > window[1] ? "Slow" : "In window"} · ${window.join("–")} s expected` : null;
   return `${dose > 0 && weight > 0 ? `<span class="pill">1:${(weight / dose).toFixed(1)}</span>` : ""}<span class="pill ${reason.reason === "error" ? "warn" : ""}">${label}</span>${verdict ? `<span class="pill ${t < window[0] || t > window[1] ? "warn" : "good"}">${esc(verdict)}</span>` : ""}`;
 }
+function coachReviewHtml(coach, shot) {
+  const marker = { on_plan: ["On plan", "good"], partly: ["Partly on plan", "warn"], off_plan: ["Off plan", "warn"], not_graded: ["Not graded", ""] };
+  const { headline, stages, temperature, notable, hypotheses, history, taste, recommendation } = coach;
+  const edit = reviewRecipeMatches(shot) && S.reviewEdit?.shotId !== shot.id ? reviewAdjustment(recommendation.adjustment, true) : null;
+  const phaseRows = [...stages, temperature].map(phase => {
+    const [label, style] = marker[phase.verdict] ?? marker.not_graded;
+    return `<li class="coach-phase"><div class="row"><strong>${esc(phase.name)}</strong><span class="pill ${style}">${label}</span></div>
+      <p>${esc(phase.sentence)}</p></li>`;
+  }).join("");
+  return `<div class="advice shot-review coach-review">
+    <p class="coach-headline"><strong>${esc(headline.sentence)}</strong></p>
+    <ul class="coach-phases">${phaseRows}</ul>
+    ${notable.length ? `<div class="label">Worth noting</div><ul>
+      ${notable.map(row => `<li>${esc(row.sentence)}</li>`).join("")}
+    </ul>` : ""}
+    ${hypotheses.map(row => `<p class="coach-hypothesis"><strong>${esc(row.label)}</strong> ${esc(row.sentence)} <span class="muted small">(${esc(row.confidence)} confidence)</span></p>`).join("")}
+    ${history ? `<div class="label">Compared with your recent shots</div><p>${esc(history.sentence)}</p>` : ""}
+    ${taste ? `<div class="label">Your tasting</div>
+      ${taste.reported ? `<p>${esc(taste.reported)}</p>` : ""}
+      ${taste.notes ? `<p class="muted">Saved note: ${esc(taste.notes)}</p>` : ""}
+      ${taste.noteQuote ? `<p>From your note: “${esc(taste.noteQuote)}”</p>` : ""}` : ""}
+    <div class="next-change"><div class="label">What to try</div><strong>${esc(recommendation.action)}</strong>
+      <div class="muted">${esc(recommendation.expect)} ${esc(recommendation.compare)}</div>
+      ${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>
+  </div>`;
+}
 function reviewHtml(saved, shot = null) {
   if (!saved?.review) return "";
+  if (saved.version === 4 && saved.coach) return coachReviewHtml(saved.coach, shot);
   const review = saved.review;
   const curve = saved.version === 3 ? saved.curve : null;
   const taste = saved.version === 3 ? saved.taste : null;

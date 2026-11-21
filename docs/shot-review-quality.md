@@ -44,8 +44,9 @@ target yield, temperature and profile shape (when available) still match. The in
 marks the window as recorded, matching recipe or catalogue guide. A guide is
 explicitly approximate; if its dose or intended yield differs, timing stays descriptive
 and cannot alone support a grind adjustment; legacy unknown windows and unknown custom profiles stay
-unknown. These input fields are optional for older clients. Saved review versions 1 and 2
-still render. New saves use version 3 (see [architecture.md](architecture.md#shot-review)).
+unknown. These input fields are optional for older clients. Saved review versions
+1 to 3 still render. New saves use the version 4 coach format.
+[Shot review architecture](architecture.md#shot-review)
 
 ## Curve read and taste alignment
 

@@ -109,13 +109,17 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.waitForSelector("#reviewBox .advice", { timeout: 5000 }); await snap("3-after", true);
     const version = await p.evaluate(() => Object.values(JSON.parse(localStorage.getItem("crema:demo-reviews")))
       .find(entry => entry.shot.id.startsWith("demo-shot-"))?.review);
-    if (version?.version !== 3 || version.evidence?.version !== 1 || !version.curve?.summary || !version.taste?.summary) {
+    if (version?.version !== 4 || version.evidence?.version !== 1 || !version.coach?.headline || !version.coach?.taste) {
       throw new Error("new review did not save both stages and versioned evidence");
     }
     const labels = await p.locator("#reviewBox .label").allTextContents();
-    if (labels[0] !== "Curve read" || !labels.includes("Taste alignment")) throw new Error("review stages are missing or out of order");
+    if (!await p.locator("#reviewBox .coach-headline").count() || !labels.includes("Your tasting") || labels.at(-1) !== "What to try")
+      throw new Error("coach review sections are missing or out of order");
+    const rows = await p.locator("#reviewBox .coach-phase").allTextContents();
+    if (rows.length !== version.coach.stages.length + 1 || rows.some(row => /\b(?:Plan|Recorded):|\bRecorded\s+[-\d]/i.test(row)))
+      throw new Error("phase rows should read as coach sentences without measurement readbacks");
   });
-  await step("read saved v1 and v2 shot reviews", async () => {
+  await step("read saved v1, v2 and v3 shot reviews", async () => {
     const result = await p.evaluate(async () => {
       const key = "crema:demo-reviews", before = localStorage.getItem(key);
       try {
@@ -123,9 +127,10 @@ async function clickThrough(b, url, [name, vp, scheme]) {
           review: { summary: "Synthetic saved review", issues: [], wentWell: [], confidence: "low", nextShot: null, askTaste: true } };
         const evidence = { version: 1, history: { curves: { usableCount: 0 } } };
         localStorage.setItem(key, JSON.stringify({ ...JSON.parse(before ?? "{}"),
-          s0: saved, s1: { review: { ...saved, version: 2, evidence } } }));
+          s0: saved, s1: { review: { ...saved, version: 2, evidence } },
+          s2: { review: { ...saved, version: 3, evidence, curve: { summary: saved.review.summary }, taste: { summary: "Synthetic saved taste" } } } }));
         const demo = makeDemoApi();
-        return await Promise.all(["s0", "s1"].map(async id => {
+        return await Promise.all(["s0", "s1", "s2"].map(async id => {
           const shot = await demo.shot(id);
           return { html: reviewHtml(shot.review, shot), review: shot.review };
         }));
@@ -135,7 +140,8 @@ async function clickThrough(b, url, [name, vp, scheme]) {
       }
     });
     if (result[0].review?.version !== 1 || "evidence" in result[0].review || result[1].review?.version !== 2 ||
-        result.some(entry => !entry.html.includes("Synthetic saved review") || entry.html.includes("Taste alignment"))) {
+        result[2].review?.version !== 3 || !result[2].html.includes("Curve read") || !result[2].html.includes("Synthetic saved taste") ||
+        result.slice(0, 2).some(entry => !entry.html.includes("Synthetic saved review") || entry.html.includes("Taste alignment"))) {
       throw new Error("legacy reviews did not render as saved");
     }
   });

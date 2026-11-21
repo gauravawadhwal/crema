@@ -2248,7 +2248,7 @@ var CremaEngine = (() => {
   }
 
   // server/recommend/review-types.ts
-  var SHOT_REVIEW_VERSION = 3;
+  var SHOT_REVIEW_VERSION = 4;
 
   // server/control/workflow.ts
   var near = (a, b) => a == null || b == null ? a == b : Math.abs(Number(a) - Number(b)) < 0.05;
@@ -2285,9 +2285,15 @@ var CremaEngine = (() => {
   // server/recommend/review-history.ts
   var MIN_COMPARATORS = 2;
   var MIN_QUARTILES = 5;
+  var COACH_TIME_DIFFERENCE_S = 3;
+  var COACH_TIME_DIFFERENCE_SHARE = 0.15;
+  var COACH_PRESSURE_DIFFERENCE_BAR = 1;
+  var COACH_ONSET_DIFFERENCE_S = 2;
+  var COACH_CUP_RATE_DIFFERENCE_G_S = 1;
   var positive2 = (n) => typeof n === "number" && Number.isFinite(n) && n > 0;
   var setting = (s) => s?.trim() || null;
   var rounded2 = (n) => Math.round(n * 10) / 10;
+  var materialDelta = (a, b, floor) => Math.abs(a - b) + 1e-9 >= floor;
   var stopLabel = (s) => {
     const value = s?.toLowerCase().trim();
     return value && ["appstop", "apistop", "userstop", "manual"].includes(value) ? "user" : value || null;
@@ -2481,6 +2487,332 @@ var CremaEngine = (() => {
     if (changed.length) lines.push(changed.length <= 4 ? `This shot recorded setting ${h.latest?.currentGrind}; earlier settings included ${changed.join(", ")}.` : "Recorded grinder settings differed across these shots.");
     return lines.join(" ");
   }
+  function coachHistory(h, facts) {
+    const latest = h.latest;
+    if (!latest || h.comparableCount === 0) return null;
+    const { currentDurationS, previousDurationS } = latest;
+    const materialTime = materialDelta(
+      currentDurationS,
+      previousDurationS,
+      Math.max(COACH_TIME_DIFFERENCE_S, COACH_TIME_DIFFERENCE_SHARE * previousDurationS)
+    );
+    const settingNote = (changed) => changed ? " The grinder setting changed too, so you can't tell what caused the difference from these shots." : "";
+    const row = (sentence, ids = ["history"]) => ({ sentence, evidenceIds: ids });
+    const time = `Your pour took ${rounded2(currentDurationS)} s versus ${rounded2(previousDurationS)} s on the last matching recipe.`;
+    if (materialTime) return row(time + settingNote(latest.grindChanged));
+    const { phase, mass, firstGramBrewElapsedS, cupRateAfterOnsetGS, references } = h.curves;
+    const previous = references[0];
+    if (phase && previous) {
+      const a = mass.current, b = previous.mass;
+      if (a && b && materialDelta(a.pressureBar, b.pressureBar, COACH_PRESSURE_DIFFERENCE_BAR)) {
+        return row(`At ${a.massG} g in the cup, you were at ${rounded2(a.pressureBar)} bar versus ${rounded2(b.pressureBar)} bar in the earlier pour.` + settingNote(previous.grindChanged));
+      }
+      if (firstGramBrewElapsedS != null && previous.firstGramBrewElapsedS != null && materialDelta(firstGramBrewElapsedS, previous.firstGramBrewElapsedS, COACH_ONSET_DIFFERENCE_S)) {
+        return row(`Your cup reached its first gram at ${rounded2(firstGramBrewElapsedS)} s versus ${rounded2(previous.firstGramBrewElapsedS)} s in the earlier pour.` + settingNote(previous.grindChanged));
+      }
+      if (cupRateAfterOnsetGS != null && previous.cupRateAfterOnsetGS != null && materialDelta(cupRateAfterOnsetGS, previous.cupRateAfterOnsetGS, COACH_CUP_RATE_DIFFERENCE_G_S)) {
+        return row(`Once your cup started filling, it gained ${rounded2(cupRateAfterOnsetGS)} g/s versus ${rounded2(previous.cupRateAfterOnsetGS)} g/s in the earlier pour.` + settingNote(previous.grindChanged));
+      }
+    }
+    const window = facts.expectedTimeS;
+    if (window && facts.timeTargetComparable) {
+      const fast = Math.max(currentDurationS, previousDurationS) <= window[0] - 4;
+      const slow = Math.min(currentDurationS, previousDurationS) >= window[1] + 5;
+      if (fast || slow) return row(`Both pours finished ${fast ? "ahead of" : "beyond"} the expected time window. ${time}` + (latest.grindChanged ? " The grinder setting changed too, so you can't tell what kept the pours at that pace." : ""), ["history", "timing"]);
+    }
+    return null;
+  }
+
+  // server/recommend/review-coach.ts
+  var NOTABLE_PACE_GAP_S = 10 - 1.5;
+  var fact = (sentence, ...evidenceIds) => ({ sentence, evidenceIds });
+  var number2 = (n) => String(Number(n.toFixed(1)));
+  var quantity = (n, unit) => `${number2(n)} ${unit}`;
+  var stageNames = (names) => names.length === 1 ? names[0].toLowerCase() : `${names.slice(0, -1).join(", ").toLowerCase()} and ${names.at(-1).toLowerCase()}`;
+  var configuredNumber = (value) => value != null && String(value).trim() && Number.isFinite(Number(value)) ? Number(value) : null;
+  var coverage2 = (p) => p.controlledError.value != null && p.controlledError.coveredS >= 0.5 && p.controlledError.coveredS + 2e-3 >= 0.8 * p.durationS;
+  function phaseName(step, p) {
+    const name = step.name ?? "";
+    if (/bloom|pause/i.test(name) || p?.purpose.value === "bloom_or_pause") return "Bloom";
+    if (/declin|ramp down/i.test(name) || p?.purpose.value === "decline") return "Decline";
+    if (/soak|^infuse$/i.test(name)) return "Soak";
+    if (/fill|preinfus/i.test(name) || p?.purpose.value === "fill_or_soak") return /start|boost/i.test(name) ? "Fill start" : "Fill";
+    if (/ramp|rise|build|pressure up/i.test(name) || p?.purpose.value === "ramp") {
+      return p?.steadyHold.value ? "Main pour" : step.pump?.toLowerCase() === "flow" ? "Flow build" : "Pressure build";
+    }
+    if (/flow limit/i.test(name)) return "Flow limit";
+    return "Main pour";
+  }
+  function phaseRow(step, p, reason, name, role, frame) {
+    const flow2 = step.pump?.toLowerCase() === "flow";
+    const unit = flow2 ? "mL/s" : "bar";
+    const variable = flow2 ? "flow" : "pressure";
+    const configured = configuredNumber(flow2 ? step.flow : step.pressure);
+    const limit = p?.plan.value?.limiter?.value ?? configuredNumber(step.limiter?.value);
+    const otherUnit = flow2 ? "bar" : "mL/s";
+    const command = p?.loggedCommand.value;
+    const hold = p?.steadyHold.value;
+    const actualReadings = flow2 ? p?.inletFlowMlS.value : p?.pressureBar.value;
+    const changed = command?.entry != null && command.last != null && Math.abs(command.last - command.entry) >= (flow2 ? 0.3 : 0.5);
+    const target = hold?.meanCommand ?? command?.timeWeightedMean ?? configured;
+    const down = changed && command.last < command.entry;
+    const actualMean = hold?.meanResponse ?? actualReadings?.timeWeightedMean;
+    const supported = /^(flow|pressure)$/i.test(step.pump ?? "");
+    const base = {
+      id: `planned-${frame}`,
+      name,
+      unit: supported ? unit : null,
+      evidenceIds: [p?.id ?? "finish"],
+      expected: supported && target != null ? { start: command?.entry ?? null, finish: command?.last ?? configured, average: target } : null,
+      actual: supported && actualReadings ? { start: actualReadings.entry, finish: actualReadings.last, average: actualMean ?? null } : null,
+      ceiling: supported && limit != null && limit > 0 ? { value: limit, unit: otherUnit } : null,
+      meanAbsoluteError: p?.controlledError.value?.absoluteMean ?? null
+    };
+    if (!p || !coverage2(p) || target == null || actualMean == null) return {
+      ...base,
+      verdict: "not_graded",
+      sentence: p ? "You have too little paired target and response data to judge this phase." : reason
+    };
+    const error = hold ? Math.abs(hold.meanResponse - hold.meanCommand) : p.controlledError.value.absoluteMean;
+    const scale = Math.max(Math.abs(target), changed ? Math.abs(command.entry) : 0, changed ? Math.abs(command.last) : 0);
+    const close = Math.max(flow2 ? 0.3 : 0.5, 0.2 * scale);
+    const wide = Math.max(flow2 ? 0.6 : 1, 0.4 * scale);
+    const limited = (p.capLikeTime.value?.shareOfCoveredTime ?? 0) >= 0.2;
+    const fill = role === "Fill" || role === "Fill start";
+    const pressureExit = step.exit?.type?.toLowerCase() === "pressure";
+    if (fill && error > close) {
+      const endShort = !flow2 && !pressureExit && role !== "Fill start" && p.durationS >= 2 && actualReadings?.last != null && command?.last != null && command.last - actualReadings.last > close;
+      return { ...base, verdict: endShort ? "partly" : "not_graded", sentence: endShort ? "Pressure was still below the setpoint when filling ended." : "The machine was still filling, so this phase is hard to judge against the target." };
+    }
+    const bloom = role === "Bloom";
+    const wholePhaseHigh = flow2 && p.durationS >= 1 && actualReadings?.min != null && command?.max != null && actualReadings.min - command.max >= wide && p.controlledError.coveredS + 2e-3 >= 0.95 * p.durationS;
+    if ((bloom || pressureExit) && error > close && !wholePhaseHigh) {
+      return { ...base, verdict: p.durationS < 1 ? "not_graded" : "partly", sentence: `${flow2 ? "Flow" : "Pressure"} was off target, with no clear exit trigger in the recording.` };
+    }
+    const verdict = error <= close ? "on_plan" : error >= wide ? "off_plan" : "partly";
+    const direction = (hold ? hold.meanResponse - hold.meanCommand : p.controlledError.value.signedMean) < 0 ? "below" : "above";
+    const channel = flow2 ? "Flow" : "Pressure";
+    const sentence = verdict === "on_plan" ? changed && !hold ? `The machine followed the planned ${variable} ${down ? "drop" : "rise"}.` : bloom ? "The machine followed the planned pause." : `The machine held close to the planned ${variable}.` : limited ? `The ${flow2 ? "pressure" : "flow"} ceiling held ${variable} below target for part of the phase.` : changed && !hold ? `${channel} ${down ? "eased" : "built"} ${direction === (down ? "above" : "below") ? "more slowly" : "more quickly"} than planned.` : verdict === "off_plan" && target > 0 ? `${channel} averaged ${quantity(actualMean, unit)} against a target of ${quantity(target, unit)}.` : `${channel} ran ${verdict === "off_plan" ? "well " : ""}${direction} the plan.`;
+    return { ...base, verdict, sentence };
+  }
+  function phaseRows(steps, observed, stage) {
+    const { finish } = stage.evidence.analysis.facts.phaseEvidence;
+    const missed = new Map(finish.unobservedPlanPhases.value?.map((p) => [p.frame, p.status]));
+    const planned = steps.map((step, frame) => {
+      const runs = observed.filter((p2) => p2.frame === frame && p2.plan.value);
+      const p = runs.reduce((best, run) => !best || run.controlledError.coveredS > best.controlledError.coveredS ? run : best, void 0);
+      return { step, p, role: phaseName(step, p) };
+    });
+    return planned.map(({ step, p, role }, frame) => {
+      const siblings = planned.flatMap((phase, index) => phase.role === role ? [index] : []);
+      const order = siblings.indexOf(frame);
+      const lower = role.toLowerCase();
+      const name = siblings.length === 1 ? role : role === "Main pour" ? order === 0 ? "Opening pour" : order === siblings.length - 1 ? "Finish pour" : role : order === 0 ? `Opening ${lower}` : order === siblings.length - 1 ? `Final ${lower}` : role;
+      const status = missed.get(frame);
+      const reason = status === "preempted_by_weight_stop" ? "The shot reached target weight before this phase." : status === "skipped_or_unrecorded" ? "This phase was skipped or its readings are missing." : status === "not_observed_before_recording_ended" ? "The shot ended before this phase was recorded." : "The recording couldn't be matched to this phase.";
+      return { phase: phaseRow(step, p, reason, name, role, frame), role, durationS: p?.durationS ?? 0 };
+    });
+  }
+  var VERDICT_ORDER = { not_graded: 0, on_plan: 1, partly: 2, off_plan: 3 };
+  function stageRows(planned) {
+    const groups = [];
+    let pouring = false;
+    let finishing = false;
+    for (const { phase, role, durationS } of planned) {
+      finishing || (finishing = role === "Decline" || role === "Flow limit");
+      const distinct = !pouring && !finishing && (role === "Bloom" || role === "Soak") && (phase.verdict === "partly" || phase.verdict === "off_plan" || role === "Bloom" && durationS >= 3);
+      pouring || (pouring = role === "Main pour" || distinct);
+      const name = finishing ? "Finish" : distinct ? role : pouring ? "Main pour" : "Start-up";
+      const last = groups.at(-1);
+      if (last?.name === name) last.phases.push(phase);
+      else groups.push({ name, phases: [phase] });
+    }
+    return groups.map(({ name, phases }) => {
+      const worst = phases.reduce((best, p) => VERDICT_ORDER[p.verdict] > VERDICT_ORDER[best.verdict] ? p : best);
+      const { verdict } = worst;
+      const tracked = phases.filter((p) => p.verdict === "on_plan");
+      const flow2 = tracked.some((p) => p.unit === "mL/s");
+      const pressure2 = tracked.some((p) => p.unit === "bar");
+      let sentence = worst.sentence;
+      if (name === "Start-up" && verdict === "on_plan" && phases.length > 1) {
+        sentence = `The machine built ${flow2 && pressure2 ? "flow and pressure" : flow2 ? "flow" : "pressure"} as planned.`;
+      } else if (name === "Main pour" && verdict === "on_plan") {
+        sentence = `The machine held close to the planned ${tracked.at(-1)?.unit === "mL/s" ? "flow" : "pressure"}.`;
+      } else if (name === "Main pour" && verdict === "partly" && /build/i.test(worst.name) && phases.slice(phases.indexOf(worst) + 1).some((p) => p.verdict === "on_plan" && p.unit === worst.unit)) {
+        sentence = `${worst.sentence.slice(0, -1)}, then the machine held it close to target.`;
+      } else if (name === "Finish" && verdict === "not_graded" && phases.every((p) => p.actual == null) && worst.sentence === "The shot reached target weight before this phase.") {
+        sentence = "The shot reached target weight before the planned finish.";
+      }
+      return { name, verdict, sentence, phaseIds: phases.map((p) => p.id), evidenceIds: [...new Set(phases.flatMap((p) => p.evidenceIds))] };
+    });
+  }
+  var TEMPERATURE_BAND_C = 2;
+  var LARGE_TEMPERATURE_MISS_C = 5;
+  var LARGE_TEMPERATURE_MISS_AFTER_DROP_C = 6;
+  function temperatureRow(phases) {
+    const pairs = phases.flatMap((p) => p.temperature.value ? [{ p, t: p.temperature.value }] : []);
+    const entry = pairs.find(({ t }) => t.entry.value)?.t;
+    const end = pairs.at(-1)?.t;
+    const named = {
+      id: "temperature",
+      name: "Temperature",
+      unit: "\xB0C",
+      expected: null,
+      actual: null,
+      ceiling: null,
+      meanAbsoluteError: null,
+      phaseIds: [...new Set(pairs.flatMap(({ p }) => p.frame == null ? [] : [`planned-${p.frame}`]))]
+    };
+    const ids = pairs.map(({ p }) => p.id);
+    if (!end?.last.value || ids.length === 0) {
+      return { ...named, verdict: "not_graded", ...fact("The recording is missing the temperature or target from the sensor this profile controls.", "temperature") };
+    }
+    const final = end.last.value;
+    const first = entry?.entry.value;
+    const startDip = first && first.offsetC < -TEMPERATURE_BAND_C;
+    const entryDip = pairs.find(({ t }) => (t.entry.value?.offsetC ?? 0) < -TEMPERATURE_BAND_C);
+    const missedLate = pairs.filter(({ t }) => Math.abs(t.lateMedianOffsetC.value ?? 0) > TEMPERATURE_BAND_C);
+    const settled = end.lateMedianOffsetC.value;
+    const hasCoverage = pairs.some(({ t }) => t.lateMedianOffsetC.value != null);
+    const near2 = Math.abs(final.offsetC) <= TEMPERATURE_BAND_C;
+    const lowered = pairs.some(({ t }) => t.sensor === end.sensor && (t.entry.value?.targetC ?? final.targetC) > final.targetC + 1);
+    const easing = settled != null && Math.sign(settled) === Math.sign(final.offsetC) && Math.abs(settled) - Math.abs(final.offsetC) >= 1;
+    const sustained = settled != null && end.lateMedianOffsetC.coveredS >= 3 && Math.sign(settled) === Math.sign(final.offsetC) && Math.min(Math.abs(settled), Math.abs(final.offsetC)) > (lowered ? LARGE_TEMPERATURE_MISS_AFTER_DROP_C : LARGE_TEMPERATURE_MISS_C);
+    const finishTarget = lowered ? "the lower finish target" : "the finish target";
+    const finish = near2 ? "recovered near target by the end" : easing ? `was still settling toward ${finishTarget}` : final.offsetC > 0 ? `ended above ${finishTarget}` : "stayed below target at the end";
+    const verdict = !hasCoverage ? "not_graded" : sustained && !easing ? "off_plan" : entryDip || Math.abs(first?.offsetC ?? 0) > TEMPERATURE_BAND_C || missedLate.length || !near2 ? "partly" : "on_plan";
+    const dip = entryDip?.t.entry.value;
+    const opening = startDip ? `${entry?.sensor === "group" ? "Group" : "Mix-water"} temperature started cold` : dip ? `The ${entryDip.t.sensor === "group" ? "group" : "mix-water"} reading dipped below target at a phase change` : null;
+    const sentence = opening ? `${opening} and ${finish}.` : verdict === "on_plan" ? "Temperature held near the sensor target." : verdict === "not_graded" ? "You have an end reading, with too little data to judge how well temperature held." : near2 ? "Temperature returned near target for the finish." : easing ? `Temperature was still settling toward ${finishTarget}.` : `Temperature stayed ${verdict === "off_plan" ? "well " : ""}${final.offsetC < 0 ? "below" : "above"} ${finishTarget}.`;
+    return {
+      ...named,
+      verdict,
+      expected: { start: first?.targetC ?? null, finish: final.targetC, average: null },
+      actual: { start: first?.actualC ?? null, finish: final.actualC, average: null },
+      ...fact(sentence, "temperature", ...ids)
+    };
+  }
+  function easyFlowPhase(facts) {
+    const { phases, cupRateAfterOnsetGS, firstSustainedBeverage } = facts.phaseEvidence;
+    const onset = firstSustainedBeverage.value;
+    return phases.find((p) => {
+      const hold = p.steadyHold.value;
+      const ceiling = p.plan.value?.limiter?.value;
+      const pressure2 = p.pressureCrest.value?.pressureBar;
+      return p.mode.value === "flow" && hold && hold.meanCommand > 3 && Math.abs(hold.meanResponse - hold.meanCommand) <= 0.1 * hold.meanCommand && ceiling != null && pressure2 != null && pressure2 <= 0.5 * ceiling && onset && onset.tS >= p.fromS && onset.tS <= p.toS && (cupRateAfterOnsetGS.value ?? 0) >= 3;
+    });
+  }
+  function hypotheses(curve, easy) {
+    const result = [];
+    const causes = [
+      {
+        kinds: ["gushed", "pressure_shortfall"],
+        timing: "fast_shot",
+        id: "easy-flow",
+        label: "Easy flow",
+        signature: "sour_thin",
+        tracking: "This fits an easy pour where your puck offered little resistance.",
+        pace: "An early finish could mean your water moved through the coffee too quickly."
+      },
+      {
+        kinds: ["choked", "flow_shortfall"],
+        timing: "slow_shot",
+        id: "restricted-flow",
+        label: "Restricted flow",
+        signature: "bitter_heavy",
+        tracking: "This fits a restricted pour where water had trouble getting through your puck.",
+        pace: "A long finish could mean water moved more slowly through your coffee."
+      }
+    ];
+    for (const pattern of causes) {
+      const measured = curve.issues.findIndex((issue) => pattern.kinds.some((kind) => issue.kind === kind));
+      const timing = curve.issues.findIndex((issue) => issue.kind === pattern.timing);
+      const easyHold = pattern.id === "easy-flow" ? easy : void 0;
+      if (measured < 0 && timing < 0 && !easyHold) continue;
+      const ids = [
+        measured >= 0 ? `finding-${measured + 1}` : null,
+        timing >= 0 ? "timing" : null,
+        ...easyHold ? [easyHold.id, "cup"] : []
+      ].filter((id) => id != null);
+      result.push({
+        id: pattern.id,
+        label: pattern.label,
+        signature: pattern.signature,
+        confidence: measured >= 0 && timing >= 0 ? "medium" : "low",
+        ...fact(measured >= 0 || easyHold ? pattern.tracking : pattern.pace, ...ids)
+      });
+    }
+    const risingFlow = curve.issues.findIndex((issue) => issue.kind === "channeling");
+    if (result.length < 2 && risingFlow >= 0) result.push({
+      id: "freer-late-flow",
+      label: "Freer flow late",
+      signature: "none",
+      confidence: "low",
+      ...fact("The rising flow at steady pressure could mean water found it easier to get through your puck later in the pour.", `finding-${risingFlow + 1}`)
+    });
+    return result;
+  }
+  function rulesCoachMechanics(stage, curve) {
+    const { facts, metrics } = stage.evidence.analysis;
+    const evidence2 = facts.phaseEvidence;
+    const planned = phaseRows(stage.steps, evidence2.phases, stage);
+    const phases = planned.map((row) => row.phase);
+    const stages = stageRows(planned);
+    const temperature = temperatureRow(evidence2.phases);
+    const notable = [];
+    const easy = easyFlowPhase(facts);
+    const cup = evidence2.firstSustainedBeverage.value;
+    const after = evidence2.cupRateAfterOnsetGS.value;
+    const rapidFill = (after ?? 0) >= 3 && (evidence2.cupRateBeforeOnsetGS.value ?? Infinity) <= 1;
+    if (cup && cup.previousBelowGramS != null && (cup.brewElapsedS >= 6 || rapidFill)) {
+      const started = (evidence2.cupRateBeforeOnsetGS.value ?? Infinity) <= 1 ? `Your cup stayed nearly dry for about ${quantity(cup.brewElapsedS, "s")}` : `Your cup reached its first gram after about ${quantity(cup.brewElapsedS, "s")}`;
+      notable.push(fact(started + (rapidFill ? ", then filled quickly." : after != null && after < 1 ? ", then filled slowly." : "."), "cup", "first-sustained-gram"));
+    } else if (metrics.enoughTelemetry && evidence2.scaleAvailability.weightSamples === 0) {
+      notable.push(fact("Your scale readings were unavailable, so cup fill couldn't be assessed.", "recording"));
+    }
+    const held = easy?.steadyHold.value;
+    const pressure2 = easy?.pressureCrest.value?.pressureBar;
+    const ceiling = easy?.plan.value?.limiter?.value;
+    if (easy && held && pressure2 != null && ceiling != null) {
+      notable.push(fact(`The machine held ${quantity(held.meanCommand, "mL/s")}, with pressure reaching only ${quantity(pressure2, "bar")} under its ${quantity(ceiling, "bar")} ceiling.`, easy.id));
+    }
+    const paceIssue = curve.issues.find((i) => i.kind === "fast_shot" || i.kind === "slow_shot");
+    if (paceIssue && facts.durationS != null && facts.expectedTimeS) {
+      const [lo, hi] = facts.expectedTimeS;
+      if (Math.max(lo - facts.durationS, facts.durationS - hi) >= NOTABLE_PACE_GAP_S) {
+        const basis = facts.expectedTimeSource === "guide" ? "guide" : "expected window";
+        notable.push(fact(`The shot finished in about ${quantity(facts.durationS, "s")} against a ${number2(lo)}\u2013${quantity(hi, "s")} ${basis}.`, "timing", "recording"));
+      }
+    }
+    const droop = evidence2.phases.find((p) => (p.pressureDroopAtHeldFlowBar.value ?? 0) >= 0.5 && p.pressureCrest.value && p.lateHydraulics.value);
+    if (droop && notable.length < 3) notable.push(fact("Pressure eased later even as the machine held flow steady.", droop.id));
+    else if (curve.issues.some((i) => i.kind === "channeling")) {
+      notable.push(fact("Flow rose even as the machine held pressure near its target.", `finding-${curve.issues.findIndex((i) => i.kind === "channeling") + 1}`));
+    }
+    const patterns = hypotheses(curve, easy);
+    const main = stages.filter((row) => row.name !== "Start-up");
+    const bad = main.find((row) => row.verdict === "off_plan");
+    const departures = main.filter((row) => row.verdict === "partly");
+    const partly = departures[0];
+    const mainPour = main.find((row) => row.name === "Main pour");
+    const trackedMain = planned.find((row) => row.role === "Main pour" && row.phase.verdict === "on_plan" && mainPour?.phaseIds.includes(row.phase.id))?.phase;
+    const good = main.find((row) => row.name === "Main pour" && row.verdict === "on_plan") ?? trackedMain ?? main.find((row) => row.verdict === "on_plan");
+    const goodBuild = planned.find((row) => /build/.test(row.role) && row.phase.verdict === "on_plan")?.phase;
+    const preempted = stages.find((row) => row.name === "Finish" && row.sentence === "The shot reached target weight before the planned finish.");
+    const between = (row) => goodBuild && bad && stages[0]?.name === "Start-up" && stages[0]?.verdict === "on_plan" ? fact(`The machine followed the plan through the start-up, then missed its target during the ${row.name.toLowerCase()}.`, ...goodBuild.evidenceIds, ...row.evidenceIds) : fact(`The machine ${row.verdict === "off_plan" ? "missed its target" : "only partly followed the plan"} during the ${row.name.toLowerCase()}.`, ...row.evidenceIds);
+    const mixed = () => {
+      const followed = main.flatMap((row) => row.verdict === "on_plan" || row.name === "Main pour" && trackedMain ? [row.name] : []);
+      const differed = departures.flatMap((row) => row.name === "Main pour" && trackedMain ? phases.filter((p) => row.phaseIds.includes(p.id) && p.verdict === "partly").map((p) => p.name) : [row.name]);
+      return fact(
+        `The machine followed the plan through the ${stageNames(followed)}, with the ${stageNames(differed)} running differently.`,
+        ...main.filter((row) => row.verdict === "on_plan" || row.verdict === "partly").flatMap((row) => row.evidenceIds)
+      );
+    };
+    const restricted = patterns.find((h) => h.id === "restricted-flow");
+    const lateFlow = patterns.find((h) => h.id === "freer-late-flow");
+    const headline = bad ? between(bad) : easy ? fact("The machine held the planned flow, and the fast cup fill at low pressure fits a puck offering little resistance.", easy.id, "cup") : good && restricted && (evidence2.cupRateAfterOnsetGS.value ?? Infinity) < 1 ? fact("The machine followed the main pour plan, and the cup filled slowly once the first gram came through.", ...good.evidenceIds, "cup") : good && lateFlow ? fact("The machine held the planned pressure as flow picked up late in the pour.", ...good.evidenceIds, ...lateFlow.evidenceIds) : partly && good ? mixed() : partly ? between(partly) : preempted && !good ? fact(preempted.sentence, ...preempted.evidenceIds) : paceIssue ? fact(`The shot finished ${paceIssue.kind === "fast_shot" ? "earlier" : "later"} than the plan's time window.`, "timing") : good ? fact(temperature.verdict === "on_plan" ? "The machine followed the plan through the main phases and temperature held near target." : temperature.verdict === "off_plan" ? "The machine followed the main pour plan with a sustained temperature miss." : temperature.verdict === "partly" ? "The machine followed the main pour plan with some variation in temperature." : "The machine followed the plan through the measured main phases.", ...main.filter((p) => p.verdict === "on_plan").flatMap((p) => p.evidenceIds), "temperature") : fact(!metrics.recordedPoints ? "You have no recorded curve to compare with the plan." : stage.profile === "manual" ? "Your manual shot has no fixed automatic curve to compare against." : "Your recording lacks enough phase data for a verdict against the plan.", "recording");
+    return { headline, phases, stages, temperature, notable: notable.slice(0, 3), hypotheses: patterns, history: coachHistory(stage.evidence.history, facts) };
+  }
 
   // server/recommend/review-taste.ts
   function grindAdvice(direction, reason) {
@@ -2558,6 +2890,101 @@ var CremaEngine = (() => {
       nextShot,
       askTaste: sourBitter == null || body == null
     };
+  }
+
+  // server/recommend/review-coach-taste.ts
+  var flavor = ["sour", "slightly sour", "balanced", "slightly bitter", "bitter"];
+  var bodyWords = ["thin", "light-bodied", "balanced in body", "rich", "heavy"];
+  function tasteLink(hypothesis, submitted, sourBitter, body) {
+    const hypothesisId = hypothesis.id;
+    if (hypothesis.signature === "none" || !submitted) return { hypothesisId, status: "no_link", sentence: null };
+    const direction = hypothesis.signature === "sour_thin" ? -1 : 1;
+    const axes = [sourBitter, body].map((value) => (value ?? 0) * direction);
+    if (axes.some((value) => value < 0)) return {
+      hypothesisId,
+      status: "does_not_match",
+      sentence: `You said it tasted ${submitted}, which doesn't fully fit the ${hypothesis.label.toLowerCase()} above, where ${direction < 0 ? "sourness or a thin body" : "bitterness or a heavy body"} would be more typical.`
+    };
+    if (axes.some((value) => value > 0)) return {
+      hypothesisId,
+      status: "matches",
+      sentence: `You said it tasted ${submitted}, which fits the ${hypothesis.label.toLowerCase()} above.`
+    };
+    return { hypothesisId, status: "no_link", sentence: null };
+  }
+  function coachTaste(input, mechanics, interpreted) {
+    const { sourBitter = null, body = null, enjoyment = null } = input.feedback ?? {};
+    const notes = reviewNotes(input);
+    if (sourBitter == null && body == null && enjoyment == null && !notes) return null;
+    const descriptors = sourBitter === 0 && body === 0 ? ["balanced"] : [sourBitter == null ? null : flavor[sourBitter + 2], body == null ? null : bodyWords[body + 2]].filter(Boolean);
+    const submitted = descriptors.join(" and ") || null;
+    const links = mechanics.hypotheses.map((h) => tasteLink(h, submitted, sourBitter, body));
+    const linked = links.filter((link) => link.sentence);
+    const relation = links.flatMap((link, i) => link.sentence ? [
+      `${link.status === "matches" ? "fits" : "doesn't fully fit"} the ${mechanics.hypotheses[i].label.toLowerCase()} above`
+    ] : []);
+    const reported = linked.length === 1 ? linked[0].sentence : submitted ? `You said it tasted ${submitted}${relation.length ? `, which ${relation.join(" and ")}` : ""}.` : !notes && enjoyment != null ? `You rated it ${enjoyment}/10 for enjoyment.` : null;
+    return { sourBitter, body, enjoyment, notes, noteQuote: interpreted?.notesEvidence ?? null, reported, links };
+  }
+  function coachRecommendation(curve, alignment, advice, taste, mechanics, knownEspresso) {
+    const repeat = (action, compare, puckCheck = null) => ({ action, expect: "Keep your recipe and other prep the same.", compare, puckCheck, adjustment: null });
+    if (alignment.status === "conflicts" || taste?.links.some((link) => link.status === "does_not_match")) {
+      return repeat("Repeat the same shot and taste it again.", "Check whether the same pour and taste recur before moving the grinder.");
+    }
+    if (!knownEspresso) return {
+      action: "Repeat with the recorded setup.",
+      expect: "Keep the settings fixed.",
+      compare: "Compare pressure and flow if the same profile is recorded again.",
+      puckCheck: null,
+      adjustment: null
+    };
+    const adjustment = taste?.sourBitter != null || taste?.body != null || taste?.notes ? advice : curve.nextShot;
+    if (adjustment) {
+      const { grindDelta, yieldDeltaG, tempDeltaC, switchProfile } = adjustment;
+      if (grindDelta === "finer" || grindDelta === "coarser") {
+        return {
+          action: `Try one small step ${grindDelta}.`,
+          expect: grindDelta === "finer" ? "Expect a slower cup fill at the same pressure or more pressure at the same flow." : "Expect a faster cup fill at the same pressure or less pressure at the same flow.",
+          compare: "Keep dose and yield fixed. Compare cup fill and taste before moving again.",
+          puckCheck: null,
+          adjustment
+        };
+      }
+      if (yieldDeltaG) return {
+        action: `Try ${Math.abs(yieldDeltaG)} g ${yieldDeltaG > 0 ? "more" : "less"} in the cup.`,
+        expect: yieldDeltaG > 0 ? "Look for a lighter body." : "Look for a fuller body.",
+        compare: "Keep dose, grind and temperature fixed. Taste the two shots side by side if you can.",
+        puckCheck: null,
+        adjustment
+      };
+      if (tempDeltaC) return {
+        action: `Try brewing ${Math.abs(tempDeltaC)} \xB0C ${tempDeltaC > 0 ? "warmer" : "cooler"}.`,
+        expect: tempDeltaC > 0 ? "Look for a softer sharpness." : "Look for a softer bitter finish.",
+        compare: "Keep dose, yield and grind fixed. Compare the finish against this shot.",
+        puckCheck: null,
+        adjustment
+      };
+      if (switchProfile) return {
+        action: `Try ${switchProfile}.`,
+        expect: "Expect a different pressure and flow pattern.",
+        compare: "Compare the recorded pour and taste at the same dose and yield.",
+        puckCheck: null,
+        adjustment
+      };
+    }
+    if ((taste?.sourBitter != null || taste?.body != null || taste?.noteQuote) && (!adjustment || adjustment.grindDelta === "same") && mechanics.hypotheses.some((h) => h.id === "freer-late-flow")) {
+      return {
+        action: "Check for even distribution before you tamp.",
+        expect: "Look for a more consistent pour from one shot to the next.",
+        compare: "Keep grind, dose and yield fixed. Compare whether the flow still picks up late.",
+        puckCheck: "even_distribution",
+        adjustment: null
+      };
+    }
+    if (!mechanics.phases.some((p) => p.verdict !== "not_graded")) {
+      return repeat("Repeat the recipe with recording active.", "Check that the next recording shows each phase before judging the curve.");
+    }
+    return repeat("Repeat the same recipe.", "Compare when the cup starts filling and how the pour and taste repeat.");
   }
 
   // server/recommend/review-evidence.ts
@@ -2760,8 +3187,8 @@ var CremaEngine = (() => {
     return {
       evidence: evidence2,
       profile,
-      earlyStop: stoppedEarly(evidence2.analysis.facts),
-      bean: input.bean ? { roastLevel: input.bean.roastLevel?.value ?? null, processKind: input.bean.processKind ?? null } : null
+      steps: profile === "espresso" ? input.profile?.steps ?? [] : [],
+      earlyStop: stoppedEarly(evidence2.analysis.facts)
     };
   }
   function prioritizedIssues(issues) {
@@ -2833,18 +3260,22 @@ var CremaEngine = (() => {
       narrative: null
     };
   }
-  function finishReview(input, stage, curve, source, notes) {
+  function finishReview(input, stage, curve, source, notes, mechanics = rulesCoachMechanics(stage, curve)) {
     const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, stage.profile === "espresso");
+    const taste = coachTaste(input, mechanics, notes);
+    const recommendation = coachRecommendation(curve, alignment, nextShot, taste, mechanics, stage.profile === "espresso");
+    const legacyNextShot = recommendation.adjustment ?? (nextShot?.grindDelta === "same" && !nextShot.yieldDeltaG && !nextShot.tempDeltaC && !nextShot.switchProfile ? nextShot : null);
+    const coachConflict = taste?.links.some((link) => link.status === "does_not_match") && alignment.status !== "conflicts";
     const summary = [
       curve.summary,
       curve.history,
       curve.timing,
       curve.narrative?.text,
       alignment.summary,
-      nextShot ? null : alignment.check
+      coachConflict ? `${recommendation.action} ${recommendation.compare}` : legacyNextShot ? null : alignment.check
     ].filter(Boolean).join(" ");
-    const review = { summary, issues: curve.issues, wentWell: curve.wentWell, confidence: curve.confidence, nextShot, askTaste };
-    return { review, curve, taste: alignment, source, evidence: projectReviewEvidence(stage.evidence) };
+    const review = { summary, issues: curve.issues, wentWell: curve.wentWell, confidence: curve.confidence, nextShot: legacyNextShot, askTaste };
+    return { review, curve, taste: alignment, coach: { ...mechanics, taste, recommendation }, source, evidence: projectReviewEvidence(stage.evidence) };
   }
   function rulesReview(input, evidence2 = buildReviewEvidence(input)) {
     const stage = curveStageInput(input, evidence2);

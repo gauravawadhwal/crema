@@ -45,7 +45,7 @@ async function grade(text: string | null, c = caseWith()) {
     override async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
       if (req.schemaName === "CurveNarrative") {
         curvePrompt = req.prompt;
-        return req.schema.parse({ interpretation: text && { text, evidenceIds: ["recording"] } });
+        return req.schema.parse({ rewrites: [] });
       }
       return req.schema.parse({ report: { notesEvidence: "the shot was sour", notesTaste: "sour",
         adjustment: { grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null } } });
@@ -54,7 +54,9 @@ async function grade(text: string | null, c = caseWith()) {
   const result = await reviewShot(new ProviderChain([new Answer()]), c.input);
   const landmarks: PhaseLandmark[] = [];
   analyzeShot(c.input, landmarks);
-  return { score: scoreEpisode(c, result, landmarks, false), curvePrompt, result };
+  // Supply raw prose directly to exercise the existing grader's negative controls.
+  const curve = { ...result.curve, narrative: text == null ? null : { text, evidenceIds: ["recording"] } };
+  return { score: scoreEpisode(c, { ...result, curve }, landmarks, false), curvePrompt, result };
 }
 
 const correct = "Pressure stayed below its target: measured 3.8 bar versus target 6 bar.";

@@ -1,6 +1,8 @@
 import { stoppedEarly, type ShotFacts } from "../profiles/analysis.js";
-import type { CurveReview, ReviewInput, ReviewResult, ShotReviewData } from "./review-types.js";
-import type { DialInAdvice } from "../schema.js";
+import type { CoachReviewResult, CurveReview, ReviewInput, ShotReviewData } from "./review-types.js";
+import type { CoachMechanics, DialInAdvice } from "../schema.js";
+import { rulesCoachMechanics } from "./review-coach.js";
+import { coachRecommendation, coachTaste } from "./review-coach-taste.js";
 import { historyCurveSentence, historySentence } from "./review-history.js";
 import { alignTaste, grindAdvice } from "./review-taste.js";
 import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "./review-evidence.js";
@@ -121,9 +123,8 @@ export function curveStageInput(input: ReviewInput, evidence: ReviewEvidence) {
   const profile: "espresso" | "manual" | "unknown" = type === "manual" ? "manual" :
     input.profile?.title?.trim() && (!type || type === "espresso") ? "espresso" : "unknown";
   return {
-    evidence, profile,
+    evidence, profile, steps: profile === "espresso" ? input.profile?.steps ?? [] : [],
     earlyStop: stoppedEarly(evidence.analysis.facts),
-    bean: input.bean ? { roastLevel: input.bean.roastLevel?.value ?? null, processKind: input.bean.processKind ?? null } : null,
   };
 }
 
@@ -207,12 +208,20 @@ export function rulesCurveReview(stage: CurveStageInput): CurveReview {
 }
 
 /** Keep the original review fields usable by older skins and saved reports. */
-export function finishReview(input: ReviewInput, stage: CurveStageInput, curve: CurveReview, source: string, notes?: Parameters<typeof alignTaste>[2]): ReviewResult {
+export function finishReview(input: ReviewInput, stage: CurveStageInput, curve: CurveReview, source: string,
+  notes?: Parameters<typeof alignTaste>[2], mechanics = rulesCoachMechanics(stage, curve)): CoachReviewResult {
   const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, stage.profile === "espresso");
+  const taste = coachTaste(input, mechanics, notes);
+  const recommendation = coachRecommendation(curve, alignment, nextShot, taste, mechanics, stage.profile === "espresso");
+  // Older clients can still display the flat review. Prevent a different
+  // adjustment from surviving there when the coach asks for a repeat.
+  const legacyNextShot = recommendation.adjustment ?? (nextShot?.grindDelta === "same" &&
+    !nextShot.yieldDeltaG && !nextShot.tempDeltaC && !nextShot.switchProfile ? nextShot : null);
+  const coachConflict = taste?.links.some(link => link.status === "does_not_match") && alignment.status !== "conflicts";
   const summary = [curve.summary, curve.history, curve.timing, curve.narrative?.text, alignment.summary,
-    nextShot ? null : alignment.check].filter(Boolean).join(" ");
-  const review = { summary, issues: curve.issues, wentWell: curve.wentWell, confidence: curve.confidence, nextShot, askTaste };
-  return { review, curve, taste: alignment, source, evidence: projectReviewEvidence(stage.evidence) };
+    coachConflict ? `${recommendation.action} ${recommendation.compare}` : legacyNextShot ? null : alignment.check].filter(Boolean).join(" ");
+  const review = { summary, issues: curve.issues, wentWell: curve.wentWell, confidence: curve.confidence, nextShot: legacyNextShot, askTaste };
+  return { review, curve, taste: alignment, coach: { ...mechanics, taste, recommendation }, source, evidence: projectReviewEvidence(stage.evidence) };
 }
 
 export function rulesReview(input: ReviewInput, evidence = buildReviewEvidence(input)): ShotReviewData {
@@ -220,7 +229,7 @@ export function rulesReview(input: ReviewInput, evidence = buildReviewEvidence(i
   return finishReview(input, stage, rulesCurveReview(stage), "rules").review;
 }
 
-export function rulesReviewResult(input: ReviewInput, fullTrace?: FullReviewTrace): ReviewResult {
+export function rulesReviewResult(input: ReviewInput, fullTrace?: FullReviewTrace): CoachReviewResult {
   const stage = curveStageInput(input, buildReviewEvidence(input, fullTrace));
   return finishReview(input, stage, rulesCurveReview(stage), "rules");
 }

@@ -949,6 +949,11 @@ body.pouring #controls { position: relative; z-index: 5; }
 .result-pills { display: flex; flex-wrap: wrap; gap: var(--s-4); }
 .next-change { display: grid; gap: var(--s-8); margin-top: var(--s-12); }
 .next-change .btn { justify-self: end; }
+.coach-review .coach-headline { margin-top: 0; }
+.coach-review .coach-phases { padding: 0; list-style: none; }
+.coach-phase { padding: var(--s-8) 0; }
+.coach-phase + .coach-phase { border-top: 1px solid var(--line); }
+.coach-phase p { margin: var(--s-4) 0; }
 .review-changed { border: 1px solid var(--accent); border-radius: var(--r); }
 .review-change-note { display: block; white-space: normal; overflow-wrap: anywhere; }
 .field-row .review-change-note { grid-column: 1 / -1; }
