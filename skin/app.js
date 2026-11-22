@@ -380,7 +380,8 @@ function makeLiveApi(conn) {
     const points = full ? shotPoints(full) : [];
     return { id: s.id, timestamp: s.timestamp, beanId: null, batch: ctx.beanBatchId, coffee: ctx.coffeeName, roaster: ctx.coffeeRoaster, profileTitle: s.workflow?.profile?.title ?? s.workflow?.name,
       manual: manualKind(s.workflow?.profile), doseG: s.annotations?.actualDoseWeight ?? ctx.targetDoseWeight ?? null, yieldG: s.annotations?.actualYield ?? (points.length ? points.at(-1).w : null), timeS: points.length ? Math.round(points.at(-1).t) : null,
-      enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "", grinderSetting: ctx.grinderSetting, points,
+      enjoyment: s.annotations?.enjoyment ?? null, notes: s.annotations?.espressoNotes ?? "",
+      tasteTags: readTasteTags(s.annotations?.extras?.crema?.tasteTags), grinderSetting: ctx.grinderSetting, points,
       targetYieldG: ctx.targetYield ?? s.workflow?.profile?.target_weight ?? null, targetTimeS: s.annotations?.extras?.crema?.targetTimeS ?? null,
       profile: s.workflow?.profile ?? null, stopReason: s.stopReason ?? s.annotations?.stopReason ?? null,
       review: s.annotations?.extras?.crema?.review ?? null,
@@ -769,7 +770,8 @@ function makeLiveApi(conn) {
         annotatedYieldG: recordedReviewNumber(full.annotations?.actualYield, 0, 500),
         volumeCountStartFrame: profile?.target_volume_count_start ?? null,
         stopReason: full.stopReason ?? full.annotations?.stopReason ?? ctx.stopReason ?? null,
-        feedback, notes: full.annotations?.espressoNotes?.slice(0, 1000) ?? null, bean: bean ?? null, installedProfiles: installed, history,
+        feedback, notes: shotReviewNotes(full.annotations?.espressoNotes, full.annotations?.extras?.crema?.tasteTags),
+        bean: bean ?? null, installedProfiles: installed, history,
       };
       const limit = E.REVIEW_POINT_LIMIT;
       const fullTrace = points.length > limit ? E.fullReviewTrace(input) : undefined;
@@ -2415,7 +2417,67 @@ function reviewHtml(saved, shot = null) {
     ${taste?.check ? `<p>${esc(taste.check)}</p>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
-/* ===== Taste scales and the Review button, shared by the after-shot panel and the shot detail ===== */
+/* ===== Tasting notes, scales and review shared by the after-shot panel and the shot detail ===== */
+const TASTE_TAGS = ["Sour", "Bitter", "Balanced", "Sweet", "Thin", "Harsh", "Heavy", "Fruity"];
+const pendingTasteTags = new Map();
+function readTasteTags(tags) {
+  return Array.isArray(tags) ? tags.filter((tag) => typeof tag === "string" && tag.trim()) : [];
+}
+function shotReviewNotes(notes, tags) {
+  return [readTasteTags(tags).join(", "), notes].filter(Boolean).join("\n").slice(0, 1000) || null;
+}
+function shotNotesHtml(shot, id) {
+  const selected = pendingTasteTags.get(shot.id)?.selected ?? shot.tasteTags ?? [];
+  return `<div class="field" data-notes-shot="${esc(shot.id)}">
+    <div class="label" id="${id}Label">Tasting notes</div>
+    <div class="chips" role="group" aria-labelledby="${id}Label">
+      ${TASTE_TAGS.map((tag) => `<button type="button" class="fchip" data-taste-tag="${tag}" aria-pressed="${selected.includes(tag)}">${tag}</button>`).join("")}
+    </div>
+    <label class="small muted" for="${id}">Extra notes (optional)</label>
+    <textarea class="input" id="${id}" rows="2">
+${esc(shot.notes || "")}</textarea>
+  </div>`;
+}
+function bindShotNotes(shot, id) {
+  const field = $("#" + id);
+  const editors = `[data-notes-shot="${CSS.escape(shot.id)}"]`;
+  const relatedShots = () => [shot, S.afterShot?.shot, S.shots.find((s) => s.id === shot.id)].filter((s) => s?.id === shot.id);
+  const paintTags = (tags) => {
+    for (const button of $$(`${editors} [data-taste-tag]`)) {
+      button.setAttribute("aria-pressed", String(tags.includes(button.dataset.tasteTag)));
+    }
+  };
+  for (const button of $$("[data-taste-tag]", field.parentElement)) {
+    button.onclick = async () => {
+      const tag = button.dataset.tasteTag;
+      const state = pendingTasteTags.get(shot.id) ?? { saved: shot.tasteTags ?? [], selected: shot.tasteTags ?? [] };
+      const selected = state.selected.includes(tag) ? state.selected.filter((t) => t !== tag) : [...state.selected, tag];
+      state.selected = selected;
+      pendingTasteTags.set(shot.id, state);
+      paintTags(selected);
+      // Live annotate serializes these patches. Roll back to the last successful save
+      // only if this tap is still the latest, so an older failure cannot undo a newer tap.
+      const saved = await attempt("save taste notes", () => S.api.annotate(shot.id, { extras: { crema: { tasteTags: selected } } }));
+      if (saved) state.saved = selected;
+      if (state.selected !== selected) return;
+      pendingTasteTags.delete(shot.id);
+      for (const record of relatedShots()) record.tasteTags = state.saved;
+      paintTags(state.saved);
+    };
+  }
+  field.onchange = async () => {
+    const notes = field.value;
+    try {
+      await S.api.annotate(shot.id, { espressoNotes: notes });
+      for (const record of relatedShots()) record.notes = notes;
+      for (const editor of $$(`${editors} textarea`)) {
+        if (editor.value === editor.defaultValue) editor.value = notes;
+        editor.defaultValue = notes;
+      }
+      toast("Notes saved");
+    } catch (err) { toast(`Couldn't save the notes: ${failText(err)}. They're still in the box`); }
+  };
+}
 const TASTE_SCALES = [
   { key: "sourBitter", label: "Taste", opts: [[-2, "Sour"], [-1, "A bit sour"], [0, "Balanced"], [1, "A bit bitter"], [2, "Bitter"]] },
   { key: "body", label: "Body", opts: [[-2, "Thin"], [-1, "Light"], [0, "Just right"], [1, "Rich"], [2, "Heavy"]] },
@@ -2490,6 +2552,7 @@ function showAfterShot(shot, pts, context = {}) {
   const weight = shot?.yieldG ?? recordedPoints.at(-1)?.w;
   $("#afterResult").innerHTML = `<span class="label">Last shot${shot?.timestamp ? ` · ${new Date(shot.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span><div class="result-line num">${weight != null ? `${fmt1(weight)} g` : "Yield unknown"}${timeS != null ? ` in ${fmt1(timeS)} s` : ""}</div><div class="result-pills">${shotResultPills(shot, context, recordedPoints)}</div>`;
   p.innerHTML = `${unsaved}
+    ${shot ? shotNotesHtml(shot, "afterNotes") : ""}
     <div id="tasteControls">${tasteScalesHtml(shot?.taste, { sourBitter: "sb", body: "bd" })}</div>
     <div class="row between"><div class="row"><span class="label">Enjoyment</span>${starsHtml(rating, "afterStars")}</div>
       <div class="row"><button class="btn primary" id="reviewShot" ${!shot ? "disabled" : ""}>${shot?.review ? "Review again" : "Review shot"}</button><button class="btn" id="pinShot" title="Show this shot faintly on the live chart for this coffee">Set as reference</button><button class="btn ghost icon-only" id="closeAfter" aria-label="Close">✕</button></div></div>
@@ -2498,12 +2561,7 @@ function showAfterShot(shot, pts, context = {}) {
     $("#tasteControls").hidden = true;
     $("#pinShot").hidden = !bean;
   } else $("#pinShot").hidden = !bean;
-  if (!bean && shot) {
-    const notes = document.createElement("div"); notes.className = "field";
-    notes.innerHTML = `<label class="label" for="afterNotes">Shot notes</label><textarea id="afterNotes" rows="2">${esc(shot.notes || "")}</textarea>`;
-    $("#reviewBox").before(notes);
-    $("#afterNotes").onchange = (e) => { shot.notes = e.target.value; S.api.annotate(shot.id, { espressoNotes: e.target.value }).catch(() => toast("Couldn't save notes")); };
-  }
+  if (shot) bindShotNotes(shot, "afterNotes");
   bindReviewAdjustment($("#reviewBox"), shot);
   bindTasteScales(shot, { sourBitter: "sb", body: "bd" });
   // Closing the review readies the chart for the next shot: the profile again, not this one.
@@ -3389,7 +3447,7 @@ function renderShotDetail() {
     <div class="chart-box"><canvas id="detailChart"></canvas></div>
     <div class="legend">${legendHtml(false)}${c ? `<span><span class="swatch" style="background:var(--muted)"></span>Faint: ${esc(c.coffee || "")} ${new Date(c.timestamp).toLocaleDateString()}</span>` : ""}</div>
     <div class="row"><span class="label">Rating</span>${starsHtml(s.enjoyment, "detailStars")}</div>
-    <div class="field"><label class="label" for="shotNotes">Notes</label><input type="text" id="shotNotes" value="${esc(s.notes || "")}" placeholder="How did it taste?"></div>
+    ${shotNotesHtml(s, "shotNotes")}
     ${s.manual ? "" : tasteScalesHtml(s.taste, { sourBitter: "detailSb", body: "detailBody" })}
     <div class="row">${bean ? `<button class="btn" id="pinDetail">${bean.bestShotId === s.id ? "Remove as reference" : "Make this the reference shot"}</button>` : ""}<span class="muted small">Uploads to Visualizer through Decaid's Visualizer plugin (Settings).</span></div>
     <div class="row"><button class="btn primary" id="reviewDetail">${s.review ? "Review again" : "Review shot"}</button></div>
@@ -3406,11 +3464,7 @@ function renderShotDetail() {
     // On failure, put the old rating back in the list and redraw the detail's stars.
     await attempt("save the rating", () => S.api.annotate(s.id, { enjoyment: n }), () => { s.enjoyment = before; draw(); if (S.selShot === s.id) renderShotDetail(); });
   });
-  $("#shotNotes").onchange = async (e) => {
-    const before = s.notes, text = e.target.value;
-    try { await S.api.annotate(s.id, { espressoNotes: text }); s.notes = text; toast("Notes saved"); }
-    catch (err) { s.notes = before; toast(`Couldn't save the notes: ${failText(err)}. They're still in the box`); }
-  };
+  bindShotNotes(s, "shotNotes");
   bindReviewAdjustment($("#detailReview"), s);
   bindTasteScales(s, { sourBitter: "detailSb", body: "detailBody" });
   bindReviewButton(s, { buttonSel: "#reviewDetail", boxSel: "#detailReview", isCurrent: () => S.selShot === s.id });

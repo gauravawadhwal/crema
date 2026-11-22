@@ -206,6 +206,10 @@ Ratings, notes, earlier review text and bean tasting descriptors stay outside
 this stage. The skin builds the same review locally when the connected server
 does not advertise the current format.
 
+Selected tasting notes are saved as `annotations.extras.crema.tasteTags`.
+Extra text is saved as Decaid's `annotations.espressoNotes`. The skin joins the
+selected tags and text into the review request's existing `notes` field.
+
 Taste alignment runs after the mechanical sections are fixed. The recorded
 taste and body scales can support or conflict with a hypothesis. A conflict
 leads to a repeat. When there is a saved note and no taste or body rating, an

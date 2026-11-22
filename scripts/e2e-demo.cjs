@@ -105,6 +105,17 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.mouse.click(...(await starAt("#afterStars", 4, 0.85))); await expectRating("#afterStars", "8", "tap right of star 4");
   });
   await step("taste", async () => {
+    const notes = p.getByRole("group", { name: "Tasting notes" });
+    const sour = notes.getByRole("button", { name: "Sour" });
+    const sweet = notes.getByRole("button", { name: "Sweet" });
+    await sour.click();
+    await sweet.press("Space");
+    if (await sour.getAttribute("aria-pressed") !== "true" || await sweet.getAttribute("aria-pressed") !== "true")
+      throw new Error("tasting notes did not support multiple selections");
+    await sour.click();
+    if (await sour.getAttribute("aria-pressed") !== "false") throw new Error("a second tap did not clear the tasting note");
+    await p.fill("#afterNotes", "Lingering cocoa");
+    await p.locator("#afterNotes").press("Tab");
     await p.click('#sb [data-v="-1"]'); await p.click('#bd [data-v="0"]'); await p.click("#reviewShot");
     await p.waitForSelector("#reviewBox .advice", { timeout: 5000 }); await snap("3-after", true);
     const version = await p.evaluate(() => Object.values(JSON.parse(localStorage.getItem("crema:demo-reviews")))
@@ -112,6 +123,7 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     if (version?.version !== 4 || version.evidence?.version !== 1 || !version.coach?.headline || !version.coach?.taste) {
       throw new Error("new review did not save both stages and versioned evidence");
     }
+    if (version.coach.taste.notes !== "Sweet\nLingering cocoa") throw new Error("review did not receive the selected pill and extra text");
     const labels = await p.locator("#reviewBox .label").allTextContents();
     if (!await p.locator("#reviewBox .coach-headline").count() || !labels.includes("Your tasting") || labels.at(-1) !== "What to try")
       throw new Error("coach review sections are missing or out of order");
@@ -163,6 +175,13 @@ async function clickThrough(b, url, [name, vp, scheme]) {
     await p.focus("#detailStars"); await p.keyboard.press("ArrowLeft");
     await expectRating("#detailStars", "7", "shot detail half star");
     await expectStarsAligned("#detailStars", 7);
+  });
+  await step("tasting notes reopen in history", async () => {
+    const notes = p.locator("#shotDetail").getByRole("group", { name: "Tasting notes" });
+    if (await notes.getByRole("button", { name: "Sweet" }).getAttribute("aria-pressed") !== "true" ||
+        await notes.getByRole("button", { name: "Sour" }).getAttribute("aria-pressed") !== "false" ||
+        await p.inputValue("#shotNotes") !== "Lingering cocoa")
+      throw new Error("saved selection and text did not reopen independently");
   });
   await step("compare", async () => {
     await p.goto(url + "#shots"); await p.waitForTimeout(800);

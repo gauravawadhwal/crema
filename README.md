@@ -65,7 +65,7 @@ To build it locally, run `node scripts/build-site.mjs`; the site goes in `_site/
 - **Profile recommendations from the coffee's description.** It ranks 31 community profiles (Adaptive, D-Flow, A-Flow, Londonium, Extractamundo Dos, allongés, turbo shots and more, described from their authors' own notes) against what the roaster and bag say. It also takes your setup into account (milk or straight, scale, burrs, experience). With AI on, the AI then picks one of the top matches and explains why in plain words.
 - **Dial in**: rate a shot (sour ↔ bitter, thin ↔ heavy, stars) and get the one change to make next. Shots outside the profile's time window are flagged.
 - **Shelf**: rest window, grams left (from shot doses), reorder nudges, freeze and finish.
-- **Shots**: history with metrics, side-by-side comparison, ratings and notes.
+- **Shots**: history with metrics, side-by-side comparison, ratings and tasting notes. Tap any number of tasting pills after a pour or in Shots, and add extra notes if you like.
 - **Settings**: your setup, steam, water and flush, machine, wake schedules, display, and descale and backflush reminders.
 - **Six themes**: Verde (the default), Crema, Rosso, Acciaio, Nordic and Notte (see below).
 
