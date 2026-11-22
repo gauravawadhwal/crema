@@ -1297,10 +1297,24 @@ function renderNextShot() {
   }
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
   $$("[data-value]", el).forEach((btn) => (btn.onclick = () => openValueSheet(btn.dataset.value)));
-  $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, () => { renderNextShot(); renderControls(); }));
-  $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(grindKey(b?.id), n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
+  // Keep the grind stepper mounted across pointerup so a touch tap's trailing click hits the same button and is consumed by bindRepeat.
+  $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, syncNextShotLoad));
+  $("#grindInput").onchange = (e) => { n.grind = e.target.value = e.target.value.trim(); local.set(grindKey(b?.id), n.grind); recipeEdited(); syncNextShotLoad(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
   $("#resetRecipe").onclick = () => resetReviewEdit() || (n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot()));
+}
+function syncNextShotLoad() {
+  const loadBtn = $("#loadBtn");
+  if (loadBtn) {
+    loadBtn.classList.toggle("primary", !S.loaded);
+    loadBtn.textContent = S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine";
+  }
+  if (!S.current) {
+    const meta = $("#nextShot .coffee-meta .muted.small");
+    if (meta) meta.textContent = S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag";
+  }
+  renderFavs();
+  renderControls();
 }
 // One source for recipe editing bounds. Yield may be zero for direct/manual profiles.
 const RECIPE_FIELDS = {
