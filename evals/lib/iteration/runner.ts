@@ -5,7 +5,9 @@ import { analyzeShot } from "../../../server/profiles/analysis.js";
 import type { PhaseLandmark } from "../../../server/profiles/phase-evidence.js";
 import { rulesReviewResult } from "../../../server/recommend/review-local.js";
 import { reviewShot } from "../../../server/recommend/review.js";
-import { legacyEvalReview } from "../review-coach-compat.js";
+import { authoredCoachRows } from "../review-coach-grader.js";
+import { replayCoachCross } from "../review-crossed.js";
+import type { CallRecord } from "../recorder.js";
 import type { LlmProvider, StructuredRequest, Usage } from "../../../server/llm/types.js";
 import { jsonSchemaFor } from "../../../server/llm/types.js";
 import type { z } from "zod";
@@ -48,7 +50,8 @@ interface StoredEpisode extends Episode {
   judgeCalls: Call[];
 }
 
-function recorded(provider: LlmProvider, calls: Call[], stop: string, candidate?: Candidate, errors: unknown[] = []): LlmProvider {
+function recorded(provider: LlmProvider, calls: Call[], stop: string, candidate?: Candidate, errors: unknown[] = [],
+    captureCurve?: (call: Pick<CallRecord, "prompt" | "output">) => void): LlmProvider {
   return {
     id: provider.id, billing: provider.billing, model: provider.model,
     async structured<T extends z.ZodType>(original: StructuredRequest<T>) {
@@ -60,11 +63,14 @@ function recorded(provider: LlmProvider, calls: Call[], stop: string, candidate?
         stopCheck(stop);
         const value = await provider.structured({ ...req, onUsage(usage) { call.usage = usage; } });
         if (req.schemaName === "CurveNarrative") {
-          const answer = value as { interpretation?: { evidenceIds: string[] } | null };
+          const answer = value as { rewrites?: { evidenceIds: string[] }[]; interpretation?: { evidenceIds: string[] } | null };
           const evidence = req.prompt.split("\n").find(line => line.startsWith('{"recording"'));
-          if (!evidence || answer.interpretation?.evidenceIds.some(id => !Object.hasOwn(JSON.parse(evidence), id))) {
+          const knownIds = new Set(evidence ? Object.keys(JSON.parse(evidence)) : []);
+          const citations = [...(answer.rewrites ?? []).flatMap(r => r.evidenceIds), ...(answer.interpretation?.evidenceIds ?? [])];
+          if (!evidence || citations.some(id => !knownIds.has(id))) {
             throw new Error("Curve answer cited unavailable evidence");
           }
+          captureCurve?.({ prompt: req.prompt, output: value });
         }
         return value;
       } catch (error) {
@@ -90,19 +96,23 @@ async function episode(run: Run, c: IterationCase, repeat: number, pairHash: str
   }
   const calls: Call[] = [], judgeCalls: Call[] = [];
   const providerErrors: unknown[] = [];
-  const provider = run.subject && recorded(run.subject, calls, run.stop, candidate, providerErrors);
+  let curveCall: Pick<CallRecord, "prompt" | "output"> | undefined;
+  const provider = run.subject && recorded(run.subject, calls, run.stop, candidate, providerErrors, call => { curveCall = call; });
   const meteringMs = () => run.subject instanceof IsolatedCli ? run.subject.meteringMs : 0;
   const start = performance.now();
   const meteringStart = meteringMs();
-  const result = legacyEvalReview(provider ? await reviewShot(new ProviderChain([provider]), c.input, c.fullTrace,
-    { pointBudget: candidate?.change.kind === "point-budget" ? candidate.change.rows : undefined }) : rulesReviewResult(c.input, c.fullTrace));
+  const pointBudget = candidate?.change.kind === "point-budget" ? candidate.change.rows : undefined;
+  const result = provider ? await reviewShot(new ProviderChain([provider]), c.input, c.fullTrace, { pointBudget }) :
+    rulesReviewResult(c.input, c.fullTrace);
   const ms = Math.max(0, performance.now() - start - (meteringMs() - meteringStart));
   const askedCurve = calls.some(call => call.name === "CurveNarrative");
   if (providerErrors.length) throw new Error("Provider error or fallback stopped the round", { cause: providerErrors[0] });
   if (provider && (askedCurve ? result.source !== provider.id : result.source !== "rules")) throw new Error("Unexpected review source or fallback");
   const trace: PhaseLandmark[] = [];
   analyzeShot(c.input, trace);
-  const score = scoreEpisode(c, result, trace, !provider);
+  const isolation = await replayCoachCross(c.input, result, c.fullTrace, curveCall, pointBudget);
+  const authored = authoredCoachRows(result.coach, curveCall?.output);
+  const score = scoreEpisode(c, result, trace, !provider, isolation, authored);
   const narrative = result.curve.narrative?.text ?? null;
   const row: StoredEpisode = { id: c.id, repeat, inputHash: c.hash, pairHash, checkpoint, score, narrative,
     source: result.source, ms, subjectTokens: calls.reduce((n, { usage }) => n + (usage?.inputTokens ?? 0) + (usage?.cacheTokens ?? 0), 0),

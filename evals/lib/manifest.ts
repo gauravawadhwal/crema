@@ -31,7 +31,7 @@ export function caseDigests(caseId: string, metadata: unknown, input: unknown, l
 export function scorerFingerprint(kind: "legacy" | "ablation") {
   const files = kind === "legacy"
     ? ["../compare.ts", "graders.ts", "review-grader.ts", "judge.ts", "tasks.ts", "provenance.ts", "report.ts"]
-    : ["review-metrics.ts", "review-labels.ts", "review-ablation.ts", "review-ablation-report.ts", "judge.ts", "provenance.ts"];
+    : ["review-metrics.ts", "review-labels.ts", "review-ablation.ts", "review-ablation-report.ts", "review-coach-expectations.ts", "review-coach-grader.ts", "review-crossed.ts", "judge.ts", "provenance.ts"];
   const sources = ["manifest.ts", ...files].map(file => [file, sha256(readFileSync(new URL(file, import.meta.url)))]);
   return digest({ sources, maximumTelemetryGapS: kind === "ablation" ? MACHINE_GAP_S : undefined });
 }

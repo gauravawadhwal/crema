@@ -10,9 +10,11 @@ import { ROOT_DIR, EVALS_DIR } from "./lib/dataset.js";
 import { REVIEW_FIXTURES, reviewFixture } from "./lib/review-fixtures.js";
 import { checkReviewHoldout, freezeReviewHoldout, loadReviewDataset, selectReviewCases } from "./lib/review-holdout.js";
 import { REVIEW_VARIANTS, VARIANT_NAMES, runReviewAblation } from "./lib/review-ablation.js";
-import { assertCurveStageInvariant, mockCurveStage } from "./lib/review-crossed.js";
+import { assertCoachTasteInvariant, assertCurveStageInvariant, mockCurveStage } from "./lib/review-crossed.js";
 import { loadLocalReviewShots } from "./lib/review-local-replay.js";
+import { seededDev } from "./lib/iteration/panel.js";
 import { loadIndependentReviewDataset } from "./lib/review-independent.js";
+import { coachExpectation } from "./lib/review-coach-expectations.js";
 import { caseDigests, makeEvalManifest, scorerFingerprint } from "./lib/manifest.js";
 import { reviewAblationMarkdown, type ReviewAblationReport } from "./lib/review-ablation-report.js";
 
@@ -32,8 +34,8 @@ const { values: args, positionals } = parseArgs({
 });
 
 const usage = `Usage: npx tsx evals/review.ts <command>
-  cross  [--fixture <legacy synthetic fixture> | --dataset <file|independent>] [--provider rules|mock]
-  run    --dataset <file|independent> [--split dev|holdout] [--purpose tune|evaluate]
+  cross  [--fixture <legacy synthetic fixture> | --dataset <file|gym|independent>] [--provider rules|mock]
+  run    --dataset <file|gym|independent> [--split dev|holdout] [--purpose tune|evaluate]
          [--variant <name>] [--provider rules|mock] [--out <dir>] [--manifest <file>]
   freeze --dataset <file> --manifest <new file>
   check  --dataset <file> --manifest <frozen file>
@@ -42,9 +44,11 @@ const usage = `Usage: npx tsx evals/review.ts <command>
 const variants = [...new Set(args.variant?.map((name) => z.enum(VARIANT_NAMES).parse(name)) ?? VARIANT_NAMES)];
 const providerName = z.enum(["rules", "mock"]).parse(args.provider ?? "rules");
 const provider = providerName === "mock" ? new MockProvider() : undefined;
-const loadDataset = (name: string) => name === "independent"
-  ? loadIndependentReviewDataset()
-  : loadReviewDataset(JSON.parse(readFileSync(name, "utf8")));
+function loadDataset(name: string) {
+  if (name === "independent") return loadIndependentReviewDataset();
+  if (name === "gym") return loadReviewDataset(seededDev([], 1).dataset);
+  return loadReviewDataset(JSON.parse(readFileSync(name, "utf8")));
+}
 
 async function main() {
   if (args.help || positionals.length !== 1) {
@@ -64,10 +68,11 @@ async function main() {
       try {
         await assertCurveStageInvariant(input);
         if (provider) await assertCurveStageInvariant(input, mockCurveStage);
+        await assertCoachTasteInvariant(input, provider);
       } catch (error) {
         throw new Error(`Crossed taste check failed for ${id}: ${error instanceof Error ? error.message : String(error)}`);
       }
-      console.log(`Curve stage invariant across crossed taste inputs for ${id}`);
+      console.log(`Curve stage and coach card invariant with grounded taste links for ${id}`);
       if (provider) console.log("Mock curve output and any narrative prompt are byte-identical");
     }
     return 0;
@@ -83,7 +88,7 @@ async function main() {
     return 0;
   }
 
-  if (!args.dataset) throw new Error("Specify --dataset <file|independent>");
+  if (!args.dataset) throw new Error("Specify --dataset <file|gym|independent>");
   const dataset = loadDataset(args.dataset);
   if (command === "freeze" || command === "check") {
     if (!args.manifest) throw new Error("Specify --manifest <file>");
@@ -113,7 +118,7 @@ async function main() {
     return 1;
   }
   const manifest = makeEvalManifest(cases.map(c => caseDigests(c.id,
-    { session: c.session, recipe: c.recipe, family: c.profileFamily, pump: c.pumpMode, split: c.split }, { input: c.input, fullTrace: c.fullTrace, samples: c.input.points.map(p => p.t) }, c.labels)),
+    { session: c.session, recipe: c.recipe, family: c.profileFamily, pump: c.pumpMode, split: c.split }, { input: c.input, fullTrace: c.fullTrace, samples: c.input.points.map(p => p.t) }, { labels: c.labels, coach: coachExpectation(c.id, c.labels, c.input.profile) })),
     cases.map(c => ({ caseId: c.id, repeat: 0 })), scorerFingerprint("ablation"));
   const report: ReviewAblationReport = {
     meta: { task: "review-ablation", dataset: dataset.id, demonstration: dataset.demonstration, split, purpose,

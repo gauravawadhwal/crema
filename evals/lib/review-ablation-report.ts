@@ -41,7 +41,7 @@ export function reviewAblationMarkdown({ meta, variants }: ReviewAblationReport)
       sections.push(...variant.labelSources.map(({ source, metrics, prompt }) => ({ family: source, metrics, prompt })));
     }
     for (const { family, metrics, prompt } of sections) {
-      const { detectorEvidence: m, reviewer, fallbackUtility } = metrics;
+      const { detectorEvidence: m, reviewer, fallbackUtility, coach } = metrics;
       lines.push(
         `### ${cell(family)}`, "",
         `Detector and evidence · ${m.runs} runs · ${m.labelled} labelled · ${m.unscoredEvents} unscored predictions · ${m.forbiddenFindingHits} forbidden finding hits`, "",
@@ -57,6 +57,19 @@ export function reviewAblationMarkdown({ meta, variants }: ReviewAblationReport)
         `- Reviewer assessment ${reviewer.passed} passed, ${reviewer.failed} failed, ${reviewer.unassessed} unassessed, ${reviewer.invalidCitation} invalid citations, ${reviewer.unavailable} unavailable, ${reviewer.noModelAnswer} without a model answer, ${reviewer.rulesControl} rules controls`,
         `- Supported reviewer outcomes ${reviewer.supportedOutcomes.passed}/${reviewer.supportedOutcomes.total} labelled decisions authored by the model`,
         `- Fallback utility ${fallbackUtility.passed}/${fallbackUtility.total} labelled fallback decisions`,
+        ...(coach.reviews ? [
+          "", "Version 4 card checks (code-authored verdicts and hypotheses)", "",
+          "| Stage class | TP | FP | FN | Precision | Recall |",
+          "|---|---:|---:|---:|---:|---:|",
+          ...coach.stageClasses.map(row => `| ${row.verdict} | ${row.tp} | ${row.fp} | ${row.fn} | ${pct(row.precision)} | ${pct(row.recall)} |`),
+          "",
+          "| Stage agreement | Hypothesis accuracy | Stop abstention | Taste isolation violations (pairs) | Taste and links | Style | Structure | Grounding | Fallbacks |",
+          "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+          `| ${coach.agreement.passed}/${coach.agreement.total} | ${coach.hypothesisAccuracy.passed}/${coach.hypothesisAccuracy.total} | ${coach.abstention.passed}/${coach.abstention.total} | ${coach.tasteIsolation.violations} (${coach.tasteIsolation.checked}) | ${coach.tasteLinkViolations} | ${coach.styleViolations} | ${coach.structuralViolations} | ${coach.groundingViolations} | ${coach.fallback} |`,
+          "",
+          `Fill, bloom and exit leniency · ${coach.leniency.map(row => `${row.kind} ${row.passed}/${row.total}`).join(" · ")}`,
+          "",
+        ] : []),
         "- Promotion eligible · no",
         `- Input/output tokens ${m.tokens.input}/${m.tokens.output} across ${m.tokens.reportedRuns}/${m.runs} runs with usage`,
         `- End-to-end latency p50/p95 ${num(m.latencyMs.p50)}/${num(m.latencyMs.p95)} ms`,

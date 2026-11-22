@@ -131,9 +131,10 @@ npx tsx evals/review.ts run --dataset evals/fixtures/review-ablation/taste-align
 `cross` takes a synthetic fixture from `evals/lib/review-fixtures.ts`. It crosses
 eight current taste settings with three recorded history taste settings. All
 24 cells keep telemetry and mechanical history fixed. Bag descriptors and prior
-review prose also vary. The adapter compares the serialized curve-stage input
-and output byte for byte. `--provider mock` also compares the actual curve
-narrative prompt and the resulting mechanical stage.
+review prose also vary. The check compares the serialized curve-stage input,
+rendered headline, ordered stages, notable points, hypotheses and mechanical
+history byte for byte. Each cell also checks its taste links against the
+recorded axes. `--provider mock` exercises the actual curve prompt and card.
 
 `run` defaults to dev/tuning and tries every registered variant. `old` and
 `facts-plus-anchored` retain the pre-split reviewer with its 50-point and
@@ -168,6 +169,70 @@ Prompt size and landmark visibility for model runs come from the captured
 subject request. Rules output labels prompt rendering as counterfactual.
 These measurements describe what a request carried. Reviewer assessment
 measures the interpretation the answer actually gives.
+
+### Version 4 coach checks
+
+```bash
+npx tsx evals/review.ts run --dataset gym --variant two-stage --provider rules
+npx tsx evals/review.ts run --dataset independent --variant two-stage --provider mock
+npx tsx evals/review.ts cross --dataset gym --provider mock
+```
+
+`gym` loads one seed from each checked-in template, including the nested family
+directories. A generated dataset file can supply further seeds. The coach
+[expectations](lib/review-coach-expectations.ts) specify intended hydraulic
+stages and their planned frames, acceptable verdicts, required hypothesis
+signatures and stop abstentions. The sidecar uses the labelled interventions
+and recordings as truth. Case labels without a matching sidecar still receive
+structure, style, grounding and taste checks. They have no stage or signature
+accuracy denominator. Manifests and iteration case fingerprints include the
+effective expectations.
+
+A reported class earns credit when it belongs to the allowed set for its
+stage. A missed stage contributes a false negative, an unexpected stage a
+false positive and a wrong class both. Temperature has its own displayed row
+and text checks. These panels contain hydraulic interventions. Ordinary
+filling, bloom and conditional-exit transients have separate leniency
+checks. A target-weight stop before a planned decline requires a visible
+`not_graded` finish with the stop reason. A low pressure under a tracked
+flow command is on plan. A flow miss at the pressure ceiling can support
+the hedged restricted-flow hypothesis and its bitter/heavy tasting signature.
+
+Ablation and iteration report stage precision and recall, hypothesis and
+abstention accuracy, taste isolation and links, structure, style, grounding
+and fallback use separately from detector evidence and reviewer credit.
+A short crossed replay holds the original model response fixed, checks the
+actual prompt, and rerenders with five taste substitutions. This replay adds
+zero subject calls. The `cross` command also exercises all 24 taste cells
+directly. Conflicting directional ratings override a match on a second axis.
+Neutral, enjoyment-only and notes-only ratings supply no directional link.
+Iteration requires zero taste-isolation violations and preserves paired
+coverage. Its existing provider failure and unexpected-fallback guards
+still abort the round.
+
+The optional v3 judge sees the displayed card with the same canonical
+evidence envelope as v2. The versioned rubric adds coach voice and plain
+language. V3 is advisory and its six
+[hand-authored synthetic controls](fixtures/review-coach-judge/v3-controls.json)
+have not been calibrated. For calibration, resolve each fixture against the
+independent dataset and send only its canonical evidence and answer. Keep
+control IDs and expected classifications outside the judge request. The
+in-code v2 rubric and historical comparison path remain available.
+
+#### Rules comparison
+
+The legacy manifest-gated comparison remains green at zero tolerance. The
+dev panel passes 28/30 (mean 0.993) and the historical panel 11/11 (mean
+1.000). The compatibility adapter serves those legacy baseline reports.
+The additional coach columns intentionally expose these differences on
+the one-seed panels:
+
+| New check | Rules result | Cases with newly measured misses |
+| --- | --- | --- |
+| Stage agreement | 128/135 | `adaptive-flow-handoff-hidden-flow-cap` misses the sustained main flow departure. `lever-willow-weight-stop` and independent `f2` fold the unobserved decline into Main pour instead of displaying a separate ungraded Finish. |
+| Hypothesis set and signature | 49/57 | `allonge-capped`, `bloom-zero-restart-restriction`, `flow-limiter-capped`, `flow-limiter-masked-restriction`, `flow-limiter-restriction`, `flow-limiter-soft-cap` and independent `a2` omit the restricted-flow hypothesis. `flat-pressure-gentler-fill-hidden-flow-cap` suggests easy flow despite the sustained delivery limit. |
+| Stop abstention | 5/8 | `lever-willow-weight-stop` (two skipped phases) and independent `f2` record the weight stop at phase level without the visible ungraded Finish. |
+| Taste isolation, form and grounding | 0 violations | The rules replay checked 285 pairs. The mock card had the same accuracy and recorded one fallback on `f2`, where the curve stage did not call the model. |
 
 ### Label sources and groups
 

@@ -67,7 +67,8 @@ function fingerprints() {
   const hash = (paths: string[]) => digest(paths.map(path => [path, readFileSync(join(ROOT_DIR, path), "utf8")]));
   return {
     scorer: hash(["evals/lib/iteration/score.ts", "evals/lib/iteration/compare.ts", "evals/lib/review-metrics.ts",
-      "evals/lib/review-grader.ts", "evals/lib/review-labels.ts", "evals/lib/graders.ts"]),
+      "evals/lib/review-grader.ts", "evals/lib/review-labels.ts", "evals/lib/graders.ts", "evals/lib/review-coach-grader.ts",
+      "evals/lib/review-coach-expectations.ts", "evals/lib/review-crossed.ts", "evals/lib/iteration/panel.ts"]),
     judgeCode: hash(["evals/lib/judge.ts", "evals/lib/iteration/runner.ts"]),
   };
 }
@@ -87,6 +88,13 @@ function devMarkdown(report: DevReport) {
           const a = p.summaries.baseline.classes.find(b => b.kind === c.kind);
           return `| ${c.kind} | ${a ? [a.tp, a.fp, a.fn].join(" / ") : "—"} | ${[c.tp, c.fp, c.fn].join(" / ")} |`;
         }), "",
+        "| Arm | Stage agreement | Hypotheses | Stop abstention | Taste isolation violations (pairs) | Taste and links | Style | Structure | Grounding | Fallbacks |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ...Object.entries(p.summaries).map(([arm, { coach: c }]) =>
+          `| ${arm} | ${c.agreement.passed}/${c.agreement.total} | ${c.hypothesisAccuracy.passed}/${c.hypothesisAccuracy.total} | ${c.abstention.passed}/${c.abstention.total} | ${c.tasteIsolation.violations} (${c.tasteIsolation.checked}) | ${c.tasteLinkViolations} | ${c.styleViolations} | ${c.structuralViolations} | ${c.groundingViolations} | ${c.fallback} |`),
+        "", "| Arm | Stage class | Precision | Recall |", "|---|---|---:|---:|",
+        ...Object.entries(p.summaries).flatMap(([arm, { coach }]) => coach.stageClasses.map(c =>
+          `| ${arm} | ${c.verdict} | ${c.precision?.toFixed(3) ?? "—"} | ${c.recall?.toFixed(3) ?? "—"} |`)), "",
         `Candidate justified abstention ${p.summaries.candidate.abstention.passed}/${p.summaries.candidate.abstention.total} and nominal false alarms ${p.summaries.candidate.nominal.alarms}/${p.summaries.candidate.nominal.total}.`,
         `Unassessed event classes ${[...p.summaries.candidate.unassessed, ...p.summaries.candidate.unsupported].join(", ") || "none observed"}.`,
         `Median input tokens ${p.summaries.baseline.medianInput} → ${p.summaries.candidate.medianInput}. p95 latency ${p.summaries.baseline.p95Ms.toFixed(1)} → ${p.summaries.candidate.p95Ms.toFixed(1)} ms.`, "",

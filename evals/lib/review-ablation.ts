@@ -5,11 +5,13 @@ import type { PhaseLandmark } from "../../server/profiles/phase-evidence.js";
 import { reviewCurveSection } from "../../server/recommend/review-curve.js";
 import type { LlmProvider } from "../../server/llm/types.js";
 import { legacyReviewShot, legacyRulesReview } from "./review-legacy.js";
-import { legacyEvalReview } from "./review-coach-compat.js";
+import { authoredCoachRows, coachCard, coachOutcomes, gradeCoachCard, scoreCoachTruth, summarizeCoach, type CoachScore } from "./review-coach-grader.js";
+import { coachExpectation } from "./review-coach-expectations.js";
+import { replayCoachCross } from "./review-crossed.js";
 import { reviewShot } from "../../server/recommend/review.js";
 import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "../../server/recommend/review-evidence.js";
 import { rulesReviewResult } from "../../server/recommend/review-local.js";
-import type { ReviewInput, ReviewResult, ShotReviewData } from "../../server/recommend/review-types.js";
+import type { CoachReviewResult, ReviewInput, ReviewResult, ShotReviewData } from "../../server/recommend/review-types.js";
 import { digest } from "./manifest.js";
 import { answerSource } from "./provenance.js";
 import { judgeChecks, judgeReview, reviewJudgeEvidence, reviewJudgeProvenance, reviewJudgeStatus } from "./judge.js";
@@ -33,6 +35,7 @@ interface VariantOutput {
   review: ShotReviewData;
   source: string;
   stages?: Pick<ReviewResult, "curve" | "taste">;
+  coachResult?: CoachReviewResult;
 }
 
 type Variant =
@@ -110,9 +113,10 @@ export const REVIEW_VARIANTS: Readonly<Record<VariantName, Variant>> = {
   "two-stage": {
     status: "ready",
     async run(input, llm, fullTrace) {
-      const { review, source, evidence, curve, taste } =
-        legacyEvalReview(llm ? await reviewShot(llm, input, fullTrace) : rulesReviewResult(input, fullTrace));
-      return { review, source, stages: { curve, taste }, detectorEvidence: normalizeLegacyReview(review, input, evidence) };
+      const coachResult = llm ? await reviewShot(llm, input, fullTrace) : rulesReviewResult(input, fullTrace);
+      const { review, source, evidence, curve, taste } = coachResult;
+      const detectorEvidence = normalizeLegacyReview(review, input, evidence);
+      return { review, source, stages: { curve, taste }, coachResult, detectorEvidence };
     },
   },
 };
@@ -142,7 +146,7 @@ export async function runReviewVariant(name: VariantName, input: ReviewInput, pr
 }
 
 function authoredReview(result: VariantOutput, calls: CallRecord[]) {
-  const { review, stages } = result;
+  const { review, stages, coachResult } = result;
   if (!stages) {
     const raw = calls.find(call => call.schemaName === "ShotReview")?.output as ShotReviewData | undefined;
     if (!raw) return undefined;
@@ -152,7 +156,9 @@ function authoredReview(result: VariantOutput, calls: CallRecord[]) {
       nextShot: digest(raw.nextShot) === digest(review.nextShot) ? review.nextShot : undefined,
     };
   }
-  const interpretation = stages.curve.narrative;
+  const curveCall = calls.find(call => call.schemaName === "CurveNarrative");
+  const interpretation = coachResult ? authoredCoachRows(coachResult.coach, curveCall?.output) : [];
+  const rewrites = interpretation.length ? interpretation : undefined;
   const { report } = (calls.find(call => call.schemaName === "ReviewNotes")?.output ?? {}) as {
     report?: { notesEvidence: string; notesTaste: string };
   };
@@ -160,8 +166,9 @@ function authoredReview(result: VariantOutput, calls: CallRecord[]) {
   // and taste alignment. A repeat imposed by those stages belongs to rules.
   const notesAssessment = report && stages.taste.summary.includes(`${report.notesTaste} in the saved note`)
     ? { quote: report.notesEvidence, reportedTaste: report.notesTaste } : undefined;
-  const nextShot = notesAssessment && review.nextShot?.reasoning.startsWith("You reported a ") ? review.nextShot : undefined;
-  return interpretation || notesAssessment ? { interpretation: interpretation ?? undefined, notesAssessment, nextShot } : undefined;
+  const adjustment = coachResult?.coach.recommendation.adjustment;
+  const nextShot = notesAssessment && adjustment?.reasoning.startsWith("You reported a ") ? adjustment : undefined;
+  return rewrites || notesAssessment ? { interpretation: rewrites, notesAssessment, nextShot } : undefined;
 }
 
 const MEASURED_LANDMARKS = ["first_sustained_beverage", "brew_pressure_crest", "phase_boundary", "stop", "recording_end"] as const;
@@ -250,6 +257,18 @@ async function scoreReviewer(result: Extract<Awaited<ReturnType<typeof runReview
   return { status: failed ? "fail" : coverage ? "pass" : "unassessed", supportedOutcome, adjudication };
 }
 
+async function advisoryCoachJudge(result: CoachReviewResult, c: ReviewEvalCase, judge: LlmProvider) {
+  const evidence = reviewJudgeEvidence(c.input, c.fullTrace);
+  const answer = coachCard(result.coach);
+  const provenance = { rubric: "v3" as const, advisory: true, ...reviewJudgeProvenance(evidence, "v3") };
+  try {
+    const verdict = await judgeReview(new ProviderChain([judge]), evidence, answer, "v3");
+    return { ...provenance, status: reviewJudgeStatus(verdict, evidence, answer), verdict };
+  } catch {
+    return { ...provenance, status: "unavailable" as const };
+  }
+}
+
 export interface AblationRecord extends ReviewMetricRow {
   prompt: PromptMeasure | null;
   caseId: string;
@@ -260,6 +279,8 @@ export interface AblationRecord extends ReviewMetricRow {
   promptHashes: string[];
   reviewerScore: ReviewerScore;
   fallbackUtility: boolean | null;
+  coach?: CoachScore;
+  coachJudge?: Awaited<ReturnType<typeof advisoryCoachJudge>>;
 }
 
 function summarizeRecords(records: AblationRecord[]) {
@@ -268,6 +289,7 @@ function summarizeRecords(records: AblationRecord[]) {
   const { abstention: _abstention, supportedOutcomes: _outcomes, forbiddenClaims: _claims, ...detectorEvidence } = summarizeReviewMetrics(records);
   return {
     detectorEvidence,
+    coach: summarizeCoach(records.flatMap(row => row.coach ? [row.coach] : [])),
     reviewer: { passed: count("pass"), failed: count("fail"), unassessed: count("unassessed"),
       invalidCitation: count("invalid-citation"), unavailable: count("unavailable"), noModelAnswer: count("no-model-answer"),
       rulesControl: count("rules-control"),
@@ -290,13 +312,23 @@ export async function runReviewAblation(cases: readonly ReviewEvalCase[], names:
       if (result.status !== "ready") throw new Error(`Variant ${name}: ${result.reason}`);
       const { ms, tokens, fellBack, detectorEvidence, source, promptHashes } = result;
       const samples = c.sampleTimes ?? c.input.points.map(p => p.t);
-      const decision = c.labels ? scoreReview(c.labels, detectorEvidence, samples).supportedOutcome : null;
+      const native = result.coachResult;
+      const outcomes = native ? coachOutcomes(native.coach.recommendation) : detectorEvidence.outcomes;
+      const decision = c.labels ? scoreReview(c.labels, { ...detectorEvidence, outcomes }, samples).supportedOutcome : null;
+      const expectation = coachExpectation(c.id, c.labels, c.input.profile);
+      const coach: CoachScore | undefined = native && {
+        ...gradeCoachCard(native, c.input, rulesReviewResult(c.input, c.fullTrace).coach),
+        truth: scoreCoachTruth(native.coach, expectation),
+        isolation: fellBack ? { checked: 0, violations: 0 } : await replayCoachCross(c.input, native, c.fullTrace, result.curveCall),
+        fallback: fellBack,
+      };
       const score = c.labels && scoreReview({ ...c.labels, supportedOutcomes: undefined, forbiddenClaims: [] }, detectorEvidence, samples);
       const prompt = !provider || result.curveCall
         ? await measurePrompt(name, c.input, c.fullTrace, result.curveCall?.prompt) : null;
       records.push({ prompt, caseId: c.id, repeat: 0, profileFamily: c.profileFamily, pumpMode: c.pumpMode, ms, tokens, fellBack, score, source,
         labelSource: c.labels?.source, promptHashes, reviewerScore: await scoreReviewer(result, c, decision, judge),
-        fallbackUtility: fellBack ? decision : null });
+        fallbackUtility: fellBack ? decision : null, coach,
+        coachJudge: native && judge ? await advisoryCoachJudge(native, c, judge) : undefined });
     }
     const families = Array.from(new Set(records.map(r => r.profileFamily)), family => ({
       family, metrics: summarizeRecords(records.filter(r => r.profileFamily === family)),
