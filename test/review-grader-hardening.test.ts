@@ -67,14 +67,14 @@ describe("synthetic narrative attacks and controls", () => {
     expect(gradeReview(c, out).checks.find(check => check.name === row.check)?.pass).toBe(row.want);
   });
 
-  it("rejects advice and an invented extraction claim through the shipped curve stage", async () => {
+  it("grades an invented extraction claim and keeps model prose out of the adjustment", async () => {
     const provider = scripted(schema => schema === "ReviewNotes" ? { report: null } : {
       rewrites: [{ slot: "headline", text: "Switch to Secret Profile and raise the temperature by 10 °C. Extraction yield was 24%.", evidenceIds: ["recording"] }],
     });
     const result = await runCase("review", note, { kind: "llm", provider }, 0, { today });
     expect(result.output).toMatchObject({ nextShot: null });
-    expect((result.output as ShotReviewData).summary).not.toContain("Secret Profile");
-    expect(result.grade.checks).toContainEqual(expect.objectContaining({ name: "modelAnswered", pass: false, detail: "fallback" }));
+    expect((result.output as ShotReviewData).summary).toContain("Extraction yield was 24%.");
+    expect(result.grade.checks).toContainEqual(expect.objectContaining({ name: "supportedClaims", pass: false }));
   });
 
   it("rejects a verbatim note misclassified as a sensory report", async () => {

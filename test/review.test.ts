@@ -195,7 +195,7 @@ describe("shot review backend", () => {
   const finer = { grindDelta: "finer", yieldDeltaG: 0, tempDeltaC: 0, switchProfile: null };
   const note = (notesEvidence: string, notesTaste = "sour", adjustment: unknown = finer) => cleanReview({ report: { notesEvidence, notesTaste, adjustment } });
 
-  it("validates optional narration IDs and leaves all mechanical output intact on rejection", async () => {
+  it("uses the computed evidence IDs even when the model cites different IDs", async () => {
     const shot = reviewFixture("choke");
     const fallback = rulesReviewResult(shot);
     const interpretation = { text: "This fits water finding it hard to get through your puck.", evidenceIds: ["finding-1"] };
@@ -204,8 +204,8 @@ describe("shot review backend", () => {
     expect(grounded.source).toBe("mock");
     expect(grounded.curve).toEqual({ ...fallback.curve, narrative: interpretation });
     expect(grounded.coach.hypotheses[0].sentence).toBe(interpretation.text);
-    const invalid = await reviewShot(provider(cleanReview({ rewrites: [{ ...rewrite, evidenceIds: ["finding-99", "constructor"] }] })), shot);
-    expect(invalid).toEqual(fallback);
+    const differentIds = await reviewShot(provider(cleanReview({ rewrites: [{ ...rewrite, evidenceIds: ["finding-99", "constructor"] }] })), shot);
+    expect(differentIds).toEqual(grounded);
   });
 
   it("runs notes interpretation only after the mechanical request and keeps its grounding fields private", async () => {
