@@ -1,40 +1,25 @@
 # Shot review intent
 
-The review should feel like a good barista looking at your shot just after you
-pull it. Aim for useful insight, with numbers where they explain a large miss
-or make a key point clearer.
+The shot review exists to tell the person who just pulled a shot something they could not easily see themselves, and to leave them knowing what to try next. Judge any change to it by that: did the review get more insightful and more useful to a home barista, not did it get more correct-looking or more checkable.
 
-- Explain how the shot went against the plan, stage by stage, in plain language.
-- Say what might explain it. Use wording like “this fits” or “could mean” and
-  keep the cause open.
-- Connect the owner's taste notes to that reading. “You said it was slightly
-  sour, which fits the fast fill” is useful. Say when the taste points another
-  way. Bring in past shots only when they help explain this one.
-- End with one concrete next-shot recommendation, such as changing grind,
-  yield or temperature, or checking puck prep.
+## What a good review does
 
-## How the review works
+Think of a barista who watched the shot with you:
 
-Read the curve first and settle the mechanical observations before looking at
-taste. Taste can help interpret those observations without biasing the curve
-reading. Code can compute facts and verdicts for the prompt. The prompt should
-shape the model's response with a format contract and a worked example.
+- Says how it went against the plan, in plain stage-level language. Numbers appear only where a miss is large or a point is key.
+- Offers a reason, hedged. It is a hypothesis, never a diagnosis.
+- Ties your taste notes back to those hypotheses ("slightly sour fits the early fill") and says so when taste points the other way.
+- Mentions earlier shots only when they explain this one.
+- Ends with one concrete thing to try: grind, yield, temperature, or check puck prep.
 
-Apply the model's wording slot by slot. Number or wording precision must never
-be a pass/fail test for the model's prose. For a returned answer, fall back to
-the rules summary only if the answer cannot be parsed into the agreed format.
-Whenever that happens, log what the model returned with private text redacted.
+## Principles that should survive refactors
 
-v0.8.0 shipped a validator that rejected real model wording, causing reviews on
-the NAS to fall back to templated text. v0.8.1 replaced it with prompt-first,
-slot-by-slot wording. Keep that pass/fail gate out of the live review.
+- **The prompt carries the quality.** Shape the answer with a clear format contract and a worked example. Do not try to guarantee quality by checking the output afterwards.
+- **Never discard the model's answer over wording or number precision.** A rejected answer silently becomes templated text, which is the worst outcome for the reader, and strict checks reject legitimate wording often. The only acceptable fallback is an answer that cannot be parsed at all, and it must log what the model returned so the cause can be diagnosed.
+- **Read the curve before taste.** Taste is used to interpret the curve afterwards, so it cannot bias the reading of what happened.
+- **Code can supply facts to the prompt; it does not police the prose.**
+- **The gym is offline.** It exists to improve the prompt over time and may measure usefulness. It must never become a gate on a live review.
 
-The prompts and review flow are in [review.ts](../server/recommend/review.ts).
-The rules summary and taste follow-up are assembled in
-[review-local.ts](../server/recommend/review-local.ts).
+## When you are unsure
 
-## The gym
-
-The [shot review gym](../evals/README.md) scores reviews offline to improve the
-prompt. It can measure usefulness. Gym results must never become a runtime gate
-or block a live review.
+Prefer the change that makes the review say something more useful over the one that makes it safer to assert. If a safeguard would make the review blander or more often templated, it is probably the wrong tool; improve the prompt instead.
