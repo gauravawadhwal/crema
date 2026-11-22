@@ -1,5 +1,4 @@
 import { CoachReview as CoachSchema } from "../../server/schema.js";
-import { consistentCoachNumbers } from "../../server/recommend/review.js";
 import { curveStageInput } from "../../server/recommend/review-local.js";
 import { groundedNotes, reviewNotes } from "../../server/recommend/review-taste.js";
 import type { CoachReview, CoachReviewResult, ReviewInput } from "../../server/recommend/review-types.js";
@@ -27,6 +26,23 @@ const puckWords: Record<NonNullable<CoachReview["recommendation"]["puckCheck"]>,
   basket_and_puck_consistency: /\b(?:basket and puck|puck and basket) consistency\b/i,
 };
 const puckDiagnosis = /\b(?:fix|correct|repair|replace|buy|install|upgrade|wdt|screen|tool|needle|tamper|channel(?:l?ing|l?ed))\b/i;
+
+/** Only coach-ready figures are eligible, with their units and original order. */
+function consistentCoachNumbers(text: string, draft: string) {
+  const quantities = (s: string) => {
+    const values: string[] = [];
+    const remainder = s.replace(/([+\-−]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*[–-]\s*([+\-−]?(?:\d+(?:\.\d+)?|\.\d+)))?\s*(mL\/s|g\/s|bar|°C|s|g)(?![\w/])/gi,
+      (_, first: string, last: string | undefined, unit: string) => {
+        const normalize = (n: string) => Number(n.replace("−", "-"));
+        values.push([normalize(first), last == null ? "" : normalize(last), unit.toLowerCase()].join("|"));
+        return "";
+      });
+    return /\p{N}/u.test(remainder) ? null : values;
+  };
+  const actual = quantities(text);
+  const expected = quantities(draft);
+  return actual != null && expected != null && actual.length === expected.length && actual.every((value, i) => value === expected[i]);
+}
 
 function oneSentence(text: string) {
   return /\S/.test(text) && !/[\r\n]|[.!?]\s+\S/.test(text.trim());
