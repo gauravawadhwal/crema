@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { assertCurveStageInvariant, mockCurveStage } from "../evals/lib/review-crossed.js";
 import { reviewFixture } from "../evals/lib/review-fixtures.js";
 import { MockProvider } from "../server/llm/mock.js";
@@ -8,8 +8,9 @@ import { CoachReview } from "../server/schema.js";
 import type { ProfileStepLike } from "../server/profiles/curve.js";
 import { fullReviewTrace } from "../server/recommend/review-evidence.js";
 import { rulesReviewResult } from "../server/recommend/review-local.js";
-import { consistentCoachNumbers, reviewShot } from "../server/recommend/review.js";
+import { reviewShot } from "../server/recommend/review.js";
 import { SHOT_REVIEW_VERSION, type ReviewInput, type ReviewPoint } from "../server/recommend/review-types.js";
+import codexBloom from "./fixtures/coach-codex-bloom.json" with { type: "json" };
 import type { z } from "zod";
 
 const fill: ProfileStepLike = { name: "Fill start", pump: "pressure", pressure: 3, sensor: "coffee", temperature: 93 };
@@ -250,31 +251,88 @@ describe("coach history, taste and the next test", () => {
 });
 
 describe("coach wording and wire compatibility", () => {
-  it("checks the exact quantity, unit and sequence without treating numerals as interchangeable", () => {
-    const draft = "At 6.5 s, pressure was 3.4 bar and flow was 4.5 mL/s.";
-    expect(consistentCoachNumbers("After 6.50 s, pressure reached 3.4 bar at 4.5 ml/s.", draft)).toBe(true);
-    for (const invalid of [draft.replace("3.4", "3.5"), draft.replace("bar", "s"), draft.replace("3.4 bar", "4.5 mL/s"),
-      draft.replace("3.4 bar", "3.4"), draft + " A 2nd change."]) {
-      expect(consistentCoachNumbers(invalid, draft)).toBe(false);
+  function recordedProvider(answer: unknown, inspect?: (prompt: string) => void) {
+    class RecordedProvider extends MockProvider {
+      override async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
+        inspect?.(req.prompt);
+        return req.schema.parse(answer);
+      }
     }
-    expect(consistentCoachNumbers("The shot finished in 20 s against a 30–35 s guide.",
-      "Reached yield after 20 s with a 30–35 s guide.")).toBe(true);
-    expect(consistentCoachNumbers("Pressure reached .5 bar.", "Pressure reached 5 bar.")).toBe(false);
+    return new ProviderChain([new RecordedProvider()]);
+  }
+
+  it("replays Codex's rewrite of a synthetic bloom omitted by the detailed phase projection", async () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const pour = shot.profile!.steps![1];
+    const fill = { ...pour, name: "Fill start", seconds: 3 };
+    const bloom = { ...pour, name: "Bloom", flow: 0, seconds: 2 };
+    shot.profile!.steps = [...Array.from({ length: 12 }, () => fill), bloom, pour];
+    const sample = shot.points[12];
+    shot.points = Array.from({ length: 48 * 4 }, (_, i) => {
+      const t = i / 4;
+      const duringBloom = t >= 36 && t < 38;
+      return { ...sample, t, frame: t < 36 ? Math.floor(t / 3) : duringBloom ? 12 : 13,
+        tf: duringBloom ? 0 : 4.5, p: 3.4, w: Math.max(0, t - 25) * 3, countedVolumeMl: t * 4.5,
+        groupTemp: 92, targetGroupTemp: 92 };
+    });
+    shot.yieldG = shot.targetYieldG = shot.annotatedYieldG = 68.25;
+    const rules = rulesReviewResult(shot);
+    const reply = await reviewShot(recordedProvider(codexBloom, prompt => {
+      const evidence = JSON.parse(prompt.split("EVIDENCE (keys are evidence IDs):\n")[1].split("\n")[0]);
+      expect(evidence["phase-12"]).toBeUndefined();
+    }), shot);
+    expect(reply.source).toBe("mock");
+    expect(reply.coach.headline).toEqual({ ...rules.coach.headline, sentence: codexBloom.rewrites[0].text });
+    expect(reply.coach.stages[1]).toEqual({ ...rules.coach.stages[1], sentence: codexBloom.rewrites[3].text });
+    expect(reply.coach.phases).toEqual(rules.coach.phases);
+    expect(reply.curve.narrative?.text).toBe(codexBloom.rewrites.map(row => row.text).join(" "));
+    expect(reply.curve.narrative?.evidenceIds).toContain("phase-12");
   });
 
-  it.each(["Your pour was 99 s.", "Your shot tasted sour.", "Your puck was channeling.", "Your peak was high."])(
-    "falls back atomically for invalid AI wording %s", async text => {
-      const shot = reviewFixture("gusher");
-      class Rewrite extends MockProvider {
-        override async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
-          const drafts = JSON.parse(req.prompt.split("COACH DRAFTS (keys are slots):\n")[1].split("\n")[0]);
-          return req.schema.parse({ rewrites: [{ slot: "headline", evidenceIds: drafts.headline.evidenceIds, text }] });
-        }
-      }
-      const reply = await reviewShot(new ProviderChain([new Rewrite()]), shot);
-      expect(reply).toEqual(rulesReviewResult(shot));
-    },
-  );
+  it("keeps useful wording with different precision and skips unusable slots individually", async () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const rules = rulesReviewResult(shot);
+    const text = "Your cup stayed nearly dry for roughly six seconds, then filled quickly.";
+    const rewrites = [
+      { slot: "notable-1", text, evidenceIds: ["invented-id"] },
+      { slot: "temperature", text: "  ", evidenceIds: [] },
+      { slot: "notable-1", text: "Your cup stayed nearly dry. Private marker.", evidenceIds: ["cup"] },
+      { slot: "private-slot", text: "Private marker.", evidenceIds: [] },
+    ];
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const reply = await reviewShot(recordedProvider({ rewrites }), shot);
+      expect(reply.source).toBe("mock");
+      expect(reply.coach.notable[0]).toEqual({ ...rules.coach.notable[0], sentence: text });
+      expect(reply.coach.temperature).toEqual(rules.coach.temperature);
+      expect(reply.curve.narrative).toEqual({ text, evidenceIds: rules.coach.notable[0].evidenceIds });
+      expect(warn.mock.calls).toEqual([
+        ["review: rejected coach rewrite", { provider: "mock", slot: "temperature", reason: "empty text", sample: "" }],
+        ["review: rejected coach rewrite", { provider: "mock", slot: "notable-1", reason: "duplicate slot", sample: "your cup stayed nearly … … …" }],
+        ["review: rejected coach rewrite", { provider: "mock", slot: "<unknown>", reason: "unknown slot", sample: "… …" }],
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("falls back to rules when the provider response cannot be parsed", async () => {
+    const shot = reviewFixture("high-flow-tracked");
+    const response = { rewrites: [
+      { slot: "headline", text: "The machine held flow near a private marker.", evidenceIds: ["phase-1"] },
+      { slot: "temperature", text: 5, evidenceIds: [] },
+    ] };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(await reviewShot(recordedProvider(response), shot)).toEqual(rulesReviewResult(shot));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("review: using measured summary:"), {
+        rewrites: 2,
+        samples: [{ slot: "headline", text: "the machine held flow … a … …" }, { slot: "temperature", text: "number" }],
+      });
+    } finally {
+      warn.mockRestore();
+    }
+  });
 
   it("retains the old flat contract while adding the new sections to rules and mock results", async () => {
     const shot = reviewFixture("gusher");

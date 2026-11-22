@@ -1,0 +1,57 @@
+{
+  "rewrites": [
+    {
+      "slot": "headline",
+      "text": "The machine’s flow ran above plan during the bloom.",
+      "evidenceIds": [
+        "phase-12"
+      ]
+    },
+    {
+      "slot": "temperature",
+      "text": "The machine held temperature near its sensor target.",
+      "evidenceIds": [
+        "temperature",
+        "phase-0",
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6",
+        "phase-7",
+        "phase-8",
+        "phase-9",
+        "phase-10",
+        "phase-11",
+        "phase-12",
+        "phase-13"
+      ]
+    },
+    {
+      "slot": "stage-1",
+      "text": "During start-up, the machine held flow close to plan in the readings.",
+      "evidenceIds": [
+        "phase-0",
+        "phase-1",
+        "phase-2",
+        "phase-3",
+        "phase-4",
+        "phase-5",
+        "phase-6",
+        "phase-7",
+        "phase-8",
+        "phase-9",
+        "phase-10",
+        "phase-11"
+      ]
+    },
+    {
+      "slot": "stage-2",
+      "text": "During the bloom, the machine’s flow ran well above plan.",
+      "evidenceIds": [
+        "phase-12"
+      ]
+    }
+  ]
+}

@@ -188,8 +188,10 @@ validates a bounded `ReviewInput` at `POST /api/review` and returns
 `{coach, review, curve, taste, source, evidence}`. The mechanical stage produces
 a headline, verdicts for planned phases and temperature, notable points,
 hedged hypotheses and a relevant history comparison. An optional provider call
-can rewrite the headline and coach sentences. Rewrites must cite eligible
-evidence IDs and preserve the measured quantities and units in each draft.
+can rewrite the headline and coach sentences. The prompt asks for plain,
+evidence-based wording and uses the computed drafts as its source. The server
+applies the wording by slot and keeps each slot's computed verdict and
+evidence IDs. A response that fails to parse uses the rules wording.
 The card groups phases into brewing stages and shows one short verdict
 sentence for each. Numbers in the wording highlight large misses or notable
 events. Each stage names the saved phase IDs it covers. The saved phase rows
