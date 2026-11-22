@@ -8,3 +8,4 @@ The workflows in `.claude/skills/` are plain Markdown and any agent can follow t
 - `verify-crema`: checks to run before calling a change done.
 - `refresh-demo-assets`: regenerating the demo data, screenshots, recording and site.
 - `ai-evals`: running and comparing AI model evaluations.
+Read [docs/shot-review-intent.md](docs/shot-review-intent.md) before changing the shot review prompt, review code, or gym.
