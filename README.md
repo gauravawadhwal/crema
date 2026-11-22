@@ -197,7 +197,7 @@ npm run check:tablet
 - [ ] Tune the prompts with real bag photos (every provider has run against real accounts in the evals; the label photos there are rendered, not real)
 - [ ] Home Assistant: expose machine state, shot count and the current coffee as sensors, and add warm-up and sleep automations
 - [ ] Add coffees from roaster order emails, so only the roast-date sticker needs photographing
-- [ ] Grinder entities and a numeric grind advisor
+- [x] Grinder presets, custom grinders and numeric grind steps
 - [ ] Profile editing and Visualizer profile import
 - [ ] Optional native phone extras: widgets and a live shot activity
 

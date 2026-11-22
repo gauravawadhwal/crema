@@ -29,6 +29,8 @@ export interface ReviewInput {
   /** Recorded context only: never the currently prepared recipe or grinder draft. */
   timestamp?: string | null;
   grinderSetting?: string | null;
+  /** Size of one adjustment on the grinder selected for the next shot. */
+  grindStep?: number;
   tempC?: number | null;
   /** Stable profile shape, ignoring absolute temperature and target yield edits. */
   profileShape?: string | null;

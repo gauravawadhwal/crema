@@ -1108,6 +1108,10 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     check(!(await page.textContent("#status")).includes("AI offline"), "no AI warning when it's switched off");
     await open(`decaid=http://localhost:${MOCK}`);
     check(await S(() => !S.api.ai.on), "the switch is remembered (in Decaid)");
+    await page.goto(`http://localhost:${SKIN}/?full#settings`);
+    await page.click("#chooseGrinder");
+    await page.selectOption("#grinderSelect", "lagom-p80");
+    await page.waitForFunction(() => grindSettings().id === "lagom-p80");
 
     // ---- 5. the phone app, served by the Crema server through its Decaid proxy ----
     procs.filter((p) => p.spawnargs.includes("server/main.ts")).forEach(stop);
@@ -1120,6 +1124,9 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     check(ph.live && ph.decaid === `http://localhost:${MOCK}`, "phone app runs live through the server's proxy");
     check(ph.shelf >= 2 && ph.ai === false, "phone sees the tablet's coffees and settings (shared through Decaid)");
     await phone.waitForFunction(() => S.next && S.presets && S.snap);
+    check(await phone.evaluate(() => grindSettings().id === "lagom-p80" && S.next.grind === "1"), "phone sees the selected grinder and uses its start with AI off");
+    await phone.click('[data-step="grind:1"]');
+    check(await phone.inputValue("#grindInput") === "1.05", "phone steps by the selected grinder's increment");
     await phone.click('[data-run="espresso"]');
     await phone.waitForFunction(() => shotRunning());
     await phone.evaluate(() => scrollTo(0, document.body.scrollHeight));

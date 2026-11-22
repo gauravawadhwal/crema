@@ -299,6 +299,12 @@ const openShot = async (page, id, selector) => {
     check(await evalPage(() => S.next.grind === String(+(11 - grindSettings().step).toFixed(3))), "fresh Apply uses the exact displayed target");
     await page.click('#resetRecipe');
     check(await evalPage(() => S.next.grind === "11"), "Reset after refreshed Apply preserves the user's prior edit");
+    await evalPage(async () => applyAppSettings(await S.api.settings.set({ grinderId: "lagom-p80" })));
+    check((await page.textContent("#reviewBox")).includes("One step on Lagom P80 is 0.05."), "the review explains the selected grinder's increment");
+    check((await page.textContent('[data-apply-review]')).includes("0.95"), "the review shows a target one P80 step finer");
+    await page.click('[data-apply-review]');
+    check(await evalPage(() => S.next.grind === "0.95"), "the selected grinder's increment applies to the next-shot draft");
+    await page.click('#resetRecipe');
     const priorYield = await evalPage(() => {
       const fixture = S.shots.find((shot) => shot.id === "after-shot-apply");
       const input = { points: [], profile: { title: fixture.profileTitle }, doseG: fixture.doseG, yieldG: fixture.yieldG,

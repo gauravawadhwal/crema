@@ -117,6 +117,18 @@ LLM_PROVIDERS=claude-cli npm start
 
 Keep it running with whatever you use for services (systemd, a process manager, your NAS's app runner).
 
+### Choosing a grinder
+
+Open **Settings → Your setup → Choose grinder**. Select Niche Zero or Lagom P80,
+or tap **Add grinder** to enter your own. Use **Edit grinder** to set the
+starting dial value, the size of one adjustment and which direction grinds
+finer. The built-in values are estimates and can be edited to match your dial.
+
+The active grinder is shared across devices. Brew starts at its configured
+value until you save a grind for that coffee on the device. Shot reviews use
+the selected increment when they suggest a grind change. Select
+**No grinder selected** to return to the original start and step settings.
+
 ### Brewing without a bag
 
 On Brew, tap the coffee name and choose **No bag**. Open Profiles, choose an
