@@ -9,6 +9,7 @@ export { beanTraits, rankProfiles, suggestRecipe } from "./profiles/match.js";
 export { baseline, inferRoast, restOf } from "./recommend/rules.js";
 export { rulesDialIn, rulesRecipe, strip, toPastShot, withTemperature } from "./recommend/local.js";
 export { DEFAULT_MAINTENANCE, DEFAULT_PRESETS, DEFAULT_SETTINGS, GRIND_STEPS } from "./shared/defaults.js";
+export { BUILT_IN_GRINDERS, GRINDER_NAME_LIMIT, MIN_GRINDER_STEP, grinderList, resolveGrinder, stepGrind, validGrinder } from "./shared/grinders.js";
 export { outlineProfile, planAt, profileCurve, shotSim, simulateShot, stepDurations } from "./profiles/curve.js";
 export { analyzeShot, shotFacts } from "./profiles/analysis.js";
 export { SHOT_REVIEW_VERSION } from "./recommend/review-types.js";

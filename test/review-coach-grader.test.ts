@@ -17,6 +17,7 @@ import { MockProvider } from "../server/llm/mock.js";
 import type { StructuredRequest } from "../server/llm/types.js";
 import { rulesReviewResult } from "../server/recommend/review-local.js";
 import type { CoachReview } from "../server/recommend/review-types.js";
+import { resolveGrinder } from "../server/shared/grinders.js";
 import type { z } from "zod";
 
 const independent = loadIndependentReviewDataset().cases;
@@ -33,8 +34,8 @@ describe("version 4 structure and surface checks", () => {
   it("agrees with the rendered section order and omits absent sections", () => {
     const { input } = fixture("a1");
     const source = readFileSync(new URL("../skin/app.js", import.meta.url), "utf8");
-    const render = runInNewContext(source.slice(source.indexOf("function coachReviewHtml("), source.indexOf("function reviewHtml(")) +
-      "\ncoachReviewHtml", { reviewRecipeMatches: () => false, S: {}, esc: String }) as (coach: CoachReview, shot: object) => string;
+    const render = runInNewContext(source.slice(source.indexOf("function reviewGrindHint("), source.indexOf("function reviewHtml(")) +
+      "\ncoachReviewHtml", { reviewRecipeMatches: () => false, grindSettings: resolveGrinder, S: {}, esc: String }) as (coach: CoachReview, shot: object) => string;
     const coach = rulesReviewResult(input).coach;
     expect(Object.keys(coachCard(coach))).toEqual(["headline", "stages", "notable", "hypotheses", "recommendation"]);
     const html = render(coach, {});

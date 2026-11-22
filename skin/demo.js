@@ -44,15 +44,14 @@ function makeDemoApi() {
     info.imageUrl = art;
     return { ...b, info, productImage: art, art: "product", frozen: false, finished: false, bestShotId: null, recipe: null, recipeSource: null };
   });
-  let aiEnabled = true;
-  const demoGrind = { grindStart: CE.DEFAULT_SETTINGS.grindStart, grindStep: CE.DEFAULT_SETTINGS.grindStep };
+  let demoSettings = { ...CE.DEFAULT_SETTINGS };
   // The AI recipes in demo-data.js are from real runs. With AI off, or for a coffee typed in by hand, the browser rules decide, as they do live.
   const rulesFor = (b) => {
     const ranked = CE.rankProfiles(b.info, prefs, titles);
     return { recipe: CE.rulesRecipe({ bean: b.info, preferences: prefs, profileTitles: titles }, ranked), source: "rules", candidates: ranked.slice(0, 8).map(CE.strip) };
   };
   const recipeFor = (b) => {
-    if (!aiEnabled || !b.byDrink) return rulesFor(b);
+    if (!demoSettings.aiEnabled || !b.byDrink) return rulesFor(b);
     const r = b.byDrink[prefs.drink] || b.byDrink.both;
     return { recipe: clone(r.recipe), source: r.source, candidates: r.ranking };
   };
@@ -266,22 +265,20 @@ function makeDemoApi() {
     demo: true,
     info: { providers: [{ id: "claude-cli", billing: "Claude subscription (recipes in this demo are from real runs)" }], decaidUrl: "simulated", server: null, serverError: null },
     // No Crema server here, so no Gemini voice notes; "Describe it" uses the browser's speech recognition.
-    ai: { available: true, get enabled() { return aiEnabled; }, get on() { return aiEnabled; }, healthy: true, voice: false },
+    ai: { available: true, get enabled() { return demoSettings.aiEnabled; }, get on() { return demoSettings.aiEnabled; }, healthy: true, voice: false },
     // Shown in the demo so the control can be seen; on the tablet it closes the skin.
     host: { canExit: true, exitToDashboard() { toast("On the tablet, this closes Crema and shows Decaid's dashboard"); } },
     settings: {
-      get: async () => ({ ...demoGrind, aiEnabled }),
-      set: async (p) => {
-        if (p.aiEnabled != null) aiEnabled = !!p.aiEnabled;
-        if (Number.isFinite(p.grindStart)) demoGrind.grindStart = p.grindStart;
-        if (p.grindStep > 0) demoGrind.grindStep = p.grindStep;
-        return { ...demoGrind, aiEnabled };
+      get: async () => clone(demoSettings),
+      set: async (patch) => {
+        demoSettings = CE.mergeRecord(demoSettings, typeof patch === "function" ? patch(demoSettings) : patch);
+        return clone(demoSettings);
       },
     },
     async shelfSignal() { return ""; }, // the demo's shelf is local: nothing to poll
     async shelf() { return shelf().map(shelfItem); },
     async identify({ files, query, description, url }, onStep) {
-      if (!aiEnabled) throw new Error("AI features are off. Enter the details by hand, or switch AI on in Settings.");
+      if (!demoSettings.aiEnabled) throw new Error("AI features are off. Enter the details by hand, or switch AI on in Settings.");
       const steps = files?.length ? ["Reading the bag", "Finding the roaster's page", "Matching community profiles"] : ["Searching for the coffee", "Reading the roaster's page", "Matching community profiles"];
       for (let i = 0; i < steps.length; i++) { onStep(i, steps); await wait(850); }
       const pool = all.filter((b) => !b.shelf || b.finished);
@@ -367,7 +364,9 @@ function makeDemoApi() {
       const recordedContext = recordedReviewContext(s.profile ?? null, s.grinderSetting);
       const targetYieldG = recordedReviewNumber(s.targetYieldG ?? s.profile?.target_weight, 0, 500);
       const timeContext = reviewTimeContext(s.profile ?? null, { ...recordedContext, doseG: s.doseG, yieldG: s.yieldG, targetYieldG, windows: [s.targetTimeS] }, bag?.recipe);
+      const grinder = CE.resolveGrinder(demoSettings);
       const input = { timestamp: s.timestamp ?? null, ...recordedContext, batchId: s.batch ?? null,
+        grindStep: grinder.id ? grinder.step : undefined,
         points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG, ...timeContext,
         annotatedYieldG: s.yieldG ?? null, volumeCountStartFrame: s.profile?.target_volume_count_start ?? null,
         targetWaterMl: recordedReviewNumber(s.profile?.target_volume, 0, 5000),

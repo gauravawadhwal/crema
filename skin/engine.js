@@ -22,11 +22,14 @@ var CremaEngine = (() => {
   // server/engine.ts
   var engine_exports = {};
   __export(engine_exports, {
+    BUILT_IN_GRINDERS: () => BUILT_IN_GRINDERS,
     CATALOG: () => CATALOG,
     DEFAULT_MAINTENANCE: () => DEFAULT_MAINTENANCE,
     DEFAULT_PRESETS: () => DEFAULT_PRESETS,
     DEFAULT_SETTINGS: () => DEFAULT_SETTINGS,
+    GRINDER_NAME_LIMIT: () => GRINDER_NAME_LIMIT,
     GRIND_STEPS: () => GRIND_STEPS,
+    MIN_GRINDER_STEP: () => MIN_GRINDER_STEP,
     NOT_READY: () => NOT_READY,
     REVIEW_EVIDENCE_VERSION: () => REVIEW_EVIDENCE_VERSION,
     REVIEW_POINT_LIMIT: () => REVIEW_POINT_LIMIT,
@@ -40,6 +43,7 @@ var CremaEngine = (() => {
     findProfile: () => findProfile,
     fullReviewTrace: () => fullReviewTrace,
     gramsUsed: () => gramsUsed,
+    grinderList: () => grinderList,
     historyCurveSentence: () => historyCurveSentence,
     inferRoast: () => inferRoast,
     isStarting: () => isStarting,
@@ -55,6 +59,7 @@ var CremaEngine = (() => {
     recipeMatches: () => recipeMatches,
     recommendPatch: () => recommendPatch,
     reconcileOutcome: () => reconcileOutcome,
+    resolveGrinder: () => resolveGrinder,
     restOf: () => restOf,
     rulesDialIn: () => rulesDialIn,
     rulesRecipe: () => rulesRecipe,
@@ -75,6 +80,7 @@ var CremaEngine = (() => {
     startSteps: () => startSteps,
     steadyWeightFlow: () => steadyWeightFlow,
     stepDurations: () => stepDurations,
+    stepGrind: () => stepGrind,
     stepProgress: () => stepProgress,
     stepTimes: () => stepTimes,
     stopReason: () => stopReason,
@@ -83,6 +89,7 @@ var CremaEngine = (() => {
     summarizeReviewTrace: () => summarizeReviewTrace,
     toPastShot: () => toPastShot,
     trackNewRows: () => trackNewRows,
+    validGrinder: () => validGrinder,
     waitingForRecipe: () => waitingForRecipe,
     withTemperature: () => withTemperature
   });
@@ -951,6 +958,46 @@ var CremaEngine = (() => {
     selected: { steam: 1, water: 1, flush: 1 }
   };
   var DEFAULT_MAINTENANCE = { backflushEveryShots: 100, descaleEveryDays: 90, lastBackflush: null, lastDescale: null };
+
+  // server/shared/grinders.ts
+  var BUILT_IN_GRINDERS = {
+    "niche-zero": { name: "Niche Zero", start: 10, step: 0.25, finer: "lower" },
+    "lagom-p80": { name: "Lagom P80", start: 1, step: 0.05, finer: "lower" }
+  };
+  var GRINDER_NAME_LIMIT = 60;
+  var MIN_GRINDER_STEP = 1e-6;
+  function decimalPlaces(number3) {
+    const [digits, exponent = "0"] = String(number3).split("e");
+    return Math.max(0, (digits.split(".")[1]?.length ?? 0) - Number(exponent));
+  }
+  function validGrinder(grinder) {
+    return !!grinder && typeof grinder.name === "string" && grinder.name.trim().length > 0 && grinder.name.length <= GRINDER_NAME_LIMIT && Number.isFinite(grinder.start) && decimalPlaces(grinder.start) <= 6 && Number.isFinite(grinder.step) && grinder.step >= MIN_GRINDER_STEP && decimalPlaces(grinder.step) <= 6 && (grinder.finer === "lower" || grinder.finer === "higher");
+  }
+  function grinderList(settings) {
+    const overrides = Object.entries(settings?.grinders ?? {}).filter(([id, grinder]) => /^[a-z0-9-]+$/.test(id) && validGrinder(grinder));
+    return { ...BUILT_IN_GRINDERS, ...Object.fromEntries(overrides) };
+  }
+  function resolveGrinder(settings) {
+    const id = settings?.grinderId;
+    const grinders = grinderList(settings);
+    if (id && Object.hasOwn(grinders, id)) return { ...grinders[id], id };
+    const { grindStart = DEFAULT_SETTINGS.grindStart, grindStep = DEFAULT_SETTINGS.grindStep } = settings ?? {};
+    const start = Number(grindStart);
+    const step = Number(grindStep);
+    return {
+      id: null,
+      name: "",
+      finer: "lower",
+      start: Number.isFinite(start) ? start : DEFAULT_SETTINGS.grindStart,
+      step: Number.isFinite(step) && step > 0 ? step : DEFAULT_SETTINGS.grindStep
+    };
+  }
+  function stepGrind(setting2, direction, grinder) {
+    const value = grinder.id ? setting2.trim() ? Number(setting2) : NaN : parseFloat(setting2);
+    if (!Number.isFinite(value)) return String(grinder.start);
+    const decimals = grinder.id ? Math.min(100, Math.max(decimalPlaces(value), decimalPlaces(grinder.step))) : 3;
+    return String(+(value + direction * grinder.step).toFixed(decimals));
+  }
 
   // server/profiles/curve.ts
   var num = (v) => {

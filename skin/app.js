@@ -487,7 +487,16 @@ function makeLiveApi(conn) {
   const WORKFLOW_SETTINGS = ["steamSettings", "hotWaterData", "rinseData"];
   const pickSettings = (o) => Object.fromEntries(WORKFLOW_SETTINGS.filter((k) => o?.[k]).map((k) => [k, o[k]]));
 
-  let heartbeatAt = 0;
+  let heartbeatAt = 0, settingsRequests = Promise.resolve();
+  const withFreshSettings = (update) => {
+    const request = settingsRequests.then(async () => {
+      const fresh = await kvGet("settings", {});
+      settings = { ...E.DEFAULT_SETTINGS, ...await update(fresh) };
+      return { ...settings };
+    });
+    settingsRequests = request.catch(() => {});
+    return request;
+  };
   const api = {
     demo: false,
     info: {
@@ -507,14 +516,13 @@ function makeLiveApi(conn) {
       exitToDashboard() { window.decentApp.exitToDashboard(); },
     },
     settings: {
-      async get() { settings = { ...E.DEFAULT_SETTINGS, ...(await kvGet("settings", {})) }; return { ...settings }; },
-      // Re-read first so a field another device changed since this one loaded survives.
-      async set(p) {
-        const fresh = await kvGet("settings", {});
-        await kvSet("settings", E.mergeRecord(fresh, p));
-        settings = { ...E.DEFAULT_SETTINGS, ...fresh, ...p };
-        return { ...settings };
-      },
+      get: () => withFreshSettings((fresh) => fresh),
+      // Re-read before each write. A grinder edit changes one entry in the fresh list.
+      set: (patch) => withFreshSettings(async (fresh) => {
+        const updated = E.mergeRecord(fresh, typeof patch === "function" ? patch(fresh) : patch);
+        await kvSet("settings", updated);
+        return updated;
+      }),
     },
 
     // A cheap read for the 5 s poll: the open coffees, their open bags (which carry
@@ -752,8 +760,10 @@ function makeLiveApi(conn) {
       const savedRec = profile?.title && profile.beverage_type !== "manual" && (ctx.beanId || batchId)
         ? await (ctx.beanId ? recordOf(ctx.beanId) : j(D(`/bean-batches/${batchId}`)).then((bt) => recordOf(bt.beanId))).catch(() => null) : null;
       const timeContext = reviewTimeContext(profile, { ...recordedContext, doseG, yieldG, targetYieldG, windows: [full.annotations?.extras?.crema?.targetTimeS, ctx.targetTimeS] }, savedRec?.recipe);
+      const grinder = E.resolveGrinder(settings);
       const input = {
         timestamp: full.timestamp ?? null, ...recordedContext, batchId,
+        grindStep: grinder.id ? grinder.step : undefined,
         targetWaterMl: recordedReviewNumber(ctx.targetWaterVolume ?? profile?.target_volume, 0, 5000),
         points, profile, doseG, yieldG, targetYieldG, ...timeContext,
         annotatedYieldG: recordedReviewNumber(full.annotations?.actualYield, 0, 500),
@@ -1197,17 +1207,39 @@ async function tare() {
 
 /* ================= next shot (brew home, left) ================= */
 function saveBrewChoice() {
-  if (S.noBag) local.set("baglessRecipe", S.next);
+  if (S.noBag) local.set("baglessRecipe", S.next && { ...S.next, grinderId: grindSettings().id });
 }
-// Grind start and step are shared settings, so every device steps the same grinder alike.
-// A coffee with no grind saved yet starts at the start value, so the stepper always has
-// a number to move and nobody needs the keyboard.
-function grindSettings() {
-  const st = { ...E.DEFAULT_SETTINGS, ...S.appSettings };
-  const start = Number(st.grindStart), stepBy = Number(st.grindStep);
-  return { start: Number.isFinite(start) ? start : E.DEFAULT_SETTINGS.grindStart, step: Number.isFinite(stepBy) && stepBy > 0 ? stepBy : E.DEFAULT_SETTINGS.grindStep };
+const grindSettings = () => E.resolveGrinder(S.appSettings);
+function grindKey(beanId) {
+  const { id } = grindSettings();
+  return id ? `grind:${id}:${beanId ?? "bagless"}` : `grind:${beanId ?? "bagless"}`;
 }
-const savedGrind = (beanId) => local.get(`grind:${beanId ?? "bagless"}`, "") || String(grindSettings().start);
+const savedGrind = (beanId) => local.get(grindKey(beanId), "") || String(grindSettings().start);
+function applyAppSettings(settings) {
+  const before = grindSettings();
+  S.appSettings = settings;
+  const after = grindSettings();
+  if (JSON.stringify(before) === JSON.stringify(after)) return;
+  if (S.next) {
+    const dial = savedGrind(S.next.beanId);
+    if (before.id !== after.id || (after.id && before.start !== after.start && S.next.grind === String(before.start) && S.next.grind !== dial)) {
+      S.next.grind = dial;
+      if (S.reviewEdit?.key === "grind") S.reviewEdit = null;
+      recipeEdited();
+    }
+  }
+  if (!$("#view-brew").hidden) {
+    renderNextShot();
+    renderControls();
+  }
+  for (const [selector, shot] of [["#reviewBox", S.afterShot?.shot], ["#detailReview", S.shots.find((s) => s.id === S.selShot)]]) {
+    const box = $(selector);
+    if (box && shot?.review) {
+      box.innerHTML = reviewHtml(shot.review, shot);
+      bindReviewAdjustment(box, shot);
+    }
+  }
+}
 function setNextFromRecipe(bean, recipe) {
   const r = recipe || bean?.recipe;
   S.next = r ? { beanId: bean?.id ?? null, profileTitle: r.profileTitle, profileId: r.profileId ?? null, profileShape: r.profileShape ?? null, direct: r.direct ?? false, manual: r.manual ?? null, doseG: r.doseG, yieldG: r.yieldG, tempC: r.tempC, targetTimeS: r.manual ? null : r.targetTimeS, grind: savedGrind(bean?.id) } : null;
@@ -1236,6 +1268,7 @@ function renderNextShot() {
   }
   const r = b?.recipe, i = b?.info, rest = b ? restOf(i) : null;
   const ratio = n?.yieldG > 0 && n?.doseG > 0 ? (n.yieldG / n.doseG).toFixed(1) : null;
+  const lowerIsFiner = grindSettings().finer === "lower";
   el.innerHTML = `
     <div class="coffee-line ${b ? "" : "bagless"}">${b ? bagArt(b) : ""}<button class="coffee-choice" id="coffeeChoice"><span class="label">${b ? esc(i.roaster.value) : "Coffee"}</span><span class="coffee-name">${b ? esc(i.name.value) : "No bag"} ›</span></button>
       <div class="coffee-meta">${b ? `<span class="pill ${rest.status}">${rest.days != null ? `Day ${rest.days} · ` : ""}${rest.label}${b.bags > 1 ? ` · Bag ${b.bagNo}` : ""}</span>` : `<span class="muted small">${S.loaded ? "Shots saved without a coffee" : "Load a profile to brew without a bag"}</span>`}
@@ -1244,7 +1277,7 @@ function renderNextShot() {
     ${n ? `
     <div class="field-row first"><span class="label">Profile</span><button class="profile-btn" id="profileBtn"><span style="min-width:0"><span class="t ${n.profileTitle.length > 45 ? "long" : ""}">${esc(n.profileTitle)}</span><span class="muted small pick-src">${esc(n.manual ? `Adjust ${n.manual} on the group-head controller` : n.fromMachine ? "As set on the machine" : n.direct ? "Selected from installed profiles" : b?.recipeSource ? pickLabel(b.recipeSource) : "Selected from installed profiles")}</span></span><span>›</span></button></div>
     <div class="recipe-tiles">${Object.entries(RECIPE_FIELDS).map(([key, f]) => `<button type="button" class="recipe-tile" data-value="${key}"><span class="label">${f.label}</span><span class="num">${key === "yield" && n.yieldG === 0 ? "Off" : fmtC(n[f.field])}<small>${key === "yield" && n.yieldG === 0 ? "" : f.unit}</small></span><span class="muted">${key === "dose" ? `${fmtC(S.prefs.basketDoseG ?? n.doseG)} g basket` : key === "yield" ? ratio ? `1:${ratio}` : "Manual stop" : "all steps"}</span></button>`).join("")}</div>
-    <div class="field-row"><span class="label">Grind</span><div class="stepper"><button type="button" data-step="grind:-1" aria-label="Finer">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="Coarser">+</button></div></div>
+    <div class="field-row"><span class="label">Grind</span><div class="stepper"><button type="button" data-step="grind:-1" aria-label="${lowerIsFiner ? "Finer" : "Coarser"}">−</button><input id="grindInput" inputmode="decimal" value="${esc(n.grind)}" placeholder="setting" aria-label="Grinder setting"><button type="button" data-step="grind:1" aria-label="${lowerIsFiner ? "Coarser" : "Finer"}">+</button></div></div>
     <div class="row"><button class="btn ${S.loaded ? "" : "primary"} grow" id="loadBtn">${S.heldLoad ? "Loads after this shot" : S.loaded ? "Loaded ✓" : "Load onto machine"}</button><button class="btn ghost" id="resetRecipe">Reset</button></div>
     ${r && !n.direct && !n.manual ? `<details><summary>Why this profile and how to dial it in</summary><div class="stack" style="gap:8px"><ul class="why">${(r.rationale || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${r.dialIn ? `<div class="advice small">${esc(r.dialIn)}</div>` : ""}<div class="muted small">Target ${r.targetTimeS?.join("–") ?? "–"} s · ${esc(r.grindHint || "")}</div></div></details>` : ""}
     ` : `<p class="muted">${S.noBag ? "Choose an installed profile. No bag or recommendation needed." : b.recipeSource === "none" ? "There is no recommendation for this coffee. Choose an installed profile." : "Working out a recipe…"}</p><a class="btn primary" href="#profiles">Choose a profile</a>`}`;
@@ -1263,7 +1296,7 @@ function renderNextShot() {
   $("#profileBtn").onclick = () => (location.hash = "#profiles");
   $$("[data-value]", el).forEach((btn) => (btn.onclick = () => openValueSheet(btn.dataset.value)));
   $$("[data-step]", el).forEach((btn) => bindRepeat(btn, () => { step(btn.dataset.step, false); $("#grindInput").value = S.next.grind; }, () => { renderNextShot(); renderControls(); }));
-  $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(`grind:${b?.id ?? "bagless"}`, n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
+  $("#grindInput").onchange = (e) => { n.grind = e.target.value.trim(); local.set(grindKey(b?.id), n.grind); S.loaded = false; saveBrewChoice(); renderNextShot(); };
   $("#loadBtn").onclick = () => loadOntoMachine();
   $("#resetRecipe").onclick = () => resetReviewEdit() || (n.direct ? chooseInstalledProfile(S.library?.find((p) => p.id === n.profileId), S.noBag) : (setNextFromRecipe(b), renderNextShot()));
 }
@@ -1286,9 +1319,8 @@ function step(spec, render = true) {
   const [key, dir] = spec.split(":"), d = Number(dir), n = S.next;
   if (RECIPE_FIELDS[key]) n[RECIPE_FIELDS[key].field] = recipeValue(key, n[RECIPE_FIELDS[key].field] + d * RECIPE_FIELDS[key].step);
   if (key === "grind") {
-    const g = grindSettings(), v = parseFloat(n.grind);
-    n.grind = String(Number.isFinite(v) ? +(v + d * g.step).toFixed(3) : g.start);
-    local.set(`grind:${n.beanId ?? "bagless"}`, n.grind);
+    n.grind = E.stepGrind(n.grind, d, grindSettings());
+    local.set(grindKey(n.beanId), n.grind);
   }
   recipeEdited();
   if (render) { renderNextShot(); renderControls(); }
@@ -1490,8 +1522,11 @@ function reconcileWorkflow({ adopt = true, boot = false } = {}) {
       profileId = library.find((p) => p.profileShape === m.profileShape)?.id ?? "unlisted-workflow-profile";
     }
     // A different profile than the recommendation's: its time window no longer applies (adoptPatch).
-    Object.assign(S.next, E.adoptPatch(m, S.next, profileId, S.current?.recipe?.profileTitle));
-    if (m.grind) local.set(`grind:${S.current?.id ?? "bagless"}`, m.grind);
+    // Decaid stores an unlabeled grind note. Keep our dial value when adopting
+    // the machine's recipe with a named grinder selected.
+    const adoptGrind = !grindSettings().id;
+    Object.assign(S.next, E.adoptPatch(adoptGrind ? m : { ...m, grind: null }, S.next, profileId, S.current?.recipe?.profileTitle));
+    if (adoptGrind && m.grind) local.set(grindKey(S.current?.id), m.grind);
     saveBrewChoice();
     S.loaded = E.recipeMatches(m, S.next);
     renderNextShot();
@@ -1508,7 +1543,8 @@ async function selectBean(key, opts = {}) {
     S.noBag = true; S.current = null; local.set("current", NO_BAG);
     if (!opts.quiet) $("#coffeeAnnouncement").textContent = "Selected: No bag";
     S.next = local.get("baglessRecipe", null); S.loaded = false; S.ghost = null;
-    if (S.next && !S.next.grind) S.next.grind = savedGrind(null);
+    if (S.next && (!S.next.grind || (S.next.grinderId ?? null) !== grindSettings().id)) S.next.grind = savedGrind(null);
+    if (S.next) delete S.next.grinderId;
     renderNextShot(); renderLive(); renderControls(); return;
   }
   S.noBag = false;
@@ -1614,7 +1650,10 @@ async function refreshPlan() {
 const FAV_UI = { editing: false, saving: false, loading: false, bound: false, selectedSlot: null };
 function favouriteRecipe() {
   const n = S.next;
-  return { noBag: S.noBag, profileId: n.profileId ?? null, profileShape: n.profileShape ?? null, manual: n.manual ?? null, direct: !!n.direct, targetTimeS: n.targetTimeS ?? null };
+  return { noBag: S.noBag, profileId: n.profileId ?? null, profileShape: n.profileShape ?? null, manual: n.manual ?? null, direct: !!n.direct, targetTimeS: n.targetTimeS ?? null, grinderId: grindSettings().id };
+}
+function favouriteGrind(f) {
+  return ((f.grinderId ?? null) === grindSettings().id && f.grinderSetting) || savedGrind(S.current?.id);
 }
 function favouriteSelected(f) {
   const n = S.next;
@@ -1622,7 +1661,7 @@ function favouriteSelected(f) {
     && (f.profileId && n.profileId ? f.profileId === n.profileId : f.profileTitle === n.profileTitle)
     && (!f.profileShape || !n.profileShape || f.profileShape === n.profileShape)
     && f.doseG === n.doseG && f.yieldG === n.yieldG && f.tempC === n.tempC
-    && E.sameGrind(f.grinderSetting || savedGrind(S.current?.id), n.grind);
+    && E.sameGrind(favouriteGrind(f), n.grind);
 }
 function favouriteScroll(left, smooth = true) {
   const list = $("#favs");
@@ -1751,7 +1790,7 @@ async function useFav(i) {
   if (f.noBag === true) await selectBean(NO_BAG, { quiet: true });
   if (f.beanId && f.beanId !== S.current?.id && S.shelf.some((b) => b.id === f.beanId)) await selectBean(f.beanId, { quiet: true });
   if (f.beanId && !S.shelf.some((b) => b.id === f.beanId)) return toast("That favourite's coffee is no longer on the shelf");
-  S.next = { ...S.next, beanId: S.current?.id ?? null, profileTitle: f.profileTitle, profileId: f.profileId ?? null, profileShape: f.profileShape ?? null, manual: f.manual ?? null, direct: f.direct ?? false, targetTimeS: f.targetTimeS ?? null, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: f.grinderSetting || savedGrind(S.current?.id) };
+  S.next = { ...S.next, beanId: S.current?.id ?? null, profileTitle: f.profileTitle, profileId: f.profileId ?? null, profileShape: f.profileShape ?? null, manual: f.manual ?? null, direct: f.direct ?? false, targetTimeS: f.targetTimeS ?? null, doseG: f.doseG, yieldG: f.yieldG, tempC: f.tempC, grind: favouriteGrind(f) };
   S.loaded = false; saveBrewChoice();
   renderNextShot();
   const loaded = await loadOntoMachine(true);
@@ -2261,8 +2300,12 @@ function reviewAdjustment(advice, exactDelta = false) {
   if (!S.next || !advice || advice.switchProfile) return null;
   const changes = [];
   if (advice.grindDelta && advice.grindDelta !== "same") {
-    const dir = /finer$/.test(advice.grindDelta) ? -1 : /coarser$/.test(advice.grindDelta) ? 1 : 0;
-    if (dir && String(S.next.grind).trim() && Number.isFinite(Number(S.next.grind))) changes.push({ key: "grind", field: "grind", label: "grind", unit: "", value: String(+(Number(S.next.grind) + dir * grindSettings().step).toFixed(3)) });
+    const grinder = grindSettings();
+    if (/(?:finer|coarser)$/.test(advice.grindDelta) && String(S.next.grind).trim() && Number.isFinite(Number(S.next.grind))) {
+      const finer = grinder.finer === "higher" ? 1 : -1;
+      const dir = advice.grindDelta.endsWith("finer") ? finer : -finer;
+      changes.push({ key: "grind", field: "grind", label: "grind", unit: "", value: E.stepGrind(String(Number(S.next.grind)), dir, grinder), grinder });
+    }
   }
   for (const [key, delta] of [["yield", advice.yieldDeltaG], ["temp", advice.tempDeltaC], ["dose", advice.doseDeltaG]]) {
     if (Number.isFinite(delta) && delta !== 0) {
@@ -2285,7 +2328,8 @@ function bindReviewAdjustment(box, shot) {
   const rendered = JSON.parse(btn.dataset.applyReview);
   btn.onclick = () => {
     if (S.reviewEdit?.shotId === shot.id) return;
-    if (!reviewRecipeMatches(shot) || JSON.stringify(S.next) !== rendered.draft) {
+    if (!reviewRecipeMatches(shot) || JSON.stringify(S.next) !== rendered.draft ||
+        (rendered.grinder && JSON.stringify(grindSettings()) !== JSON.stringify(rendered.grinder))) {
       box.innerHTML = reviewHtml(shot.review, shot); bindReviewAdjustment(box, shot);
       toast("The next-shot recipe changed. Check the updated suggestion.");
       return;
@@ -2319,6 +2363,11 @@ function shotResultPills(shot, context = {}, points = shot?.points || []) {
   const verdict = window && t != null ? `${t < window[0] ? "Fast" : t > window[1] ? "Slow" : "In window"} · ${window.join("–")} s expected` : null;
   return `${dose > 0 && weight > 0 ? `<span class="pill">1:${(weight / dose).toFixed(1)}</span>` : ""}<span class="pill ${reason.reason === "error" ? "warn" : ""}">${label}</span>${verdict ? `<span class="pill ${t < window[0] || t > window[1] ? "warn" : "good"}">${esc(verdict)}</span>` : ""}`;
 }
+function reviewGrindHint(advice) {
+  const grinder = grindSettings();
+  return grinder.id && /(?:finer|coarser)$/.test(advice?.grindDelta)
+    ? `<p class="muted small">One step on ${esc(grinder.name)} is ${grinder.step}.</p>` : "";
+}
 function coachReviewHtml(coach, shot) {
   const marker = { on_plan: ["On plan", "good"], partly: ["Partly on plan", "warn"], off_plan: ["Off plan", "warn"], not_graded: ["Not graded", ""] };
   const { headline, stages, temperature, notable, hypotheses, history, taste, recommendation } = coach;
@@ -2342,6 +2391,7 @@ function coachReviewHtml(coach, shot) {
       ${taste.noteQuote ? `<p>From your note: “${esc(taste.noteQuote)}”</p>` : ""}` : ""}
     <div class="next-change"><div class="label">What to try</div><strong>${esc(recommendation.action)}</strong>
       <div class="muted">${esc(recommendation.expect)} ${esc(recommendation.compare)}</div>
+      ${reviewGrindHint(recommendation.adjustment)}
       ${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>
   </div>`;
 }
@@ -2361,7 +2411,7 @@ function reviewHtml(saved, shot = null) {
     ${curve ? `${curve.timing ? `<p>${esc(curve.timing)}</p>` : ""}<p class="muted small">${esc(curve.limitation)}</p>` : ""}
     ${taste ? `<div class="label">Taste alignment</div><p>${esc(taste.summary)}</p>
       ${taste.notes ? `<p class="muted">Saved note: ${esc(taste.notes)}</p>` : ""}` : ""}
-    ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
+    ${review.nextShot ? `<div class="next-change"><div class="label">Next shot</div><strong>${esc(review.nextShot.change)}</strong><div class="muted">${esc(review.nextShot.reasoning)}</div>${reviewGrindHint(review.nextShot)}${edit ? `<button class="btn primary" data-apply-review="${esc(JSON.stringify({ ...edit, draft: JSON.stringify(S.next) }))}">Set ${edit.label} to ${esc(edit.value)}${edit.unit}</button>` : S.reviewEdit?.shotId === shot?.id ? `<p class="muted small">Applied to the next shot. Reset undoes this change.</p>` : ""}</div>` : ""}
     ${taste?.check ? `<p>${esc(taste.check)}</p>` : ""}
     ${review.askTaste ? `<p class="muted small">Add taste feedback next time to guide the recommendation.</p>` : ""}</div>`;
 }
@@ -3385,6 +3435,72 @@ function mini(id, value, stepV, unit) {
   return `<div class="mini"><button type="button" data-mini="${id}:-${stepV}" aria-label="Less" ${disabled}>−</button><input id="${id}" type="number" step="${stepV}" ${limits ? `min="${limits[0]}" max="${limits[1]}"` : ""} inputmode="decimal" value="${available ? value : ""}" placeholder="Unavailable" aria-label="${unit}" ${disabled}><button type="button" data-mini="${id}:${stepV}" aria-label="More" ${disabled}>+</button></div>`;
 }
 function seg(id, options, value) { return `<div class="seg" id="${id}">${options.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(value)}">${l}</button>`).join("")}</div>`; }
+async function saveGrinderSettings(patch, control) {
+  const controls = $$("input, select, button", $("#sheet")).filter((el) => el.id !== "sheetClose" && !el.disabled);
+  controls.forEach((el) => (el.disabled = true));
+  try {
+    applyAppSettings(await S.api.settings.set(patch));
+    if ($("#sheet").contains(control)) closeSheet();
+    if (!$("#view-settings").hidden) void renderSettings();
+    toast("Saved");
+  } catch (e) {
+    toast(`Couldn't save: ${failText(e)}`);
+  } finally {
+    controls.forEach((el) => (el.disabled = false));
+  }
+}
+function grinderPicker() {
+  const grinder = grindSettings(), options = Object.entries(E.grinderList(S.appSettings));
+  openSheet(`<h2>Grinder</h2>
+    <div class="field"><label class="label" for="grinderSelect">Active grinder</label>
+      <select id="grinderSelect"><option value="">No grinder selected</option>
+        ${options.map(([id, { name }]) => `<option value="${esc(id)}" ${id === grinder.id ? "selected" : ""}>${esc(name)}</option>`).join("")}
+      </select></div>
+    <div class="row">${grinder.id ? '<button class="btn" id="editGrinder">Edit grinder</button>' : ""}
+      <button class="btn" id="addGrinder">Add grinder</button></div>`);
+  $("#grinderSelect").onchange = (event) => {
+    const id = event.target.value || null;
+    void saveGrinderSettings((fresh) => {
+      if (id && !Object.hasOwn(E.grinderList(fresh), id)) throw new Error("This grinder was removed");
+      return { grinderId: id };
+    }, event.target).then(() => {
+      event.target.value = grindSettings().id ?? "";
+    });
+  };
+  const edit = $("#editGrinder");
+  if (edit) edit.onclick = () => grinderEditor(grinder);
+  $("#addGrinder").onclick = () => grinderEditor({ ...grinder, id: null, name: "" });
+}
+function grinderEditor(grinder) {
+  const { id, name, start, step, finer } = grinder;
+  const custom = id && !Object.hasOwn(E.BUILT_IN_GRINDERS, id);
+  openSheet(`<h2>${id ? "Edit grinder" : "Add grinder"}</h2>
+    <form class="stack" id="grinderForm">
+      <div class="field"><label class="label" for="grinderName">Name</label><input id="grinderName" type="text" value="${esc(name)}" maxlength="${E.GRINDER_NAME_LIMIT}" required></div>
+      <div class="field"><label class="label" for="grinderStart">Starting grind</label><input id="grinderStart" type="number" inputmode="decimal" step="any" value="${start}" required></div>
+      <div class="field"><label class="label" for="grinderStep">Grind step</label><input id="grinderStep" type="number" inputmode="decimal" min="${E.MIN_GRINDER_STEP}" step="any" value="${step}" required></div>
+      <div class="field"><label class="label" for="grinderDirection">Finer grind uses</label>
+        <select id="grinderDirection"><option value="lower">Lower numbers</option><option value="higher" ${finer === "higher" ? "selected" : ""}>Higher numbers</option></select></div>
+      <div class="row"><button class="btn primary" type="submit">Save grinder</button>
+        ${custom ? '<button class="btn ghost" type="button" id="removeGrinder">Remove grinder</button>' : ""}</div>
+    </form>`);
+  $("#grinderForm").onsubmit = (event) => {
+    event.preventDefault();
+    const value = { name: $("#grinderName").value.trim(), start: $("#grinderStart").valueAsNumber, step: $("#grinderStep").valueAsNumber, finer: $("#grinderDirection").value };
+    if (!E.validGrinder(value)) { toast("Enter a name, a starting grind and a positive step. Use up to six decimal places."); return; }
+    const key = id ?? `custom-${Array.from(crypto.getRandomValues(new Uint32Array(4)), (n) => n.toString(16).padStart(8, "0")).join("")}`;
+    void saveGrinderSettings((fresh) => {
+      if (id && !Object.hasOwn(E.grinderList(fresh), id)) throw new Error("This grinder was removed");
+      return { grinders: { ...fresh.grinders, [key]: value }, ...(id ? {} : { grinderId: key }) };
+    }, event.currentTarget);
+  };
+  const remove = $("#removeGrinder");
+  if (remove) remove.onclick = () => void saveGrinderSettings((fresh) => {
+    const grinders = { ...fresh.grinders };
+    delete grinders[id];
+    return { grinders, ...(fresh.grinderId === id ? { grinderId: null } : {}) };
+  }, remove);
+}
 async function renderSettings() {
   const el = $("#settings");
   el.innerHTML = `<p class="muted">Loading…</p>`;
@@ -3392,7 +3508,7 @@ async function renderSettings() {
   const [wf, ms, pres, scheds, disp, plugins, maint] = await Promise.all([m.workflowSettings.get().catch(() => null), m.settings.get().catch(() => null), m.presence.get().catch(() => null), m.schedules.list().catch(() => []), m.display.get().catch(() => null), m.plugins().catch(() => []), S.api.maintenance.get().catch(() => null)]);
   S.maint = maint;
   const p = S.prefs, theme = local.get("theme", "auto");
-  S.appSettings = await S.api.settings.get().catch(() => S.appSettings);
+  applyAppSettings(await S.api.settings.get().catch(() => S.appSettings));
   const ai = { enabled: S.appSettings?.aiEnabled !== false }, grind = grindSettings();
   const viz = plugins.find((x) => /visualizer/i.test(x.id));
   const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -3401,8 +3517,9 @@ async function renderSettings() {
     <div class="set-row first"><span>How you drink it</span>${seg("pDrink", [["straight", "Straight"], ["milk", "Milk"], ["both", "Both"]], p.drink ?? "both")}</div>
     <div class="set-row"><span>Bluetooth scale<span class="hint">Needed for D-Flow, A-Flow, blooming and allongé profiles</span></span>${sw("pScale", p.hasScale !== false)}</div>
     <div class="set-row"><span>Grinder burrs</span>${seg("pBurrs", [["flat", "Flat"], ["conical", "Conical"], ["unknown", "Not sure"]], p.burrs ?? "unknown")}</div>
-    <div class="set-row"><span>Grind to start from<span class="hint">For a coffee with no grind saved yet</span></span>${mini("gStart", grind.start, grind.step, "grind setting")}</div>
-    <div class="set-row"><span>Grind step<span class="hint">How far one tap of − or + moves the grind</span></span>${seg("gStep", E.GRIND_STEPS.map((v) => [v, String(v)]), grind.step)}</div>
+    <div class="set-row"><span>Grinder<span class="hint" style="overflow-wrap:anywhere">${grind.id ? `${esc(grind.name)} · Start ${grind.start} · Step ${grind.step}` : "No grinder selected"}</span></span><button class="btn small" id="chooseGrinder">Choose grinder</button></div>
+    ${grind.id ? "" : `<div class="set-row"><span>Grind to start from<span class="hint">For a coffee with no grind saved yet</span></span>${mini("gStart", grind.start, grind.step, "grind setting")}</div>
+    <div class="set-row"><span>Grind step<span class="hint">How far one tap of − or + moves the grind</span></span>${seg("gStep", E.GRIND_STEPS.map((v) => [v, String(v)]), grind.step)}</div>`}
     <div class="set-row"><span>Experience</span>${seg("pExp", [["new", "New"], ["comfortable", "Comfortable"], ["advanced", "Advanced"]], p.experience ?? "comfortable")}</div>
     <div class="set-row"><span>Basket dose<span class="hint">Grams your basket holds</span></span>${mini("pDose", p.basketDoseG ?? 18, 0.5, "grams")}</div>
   </div>
@@ -3488,11 +3605,12 @@ async function renderSettings() {
   const segWire = (id, key) => $$(`#${id} button`).forEach((b) => (b.onclick = () => { $$(`#${id} button`).forEach((x) => x.setAttribute("aria-pressed", String(x === b))); savePrefs({ [key]: b.dataset.v }); }));
   segWire("pDrink", "drink"); segWire("pBurrs", "burrs"); segWire("pExp", "experience");
   $("#pScale").onchange = (e) => savePrefs({ hasScale: e.target.checked });
+  $("#chooseGrinder").onclick = grinderPicker;
   const settingInputs = Object.fromEntries($$(".mini input", el).map((input) => [input.id, input]));
   const num = (id) => settingNumber(settingInputs[id]?.value, SETTING_LIMITS[id]);
   const handlers = {
     pDose: () => savePrefs({ basketDoseG: num("pDose") }),
-    gStart: async () => { S.appSettings = await S.api.settings.set({ grindStart: num("gStart") }); },
+    gStart: async () => { applyAppSettings(await S.api.settings.set({ grindStart: num("gStart") })); },
     sSteamT: () => setWorkflowSetting("steamSettings", "targetTemperature", num("sSteamT")),
     sSteamF: () => setWorkflowSetting("steamSettings", "flow", num("sSteamF")),
     sWaterT: () => setWorkflowSetting("hotWaterData", "targetTemperature", num("sWaterT")),
@@ -3538,9 +3656,9 @@ async function renderSettings() {
     const v = Number(b.dataset.v);
     $$("#gStep button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
     try {
-      S.appSettings = await S.api.settings.set({ grindStep: v });
+      applyAppSettings(await S.api.settings.set({ grindStep: v }));
       $$('[data-mini^="gStart:"]').forEach((x) => (x.dataset.mini = `gStart:${x.dataset.mini.includes("-") ? -v : v}`));
-      $("#gStart").step = String(v);
+      if ($("#gStart")) $("#gStart").step = String(v);
       toast("Saved");
     } catch (e) { toast(`Couldn't save: ${failText(e)}`); renderSettings(); }
   }));
@@ -3589,7 +3707,7 @@ async function renderSettings() {
   $("#changeServer").onclick = () => connectSheet();
   const ex = $("#exitDash"); if (ex) ex.onclick = exitToDashboard;
   $("#sAi").onchange = async (e) => {
-    try { S.appSettings = await S.api.settings.set({ aiEnabled: e.target.checked }); } catch (err) { renderSettings(); return toast(`Couldn't save: ${failText(err)}`); }
+    try { applyAppSettings(await S.api.settings.set({ aiEnabled: e.target.checked })); } catch (err) { renderSettings(); return toast(`Couldn't save: ${failText(err)}`); }
     renderStatus(); renderSettings();
     toast(e.target.checked ? "AI features on" : "AI features off. Crema uses its rules");
   };
@@ -3833,7 +3951,8 @@ async function boot() {
   const recheck = () => {
     if (document.visibilityState !== "visible") return;
     void syncShelf(true);
-    void reconcileWorkflow();
+    if (S.api.demo) void reconcileWorkflow();
+    else void S.api.settings.get().then(applyAppSettings).catch(() => {}).then(() => reconcileWorkflow());
   };
   document.addEventListener("visibilitychange", recheck);
   window.addEventListener("focus", recheck);

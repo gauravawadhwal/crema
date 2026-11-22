@@ -44,11 +44,17 @@ one entry or adding a new one; other keys are per-device or written whole.
 |---|---|
 | Beans, batches, profiles, workflow, shots, annotations | Decaid |
 | Crema's record per bean: `info` (BeanInfo), `recipe`, `recipeSource`, `photo`, `productImage`, `art`, `bestShotId`, `finished`, `batchId` | Decaid KV `crema/bean:<beanId>` |
-| `settings` (`aiEnabled`, `grindStart`, `grindStep`), `preferences`, `favourites[]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
+| `settings` (`aiEnabled`, `grindStart`, `grindStep`, `grinderId`, `grinders`), `preferences`, `favourites[]`, `presets`, `maintenance` | Decaid KV `crema/<key>` |
 | Theme, device frame, saved server and Decaid addresses, group-head mode, screen saver | `localStorage` on each device |
 | Cached roaster product photos | Crema server, `CREMA_IMAGES` |
 
 Defaults for the KV entries are in `server/shared/defaults.ts`.
+
+Grinder selection is shared through Decaid settings. The `grinders` map holds
+custom entries and edits to built-in presets. Each device remembers grind notes
+by coffee and grinder. Favourites carry the grinder ID for their saved grind,
+and old favourites without an ID match the no-grinder setup. Shot and workflow
+notes remain the values originally recorded by Decaid.
 
 Coffee association is optional. The local `current` choice distinguishes an
 intentional No bag selection from an empty/loading shelf; `baglessRecipe` remembers
@@ -118,7 +124,7 @@ Both must provide:
 |---|---|
 | `demo`, `info.{providers, voice, decaidUrl, server, serverError}` | Mode and display info |
 | `ai.{available, enabled, on, healthy, voice}` | A server is connected; the switch is on; both; the last call succeeded; the server can transcribe voice notes |
-| `settings.get()`, `settings.set(patch)` | `{aiEnabled, grindStart, grindStep}` |
+| `settings.get()`, `settings.set(patch)` | App settings. A patch can be an object or a function of the fresh record |
 | `shelf()` | Coffees on the shelf: `{id, batch, info, recipe, recipeSource, photo, productImage, art, weight, remaining, frozen, bestShotId, shots}` |
 | `identify(input, onStep)` | Photos, a typed or spoken description, or a link → BeanInfo. Throws when AI is off |
 | `transcribe(wav)` | A voice note (16 kHz mono WAV) → text, through the server's Gemini. The demo throws: it uses the browser's speech recognition |

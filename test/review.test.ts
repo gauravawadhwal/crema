@@ -215,11 +215,13 @@ describe("shot review backend", () => {
       calls.push(schema);
       if (schema === "CurveNarrative") {
         expect(prompt).not.toContain("sharply sour");
+        expect(prompt).not.toContain("grindStep");
         return cleanReview();
       }
       expect(prompt).toContain("It tasted sharply sour");
+      expect(prompt).toContain('"grindStep":0.05');
       return note("sharply sour");
-    }), shot);
+    }), { ...shot, grindStep: 0.05 });
     expect(calls).toEqual(["CurveNarrative", "ReviewNotes"]);
     expect(run.curve).toEqual(rulesReviewResult({ ...shot, notes: null }).curve);
     expect(run.review.nextShot?.grindDelta).toBe("finer");
@@ -375,5 +377,13 @@ describe("shot review backend", () => {
       expect(ReviewBody.safeParse(input({ history: [{ ...history, ...bad }] })).success).toBe(false);
     }
     expect(ReviewBody.safeParse({ ...input(), timestamp: "x".repeat(81) }).success).toBe(false);
+  });
+
+  it("accepts an optional positive grind step for the next shot", () => {
+    expect(ReviewBody.parse(input()).grindStep).toBeUndefined();
+    expect(ReviewBody.parse(input({ grindStep: 0.05 })).grindStep).toBe(0.05);
+    for (const grindStep of [0, -0.05, "0.05", Infinity]) {
+      expect(ReviewBody.safeParse({ ...input(), grindStep }).success).toBe(false);
+    }
   });
 });

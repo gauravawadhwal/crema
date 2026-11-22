@@ -1,4 +1,5 @@
 /** Defaults and shapes for Crema's own settings, shared by the server and the web app. */
+import type { Grinder } from "./grinders.js";
 
 /** A one-tap favourite: profile, recipe and optionally the coffee. */
 export interface Favourite {
@@ -9,6 +10,7 @@ export interface Favourite {
   tempC: number;
   beanId: string | null;
   grinderSetting: string | null;
+  grinderId?: string | null;
   /** Explicitly bagless; absent on older favourites, which retain their behavior. */
   noBag?: boolean;
   profileId?: string | null;
@@ -33,7 +35,7 @@ export interface Presets {
   selected: { steam: number; water: number; flush: number };
 }
 
-/** App-wide switches. */
+/** App-wide settings. */
 export interface AppSettings {
   /** Master switch for AI features (identification, AI profile choice, AI dial-in). */
   aiEnabled: boolean;
@@ -41,6 +43,9 @@ export interface AppSettings {
   grindStart: number;
   /** How far one tap of the grind stepper moves the setting. */
   grindStep: number;
+  grinderId?: string | null;
+  /** Custom grinders and changes to the built-in presets, keyed by grinder ID. */
+  grinders?: Record<string, Grinder>;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = { aiEnabled: true, grindStart: 10, grindStep: 0.25 };

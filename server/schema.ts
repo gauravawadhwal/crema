@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { REVIEW_POINT_LIMIT } from "./recommend/review-evidence.js";
 import { FullReviewTraceWire, ReviewIssue, ReviewTraceWire } from "./recommend/review-wire.js";
+import { MIN_GRINDER_STEP } from "./shared/grinders.js";
 export { ReviewIssue } from "./recommend/review-wire.js";
 
 /**
@@ -171,6 +172,7 @@ const ReviewHistory = z.object({
 });
 export const ReviewBody = z.object({
   timestamp: z.string().max(80).nullish(), grinderSetting: z.string().max(120).nullish(),
+  grindStep: z.number().min(MIN_GRINDER_STEP).optional(),
   tempC: z.number().min(0).max(150).nullish(), profileShape: z.string().max(20000).nullish(),
   batchId: z.string().min(1).max(160).nullish(), targetWaterMl: z.number().min(0).max(5000).nullish(),
   points: z.array(ReviewPoint).max(REVIEW_POINT_LIMIT).superRefine((points, ctx) => {
