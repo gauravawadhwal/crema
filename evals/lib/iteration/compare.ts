@@ -1,3 +1,4 @@
+import { summarizeCoach } from "../review-coach-grader.js";
 import { digest } from "./candidate.js";
 import type { IterationCase, DeterministicScore } from "./score.js";
 
@@ -43,6 +44,7 @@ function coverage(rows: Episode[]) {
   const abstention = scores.filter(s => s.abstention !== null);
   const nominal = scores.filter(s => s.nominal);
   return {
+    coach: summarizeCoach(scores.flatMap(s => s.coach ? [s.coach] : [])),
     classes: [...new Set([...events.map(e => e.kind), ...alarms])].sort().map(kind => {
       const required = events.filter(e => e.kind === kind);
       const tp = required.filter(e => e.matched).length;
@@ -84,16 +86,34 @@ export function compareEpisodes(cases: readonly IterationCase[], repeats: number
   const b = align(schedule, candidate, hash);
   const failures = new Set<string>();
   const adverse: { id: string; repeat: number; checks: string[]; before: string | null; after: string | null }[] = [];
-  const pass = (r: Episode) => !r.score.critical.length && r.score.events.every(e => e.matched) && !r.score.nominalAlarm &&
+  const coachChecks = ({ score }: Episode) => !score.coach ? [] : [
+    ...score.coach.structural, ...score.coach.style, ...score.coach.grounding, ...score.coach.taste,
+    ...(score.coach.isolation.violations ? ["taste-isolation"] : []),
+  ].map(check => `coach.${check}`);
+  const checkKeys = (r: Episode) => [...r.score.critical, ...coachChecks(r), ...(options.hardJudge ? r.judge?.critical ?? ["judge-missing"] : [])];
+  const pass = (r: Episode) => !checkKeys(r).length && r.score.events.every(e => e.matched) && !r.score.nominalAlarm &&
     r.score.abstention !== false && (!options.hardJudge || r.judge?.critical.length === 0);
-  const checkKeys = (r: Episode) => [...r.score.critical, ...(options.hardJudge ? r.judge?.critical ?? ["judge-missing"] : [])];
+  if (b.some(r => r.score.coach?.isolation.violations)) failures.add("coach taste isolation violation");
   for (const [i, row] of b.entries()) {
     const before = a[i];
     const checks = checkKeys(row).filter(c => !checkKeys(before).includes(c));
     if (checks.length) failures.add("critical regression");
+    const original = before.score.coach?.truth, changed = row.score.coach?.truth;
+    if (original && (!changed || original.stages.some((s, j) =>
+        s.expected === s.actual && (!changed.stages[j] || changed.stages[j].expected !== changed.stages[j].actual)) ||
+        original.hypothesisSetCorrect && !changed.hypothesisSetCorrect ||
+        original.abstentions.some(s => s.pass && !changed.abstentions.some(t => t.id === s.id && t.pass)))) {
+      failures.add("lost coach verdict, hypothesis or stop abstention");
+    }
     const losses = before.score.events.filter(e => e.matched && !row.score.events.some(f => f.id === e.id && f.matched));
     if (losses.length) failures.add("lost observable event");
     if (before.score.nominal && !before.score.nominalAlarm && row.score.nominalAlarm) failures.add("new nominal false alarm");
+    if (before.score.coach?.isolation.checked && row.score.coach?.isolation.checked !== before.score.coach.isolation.checked) {
+      failures.add("incomplete paired coach taste isolation coverage");
+    }
+    if (original?.leniency.some(s => s.pass && !changed?.leniency.some(t => t.kind === s.kind && t.id === s.id && t.pass))) {
+      failures.add("lost legitimate coach leniency");
+    }
     if (before.score.abstention === true && row.score.abstention !== true) failures.add("lost justified abstention");
     if (checks.length || losses.length || before.score.salient && !row.score.salient) adverse.push({
       id: row.id, repeat: row.repeat, checks: [...checks, ...losses.map(e => `lost:${e.id}`), ...(before.score.salient && !row.score.salient ? ["lost:salience"] : [])],

@@ -1,6 +1,9 @@
 import type { FullReviewTrace } from "../../../server/recommend/review-evidence.js";
-import type { ReviewInput, ReviewResult } from "../../../server/recommend/review-types.js";
+import type { CoachReviewResult, ReviewInput, ReviewResult } from "../../../server/recommend/review-types.js";
 import type { PhaseLandmark } from "../../../server/profiles/phase-evidence.js";
+import { rulesReviewResult } from "../../../server/recommend/review-local.js";
+import { coachOutcomes, gradeCoachCard, scoreCoachTruth, type authoredCoachRows, type CoachScore } from "../review-coach-grader.js";
+import { coachExpectation } from "../review-coach-expectations.js";
 import { gradeReview } from "../review-grader.js";
 import { normalizeLegacyReview } from "../review-ablation.js";
 import { scoreReview, type ReviewEvent } from "../review-metrics.js";
@@ -54,8 +57,8 @@ const inferredTaste = /\b(?:sour(?:ness)?|bitter(?:ness)?|sweet(?:ness)?|fruity|
 const definiteDiagnosis = /\b(?:channel(?:l?ing|l?ed)|puck defect|under.extract(?:ed|ion)|over.extract(?:ed|ion)|extraction yield)\b/i;
 const abstaining = /\b(?:cannot|can't|could not|unavailable|unknown|unreliable|insufficient|missing|not recorded|no reliable)\b/i;
 
-function narratives(text: string, result: ReviewResult, trace: PhaseLandmark[]) {
-  const cited = new Set(result.curve.narrative?.evidenceIds ?? []);
+function narratives(text: string, result: ReviewResult, trace: PhaseLandmark[], evidenceIds = result.curve.narrative?.evidenceIds ?? []) {
+  const cited = new Set(evidenceIds);
   const phases = result.evidence.analysis.facts.phaseEvidence.phases;
   const covers = (at: number) => phases.some(p => cited.has(p.id) && p.fromS - 0.15 <= at && p.toS + 0.15 >= at)
     || result.evidence.landmarks.some(l => cited.has(l.id) && Math.abs(l.tS - at) <= 0.15);
@@ -133,12 +136,24 @@ export interface DeterministicScore {
   abstention: boolean | null;
   salient: boolean | null;
   diagnostics: string[];
+  coach?: CoachScore;
 }
 
-export function scoreEpisode(c: IterationCase, result: ReviewResult, trace: PhaseLandmark[], rules: boolean): DeterministicScore {
-  const text = result.curve.narrative?.text ?? "";
-  const outputs = normalizeLegacyReview(result.review, c.input, result.evidence);
-  const spoken = narratives(text, result, trace);
+export function scoreEpisode(c: IterationCase, result: CoachReviewResult, trace: PhaseLandmark[], rules: boolean,
+  isolation: CoachScore["isolation"] = { checked: 0, violations: 0 },
+  authored?: ReturnType<typeof authoredCoachRows>): DeterministicScore {
+  const text = authored ? authored.map(row => row.text).join(" ") : result.curve.narrative?.text ?? "";
+  const detector = normalizeLegacyReview(result.review, c.input, result.evidence);
+  const outcomes = coachOutcomes(result.coach.recommendation);
+  const outputs = { ...detector, outcomes, claims: { ...detector.claims, "multiple-next-shot-changes": outcomes.length > 1 } };
+  const coach: CoachScore = {
+    ...gradeCoachCard(result, c.input, rulesReviewResult(c.input, c.fullTrace).coach),
+    truth: scoreCoachTruth(result.coach, coachExpectation(c.id, c.labels, c.input.profile)),
+    isolation, fallback: false,
+  };
+  const spoken = authored ? authored.flatMap((row, order) =>
+    narratives(row.text, result, trace, row.evidenceIds).map(observation => ({ ...observation, order }))) :
+    narratives(text, result, trace);
   const numeric = measurements(text, c.input, c, result);
   const critical: string[] = [...numeric.errors];
   const diagnostics: string[] = [];
@@ -155,7 +170,7 @@ export function scoreEpisode(c: IterationCase, result: ReviewResult, trace: Phas
       else diagnostics.push(`legacy.${check.name}`);
     }
     return { critical, diagnostics, events: [], falseAlarms: [], unassessedKinds: [], uncoveredKinds: [],
-      nominal: false, nominalAlarm: false, abstention: null, salient: null };
+      nominal: false, nominalAlarm: false, abstention: null, salient: null, coach };
   }
   const labels = c.labels;
   if (labels?.source !== "synthetic-injected") throw new Error("A gym episode requires synthetic labels");
@@ -179,7 +194,7 @@ export function scoreEpisode(c: IterationCase, result: ReviewResult, trace: Phas
   }
   const knownKinds = new Set(assessed.assessedKinds);
   return {
-    critical, diagnostics, events: assessed.events, falseAlarms: assessed.falseAlarms,
+    critical, diagnostics, coach, events: assessed.events, falseAlarms: assessed.falseAlarms,
     unassessedKinds: [...new Set(output.events.filter(e => !knownKinds.has(e.kind) && (!nominal || !faults.has(e.kind))).map(e => e.kind))],
     uncoveredKinds: rules ? [] : [...knownKinds].filter(kind => !Object.hasOwn(descriptions, kind)),
     nominal, nominalAlarm: nominal && output.events.some(e => faults.has(e.kind) || labels.observations.some(o => o.kind === e.kind && o.expected === "forbidden")),

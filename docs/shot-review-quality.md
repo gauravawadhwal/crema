@@ -57,15 +57,44 @@ against that recording's prompt. The taste stage uses the ratings to confirm,
 change or defer the proposed experiment. Enjoyment records preference and
 does not establish a mechanical cause.
 
+### Version 4 coach card
+
+The saved card opens with a headline about what the machine did against
+the plan. It shows the brewing stages in order and a temperature row. Each
+row has one qualitative sentence and a code-computed verdict of on plan,
+partly on plan, off plan or not graded. Large misses and significant events
+can carry specific measurements. A labelled, hedged hypothesis can name a
+typical tasting signature. Relevant comparisons with earlier shots appear
+before the optional tasting section. The card closes with one small change,
+one puck-preparation check or a specific repeat.
+
+The mechanical card is built before taste is read. Code links directional
+ratings to the displayed hypotheses and records a match, a conflict or no
+link. Enjoyment on its own records preference. It neither supplies a
+directional link nor changes the mechanical verdicts. A model can rewrite
+approved mechanical sentences using their existing evidence identifiers
+and quantities.
+
+The gym scores the displayed card separately from both the detector and
+model-authored text. Hidden synthetic expectations cover flow and pressure
+tracking, a binding ceiling, start-up and bloom transients, configured
+exits and an unobserved finish after a weight stop. Crossed taste pairs
+check that the mechanical card is identical and that the rendered taste
+links follow the supplied ratings. The reports also separate advice bounds,
+plain language, numeric grounding and model fallback. The v3 coach judge
+is advisory and the new synthetic controls await calibration.
+[Gym commands and rules comparison](../evals/README.md#version-4-coach-checks)
+
 ### Taste notes and fallback
 
 With a free-text note and neither taste nor body rated, a separate model call can interpret the note. It must quote the sensory report verbatim in a private `notesEvidence` field
 and separately classify its reported character in `notesTaste` before a notes-only
 adjustment is accepted. This separates taste interpretation from selecting a move. Code checks the quote's source,
 limits notes-only adjustments to a small trial, and abstains when the proposed
-grind direction opposes the recorded mechanics. Both private fields are stripped before
-saving/displaying the review. Exact quotation proves provenance, not semantic
-correctness: negation and embedded instructions are evaluated separately.
+grind direction opposes the recorded mechanics. The coach card can show
+the accepted excerpt as a quotation from the saved note. The internal
+classification stays out of the card. Quotation establishes provenance.
+Negation and embedded instructions are evaluated separately.
 
 The rules fallback does not pretend to interpret free text. With notes but no
 numeric taste feedback it preserves the observations and asks for taste confirmation

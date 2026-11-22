@@ -6,6 +6,7 @@ import { generateGymDataset, readGymScenarios } from "../gym/dataset.js";
 import { GYM_GENERATOR_VERSION } from "../gym/random.js";
 import { reviewFixture } from "../review-fixtures.js";
 import { loadReviewDataset } from "../review-holdout.js";
+import { coachExpectation } from "../review-coach-expectations.js";
 import { digest } from "./candidate.js";
 import type { IterationCase } from "./score.js";
 
@@ -20,7 +21,7 @@ export function syntheticPanel(rows: ReturnType<typeof loadReviewDataset>["cases
   for (const id of Object.keys(policies)) if (!ids.has(id)) throw new Error("Case policy refers to an absent case");
   return rows.map<IterationCase>(c => ({
     id: c.id, family: c.profileFamily, session: c.session, recipe: c.recipe, template: c.id.replace(/\.s\d+$/, ""),
-    hash: digest([c.hash, policies[c.id]]), input: c.input, fullTrace: c.fullTrace, pumpMode: c.pumpMode, labels: c.labels, ...policies[c.id],
+    hash: digest([c.hash, policies[c.id], coachExpectation(c.id, c.labels, c.input.profile)]), input: c.input, fullTrace: c.fullTrace, pumpMode: c.pumpMode, labels: c.labels, ...policies[c.id],
   }));
 }
 

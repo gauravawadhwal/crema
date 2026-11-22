@@ -1,0 +1,108 @@
+{
+  "rubric": "v3",
+  "calibration": "unrun",
+  "controls": [
+    {
+      "id": "c101",
+      "fixture": "a1",
+      "expected": "faithful",
+      "answer": {
+        "headline": "The machine held the planned flow and the cup filled quickly at low pressure.",
+        "stages": [
+          { "name": "Start-up", "verdict": "on_plan", "sentence": "The machine built flow as planned." },
+          { "name": "Main pour", "verdict": "on_plan", "sentence": "The machine held the planned flow below its pressure ceiling." },
+          { "name": "Temperature", "verdict": "on_plan", "sentence": "The machine held temperature near target." }
+        ],
+        "notable": [],
+        "hypotheses": [{ "label": "Easy flow", "sentence": "This fits a pour that moved easily through the coffee.", "confidence": "low" }],
+        "recommendation": { "action": "Repeat the same recipe.", "expect": "Keep the grinder setting fixed.", "compare": "Check whether the cup fills as quickly again." }
+      }
+    },
+    {
+      "id": "c102",
+      "fixture": "a1",
+      "expected": "flawed",
+      "answer": {
+        "headline": "You missed the pressure target because your puck was uneven, so this shot tasted sour.",
+        "stages": [
+          { "name": "Start-up", "verdict": "on_plan", "sentence": "The machine built flow as planned." },
+          { "name": "Main pour", "verdict": "off_plan", "sentence": "You failed to reach the pressure target." },
+          { "name": "Temperature", "verdict": "on_plan", "sentence": "The machine held temperature near target." }
+        ],
+        "notable": [],
+        "hypotheses": [{ "label": "Channeling", "sentence": "This proves you tamped unevenly.", "confidence": "medium" }],
+        "recommendation": { "action": "Grind much finer and raise the temperature.", "expect": "Expect more pressure.", "compare": "Check the cup fill." }
+      }
+    },
+    {
+      "id": "c103",
+      "fixture": "e1",
+      "expected": "faithful",
+      "answer": {
+        "headline": "The machine paused inlet flow as planned while coffee kept dripping into the cup.",
+        "stages": [
+          { "name": "Start-up", "verdict": "on_plan", "sentence": "The machine followed the planned fill." },
+          { "name": "Bloom", "verdict": "on_plan", "sentence": "The machine followed the planned pause." },
+          { "name": "Main pour", "verdict": "on_plan", "sentence": "The machine resumed the planned flow." },
+          { "name": "Temperature", "verdict": "on_plan", "sentence": "The machine held temperature near target." }
+        ],
+        "notable": ["The scale continued to register coffee in the cup during the pause."],
+        "hypotheses": [],
+        "recommendation": { "action": "Repeat the same recipe.", "expect": "Keep your prep the same.", "compare": "Watch when the coffee starts to collect in the cup." }
+      }
+    },
+    {
+      "id": "c104",
+      "fixture": "e1",
+      "expected": "flawed",
+      "answer": {
+        "headline": "This shot had some changes worth noting.",
+        "stages": [
+          { "name": "Start-up", "verdict": "on_plan", "sentence": "Plan: 3 mL/s. Recorded: 3 mL/s." },
+          { "name": "Bloom", "verdict": "off_plan", "sentence": "The positive cup slope shows the inlet pause failed." },
+          { "name": "Main pour", "verdict": "on_plan", "sentence": "The machine resumed the planned flow." },
+          { "name": "Temperature", "verdict": "on_plan", "sentence": "The machine held temperature near target." }
+        ],
+        "notable": [],
+        "hypotheses": [],
+        "history": "This was faster than your last shot.",
+        "recommendation": { "action": "Repeat the same recipe.", "expect": "Keep your prep the same.", "compare": "Check the coffee." }
+      }
+    },
+    {
+      "id": "c105",
+      "fixture": "f2",
+      "expected": "faithful",
+      "answer": {
+        "headline": "The shot reached its target weight before the planned finish.",
+        "stages": [
+          { "name": "Start-up", "verdict": "on_plan", "sentence": "The machine built pressure as planned." },
+          { "name": "Main pour", "verdict": "on_plan", "sentence": "The machine held close to the planned pressure." },
+          { "name": "Finish", "verdict": "not_graded", "sentence": "The shot reached target weight before the planned finish." },
+          { "name": "Temperature", "verdict": "on_plan", "sentence": "The machine held temperature near target." }
+        ],
+        "notable": [],
+        "hypotheses": [],
+        "recommendation": { "action": "Repeat the same recipe.", "expect": "Use the same target weight.", "compare": "Check whether the pour again reaches that weight before the final stage." }
+      }
+    },
+    {
+      "id": "c106",
+      "fixture": "f2",
+      "expected": "flawed",
+      "answer": {
+        "headline": "The machine reached the weight target.",
+        "stages": [
+          { "name": "Start-up", "verdict": "on_plan", "sentence": "The machine built pressure as planned." },
+          { "name": "Main pour", "verdict": "on_plan", "sentence": "The machine held close to the planned pressure." },
+          { "name": "Finish", "verdict": "on_plan", "sentence": "The machine followed the planned pressure drop." },
+          { "name": "Temperature", "verdict": "on_plan", "sentence": "The machine held temperature near target." }
+        ],
+        "notable": [],
+        "hypotheses": [],
+        "taste": { "reported": "You said it tasted balanced." },
+        "recommendation": { "action": "Repeat the same recipe.", "expect": "Use the same target weight.", "compare": "Check whether the final stage repeats." }
+      }
+    }
+  ]
+}
