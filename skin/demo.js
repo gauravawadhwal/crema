@@ -352,7 +352,17 @@ function makeDemoApi() {
     async shot(id) { return shots.find((s) => s.id === id) || null; },
     async lastShotWith(title, profileShape = null) { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).find((s) => s.profileTitle === title && (!profileShape || brewProfileShape(s.profile) === profileShape)) || null; },
     async latestShot() { return shots.slice().sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0] || null; },
-    async annotate(id, a) { const s = shots.find((x) => x.id === id); if (s) { if (a.enjoyment != null) s.enjoyment = a.enjoyment; if (a.espressoNotes != null) s.notes = a.espressoNotes; if (a.extras?.crema) s.taste = { ...(s.taste ?? {}), ...a.extras.crema }; } },
+    async annotate(id, a) {
+      const s = shots.find((x) => x.id === id);
+      if (!s) return;
+      if (a.enjoyment != null) s.enjoyment = a.enjoyment;
+      if (a.espressoNotes != null) s.notes = a.espressoNotes;
+      if (a.extras?.crema) {
+        const { tasteTags, ...taste } = a.extras.crema;
+        if (tasteTags) s.tasteTags = tasteTags;
+        s.taste = { ...(s.taste ?? {}), ...taste };
+      }
+    },
     async review(shotId, feedback = null, bean = null) {
       const s = shots.find((x) => x.id === shotId);
       if (!s) throw new Error("Shot not found");
@@ -371,7 +381,8 @@ function makeDemoApi() {
         points, profile: s.profile ?? null, doseG: s.doseG ?? null, yieldG: s.yieldG ?? null, targetYieldG, ...timeContext,
         annotatedYieldG: s.yieldG ?? null, volumeCountStartFrame: s.profile?.target_volume_count_start ?? null,
         targetWaterMl: recordedReviewNumber(s.profile?.target_volume, 0, 5000),
-        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: feedback.notes ?? null } : null, notes: s.notes?.slice(0, 1000) || null, bean: bean ?? bag?.info ?? null,
+        stopReason: s.stopReason ?? null, feedback: feedback ? { ...feedback, notes: feedback.notes ?? null } : null,
+        notes: shotReviewNotes(s.notes, s.tasteTags), bean: bean ?? bag?.info ?? null,
         installedProfiles: demoProfiles.map((p) => p.title), history: history.map((x) => {
           const metadata = { doseG: recordedReviewNumber(x.doseG, 0, 60), yieldG: recordedReviewNumber(x.yieldG, 0, 500),
             targetYieldG: recordedReviewNumber(x.targetYieldG ?? x.profile?.target_weight, 0, 500), stopReason: x.stopReason ?? null };

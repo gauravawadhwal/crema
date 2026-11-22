@@ -934,15 +934,33 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await open(`decaid=http://localhost:${MOCK}&server=http://localhost:${CREMA}`);
     check(await S(() => S.api.ai.on), "AI on with the server connected");
     await dev("shots/seed", { count: 1 });
+    const reviewShotId = await S(async () => {
+      const shot = (await S.api.shots(50)).find(s => s.id.startsWith("seed-"));
+      await S.api.annotate(shot.id, { espressoNotes: "Cocoa finish", extras: { other: "keep me" } });
+      return shot.id;
+    });
+    await S(() => { location.hash = "#shots"; });
+    await page.locator(`[data-open="${reviewShotId}"]`).click();
+    check(await page.inputValue("#shotNotes") === "Cocoa finish", "shot history displays the existing free-text note");
+    const legacyNotes = await page.evaluate(async id => (await S.api.review(id)).coach.taste.notes, reviewShotId);
+    check(legacyNotes === "Cocoa finish", "legacy free-text notes reach the AI review");
+    const pills = page.locator("#shotDetail").getByRole("group", { name: "Tasting notes" });
+    await pills.getByRole("button", { name: "Fruity" }).click();
+    await pills.getByRole("button", { name: "Sweet" }).click();
     const savedReview = await S(async () => {
       const shot = (await S.api.shots(50)).find(s => s.id.startsWith("seed-"));
       const result = await S.api.review(shot.id);
       const reopened = await S.api.shot(shot.id);
+      const raw = await fetch(S.api.info.decaidUrl + "/api/v1/shots/" + shot.id).then(r => r.json());
       return { source: result.source, version: result.version, evidence: reopened.review?.evidence?.version, coach: !!reopened.review?.coach,
-        sameReview: JSON.stringify(result) === JSON.stringify(reopened.review) };
+        sameReview: JSON.stringify(result) === JSON.stringify(reopened.review), reviewNotes: result.coach?.taste?.notes,
+        notes: reopened.notes, tags: reopened.tasteTags, other: raw.annotations.extras.other };
     });
     check(savedReview.source === "mock" && savedReview.version === 4 && savedReview.coach && savedReview.evidence === 1 && savedReview.sameReview,
       "AI review stores versioned evidence and reads it back through Decaid", JSON.stringify(savedReview));
+    check(savedReview.reviewNotes === "Fruity, Sweet\nCocoa finish" && savedReview.notes === "Cocoa finish" &&
+      JSON.stringify(savedReview.tags) === JSON.stringify(["Fruity", "Sweet"]) && savedReview.other === "keep me",
+      "two saved pills and legacy text pass the review request schema while preserving unrelated annotations", JSON.stringify(savedReview));
     await page.goto(`http://localhost:${SKIN}/?full#add`); await page.waitForTimeout(800);
     await page.click("#mode-describe");
     await page.fill("#describeInput", "Example Roasters Kii AA");
