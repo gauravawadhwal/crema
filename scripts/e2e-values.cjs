@@ -142,6 +142,66 @@ const fs = require('node:fs');
     await page.screenshot({ path: `${shots}/1005-552-manual-sheet.png` });
     const setBox = await page.locator('#valueSet').boundingBox(); assert.ok(setBox.y >= 0 && setBox.y + setBox.height <= 552, 'Set is visible at compact height');
     await page.click('#valueSet'); assert.equal(await page.evaluate(() => S.next.yieldG), 0);
+    // Touch taps on the Brew grind stepper must step once per tap on both phone and tablet layouts.
+    for (const cfg of [
+      { label: 'phone', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+      { label: 'tablet', viewport: { width: 1340, height: 800 }, hasTouch: true, isMobile: false },
+    ]) {
+      const tctx = await browser.newContext(cfg);
+      try {
+        const tp = await tctx.newPage();
+        tp.on('pageerror', e => errors.push(e.message));
+        await tp.goto(url);
+        await tp.waitForFunction(() => S.next && S.prefs && S.library);
+        await tp.click('#loadBtn');
+        await tp.waitForFunction(() => S.loaded === true);
+        assert.equal(await tp.inputValue('#grindInput'), '10');
+        await tp.locator('[data-step="grind:1"]').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.inputValue('#grindInput'), '10.25', `${cfg.label} touch tap + steps once`);
+        assert.equal(await tp.evaluate(() => S.loaded), false, `${cfg.label} touch tap marks recipe unloaded`);
+        assert.equal(await tp.locator('#loadBtn').textContent(), 'Load onto machine');
+        assert.ok(await tp.locator('#loadBtn').evaluate(el => el.classList.contains('primary')));
+        await tp.locator('[data-step="grind:-1"]').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.inputValue('#grindInput'), '10', `${cfg.label} touch tap - steps once`);
+        // Consecutive taps still register each tap individually.
+        await tp.locator('[data-step="grind:1"]').tap();
+        await tp.locator('[data-step="grind:1"]').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.inputValue('#grindInput'), '10.5', `${cfg.label} two touch taps step twice`);
+        // Named grinder with finer step size (Lagom P80: start 1, step 0.05).
+        await tp.evaluate(() => { location.hash = '#settings'; });
+        await tp.waitForSelector('#chooseGrinder');
+        await tp.locator('#chooseGrinder').tap();
+        await tp.selectOption('#grinderSelect', 'lagom-p80');
+        await tp.waitForFunction(() => grindSettings().id === 'lagom-p80');
+        await tp.evaluate(() => { location.hash = '#brew'; });
+        await tp.waitForSelector('#grindInput');
+        assert.equal(await tp.inputValue('#grindInput'), '1');
+        await tp.locator('[data-step="grind:1"]').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.inputValue('#grindInput'), '1.05', `${cfg.label} Lagom P80 touch tap + steps once`);
+        await tp.locator('[data-step="grind:-1"]').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.inputValue('#grindInput'), '1', `${cfg.label} Lagom P80 touch tap - steps once`);
+        // Keyboard activation steps once and preserves focus for repeated presses.
+        await tp.locator('[data-step="grind:1"]').focus();
+        await tp.keyboard.press('Enter');
+        await tp.keyboard.press('Enter');
+        assert.equal(await tp.inputValue('#grindInput'), '1.1', `${cfg.label} repeated keyboard Enter steps once per press`);
+        // Bagless loaded state updates its helper note in place on grind tap.
+        await tp.evaluate(() => chooseInstalledProfile(S.library.find((p) => !p.manual), true));
+        await tp.waitForFunction(() => S.noBag && S.next);
+        await tp.click('#loadBtn');
+        await tp.waitForFunction(() => S.loaded === true);
+        assert.equal(await tp.locator('#nextShot .coffee-meta .muted.small').textContent(), 'Shots saved without a coffee');
+        await tp.locator('[data-step="grind:1"]').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.inputValue('#grindInput'), '1.05', `${cfg.label} bagless touch tap + steps once`);
+        assert.equal(await tp.locator('#nextShot .coffee-meta .muted.small').textContent(), 'Load a profile to brew without a bag');
+      } finally { await tctx.close(); }
+    }
     assert.deepEqual(errors, []);
     console.log('ok value sheet: tabs, draft, drag, bounds, recents, cancel routes, Set, tap/hold, settings write coalescing and screenshots');
   } finally { await browser.close(); }
