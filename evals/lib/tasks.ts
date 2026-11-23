@@ -11,9 +11,10 @@ import type { ShotReviewData } from "../../server/recommend/review-types.js";
 import { reviewFixture } from "./review-fixtures.js";
 import { gradeReview } from "./review-grader.js";
 import { identify, type IdentifyInput } from "../../server/identify.js";
-import { ProviderChain } from "../../server/llm/index.js";
+import type { ProviderChain } from "../../server/llm/index.js";
 import { MockProvider } from "../../server/llm/mock.js";
-import type { ImageInput, LlmProvider } from "../../server/llm/types.js";
+import type { ImageInput } from "../../server/llm/types.js";
+import { evalProviderChain, type EvalProvider } from "./providers.js";
 import { rankProfiles } from "../../server/profiles/match.js";
 import { dialInWithSource, recommend, rulesDialIn } from "../../server/recommend/index.js";
 import type { BeanInfo, DialInAdvice, Recipe } from "../../server/schema.js";
@@ -38,7 +39,7 @@ import { RecordingProvider, type CallRecord } from "./recorder.js";
 import { caseDigests, sha256 } from "./manifest.js";
 import { answerSource, type AnswerSource, type RequestedSubject } from "./provenance.js";
 
-export type Subject = { kind: "llm"; provider: LlmProvider } | { kind: "rules" };
+export type Subject = { kind: "llm"; provider: EvalProvider } | { kind: "rules" };
 
 export interface RunRecord {
   caseId: string;
@@ -63,7 +64,7 @@ export interface RunRecord {
 }
 
 export interface RunOptions {
-  judge?: LlmProvider;
+  judge?: EvalProvider;
   today: Date;
 }
 
@@ -75,7 +76,7 @@ export function supports(task: TaskName, subject: Subject): boolean {
 
 export async function runCase<T extends TaskName>(task: T, c: CaseFor<T>, subject: Subject, repeat: number, opts: RunOptions): Promise<RunRecord> {
   const rec = subject.kind === "llm" ? new RecordingProvider(subject.provider) : new RecordingProvider(new MockProvider());
-  const llm = new ProviderChain([rec]);
+  const llm = evalProviderChain(rec);
   const requested: RequestedSubject = subject.kind === "rules" ? { kind: "rules" } : { kind: "llm", provider: subject.provider.id };
   const base = { caseId: c.id, repeat, split: c.split, tags: c.tags, requested, judgeRequested: task !== "identify" && !!opts.judge };
   const t0 = performance.now();
@@ -194,7 +195,7 @@ async function execute(task: TaskName, c: unknown, subject: Subject, llm: Provid
 }
 
 /** Re-run only the judge. Review evidence comes from the independently verified case. */
-export async function rejudge(task: TaskName, r: RunRecord, provider: LlmProvider, reviewCase?: ReviewCase, liveInput?: string): Promise<void> {
+export async function rejudge(task: TaskName, r: RunRecord, provider: EvalProvider, reviewCase?: ReviewCase, liveInput?: string): Promise<void> {
   if (task === "identify") return;
   r.judgeRequested = true;
   r.judgeStatus = "unavailable";
@@ -207,7 +208,7 @@ export async function rejudge(task: TaskName, r: RunRecord, provider: LlmProvide
   const source = answerSource(task, r.calls, r.context, r.requested);
   if (source !== "model" && source !== "rules") return;
   const jr = new RecordingProvider(provider);
-  const llm = new ProviderChain([jr]);
+  const llm = evalProviderChain(jr);
   if (evidence) r.judgeProvenance = reviewJudgeProvenance(evidence);
   try {
     r.judge = evidence ? await judgeReview(llm, evidence, r.output)

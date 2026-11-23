@@ -14,8 +14,7 @@ import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { makeProvider, PROVIDER_IDS } from "../server/llm/index.js";
-import type { ProviderId } from "../server/llm/types.js";
+import { EVAL_PROVIDER_IDS, isEvalProviderId, makeEvalProvider } from "./lib/providers.js";
 import { EVALS_DIR, loadCases, TASKS, type ReviewCase, type TaskName } from "./lib/dataset.js";
 import { consoleSummary, markdownReport, packResults, summarize, unpackResults, type ResultsFile } from "./lib/report.js";
 import { SYSTEM_PROMPTS } from "./lib/recorder.js";
@@ -44,7 +43,7 @@ const { values: args } = parseArgs({
 if (args.help) {
   console.log(`Usage: npx tsx evals/run.ts [options]
   --task identify|recommend|dialin|review|all   (default all)
-  --provider ${PROVIDER_IDS.join("|")}|rules   (default claude-cli)
+  --provider ${EVAL_PROVIDER_IDS.join("|")}|rules   (default claude-cli)
   --model <name>        provider's model, e.g. haiku, sonnet, opus, gemini-2.5-flash-lite
   --repeat N            run each case N times to measure consistency (default 1)
   --concurrency N       parallel cases (default 4)
@@ -52,7 +51,7 @@ if (args.help) {
   --split dev|holdout   only one split (review defaults to dev)
   --date YYYY-MM-DD     pin the reference date for relative case inputs
   --live                include identify cases that need live web search
-  --judge <provider[:model]>  add model-graded text checks (recommend, dialin)
+  --judge <provider[:model]>  add model-graded text checks (recommend, dialin, review)
   --label <text>        note stored with the results (e.g. "prompt v2")
   --out <dir>           where to write results (default evals/results)
   --regrade <file>      write a derived report from verified saved inputs and current labels
@@ -71,8 +70,8 @@ function git() {
 function parseSubject(spec: string, model?: string): { subject: Subject; name: string; provider: string; model: string | null; settings: string } {
   if (spec === "rules") return { subject: { kind: "rules" }, name: "rules", provider: "rules", model: null, settings: digest(["rules"]) };
   const [id, inlineModel] = spec.split(":");
-  if (!PROVIDER_IDS.includes(id as ProviderId)) throw new Error(`unknown provider ${id}; expected ${PROVIDER_IDS.join(", ")} or rules`);
-  const provider = makeProvider(id as ProviderId, { model: model ?? inlineModel });
+  if (!isEvalProviderId(id)) throw new Error(`unknown provider ${id}; expected ${EVAL_PROVIDER_IDS.join(", ")} or rules`);
+  const provider = makeEvalProvider(id, model ?? inlineModel);
   const effort = id === "codex-cli" ? process.env.CODEX_REASONING_EFFORT ?? null : null;
   return { subject: { kind: "llm", provider }, settings: digest([id, provider.model ?? null, effort]), name: provider.model ? `${id}:${provider.model}` : id, provider: id, model: provider.model ?? null };
 }

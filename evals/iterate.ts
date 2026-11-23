@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { ROOT_DIR } from "./lib/dataset.js";
+import { asServerProvider } from "./lib/providers.js";
 import { loadReviewDataset } from "./lib/review-holdout.js";
 import { digest } from "./lib/iteration/candidate.js";
 import { runDemonstration } from "./lib/iteration/demo.js";
@@ -27,14 +28,14 @@ const Plan = z.strictObject({
   casePolicies: CasePolicies.default({}),
   subject: CliPin,
   proposer: CliPin,
-  judge: CliPin.refine(pin => pin.provider === "claude-cli" && /^claude-opus-\d/.test(pin.model)),
+  judge: CliPin.refine(pin => (pin.provider === "claude-cli" || pin.provider === "agy-cli") && /^claude-opus-\d/.test(pin.model)),
   calibration: z.strictObject({ file: absolutePath, sha }),
   sandbox: Sandbox,
   budget: Budget,
 });
 const Calibration = z.strictObject({
   status: z.enum(["passed", "advisory", "failed"]),
-  judge: z.strictObject({ provider: z.literal("claude-cli"), model: z.string(), effort: z.string(), tier: z.literal("standard") }),
+  judge: z.strictObject({ provider: z.enum(["claude-cli", "agy-cli"]), model: z.string(), effort: z.string(), tier: z.literal("standard") }),
   scorer: sha,
   judgeCode: sha,
   report: sha,
@@ -48,7 +49,7 @@ const usage = `Usage: npx tsx evals/iterate.ts <command> --out <private director
   demo [--provider mock|rules]
   dev --plan <round.json> --approved
   locked --plan <round.json> --lock <custodian.json> --approved
-  pins
+  pins [--judge agy-cli:<opus-model>]
 See evals/ITERATION.md for plan fields, approval and costs.`;
 
 const git = (...args: string[]) => execFileSync("git", args, { cwd: ROOT_DIR, encoding: "utf8" }).trim();
@@ -63,13 +64,14 @@ function external(file: string) {
   return actual;
 }
 
-function fingerprints() {
+function fingerprints(agy = false) {
   const hash = (paths: string[]) => digest(paths.map(path => [path, readFileSync(join(ROOT_DIR, path), "utf8")]));
   return {
     scorer: hash(["evals/lib/iteration/score.ts", "evals/lib/iteration/compare.ts", "evals/lib/review-metrics.ts",
       "evals/lib/review-grader.ts", "evals/lib/review-labels.ts", "evals/lib/graders.ts", "evals/lib/review-coach-grader.ts",
       "evals/lib/review-coach-expectations.ts", "evals/lib/review-crossed.ts", "evals/lib/iteration/panel.ts"]),
-    judgeCode: hash(["evals/lib/judge.ts", "evals/lib/iteration/runner.ts"]),
+    judgeCode: hash(["evals/lib/judge.ts", "evals/lib/iteration/runner.ts",
+      ...(agy ? ["evals/lib/agy-cli.ts", "evals/lib/iteration/providers.ts", "evals/lib/iteration/runtime.ts"] : [])]),
   };
 }
 
@@ -116,7 +118,7 @@ async function realRound(command: "dev" | "locked", args: { plan?: string; lock?
       plan.proposer.provider === "claude-cli" && !/^claude-(?:opus|sonnet|haiku)-\d/.test(plan.proposer.model)) {
     throw new Error("Use a versioned Claude model identifier");
   }
-  const { scorer, judgeCode } = fingerprints();
+  const { scorer, judgeCode } = fingerprints(plan.judge.provider === "agy-cli");
   const approval = readJson(external(plan.calibration.file));
   if (digest(approval) !== plan.calibration.sha) throw new Error("Calibration report digest differs");
   const calibration = Calibration.parse(approval);
@@ -147,17 +149,18 @@ async function realRound(command: "dev" | "locked", args: { plan?: string; lock?
   try {
     assertPrivateDirectory(external(plan.sandbox.home));
     for (const profile of [plan.sandbox.codexProfile, plan.sandbox.claudeProfile]) if (profile) assertPrivateDirectory(external(profile));
-    const meter = new Meter(dir, stop, plan.budget, binding, makeQuotaReader(plan.sandbox, work, stop));
+    const meter = new Meter(dir, stop, plan.budget, binding, makeQuotaReader(plan.sandbox, work, stop, [plan.subject, plan.proposer, plan.judge]));
     const subject = new IsolatedCli(plan.subject, plan.sandbox, work, stop, meter);
     const proposer = new IsolatedCli(plan.proposer, plan.sandbox, work, stop, meter);
     const judge = new IsolatedCli(plan.judge, plan.sandbox, work, stop, meter);
     for (const cli of [subject, judge, ...(command === "dev" ? [proposer] : [])]) await cli.checkVersion();
-    const run = { pins, dir, stop, subject, judge, hardJudge: calibration.status === "passed", offline: false };
+    const run = { pins, dir, stop, subject: asServerProvider(subject), judge: asServerProvider(judge),
+      hardJudge: calibration.status === "passed", offline: false };
     const devReport = join(dir, "dev.json");
     if (command === "dev") {
       if (args.lock) throw new Error("The dev command has no holdout input");
       if (existsSync(devReport)) throw new Error("This round has already released a dev decision");
-      const report = await develop(run, screen, dev, proposer, binding);
+      const report = await develop(run, screen, dev, asServerProvider(proposer), binding);
       saveJson(devReport, report);
       writeFileSync(join(dir, "dev.md"), devMarkdown(report), { mode: 0o600, flag: "wx" });
       console.log(report.finalist?.accepted ? `Dev nominee ${report.finalist.candidate.id} · ${digest(report)}` : "No dev nominee");
@@ -193,13 +196,18 @@ async function realRound(command: "dev" | "locked", args: { plan?: string; lock?
 
 async function main() {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
-    out: { type: "string" }, provider: { type: "string" }, plan: { type: "string" }, lock: { type: "string" },
+    out: { type: "string" }, provider: { type: "string" }, judge: { type: "string" }, plan: { type: "string" }, lock: { type: "string" },
     approved: { type: "boolean" }, help: { type: "boolean" },
   } });
   if (values.help) { console.log(usage); return; }
   if (positionals.length !== 1) throw new Error(usage);
   const command = z.enum(["demo", "dev", "locked", "pins"]).parse(positionals[0]);
-  if (command === "pins") { console.log(JSON.stringify({ commit: git("rev-parse", "HEAD"), ...fingerprints() })); return; }
+  if (command === "pins") {
+    if (values.judge && !/^agy-cli:claude-opus-\d[a-z0-9.-]*$/.test(values.judge)) throw new Error(usage);
+    console.log(JSON.stringify({ commit: git("rev-parse", "HEAD"), ...fingerprints(!!values.judge) }));
+    return;
+  }
+  if (values.judge) throw new Error("Set the real judge in the pinned plan");
   if (!values.out) throw new Error(usage);
   const out = resolve(values.out);
   external(dirname(out));

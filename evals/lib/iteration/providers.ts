@@ -1,45 +1,59 @@
 import { isAbsolute, join } from "node:path";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { z } from "zod";
-import { jsonSchemaFor, type LlmProvider, type StructuredRequest, type Usage } from "../../../server/llm/types.js";
-import { assertPrivateDirectory, Meter, processOutput, quotaWindows } from "./runtime.js";
+import { jsonSchemaFor, type StructuredRequest, type Usage } from "../../../server/llm/types.js";
+import { AgyCliProvider } from "../agy-cli.js";
+import type { EvalProvider } from "../providers.js";
+import { agyQuotaWindows, assertPrivateDirectory, Meter, processOutput, quotaWindows, type Vendor } from "./runtime.js";
 
 const file = z.string().refine(isAbsolute, "use an absolute path");
 const version = z.string().regex(/^[a-z0-9][a-z0-9.-]+$/);
 const positive = z.number().int().positive();
 export const CliPin = z.strictObject({
-  provider: z.enum(["codex-cli", "claude-cli"]),
+  provider: z.enum(["codex-cli", "claude-cli", "agy-cli"]),
   model: version,
   effort: z.enum(["low", "medium", "high"]),
   tier: z.literal("standard"),
   binary: file,
   cliVersion: z.string().min(1),
   maxCallTokens: positive,
-});
+}).refine(pin => pin.provider !== "agy-cli" ||
+  agyWindowIds(pin.model).length > 0 && pin.model.endsWith(`-${pin.effort}`),
+  "Use an Antigravity catalog model with a supported quota group and matching effort");
 
 export type CliPin = z.infer<typeof CliPin>;
-export type Vendor = "codex" | "claude";
-export const vendorOf = (pin: CliPin): Vendor => pin.provider === "codex-cli" ? "codex" : "claude";
+export const vendorOf = (pin: CliPin): Vendor => pin.provider === "agy-cli" ? "agy" : pin.provider === "codex-cli" ? "codex" : "claude";
 export const Sandbox = z.strictObject({
   home: file, codexProfile: file.optional(), claudeProfile: file.optional(), quotaBinary: file,
   timeoutMs: positive.max(300_000),
 });
 
 export function isolatedEnv(config: z.infer<typeof Sandbox>, vendor: Vendor) {
+  assertPrivateDirectory(config.home);
+  const env = { HOME: config.home, PATH: "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", TMPDIR: config.home };
+  if (vendor === "agy") return env; // The isolated home contains the signed-in agy profile.
   const profile = vendor === "codex" ? config.codexProfile : config.claudeProfile;
   if (!profile) throw new Error("Missing isolated subscription profile");
-  assertPrivateDirectory(config.home);
   assertPrivateDirectory(profile);
-  return { HOME: config.home, PATH: "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", TMPDIR: config.home,
-    [vendor === "codex" ? "CODEX_HOME" : "CLAUDE_CONFIG_DIR"]: profile };
+  return { ...env, [vendor === "codex" ? "CODEX_HOME" : "CLAUDE_CONFIG_DIR"]: profile };
 }
 
-export function makeQuotaReader(config: z.infer<typeof Sandbox>, cwd: string, stop: string) {
+function agyWindowIds(model: string): string[] {
+  if (/^(claude-|gpt-)/.test(model)) return ["claude_gpt_5h", "claude_gpt_weekly"];
+  if (model.startsWith("gemini-")) return ["gemini_5h", "gemini_weekly",
+    ...(/argon|g1-pro/.test(model) ? ["gemini_argon_weekly"] : [])];
+  return [];
+}
+
+export function makeQuotaReader(config: z.infer<typeof Sandbox>, cwd: string, stop: string, pins: readonly CliPin[] = []) {
+  const agyWindows = new Set(pins.filter(pin => pin.provider === "agy-cli").flatMap(pin => agyWindowIds(pin.model)));
   return async (vendor: Vendor) => {
-    const stdout = await processOutput(config.quotaBinary, ["--provider", vendor, "--profile-only", "--json", "--full", "--no-credential-refresh"], {
+    const selection = vendor === "agy" ? ["--max-age", "0"] : ["--profile-only"];
+    const stdout = await processOutput(config.quotaBinary, ["--provider", vendor, ...selection, "--json", "--full", "--no-credential-refresh"], {
       cwd, env: isolatedEnv(config, vendor), timeoutMs: 20_000, stop,
     });
-    return quotaWindows(JSON.parse(stdout), vendor);
+    const raw = JSON.parse(stdout);
+    return vendor === "agy" ? agyQuotaWindows(raw, agyWindows) : quotaWindows(raw, vendor);
   };
 }
 
@@ -90,7 +104,7 @@ function codexResult(stdout: string) {
 
 // These eval-only adapters implement the server's LlmProvider contract. They
 // deliberately bypass the general-purpose CLI adapters' inherited host config.
-export class IsolatedCli implements LlmProvider {
+export class IsolatedCli implements EvalProvider {
   readonly billing = "metered subscription";
   meteringMs = 0;
   get id() { return this.pin.provider; }
@@ -115,7 +129,8 @@ export class IsolatedCli implements LlmProvider {
     const { raw, usage } = await this.meter.call(this.vendor, this.pin.maxCallTokens, async () => {
       const clientStarted = performance.now();
       try {
-        const parsed = this.id === "claude-cli" ? await this.claude(req, schema) : await this.codex(req, schema);
+        const parsed = this.id === "agy-cli" ? await this.agy(req) :
+          this.id === "claude-cli" ? await this.claude(req, schema) : await this.codex(req, schema);
         return { value: parsed, tokens: totalTokens(parsed.usage) };
       } finally {
         clientMs += performance.now() - clientStarted;
@@ -123,6 +138,16 @@ export class IsolatedCli implements LlmProvider {
     }).finally(() => { this.meteringMs += performance.now() - started - clientMs; });
     req.onUsage?.(usage);
     return req.schema.parse(raw);
+  }
+
+  private async agy(req: StructuredRequest<z.ZodType>) {
+    const provider = new AgyCliProvider(this.pin.model, {
+      binary: this.pin.binary, env: isolatedEnv(this.sandbox, "agy"), scratchRoot: this.cwd,
+      timeoutMs: this.sandbox.timeoutMs, stop: this.stop,
+    });
+    const { raw, usage } = await provider.request(req);
+    if (!usage) throw new Error("Antigravity did not report token usage");
+    return { raw, usage };
   }
 
   private async claude(req: StructuredRequest<z.ZodType>, schema: string) {
