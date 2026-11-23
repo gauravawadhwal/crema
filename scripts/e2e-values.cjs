@@ -200,6 +200,99 @@ const fs = require('node:fs');
         await tp.waitForTimeout(100);
         assert.equal(await tp.inputValue('#grindInput'), '1.05', `${cfg.label} bagless touch tap + steps once`);
         assert.equal(await tp.locator('#nextShot .coffee-meta .muted.small').textContent(), 'Load a profile to brew without a bag');
+
+        // No-change guard: other pointer/bindRepeat/re-rendering controls execute once per touch tap.
+        // Value sheet steppers (#valuePlus/#valueMinus), ruler tap, and handle tap.
+        await tp.locator('[data-value="dose"]').tap();
+        await tp.waitForSelector('#valuePlus');
+        const tv = () => tp.locator('#valueRuler').getAttribute('aria-valuenow').then(Number);
+        const dose0 = await tv();
+        await tp.locator('#valuePlus').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tv(), dose0 + 0.5, `${cfg.label} value sheet + steps once`);
+        await tp.locator('#valueMinus').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tv(), dose0, `${cfg.label} value sheet - steps once`);
+        await tp.locator('#valueRuler').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tv(), dose0, `${cfg.label} value sheet ruler tap does not step`);
+        await tp.locator('.value-handle').tap();
+        await tp.locator('#sheetBack').waitFor({ state: 'hidden' });
+        assert.equal(await tp.inputValue('#grindInput'), '1.05', `${cfg.label} value sheet handle tap closes cleanly`);
+
+        // Favourites carousel (#addFav, #editFavs) single-tap actions.
+        await tp.evaluate(() => {
+          window.__favWrites = 0;
+          const orig = S.api.favourites.set;
+          S.api.favourites.set = (...a) => { window.__favWrites++; return orig(...a); };
+        });
+        const favs0 = await tp.locator('#favs .fav:not(.empty)').count();
+        await tp.locator('#addFav').scrollIntoViewIfNeeded();
+        await tp.locator('#addFav').tap();
+        await tp.waitForTimeout(150);
+        assert.equal(await tp.locator('#favs .fav:not(.empty)').count(), favs0 + 1, `${cfg.label} addFav touch tap adds once`);
+        assert.equal(await tp.evaluate(() => window.__favWrites), 1, `${cfg.label} addFav touch tap writes once`);
+        await tp.locator('#editFavs').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.locator('#editFavs').getAttribute('aria-pressed'), 'true', `${cfg.label} editFavs touch tap toggles once`);
+        await tp.locator('#editFavs').tap();
+        await tp.waitForTimeout(100);
+        assert.equal(await tp.locator('#editFavs').getAttribute('aria-pressed'), 'false', `${cfg.label} editFavs second touch tap toggles off`);
+
+        // Settings mini steppers ([data-mini], including gStart after clearing named grinder) and #sAi switch.
+        await tp.evaluate(() => { location.hash = '#settings'; });
+        await tp.waitForSelector('#chooseGrinder');
+        await tp.locator('#chooseGrinder').tap();
+        await tp.selectOption('#grinderSelect', '');
+        await tp.waitForSelector('#gStart');
+        await tp.evaluate(() => {
+          window.__miniWrites = [];
+          const orig = S.api.settings.set;
+          S.api.settings.set = (p) => { window.__miniWrites.push(p); return orig(p); };
+        });
+        const gStart0 = Number(await tp.inputValue('#gStart'));
+        await tp.locator('[data-mini="gStart:0.25"]').scrollIntoViewIfNeeded();
+        await tp.locator('[data-mini="gStart:0.25"]').tap();
+        await tp.waitForTimeout(280);
+        assert.equal(Number(await tp.inputValue('#gStart')), gStart0 + 0.25, `${cfg.label} settings gStart + touch tap steps once`);
+        assert.equal(await tp.evaluate(() => window.__miniWrites.length), 1, `${cfg.label} settings gStart + writes once`);
+        await tp.locator('[data-mini="gStart:-0.25"]').tap();
+        await tp.waitForTimeout(280);
+        assert.equal(Number(await tp.inputValue('#gStart')), gStart0, `${cfg.label} settings gStart - touch tap steps once`);
+        const sSteam0 = Number(await tp.inputValue('#sSteamT'));
+        await tp.locator('[data-mini="sSteamT:5"]').scrollIntoViewIfNeeded();
+        await tp.locator('[data-mini="sSteamT:5"]').tap();
+        await tp.waitForTimeout(280);
+        assert.equal(Number(await tp.inputValue('#sSteamT')), sSteam0 + 5, `${cfg.label} settings sSteamT + touch tap steps once`);
+        const ai0 = await tp.locator('#sAi').isChecked();
+        await tp.locator('#sAi').scrollIntoViewIfNeeded();
+        await tp.locator('#sAi').tap();
+        await tp.waitForTimeout(150);
+        assert.equal(await tp.locator('#sAi').isChecked(), !ai0, `${cfg.label} settings sAi touch tap toggles once`);
+
+        // Shots compare checkbox ([data-cmp] / .cmp-label re-rendering #shotList in onchange) and #detailStars.
+        await tp.evaluate(() => { location.hash = '#shots'; });
+        await tp.waitForSelector('[data-cmp]:not(:disabled)');
+        const cmpLabel = tp.locator('.cmp-label:has([data-cmp]:not(:disabled))').first();
+        const cmpId = await cmpLabel.locator('input').getAttribute('data-cmp');
+        await cmpLabel.tap();
+        await tp.waitForTimeout(120);
+        assert.equal(await tp.evaluate(() => S.cmpShot), cmpId, `${cfg.label} shots compare label touch tap toggles on once`);
+        await tp.locator(`.cmp-label:has([data-cmp="${cmpId}"])`).tap();
+        await tp.waitForTimeout(120);
+        assert.equal(await tp.evaluate(() => S.cmpShot), null, `${cfg.label} shots compare label second touch tap toggles off`);
+        await tp.evaluate(() => {
+          window.__starWrites = 0;
+          const orig = S.api.annotate;
+          S.api.annotate = (...a) => { window.__starWrites++; return orig(...a); };
+        });
+        await tp.locator('#detailStars').scrollIntoViewIfNeeded();
+        const sbox = await tp.locator('#detailStars').boundingBox();
+        const sCur = Number(await tp.locator('#detailStars').getAttribute('aria-valuenow'));
+        await tp.touchscreen.tap(sbox.x + sbox.width * (sCur === 8 ? 0.55 : 0.78), sbox.y + sbox.height / 2);
+        await tp.waitForTimeout(120);
+        assert.notEqual(Number(await tp.locator('#detailStars').getAttribute('aria-valuenow')), sCur, `${cfg.label} detailStars touch tap updates rating`);
+        assert.equal(await tp.evaluate(() => window.__starWrites), 1, `${cfg.label} detailStars touch tap writes once`);
       } finally { await tctx.close(); }
     }
     assert.deepEqual(errors, []);

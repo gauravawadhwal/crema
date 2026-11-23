@@ -7887,17 +7887,27 @@ function tickSaver() {
 }
 function wakeFromSaver() { $("#saver").hidden = true; cancelSaverHold(); S.api.machine.setState("idle").catch(() => {}); }
 // Hold to wake: a ring fills for 1 s under the finger; letting go early sends nothing.
-let saverHoldTimer = null;
+let saverHoldTimer = null, saverHoldWoke = false;
 function cancelSaverHold() { clearTimeout(saverHoldTimer); saverHoldTimer = null; $("#saver").classList.remove("holding"); }
 function wireSaver() {
   const sv = $("#saver");
   sv.onclick = () => { if (!S.holdWake) wakeFromSaver(); };
   sv.addEventListener("pointerdown", (e) => {
+    saverHoldWoke = false;
     if (!S.holdWake || saverHoldTimer) return;
+    const touch = e.pointerType === "touch";
     try { sv.setPointerCapture(e.pointerId); } catch {}
     sv.classList.add("holding");
-    saverHoldTimer = setTimeout(() => { saverHoldTimer = null; wakeFromSaver(); }, 1000);
+    saverHoldTimer = setTimeout(() => { saverHoldTimer = null; saverHoldWoke = touch; wakeFromSaver(); }, 1000);
   });
+  // A completed touch hold hides #saver before release; cancel the trailing compatibility click
+  // so lifting the finger does not activate a control underneath.
+  sv.addEventListener("touchend", (e) => {
+    if (!saverHoldWoke) return;
+    if (e.cancelable) e.preventDefault();
+    if (!e.touches.length) saverHoldWoke = false;
+  }, { passive: false });
+  sv.addEventListener("touchcancel", () => { saverHoldWoke = false; });
   ["pointerup", "pointercancel", "pointerleave"].forEach((t) => sv.addEventListener(t, cancelSaverHold));
   sv.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wakeFromSaver(); } });
 }
