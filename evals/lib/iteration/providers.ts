@@ -145,9 +145,9 @@ export class IsolatedCli implements EvalProvider {
       binary: this.pin.binary, env: isolatedEnv(this.sandbox, "agy"), scratchRoot: this.cwd,
       timeoutMs: this.sandbox.timeoutMs, stop: this.stop,
     });
-    const { value, usage } = await provider.request(req);
+    const { raw, usage } = await provider.request(req);
     if (!usage) throw new Error("Antigravity did not report token usage");
-    return { raw: value, usage };
+    return { raw, usage };
   }
 
   private async claude(req: StructuredRequest<z.ZodType>, schema: string) {

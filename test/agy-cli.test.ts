@@ -127,7 +127,10 @@ describe("Antigravity eval provider", () => {
       agy: { maxShortPp: 10, maxWeeklyPp: 10, reserveShortPp: 50, reserveWeeklyPp: 50, shortPpPerCall: 1, weeklyPpPerCall: 1 },
     } }, "test", reader);
     const provider = new IsolatedCli(pin, sandbox, dir, stop, meter);
-    await expect(provider.structured(req)).resolves.toEqual({ verdict: "ok" });
+    let decodes = 0;
+    const schema = z.preprocess(input => { decodes++; return input; }, req.schema);
+    await expect(provider.structured({ ...req, schema })).resolves.toEqual({ verdict: "ok" });
+    expect(decodes).toBe(1);
     expect(meter.usage).toMatchObject({ attempts: 1, tokens: 17, windows: { agy: [{ id: "claude_gpt_5h" }, { id: "claude_gpt_weekly" }] } });
     await expect(provider.structured(req)).rejects.toThrow("Hard token cap");
     writeFileSync(stop, "");

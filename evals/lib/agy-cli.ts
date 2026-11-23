@@ -61,12 +61,14 @@ export class AgyCliProvider {
   }
 
   async structured<T extends z.ZodType>(req: StructuredRequest<T>): Promise<z.infer<T>> {
-    const { value, usage } = await this.request(req);
+    const { raw, usage } = await this.request(req);
     if (usage) req.onUsage?.(usage);
-    return value;
+    const result = req.schema.safeParse(raw);
+    if (!result.success) throw new Error("[agy-cli] Antigravity returned invalid structured output");
+    return result.data;
   }
 
-  async request<T extends z.ZodType>(req: StructuredRequest<T>): Promise<{ value: z.infer<T>; usage?: Usage }> {
+  async request(req: StructuredRequest<z.ZodType>): Promise<{ raw: unknown; usage?: Usage }> {
     if (req.images?.length || req.web) throw new Error("agy-cli accepts text-only eval requests");
     const { binary = process.env.AGY_BIN || "agy", stop, timeoutMs = 180_000 } = this.options;
     const root = await realpath(this.options.scratchRoot ?? tmpdir());
@@ -97,12 +99,12 @@ export class AgyCliProvider {
           throw new Error("Invalid Antigravity token usage");
         }
         return {
-          value: req.schema.parse(envelope.structured_output ?? extractJson(envelope.response ?? "")),
+          raw: envelope.structured_output ?? extractJson(envelope.response ?? ""),
           usage: u && { inputTokens: u.input_tokens - u.cache_read_tokens, cacheTokens: u.cache_read_tokens,
             outputTokens: Math.max(u.output_tokens + u.thinking_tokens, (u.total_tokens ?? 0) - u.input_tokens) },
         };
       }
-      return { value: req.schema.parse(raw) };
+      return { raw };
     } catch (error) {
       if (error instanceof TransportFailure) throw error;
       if (error instanceof z.ZodError || error instanceof SyntaxError ||
