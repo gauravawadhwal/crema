@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { z } from "zod";
-import type { LlmProvider, StructuredRequest, Usage } from "../../server/llm/types.js";
+import type { StructuredRequest, Usage } from "../../server/llm/types.js";
+import type { EvalProvider } from "./providers.js";
 
 export interface CallRecord {
   schemaName: string;
@@ -40,11 +41,11 @@ function addUsage(a: Usage | undefined, b: Usage): Usage {
  * swallows some errors (it falls back to rules), so this is how the evals tell
  * a model answer from a fallback.
  */
-export class RecordingProvider implements LlmProvider {
+export class RecordingProvider<P extends EvalProvider = EvalProvider> implements EvalProvider {
   readonly calls: CallRecord[] = [];
-  constructor(private readonly inner: LlmProvider) {}
+  constructor(private readonly inner: P) {}
 
-  get id() {
+  get id(): P["id"] {
     return this.inner.id;
   }
   get billing() {

@@ -1,10 +1,9 @@
-import { PROVIDER_IDS } from "../../server/llm/index.js";
+import { isEvalProviderId } from "./providers.js";
 import type { CallRecord } from "./recorder.js";
 import type { TaskName } from "./dataset.js";
 
 export type AnswerSource = "rules" | "model" | "fallback" | "unknown";
 export type RequestedSubject = { kind: "rules" } | { kind: "llm"; provider: string };
-const knownProvider = (value: string) => (PROVIDER_IDS as readonly string[]).includes(value);
 
 const schemas: Record<TaskName, readonly string[]> = {
   identify: ["BeanInfo"],
@@ -29,9 +28,9 @@ export function answerSource(
   if (rules) return requested?.kind === "llm" || relevant.length ? "fallback" : "unknown";
   if (!completed) return "unknown";
   if (source !== undefined) {
-    return knownProvider(source) && (!requested || requested.provider === source) ? "model" : "unknown";
+    return isEvalProviderId(source) && (!requested || requested.provider === source) ? "model" : "unknown";
   }
   // Older reports stored the requested provider in metadata and the fallback
   // flag in context. A successful raw reply alone cannot prove it was used.
-  return requested?.kind === "llm" && knownProvider(requested.provider) && (fellBack === false || task === "identify") ? "model" : "unknown";
+  return requested?.kind === "llm" && isEvalProviderId(requested.provider) && (fellBack === false || task === "identify") ? "model" : "unknown";
 }

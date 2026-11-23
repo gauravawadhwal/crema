@@ -22,10 +22,14 @@ export function stopCheck(stop: string) {
 
 export function processOutput(command: string, args: string[], options: {
   cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; stop?: string; stdin?: string;
+  check?: (code: number | null, stdout: string, stderr: string) => void;
 }): Promise<string> {
   if (options.stop) stopCheck(options.stop);
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: options.cwd, env: options.env, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      cwd: options.cwd, env: options.env, detached: true,
+      stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    });
     let stdout = "", stderr = "", aborted: Error | undefined;
     const abort = (error: Error) => {
       aborted ??= error;
@@ -39,26 +43,30 @@ export function processOutput(command: string, args: string[], options: {
       if (options.stop && existsSync(options.stop)) abort(new Error("Iteration stopped during subprocess"));
     }, 100);
     const clear = () => { clearInterval(poll); clearTimeout(timeout); };
-    child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+    child.stdout?.setEncoding("utf8").on("data", (chunk: string) => {
       stdout += chunk;
       if (stdout.length > 4_000_000) abort(new Error("Subprocess output exceeded its limit"));
     });
-    child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => {
       stderr = (stderr + chunk).slice(-16_384);
     });
-    child.stdin.on("error", () => {}); // close handles an early exit
+    child.stdin?.on("error", () => {}); // close handles an early exit
     child.once("error", (error: NodeJS.ErrnoException) => {
       clear();
-      reject(error.code === "EAGAIN" ? new TransportFailure("Process could not start") : new Error("Subprocess could not start"));
+      reject(error.code === "EAGAIN" ? new TransportFailure("Process could not start") : new Error(`Subprocess could not start (${error.code})`));
     });
     child.once("close", (code) => {
       clear();
       if (aborted) reject(aborted);
-      else if (code === 0) resolve(stdout);
-      else if (/^(?:connection reset by peer|temporary transport failure)$/im.test(stderr.trim())) reject(new TransportFailure("Temporary transport failure"));
+      else if (code !== 0 && /^(?:connection reset by peer|temporary transport failure)$/im.test(stderr.trim())) {
+        reject(new TransportFailure("Temporary transport failure"));
+      } else if (options.check) {
+        try { options.check(code, stdout, stderr); resolve(stdout); }
+        catch (error) { reject(error); }
+      } else if (code === 0) resolve(stdout);
       else reject(new Error(`Subprocess exited with code ${code}`));
     });
-    child.stdin.end(options.stdin);
+    child.stdin?.end(options.stdin);
   });
 }
 
@@ -67,22 +75,51 @@ export const QuotaLimit = z.strictObject({
   maxShortPp: pp.positive(), maxWeeklyPp: pp.positive(),
   reserveShortPp: pp, reserveWeeklyPp: pp, shortPpPerCall: pp.positive(), weeklyPpPerCall: pp.positive(),
 });
-type Vendor = "codex" | "claude";
+const Vendors = z.enum(["codex", "claude", "agy"]);
+export type Vendor = z.infer<typeof Vendors>;
 export const Budget = z.strictObject({
-  maxTokens: z.number().int().positive(), quota: z.partialRecord(z.enum(["codex", "claude"]), QuotaLimit),
+  maxTokens: z.number().int().positive(), quota: z.partialRecord(Vendors, QuotaLimit),
 });
 
+const QuotaWindow = z.object({ id: z.string(), kind: z.string(), percentRemaining: pp, resetsAt: z.string() });
 const Quota = z.object({ schemaVersion: z.literal(5), providers: z.array(z.object({
   provider: z.enum(["codex", "claude"]), source: z.literal("oauth"),
   state: z.object({ status: z.literal("fresh"), stale: z.literal(false), refreshedAt: z.string() }),
-  windows: z.array(z.object({ id: z.string(), kind: z.string(), percentRemaining: pp, resetsAt: z.string() })),
+  windows: z.array(QuotaWindow),
 })) });
 
-export function quotaWindows(raw: unknown, vendor: Vendor, now = Date.now()) {
+const AgyQuota = z.object({
+  schemaVersion: z.literal(5), generatedAt: z.string(),
+  providers: z.array(z.object({ provider: z.string() }).passthrough()),
+});
+const AgyAccount = z.object({
+  state: z.object({ status: z.literal("fresh"), stale: z.literal(false), reused: z.literal(false).optional() }),
+  accountKeys: z.tuple([z.string().min(1)]),
+  windows: z.array(z.object({ id: z.string() }).passthrough()),
+});
+
+export function agyQuotaWindows(raw: unknown, required: ReadonlySet<string>, now = Date.now()) {
+  const reading = AgyQuota.parse(raw);
+  const matching = reading.providers.filter(p => p.provider === "agy");
+  if (matching.length !== 1) throw new Error("Antigravity quota requires a single subscription account");
+  const account = AgyAccount.parse(matching[0]);
+  const windows = z.array(QuotaWindow).parse(account.windows.filter(w => required.has(w.id)));
+  if (!required.size || windows.length !== required.size ||
+      windows.some(w => w.kind !== (w.id.endsWith("_5h") ? "session" : "weekly"))) {
+    throw new Error("Missing or unsupported Antigravity quota windows");
+  }
+  return freshWindows(windows, reading.generatedAt, now);
+}
+
+export function quotaWindows(raw: unknown, vendor: Exclude<Vendor, "agy">, now = Date.now()) {
   const matching = Quota.parse(raw).providers.filter(p => p.provider === vendor);
   if (matching.length !== 1) throw new Error("Quota requires a single subscription account");
   const { state, windows } = matching[0];
-  const age = now - Date.parse(state.refreshedAt);
+  return freshWindows(windows, state.refreshedAt, now);
+}
+
+function freshWindows(windows: z.infer<typeof QuotaWindow>[], observedAt: string, now: number) {
+  const age = now - Date.parse(observedAt);
   if (!(age >= -1000 && age <= 60_000)) throw new Error("Stale quota reading");
   if (new Set(windows.map(w => w.id)).size !== windows.length ||
       !windows.some(w => w.kind === "session") || !windows.some(w => w.kind === "weekly") ||
@@ -96,7 +133,7 @@ type Windows = ReturnType<typeof quotaWindows>;
 const State = z.strictObject({
   binding: z.string(), tokens: z.number().nonnegative(), attempts: z.number().int().nonnegative(),
   uncertain: z.boolean(),
-  windows: z.partialRecord(z.enum(["codex", "claude"]), z.array(z.object({
+  windows: z.partialRecord(Vendors, z.array(z.object({
     id: z.string(), kind: z.string(), remaining: pp, reset: z.string(), observed: z.number().nonnegative(), reserved: z.number().nonnegative(),
   }))),
 });

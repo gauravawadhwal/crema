@@ -54,6 +54,26 @@ Any provider in `server/llm/` works: `claude-cli`, `codex-cli`,
 gemini-2.5-flash-lite`), and `mock`. `--provider rules` runs Crema's
 deterministic fallback in place of a model.
 
+### Antigravity CLI
+
+Sign in to `agy` with your Antigravity subscription and use the exact model
+ID shown by `agy models`. The eval-only `agy-cli` provider accepts text requests
+and validates print-mode responses against the requested schema. It runs from
+an empty directory outside the checkout with closed stdin and a bounded timeout.
+Its session settings disable AI-credit fallback.
+[Antigravity CLI settings](https://antigravity.google/docs/cli/reference/).
+
+```sh
+npm run eval -- --task review --provider agy-cli --model gemini-4-argon-high --concurrency 1
+npm run eval -- --task review --provider rules --judge agy-cli:claude-opus-5-5-high --concurrency 1
+```
+
+Use `AGY_BIN` to point to a specific executable if `agy` is absent from PATH
+or you need a pinned installation. The same `--judge` flag works with
+`--regrade` for saved responses. See [gym iteration](ITERATION.md) for approved,
+metered rounds and [the Opus calibration](agy-judge-calibration.md) for the
+comparison with Claude CLI.
+
 ## Shot-review quality — 12 November 2026
 
 The legacy review suite has **41 synthetic cases**. Of these, 30 were authored
