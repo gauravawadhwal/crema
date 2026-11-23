@@ -168,6 +168,79 @@ const check = (ok, label, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"}
     await p.waitForTimeout(1500);
     const after = await p.evaluate(() => [S.chime, window.__notes, S.snap?.state?.state]);
     check(after[0] === true && after[1] === 0, "the chime setting survives a reload, and a reload is silent", JSON.stringify(after));
+
+    // Touch regression: hold-to-wake over an underlying Brew control must wake without
+    // passing a trailing compatibility click through to the control underneath.
+    for (const cfg of [
+      { label: "phone", viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+      { label: "tablet", viewport: { width: 1340, height: 800 }, hasTouch: true, isMobile: false },
+    ]) {
+      const tctx = await b.newContext(cfg);
+      try {
+        const tp = await tctx.newPage();
+        tp.on("pageerror", (e) => errs.push(e.message));
+        await tp.goto(pageUrl() + "#brew");
+        await tp.waitForFunction(() => typeof S !== "undefined" && S.api && S.snap && S.next && S.presets, null, { timeout: 15000 });
+        const holdTouch = async (x, y, ms) => {
+          const cdp = await tctx.newCDPSession(tp);
+          try {
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: Math.round(x), y: Math.round(y), id: 1 }] });
+            await tp.waitForTimeout(ms);
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+          } finally { await cdp.detach(); }
+        };
+        const showSaver = async (hold) => {
+          await tp.evaluate((h) => { S.holdWake = h; S.api.machine.setState("sleeping"); document.getElementById("saver").hidden = false; }, hold);
+          await tp.waitForSelector("#saver:not([hidden])");
+        };
+        // Tap-to-wake (holdWake=false) over grind + wakes once without stepping grind.
+        await tp.locator('[data-step="grind:1"]').scrollIntoViewIfNeeded();
+        const grindBox = await tp.locator('[data-step="grind:1"]').boundingBox();
+        const grindBefore = await tp.inputValue("#grindInput");
+        await showSaver(false);
+        await tp.touchscreen.tap(grindBox.x + grindBox.width / 2, grindBox.y + grindBox.height / 2);
+        await tp.waitForTimeout(200);
+        check(
+          await tp.evaluate((g) => document.getElementById("saver").hidden && S.snap?.state?.state !== "sleeping" && S.next.grind === g, grindBefore),
+          `${cfg.label} touch tap-to-wake wakes without clicking the grind button underneath`,
+          await tp.inputValue("#grindInput"),
+        );
+        // Short touch tap with holdWake=true leaves the machine asleep.
+        await showSaver(true);
+        await tp.touchscreen.tap(grindBox.x + grindBox.width / 2, grindBox.y + grindBox.height / 2);
+        await tp.waitForTimeout(200);
+        check(
+          await tp.evaluate(() => !document.getElementById("saver").hidden && S.snap?.state?.state === "sleeping"),
+          `${cfg.label} touch short tap does not wake when hold-to-wake is on`,
+        );
+        // Full 1 s touch hold directly over grind + wakes without stepping grind.
+        await holdTouch(grindBox.x + grindBox.width / 2, grindBox.y + grindBox.height / 2, 1150);
+        await tp.waitForTimeout(200);
+        check(
+          await tp.evaluate((g) => document.getElementById("saver").hidden && S.snap?.state?.state !== "sleeping" && S.next.grind === g, grindBefore),
+          `${cfg.label} touch hold-to-wake over grind + wakes without stepping grind`,
+          await tp.inputValue("#grindInput"),
+        );
+        // Full 1 s touch hold directly over the Dose tile wakes without opening the value sheet.
+        await tp.locator('[data-value="dose"]').scrollIntoViewIfNeeded();
+        const doseBox = await tp.locator('[data-value="dose"]').boundingBox();
+        await showSaver(true);
+        await holdTouch(doseBox.x + doseBox.width / 2, doseBox.y + doseBox.height / 2, 1150);
+        await tp.waitForTimeout(200);
+        check(
+          await tp.evaluate(() => document.getElementById("saver").hidden && S.snap?.state?.state !== "sleeping" && document.getElementById("sheetBack").hidden),
+          `${cfg.label} touch hold-to-wake over Dose tile wakes without opening value sheet`,
+        );
+        // A normal touch tap on grind + still steps once right after waking.
+        await tp.locator('[data-step="grind:1"]').tap();
+        await tp.waitForTimeout(120);
+        check(
+          Number(await tp.inputValue("#grindInput")) === Number(grindBefore) + 0.25,
+          `${cfg.label} grind + still steps once after waking from hold-to-wake`,
+          await tp.inputValue("#grindInput"),
+        );
+      } finally { await tctx.close(); }
+    }
     check(errs.length === 0, "no page errors", errs.join("; "));
   } catch (e) {
     console.log("FAIL script error:", e.message); failed = true;
