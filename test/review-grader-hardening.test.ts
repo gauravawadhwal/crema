@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import adversarial from "../evals/fixtures/review-ablation/grader-adversarial.json";
 import { loadCases, ROOT_DIR } from "../evals/lib/dataset.js";
+import { reviewJudgeEvidence, reviewJudgeStatus } from "../evals/lib/judge.js";
 import { makeEvalManifest, sha256 } from "../evals/lib/manifest.js";
 import type { ResultsFile } from "../evals/lib/report.js";
 import { normalizeLegacyReview, runReviewAblation, type ReviewEvalCase } from "../evals/lib/review-ablation.js";
@@ -126,6 +127,66 @@ describe("review attribution and adjudication", () => {
       expect(result.grade.pass).toBe(true);
       expect(result.grade.checks.some(c => c.name.startsWith("judge."))).toBe(false);
     }
+  });
+
+  it("treats unassessed tasteGrounding as expected only when no taste is recorded, and accepts serialized evidence JSON citations", async () => {
+    const noTasteInput = { ...input, feedback: null, notes: null };
+    const noTasteEvidence = reviewJudgeEvidence(noTasteInput);
+    const tasteUnassessed = {
+      ...goodVerdict,
+      assessment: { ...goodVerdict.assessment, tasteGrounding: { status: "unassessed" as const } },
+    };
+    const answer = { summary: "The shot ended at 36 g target weight and climbed toward 8.55 bar." };
+    expect(reviewJudgeStatus(tasteUnassessed, noTasteEvidence, answer)).toBe("assessed");
+
+    // When taste feedback or notes ARE present, unassessed tasteGrounding remains a coverage gap.
+    const withFeedback = reviewJudgeEvidence({ ...noTasteInput, feedback: { sourBitter: -1, body: 0, enjoyment: 6, notes: null } });
+    const withNotes = reviewJudgeEvidence({ ...noTasteInput, notes: "bright and sour" });
+    expect(reviewJudgeStatus(tasteUnassessed, withFeedback, answer)).toBe("unassessed");
+    expect(reviewJudgeStatus(tasteUnassessed, withNotes, answer)).toBe("unassessed");
+    expect(reviewJudgeStatus({
+      ...goodVerdict,
+      assessment: { numericEvidence: { status: "pass" }, causalRestraint: { status: "pass" }, adviceAlignment: { status: "pass" } },
+    }, noTasteEvidence, answer)).toBe("unassessed");
+
+    // Serialized JSON field quotes from evidence (exact and pretty-printed) must not be discarded as invalid-citation.
+    const serialized = JSON.stringify(noTasteEvidence);
+    const yieldSnippet = `"yieldG":${noTasteInput.yieldG}`;
+    const point = noTasteInput.points[5];
+    const pointSnippet = `"t":${point.t},"p":${point.p},"f":${point.f}`;
+    expect(serialized).toContain(yieldSnippet);
+    expect(serialized).toContain(pointSnippet);
+    for (const inputSays of [yieldSnippet, `"yieldG": ${noTasteInput.yieldG}`, pointSnippet]) {
+      const verdict = {
+        ...tasteUnassessed,
+        contradictions: [{ answerSays: "36 g target weight", inputSays }],
+      };
+      expect(reviewJudgeStatus(verdict, noTasteEvidence, answer)).toBe("assessed");
+    }
+
+    // Real invalid citations (fabricated values, punctuation-only, or unquoted answer) still return invalid-citation.
+    for (const bad of [
+      { answerSays: "36 g target weight", inputSays: '"yieldG":999.9' },
+      { answerSays: "36 g target weight", inputSays: "," },
+      { answerSays: "not in answer", inputSays: yieldSnippet },
+    ]) {
+      expect(reviewJudgeStatus({ ...tasteUnassessed, contradictions: [bad] }, noTasteEvidence, answer)).toBe("invalid-citation");
+    }
+
+    // End-to-end through runCase: a real contradiction with a JSON evidence citation fails judge.noContradictions.
+    const catchingJudge = scripted((_, prompt) => {
+      const parsed = JSON.parse(prompt);
+      const summary = parsed.answer.summary as string;
+      const snippet = summary.slice(0, 20);
+      return {
+        ...tasteUnassessed,
+        contradictions: [{ answerSays: snippet, inputSays: `"yieldG":${parsed.caseEvidence.recording.yieldG}` }],
+      };
+    });
+    const judged = await runCase("review", clean, { kind: "rules" }, 0, { today, judge: catchingJudge });
+    expect(judged.judgeStatus).toBe("assessed");
+    expect(judged.grade.pass).toBe(false);
+    expect(judged.grade.checks).toContainEqual(expect.objectContaining({ name: "judge.noContradictions", pass: false }));
   });
 
   it("separates fallback utility from model quality even with missing historical context", async () => {

@@ -54,6 +54,7 @@ const descriptions: Record<string, RegExp> = {
 };
 const faults = new Set(["pressure_shortfall", "flow_shortfall", "choked", "gushed", "off_target_temp", "fast_shot", "slow_shot"]);
 const inferredTaste = /\b(?:sour(?:ness)?|bitter(?:ness)?|sweet(?:ness)?|fruity|chocolatey|delicious|tasted?)\b/i;
+const nonClaimingTaste = /\b(?:(?:no|without)\s+(?:recorded\s+|logged\s+|reported\s+)?taste(?:\s+(?:feedback|notes?|report|data|rating|info(?:rmation)?))?|taste\s+(?:it|the\s+(?:shot|cup|coffee|espresso)|first|before\b)|(?:check|log|record|report|note)\s+(?:the\s+|your\s+)?taste)\b/gi;
 const definiteDiagnosis = /\b(?:channel(?:l?ing|l?ed)|puck defect|under.extract(?:ed|ion)|over.extract(?:ed|ion)|extraction yield)\b/i;
 const abstaining = /\b(?:cannot|can't|could not|unavailable|unknown|unreliable|insufficient|missing|not recorded|no reliable)\b/i;
 
@@ -91,32 +92,85 @@ function measurements(text: string, input: ReviewInput, c: IterationCase, result
   const labelFigures = c.labels?.source === "synthetic-injected" ? c.labels.figures : [];
   const figures: { id: string; unit: string; value: number }[] = [];
   const errors = new Set<string>();
-  for (const match of text.toLowerCase().matchAll(quantities)) {
+  const targetComparison = /\b(?:below|above|under|over|near|off|from|short of|miss(?:ed|ing)?(?:\s+(?:the|its))?)\s+(?:the\s+|its\s+)?(?:planned\s+|sensor\s+)?(?:target|plan|setpoint|command)\b/g;
+  const num = (v: string | number | undefined) => {
+    if (v == null || String(v).trim() === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const steps = input.profile?.steps ?? [];
+  const pressureCeilings = steps.filter(s => s.pump?.toLowerCase() === "flow").map(s => num(s.limiter?.value));
+  const flowCeilings = steps.filter(s => s.pump?.toLowerCase() === "pressure").map(s => num(s.limiter?.value));
+  const stepTemps = steps.map(s => num(s.temperature));
+  const stepSeconds = steps.map(s => num(s.seconds));
+  const { facts, metrics } = result.evidence.analysis;
+  const { phaseEvidence } = facts;
+  const tempOffsets = [
+    metrics.meanTemperatureOffsetC,
+    ...phaseEvidence.phases.flatMap(p => {
+      const tv = p.temperature.value;
+      return tv ? [tv.entry.value?.offsetC, tv.last.value?.offsetC, tv.lateMedianOffsetC.value] : [];
+    }),
+  ].flatMap(v => v == null ? [] : [v, Math.abs(v)]);
+
+  const allMatches = [...text.toLowerCase().matchAll(quantities)];
+  for (const [idx, match] of allMatches.entries()) {
     const value = Number(match[1]), unit = match[2].replace(/\s/g, "").replace(/^sec(?:ond)?s?$/, "s");
-    const context = text.toLowerCase().slice(0, match.index).split(/(?<=[.!?])\s+|,|\b(?:versus|vs|against|while|compared (?:with|to))\b/).at(-1) ?? "";
+    const prevEnd = idx > 0 ? allMatches[idx - 1].index + allMatches[idx - 1][0].length : 0;
+    const rawContext = text.toLowerCase().slice(prevEnd, match.index).split(/(?<=[.!?])\s+|,|\b(?:versus|vs|against|while|compared (?:with|to))\b/).at(-1) ?? "";
+    const context = rawContext.replace(targetComparison, " ");
     const after = text.toLowerCase().slice(match.index + match[0].length);
     const marker = [...context.matchAll(/\b(target|planned|commanded|requested|goal|measured|actual|observed|recorded|held|reached|stayed)\b/g)].at(-1)?.[1];
-    const role = /^\s+(?:target|command|goal)\b/.test(after) || marker && /^(?:target|planned|commanded|requested|goal)$/.test(marker)
+    const isCeiling = /^\s+(?:(?:pressure|flow)\s+)?(?:ceiling|cap|limit)\b/.test(after) ||
+      /\b(?:(?:ceiling|cap|limit)(?:\s+(?:of|at|near))?|(?:capped|limited)\s+(?:at|to|near))\s*$/.test(context);
+    const role = isCeiling ? "ceiling" :
+      /^\s+(?:(?:pressure|flow|temperature|sensor)\s+)?(?:target|plan|command(?:ed)?|goal|setpoint|guide|expected(?:\s+window)?)\b/.test(after) ||
+        marker && /^(?:target|planned|commanded|requested|goal)$/.test(marker)
       ? "target" : marker ? "measured" : undefined;
     const sameRole = role ? labelFigures.filter(f => f.unit.toLowerCase() === unit && f.id.endsWith(`.${role}`)) : [];
     const exact = sameRole.filter(f => Math.abs(f.value - value) <= f.tolerance);
     const matching = exact.length ? exact : sameRole.length === 1 ? sameRole : [];
     for (const f of matching) figures.push({ id: f.id, unit: f.unit, value });
-    const keys = unit === "bar" ? ["p", "tp"] as const : unit === "ml/s" ? ["f", "tf"] as const :
-      unit === "°c" ? ["temp", "targetTemp"] as const : undefined;
-    const recorded = keys ? input.points.flatMap(p => role === "target" ? [p[keys[1]]] :
-      role === "measured" ? [p[keys[0]]] : [p[keys[0]], p[keys[1]]]) :
-      unit === "g" ? (role === "target" ? [input.targetYieldG] : [input.doseG, input.yieldG]) :
-      unit === "s" ? (role === "target" ? input.targetTimeS ?? [] : input.points.map(p => p.t)) :
-      unit === "g/s" ? input.points.map(p => p.weightFlow) : [];
-    let fixedRoles: number[] | undefined;
+    const recorded: (number | null | undefined)[] =
+      unit === "bar" ? (
+        role === "ceiling" ? pressureCeilings :
+        role === "target" ? input.points.map(p => p.tp) :
+        role === "measured" ? input.points.map(p => p.p) :
+        [...input.points.flatMap(p => [p.p, p.tp]), ...pressureCeilings]
+      ) :
+      unit === "ml/s" ? (
+        role === "ceiling" ? flowCeilings :
+        role === "target" ? input.points.map(p => p.tf) :
+        role === "measured" ? input.points.map(p => p.f) :
+        [...input.points.flatMap(p => [p.f, p.tf]), ...flowCeilings]
+      ) :
+      unit === "°c" ? (
+        role === "target" ? [...input.points.flatMap(p => [p.targetTemp, p.targetGroupTemp]), input.tempC, ...stepTemps] :
+        role === "measured" ? [...input.points.flatMap(p => [p.temp, p.groupTemp]), ...tempOffsets] :
+        [...input.points.flatMap(p => [p.temp, p.targetTemp, p.groupTemp, p.targetGroupTemp]), ...tempOffsets, input.tempC, ...stepTemps]
+      ) :
+      unit === "g" ? (
+        role === "target" || role === "ceiling" ? [input.targetYieldG] :
+        [input.doseG, input.yieldG, input.annotatedYieldG, ...input.points.map(p => p.w),
+          ...(phaseEvidence.firstSustainedBeverage.value ? [1] : [])]
+      ) :
+      unit === "s" ? (
+        role === "target" || role === "ceiling" ? [...(input.targetTimeS ?? []), ...(result.evidence.expectedTime.value ?? []), ...stepSeconds] :
+        [...input.points.map(p => p.t), facts.durationS, phaseEvidence.firstSustainedBeverage.value?.brewElapsedS,
+          ...phaseEvidence.phases.flatMap(p => [p.fromS, p.toS, p.durationS]),
+          ...result.evidence.landmarks.flatMap(l => [l.tS, l.brewElapsedS])]
+      ) :
+      unit === "g/s" ? [...input.points.map(p => p.weightFlow), phaseEvidence.cupRateBeforeOnsetGS.value, phaseEvidence.cupRateAfterOnsetGS.value] : [];
+    const issueValues: number[] = [];
     for (const kind of ["pressure_shortfall", "flow_shortfall"]) {
       const comparison = result.curve.issues.find(i => i.kind === kind)?.evidence.match(/target ([\d.]+) (bar|ml\/s), measured ([\d.]+)/);
-      if (comparison?.[2] === unit && role) fixedRoles = [Number(comparison[role === "target" ? 1 : 3])];
+      if (comparison?.[2] === unit && (role === "target" || role === "measured")) issueValues.push(Number(comparison[role === "target" ? 1 : 3]));
     }
     const supported = matching.length ? matching.some(f => Math.abs(f.value - value) <= f.tolerance) :
-      (fixedRoles ?? recorded).some(n => n != null && Math.abs(n - value) <= 0.15);
-    const channel = [...context.matchAll(/\b(pressure|(?:inlet |cup )?flow|temperature)\b/g)].at(-1)?.[1];
+      [...recorded, ...issueValues].some(n => n != null && Math.abs(n - value) <= 0.15);
+    const afterChannel = /^\s+(pressure|(?:inlet |cup )?flow|temperature)\b/.exec(after)?.[1];
+    const channelClause = context.split(/\b(?:before|after|when|as|then|and)\b/).at(-1) ?? context;
+    const channel = afterChannel ?? [...channelClause.matchAll(/\b(pressure|(?:inlet |cup )?flow|temperature)\b/g)].at(-1)?.[1];
     const mismatchedUnit = (unit === "ml/s" && (channel === "pressure" || channel === "temperature" || channel === "cup flow")) ||
       (unit === "bar" && (channel?.endsWith("flow") || channel === "temperature")) ||
       (unit === "°c" && (channel?.endsWith("flow") || channel === "pressure"));
@@ -158,7 +212,7 @@ export function scoreEpisode(c: IterationCase, result: CoachReviewResult, trace:
   const critical: string[] = [...numeric.errors];
   const diagnostics: string[] = [];
   const clauses = text.split(/(?<=[.!?])\s+|[;]|\b(?:but|however|yet)\b/i);
-  if (clauses.some(clause => inferredTaste.test(clause) && !abstaining.test(clause))) critical.push("taste-leakage");
+  if (clauses.some(clause => inferredTaste.test(clause.replace(nonClaimingTaste, " ")) && !abstaining.test(clause))) critical.push("taste-leakage");
   // A stated evidence limit and a diagnosis elsewhere in the answer are scored independently.
   if (clauses.some(clause => definiteDiagnosis.test(clause) && !abstaining.test(clause))) critical.push("unsupported-diagnosis");
   if (outputs.claims["multiple-next-shot-changes"]) critical.push("multiple-changes");

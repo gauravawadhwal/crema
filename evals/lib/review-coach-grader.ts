@@ -27,21 +27,228 @@ const puckWords: Record<NonNullable<CoachReview["recommendation"]["puckCheck"]>,
 };
 const puckDiagnosis = /\b(?:fix|correct|repair|replace|buy|install|upgrade|wdt|screen|tool|needle|tamper|channel(?:l?ing|l?ed))\b/i;
 
-/** Only coach-ready figures are eligible, with their units and original order. */
-function consistentCoachNumbers(text: string, draft: string) {
-  const quantities = (s: string) => {
-    const values: string[] = [];
-    const remainder = s.replace(/([+\-−]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*[–-]\s*([+\-−]?(?:\d+(?:\.\d+)?|\.\d+)))?\s*(mL\/s|g\/s|bar|°C|s|g)(?![\w/])/gi,
-      (_, first: string, last: string | undefined, unit: string) => {
-        const normalize = (n: string) => Number(n.replace("−", "-"));
-        values.push([normalize(first), last == null ? "" : normalize(last), unit.toLowerCase()].join("|"));
-        return "";
-      });
-    return /\p{N}/u.test(remainder) ? null : values;
+const quantityPattern = /([+\-−]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*(?:[–-]|→|\bto\b)\s*([+\-−]?(?:\d+(?:\.\d+)?|\.\d+)))?\s*(mL\/s|g\/s|bar|°\s*C|s(?:ec(?:ond)?s?)?|g)(?![\w/])/gi;
+type NumberRole = "measured" | "target" | "ceiling";
+type QuantityUnit = "ml/s" | "g/s" | "bar" | "°c" | "s" | "g";
+interface ParsedQuantity {
+  first: number;
+  last: number | null;
+  unit: QuantityUnit;
+  role: NumberRole;
+}
+
+const normalizeUnit = (unit: string): QuantityUnit => {
+  const compact = unit.toLowerCase().replace(/\s+/g, "");
+  return /^sec(?:ond)?s?$/.test(compact) ? "s" : compact as QuantityUnit;
+};
+
+const normalizeNumber = (n: string) => Number(n.replace("−", "-"));
+
+// Bind numeric comparisons to a role, recognizing ceiling/cap/limit both before
+// and after a number and ignoring relational references like "below target at".
+function parseQuantities(text: string): ParsedQuantity[] | null {
+  const matches = [...text.matchAll(quantityPattern)];
+  const remainder = text.replace(quantityPattern, "");
+  if (/\p{N}/u.test(remainder)) return null;
+  const targetComparison = /\b(?:below|above|under|over|near|off|from|short of|miss(?:ed|ing)?(?:\s+(?:the|its))?)\s+(?:the\s+|its\s+)?(?:planned\s+|sensor\s+)?(?:target|plan|setpoint|command)\b/gi;
+  return matches.map((match, i) => {
+    const start = matches[i - 1] ? matches[i - 1].index + matches[i - 1][0].length : 0;
+    const rawPrior = text.slice(start, match.index);
+    const localPrior = (rawPrior.split(/(?<=[.!?])\s+|[,;]|\b(?:versus|vs\.?|against|while|compared (?:with|to))\b/i).at(-1) ?? rawPrior)
+      .replace(targetComparison, " ");
+    const after = text.slice(match.index + match[0].length, matches[i + 1]?.index);
+    let role: NumberRole = "measured";
+    if (/^\s+(?:(?:pressure|flow)\s+)?(?:ceiling|cap|limit)\b/i.test(after) ||
+        /\b(?:(?:ceiling|cap|limit)(?:\s+(?:of|at|near))?|(?:capped|limited)\s+(?:at|to|near))\s*$/i.test(localPrior)) {
+      role = "ceiling";
+    } else if (/^\s+(?:(?:pressure|flow|temperature|sensor)\s+)?(?:target|plan|command(?:ed)?|setpoint|guide|expected(?:\s+window)?)\b/i.test(after) ||
+        /\b(?:target|plan(?:ned)?|command(?:ed)?|request(?:ed)?|setpoint|guide|expected)(?:\s+(?:pressure|flow|temperature|yield|time|climb|ramp|decline|drop|rise|hold))?(?:\s+(?:of|was|is|at|near|around|to|toward))?\s*$/i.test(localPrior)) {
+      role = "target";
+    }
+    return {
+      first: normalizeNumber(match[1]),
+      last: match[2] == null ? null : normalizeNumber(match[2]),
+      unit: normalizeUnit(match[3]),
+      role,
+    };
+  });
+}
+
+function baseGroundedValues(input: ReviewInput, result: CoachReviewResult) {
+  const buckets = new Map<string, number[]>();
+  const add = (unit: QuantityUnit, role: NumberRole, ...values: (number | null | undefined)[]) => {
+    const key = `${unit}|${role}`;
+    const list = buckets.get(key) ?? [];
+    for (const v of values) {
+      if (v != null && Number.isFinite(v)) list.push(v);
+    }
+    buckets.set(key, list);
   };
-  const actual = quantities(text);
-  const expected = quantities(draft);
-  return actual != null && expected != null && actual.length === expected.length && actual.every((value, i) => value === expected[i]);
+  const stepPump = (frame: number | null) =>
+    frame == null ? null : input.profile?.steps?.[frame]?.pump?.toLowerCase() ?? null;
+  const num = (v: string | number | undefined) => {
+    if (v == null || String(v).trim() === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const { facts, metrics } = result.evidence.analysis;
+  const { phaseEvidence } = facts;
+  const brewStart = facts.brewStartS;
+  for (const p of input.points) {
+    const pump = stepPump(p.frame);
+    add("bar", "measured", p.p);
+    if (pump !== "flow") add("bar", "target", p.tp);
+    add("ml/s", "measured", p.f);
+    if (pump !== "pressure") add("ml/s", "target", p.tf);
+    add("°c", "measured", p.temp, p.groupTemp);
+    add("°c", "target", p.targetTemp, p.targetGroupTemp);
+    add("g", "measured", p.w);
+    add("g/s", "measured", p.weightFlow);
+    add("s", "measured", p.t, brewStart != null ? p.t - brewStart : null);
+  }
+
+  for (const step of input.profile?.steps ?? []) {
+    const pump = step.pump?.toLowerCase();
+    const limit = num(step.limiter?.value);
+    if (pump === "pressure") {
+      add("bar", "target", num(step.pressure));
+      add("ml/s", "ceiling", limit);
+    } else if (pump === "flow") {
+      add("ml/s", "target", num(step.flow));
+      add("bar", "ceiling", limit);
+    }
+    add("°c", "target", num(step.temperature));
+    add("g", "target", num(step.weight));
+    const secs = num(step.seconds);
+    add("s", "target", secs);
+    add("s", "ceiling", secs);
+  }
+
+  add("°c", "target", input.tempC);
+  add("°c", "measured", metrics.meanTemperatureOffsetC,
+    metrics.meanTemperatureOffsetC == null ? null : Math.abs(metrics.meanTemperatureOffsetC));
+  add("g", "measured", input.doseG, input.yieldG, input.annotatedYieldG, facts.doseG, facts.yieldG);
+  add("g", "target", input.targetYieldG, facts.targetYieldG);
+  add("g", "ceiling", input.targetYieldG, facts.targetYieldG);
+  add("bar", "measured", facts.peakPressureBar, facts.pourMeanPressureBar);
+  add("ml/s", "measured", facts.pourMeanFlowMlS);
+  add("s", "measured", facts.brewStartS, facts.brewEndS, facts.durationS, facts.preinfusionS,
+    facts.pourS, facts.firstDripsS, facts.timeDeltaS, facts.timeDeltaS == null ? null : Math.abs(facts.timeDeltaS));
+  for (const t of [...(input.targetTimeS ?? []), ...(facts.expectedTimeS ?? []), ...(result.evidence.expectedTime.value ?? [])]) {
+    add("s", "target", t);
+  }
+
+  for (const ps of facts.pourSteps) {
+    const u: QuantityUnit = ps.pump === "flow" ? "ml/s" : "bar";
+    const other: QuantityUnit = ps.pump === "flow" ? "bar" : "ml/s";
+    add(u, "target", ps.target);
+    add(u, "measured", ps.actualMean, ps.actualPeak);
+    add(other, "measured", ps.otherMean);
+    add(other, "ceiling", ps.limiterValue);
+    add("s", "measured", ps.durationS);
+  }
+
+  for (const p of phaseEvidence.phases) {
+    add("s", "measured", p.fromS, p.toS, p.durationS, p.controlledError.coveredS, p.pressureBar.coveredS,
+      p.inletFlowMlS.coveredS, p.pressureCrest.value?.tS, p.capLikeTime.coveredS, p.capLikeTime.value?.seconds);
+    if (p.plan.value) {
+      add("s", "target", p.plan.value.maximumS);
+      add("s", "ceiling", p.plan.value.maximumS);
+      add("°c", "target", p.plan.value.temperatureC);
+      add("g", "target", p.plan.value.weightG);
+    }
+    const pv = p.pressureBar.value;
+    if (pv) add("bar", "measured", pv.entry, pv.last, pv.min, pv.max, pv.timeWeightedMean,
+      pv.entry != null && pv.last != null ? Math.abs(pv.last - pv.entry) : null);
+    const fv = p.inletFlowMlS.value;
+    if (fv) add("ml/s", "measured", fv.entry, fv.last, fv.min, fv.max, fv.timeWeightedMean,
+      fv.entry != null && fv.last != null ? Math.abs(fv.last - fv.entry) : null);
+    add("bar", "measured", p.pressureCrest.value?.pressureBar, p.lateHydraulics.value?.medianPressureBar,
+      p.pressureDroopAtHeldFlowBar.value);
+    add("ml/s", "measured", p.lateHydraulics.value?.medianInletFlowMlS);
+    const mode = p.mode.value;
+    if (mode === "pressure" || mode === "flow") {
+      const u: QuantityUnit = mode === "flow" ? "ml/s" : "bar";
+      const other: QuantityUnit = mode === "flow" ? "bar" : "ml/s";
+      const cmd = p.loggedCommand.value;
+      if (cmd) add(u, "target", cmd.entry, cmd.last, cmd.min, cmd.max, cmd.timeWeightedMean,
+        cmd.entry != null && cmd.last != null ? Math.abs(cmd.last - cmd.entry) : null);
+      add(u, "target", p.steadyHold.value?.meanCommand, p.plan.value?.endpoint);
+      add(u, "measured", p.steadyHold.value?.meanResponse, p.controlledError.value?.absoluteMean,
+        p.controlledError.value?.signedMean,
+        p.controlledError.value?.signedMean == null ? null : Math.abs(p.controlledError.value.signedMean));
+      add(other, "ceiling", p.plan.value?.limiter?.value);
+    }
+    const tv = p.temperature.value;
+    if (tv) {
+      const e = tv.entry.value, l = tv.last.value, late = tv.lateMedianOffsetC.value;
+      add("°c", "measured", e?.actualC, l?.actualC, e?.offsetC, l?.offsetC, late,
+        e?.offsetC == null ? null : Math.abs(e.offsetC),
+        l?.offsetC == null ? null : Math.abs(l.offsetC),
+        late == null ? null : Math.abs(late));
+      add("°c", "target", e?.targetC, l?.targetC);
+    }
+  }
+
+  if (phaseEvidence.firstSustainedBeverage.value) {
+    add("g", "measured", 1);
+    add("s", "measured", phaseEvidence.firstSustainedBeverage.value.tS, phaseEvidence.firstSustainedBeverage.value.brewElapsedS);
+  }
+  add("g/s", "measured", phaseEvidence.cupRateBeforeOnsetGS.value, phaseEvidence.cupRateAfterOnsetGS.value);
+  for (const landmark of result.evidence.landmarks) {
+    add("s", "measured", landmark.tS, landmark.brewElapsedS, landmark.phaseElapsedS);
+  }
+  for (const issue of result.curve.issues) {
+    add("s", "measured", issue.fromS, issue.toS);
+  }
+  for (const phase of [result.coach.temperature, ...result.coach.phases]) {
+    if (!phase.unit) continue;
+    const u = normalizeUnit(phase.unit);
+    add(u, "target", phase.expected?.start, phase.expected?.finish, phase.expected?.average);
+    add(u, "measured", phase.actual?.start, phase.actual?.finish, phase.actual?.average, phase.meanAbsoluteError);
+    if (phase.ceiling) add(normalizeUnit(phase.ceiling.unit), "ceiling", phase.ceiling.value);
+  }
+  const curves = result.evidence.history.curves;
+  if (curves?.reason === "comparable_phases") {
+    add("bar", "measured", curves.phase?.peakPressureBar, curves.mass.current?.pressureBar,
+      ...curves.references.map(r => r.mass?.pressureBar));
+    add("g", "measured", curves.mass.current?.massG);
+  }
+  for (const h of input.history) {
+    add("g", "measured", h.doseG, h.yieldG);
+    add("g", "target", h.targetYieldG);
+    add("s", "measured", h.durationS);
+    add("°c", "target", h.tempC);
+  }
+  return buckets;
+}
+
+const NUMERIC_GROUNDING_TOLERANCE = 0.15;
+
+function groundedCoachNumbers(text: string, draft: string, baseBuckets: () => Map<string, number[]>) {
+  if (spelledFigure.test(text)) return false;
+  const parsed = parseQuantities(text);
+  if (parsed === null) return false;
+  if (parsed.length === 0) return true;
+  const buckets = baseBuckets();
+  const draftValues = new Map<string, number[]>();
+  for (const q of parseQuantities(draft) ?? []) {
+    const key = `${q.unit}|${q.role}`;
+    const list = draftValues.get(key) ?? [];
+    list.push(q.first);
+    if (q.last !== null) list.push(q.last);
+    draftValues.set(key, list);
+  }
+  return parsed.every(({ first, last, unit, role }) => {
+    const key = `${unit}|${role}`;
+    const allowed = buckets.get(key) ?? [];
+    const fromDraft = draftValues.get(key) ?? [];
+    const ok = (value: number) =>
+      fromDraft.some(ref => Math.abs(ref - value) <= NUMERIC_GROUNDING_TOLERANCE) ||
+      allowed.some(ref => Math.abs(ref - value) <= NUMERIC_GROUNDING_TOLERANCE);
+    return ok(first) && (last === null || ok(last));
+  });
 }
 
 function oneSentence(text: string) {
@@ -174,24 +381,6 @@ function recommendationViolations(rec: CoachReview["recommendation"], input: Rev
   return errors;
 }
 
-// Bind numeric comparisons to a slot-specific reference and keep the role
-// of each value, even when the same digits and units remain in the sentence.
-function numberRoles(text: string) {
-  return [...text.matchAll(/(?:\d+(?:\.\d+)?)(?:\s*[–-]\s*\d+(?:\.\d+)?)?\s*(?:mL\/s|g\/s|bar|°C|s|g)(?![\w/])/gi)].map((match, i, values) => {
-    const prior = text.slice(values[i - 1] ? values[i - 1].index + values[i - 1][0].length : 0, match.index);
-    const after = text.slice(match.index + match[0].length, values[i + 1]?.index);
-    const target = /\b(?:target|planned|command(?:ed)?|request(?:ed)?|setpoint|guide|expected)\b/i;
-    if (/^\s+ceiling\b/i.test(after) || /\b(?:ceiling|cap|limit)(?:\s+of)?\s*$/i.test(prior)) return "ceiling";
-    if (/^\s+(?:target|command|guide|expected window)\b/i.test(after) || target.test(prior)) return "target";
-    return "measured";
-  });
-}
-
-function numbersMatch(text: string, draft: string) {
-  const expected = numberRoles(draft);
-  return !spelledFigure.test(text) && consistentCoachNumbers(text, draft) && numberRoles(text).every((role, i) => role === expected[i]);
-}
-
 export interface CoachStyle {
   structural: string[];
   style: string[];
@@ -233,15 +422,15 @@ export function gradeCoachCard(result: CoachReviewResult, input: ReviewInput, re
   if (evidence.analysis.facts.phaseEvidence.firstSustainedBeverage.value) evidenceIds.add("cup");
   const validIds = (row: Fact, draft?: Fact) => row.evidenceIds.length > 0 &&
     row.evidenceIds.every(id => evidenceIds.has(id) && (!draft || draft.evidenceIds.includes(id)));
+  let cachedBuckets: Map<string, number[]> | undefined;
+  const getBuckets = () => cachedBuckets ??= baseGroundedValues(input, result);
   for (const { slot, row } of mechanicsFacts(coach)) {
     const text = row.sentence;
     const draft = referenceFacts.get(slot);
     const isStage = slot.startsWith("stage-") || slot === "temperature";
-    const stage = coach.stages.find(s => s === row);
     if (isStage && !oneSentence(text)) structural.push(`stage-sentence.${slot}`);
-    if (isStage && readback.test(text) || /\p{N}/u.test(text) && !slot.startsWith("notable-") && slot !== "history" &&
-        (!isStage || (stage ?? coach.temperature).verdict !== "off_plan")) style.push(`numeric-readback.${slot}`);
-    if (!draft || (text !== draft.sentence && !numbersMatch(text, draft.sentence))) grounding.push(`figures-or-role.${slot}`);
+    if (readback.test(text)) style.push(`numeric-readback.${slot}`);
+    if (!draft || (text !== draft.sentence && !groundedCoachNumbers(text, draft.sentence, getBuckets))) grounding.push(`figures-or-role.${slot}`);
     if (!validIds(row, draft)) grounding.push(`evidence-ids.${slot}`);
     if (jargon.test(text)) style.push(`jargon.${slot}`);
     // History conveys the owner's recorded time, not control of a machine channel.

@@ -86,6 +86,9 @@ describe("version 4 structure and surface checks", () => {
       row.notable.find(n => n.sentence.includes("4.5 mL/s"))!.sentence = sentence;
     }).grounding;
     expect(rewrite("The machine held 4.5 mL/s and reached 3.6 bar below its 8.6 bar ceiling.")).toEqual([]);
+    expect(rewrite("The machine held 4.5 mL/s and reached 3.6 bar below its 8.6 bar limit.")).toEqual([]);
+    expect(rewrite("The machine held 4.5 mL/s and reached 3.6 bar below its 8.6 bar cap.")).toEqual([]);
+    expect(rewrite("The machine held 4.5 mL/s and reached 3.6 bar under its 8.6 bar pressure limit.")).toEqual([]);
     for (const wrong of [
       "The machine held 4.5 mL/s and reached 3.6 bar below its 8.6 bar target.",
       "The machine held 4.5 mL/s with a ceiling of 3.6 bar and reached 8.6 bar.",
@@ -96,6 +99,45 @@ describe("version 4 structure and surface checks", () => {
     ]) expect(rewrite(wrong)).toContain("figures-or-role.notable-2");
     expect(grade("a1", row => { row.notable[1].evidenceIds = ["recording", "invented-id"]; }).grounding)
       .toContain("evidence-ids.notable-2");
+  });
+
+  it("allows grounded EVIDENCE figures in stages and temperature recovery while rejecting fabricated or swapped figures", () => {
+    const { dataset } = seededDev([], 1);
+    const gymTracked = dataset.cases.find(c => c.id === "allonge-tracked.s0")!;
+    const gymResult = rulesReviewResult(gymTracked.input);
+    const gymRef = structuredClone(gymResult.coach);
+    gymResult.coach.temperature.sentence = "Group temperature started below target at 87.5 °C against a 91.5 °C target and recovered near target by the end.";
+    gymResult.coach.stages[1].sentence = "The machine held flow near 4.5 mL/s while pressure stayed under the 8.6 bar limit.";
+    expect(gradeCoachCard(gymResult, gymTracked.input, gymRef)).toEqual({ structural: [], style: [], grounding: [], taste: [] });
+
+    const capped = fixture("a2");
+    const cappedResult = rulesReviewResult(capped.input);
+    const cappedRef = structuredClone(cappedResult.coach);
+    cappedResult.coach.stages[1].sentence = "Flow averaged 3.3 mL/s against a 4.5 mL/s target under the 8.6 bar pressure limit.";
+    expect(gradeCoachCard(cappedResult, capped.input, cappedRef)).toEqual({ structural: [], style: [], grounding: [], taste: [] });
+
+    const decline = fixture("b1");
+    const declineResult = rulesReviewResult(decline.input);
+    const declineRef = structuredClone(declineResult.coach);
+    declineResult.coach.stages[2].sentence = "The machine followed the planned decline from 9 to 6 bar.";
+    expect(gradeCoachCard(declineResult, decline.input, declineRef)).toEqual({ structural: [], style: [], grounding: [], taste: [] });
+
+    // Real violations must still fail: fabricated values, swapped roles, and literal readback.
+    const badTemp = rulesReviewResult(gymTracked.input);
+    badTemp.coach.temperature.sentence = "Group temperature started at 70 °C against a 91.5 °C target.";
+    expect(gradeCoachCard(badTemp, gymTracked.input, gymRef).grounding).toContain("figures-or-role.temperature");
+
+    const swappedTemp = rulesReviewResult(gymTracked.input);
+    swappedTemp.coach.temperature.sentence = "Group temperature held 91.5 °C against an 87.5 °C target.";
+    expect(gradeCoachCard(swappedTemp, gymTracked.input, gymRef).grounding).toContain("figures-or-role.temperature");
+
+    const badStage = rulesReviewResult(capped.input);
+    badStage.coach.stages[1].sentence = "Pressure averaged 12.5 bar against a 4.5 mL/s target.";
+    expect(gradeCoachCard(badStage, capped.input, cappedRef).grounding).toContain("figures-or-role.stage-2");
+
+    const readbackCard = rulesReviewResult(capped.input);
+    readbackCard.coach.headline.sentence = "Dose: 18 g, yield: 80.6 g.";
+    expect(gradeCoachCard(readbackCard, capped.input, cappedRef).style).toContain("numeric-readback.headline");
   });
 });
 

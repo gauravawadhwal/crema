@@ -93,25 +93,52 @@ export function reviewJudgeProvenance(evidence: ReviewJudgeEvidence, version: Re
   return { evidenceDigest: digest(evidence), rubricDigest: digest([reviewRubric(version), z.toJSONSchema(ReviewJudgeVerdict)]) };
 }
 
-// Citations must occur inside a single displayed text field. Searching the
-// serialized object would allow quotations stitched across fields or keys.
+// Citations for displayed answers must occur inside a single text field.
+// Searching the serialized answer would allow quotes stitched across fields.
 function containsQuote(value: unknown, quote: string): boolean {
   if (!quote.trim()) return false;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value).includes(quote);
   return value !== null && typeof value === "object" && Object.values(value).some(field => containsQuote(field, quote));
 }
 
+function compactJsonSnippet(quote: string): string {
+  return quote.trim()
+    .replace(/(":)\s+/g, "$1")
+    .replace(/,\s+(?=["\-\d\[\{tfn])/g, ",")
+    .replace(/([\{\[])\s+/g, "$1")
+    .replace(/\s+([\}\]])/g, "$1");
+}
+
+function containsEvidenceQuote(evidence: ReviewJudgeEvidence, quote: string): boolean {
+  if (containsQuote(evidence, quote)) return true;
+  if (!/[a-z0-9]/i.test(quote)) return false;
+  const serialized = JSON.stringify(evidence);
+  return serialized.includes(quote) || serialized.includes(compactJsonSnippet(quote));
+}
+
+function hasRecordedTaste(taste: ReviewJudgeEvidence["taste"]): boolean {
+  if (taste.notes?.trim()) return true;
+  const fb = taste.feedback;
+  return !!fb && (fb.sourBitter != null || fb.body != null || fb.enjoyment != null || !!fb.notes?.trim());
+}
+
 export function reviewJudgeStatus(verdict: unknown, evidence: ReviewJudgeEvidence, answer: unknown) {
   const parsed = ReviewJudgeVerdict.safeParse(verdict);
   if (!parsed.success) return "unassessed" as const;
   const v = parsed.data;
-  if (v.contradictions.some(c => !containsQuote(answer, c.answerSays) || !containsQuote(evidence, c.inputSays)) ||
+  if (v.contradictions.some(c => !containsQuote(answer, c.answerSays) || !containsEvidenceQuote(evidence, c.inputSays)) ||
       v.inventedFigures.some(q => !containsQuote(answer, q)) ||
       semanticChecks.some(key => {
         const check = v.assessment?.[key];
         return check?.status === "fail" && check.findings.some(f => !containsQuote(answer, f.answerSays) || !Object.hasOwn(evidence, f.evidenceId));
       })) return "invalid-citation" as const;
-  return semanticChecks.some(key => !v.assessment?.[key] || v.assessment[key].status === "unassessed") ? "unassessed" as const : "assessed" as const;
+  const tastePresent = hasRecordedTaste(evidence.taste);
+  return semanticChecks.some(key => {
+    const check = v.assessment?.[key];
+    if (!check) return true;
+    if (check.status !== "unassessed") return false;
+    return key !== "tasteGrounding" || tastePresent;
+  }) ? "unassessed" as const : "assessed" as const;
 }
 
 export async function judgeReview(llm: ProviderChain, evidence: ReviewJudgeEvidence, answer: unknown, version: ReviewRubric = "v2"): Promise<JudgeVerdict> {
