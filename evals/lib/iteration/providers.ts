@@ -58,10 +58,11 @@ export function makeQuotaReader(config: z.infer<typeof Sandbox>, cwd: string, st
 }
 
 const count = z.number().int().nonnegative();
-function claudeResult(stdout: string, pin: CliPin) {
+export function claudeResult(stdout: string, pin: CliPin, options: { jsonSchema?: boolean } = {}) {
+  const jsonSchema = options.jsonSchema ?? true;
   const envelope = z.object({
     is_error: z.literal(false),
-    num_turns: z.literal(1),
+    num_turns: jsonSchema ? z.number().int().min(1) : z.literal(1),
     structured_output: z.unknown(),
     usage: z.object({
       input_tokens: count, output_tokens: count, cache_creation_input_tokens: count.default(0), cache_read_input_tokens: count.default(0),
@@ -153,10 +154,10 @@ export class IsolatedCli implements EvalProvider {
   private async claude(req: StructuredRequest<z.ZodType>, schema: string) {
     const stdout = await this.command([
       "-p", "--safe-mode", "--restricted", "--strict-mcp-config", "--tools", "", "--disable-slash-commands",
-      "--setting-sources", "", "--no-session-persistence", "--max-turns", "1", "--output-format", "json",
+      "--setting-sources", "", "--no-session-persistence", "--output-format", "json",
       "--model", this.pin.model, "--effort", this.pin.effort, "--system-prompt", req.system, "--json-schema", schema,
     ], req.prompt);
-    return claudeResult(stdout, this.pin);
+    return claudeResult(stdout, this.pin, { jsonSchema: true });
   }
 
   private async codex(req: StructuredRequest<z.ZodType>, schema: string) {

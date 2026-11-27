@@ -81,7 +81,7 @@ export const Budget = z.strictObject({
   maxTokens: z.number().int().positive(), quota: z.partialRecord(Vendors, QuotaLimit),
 });
 
-const QuotaWindow = z.object({ id: z.string(), kind: z.string(), percentRemaining: pp, resetsAt: z.string() });
+const QuotaWindow = z.object({ id: z.string(), kind: z.string(), percentRemaining: pp, resetsAt: z.string().nullish() });
 const Quota = z.object({ schemaVersion: z.literal(5), providers: z.array(z.object({
   provider: z.enum(["codex", "claude"]), source: z.literal("oauth"),
   state: z.object({ status: z.literal("fresh"), stale: z.literal(false), refreshedAt: z.string() }),
@@ -123,60 +123,113 @@ function freshWindows(windows: z.infer<typeof QuotaWindow>[], observedAt: string
   if (!(age >= -1000 && age <= 60_000)) throw new Error("Stale quota reading");
   if (new Set(windows.map(w => w.id)).size !== windows.length ||
       !windows.some(w => w.kind === "session") || !windows.some(w => w.kind === "weekly") ||
-      windows.some(w => !["session", "weekly", "model"].includes(w.kind) || !(Date.parse(w.resetsAt) > now))) {
+      windows.some(w => !["session", "weekly", "model"].includes(w.kind) ||
+        (w.resetsAt == null ? w.percentRemaining !== 100 : !(Date.parse(w.resetsAt) > now)))) {
     throw new Error("Unsupported or expired quota windows");
   }
-  return windows.sort((a, b) => a.id.localeCompare(b.id));
+  return windows
+    .map(w => ({ id: w.id, kind: w.kind, percentRemaining: w.percentRemaining, resetsAt: w.resetsAt ?? null }))
+    .sort((a, b) => a.id.localeCompare(b.id));
 }
 type Windows = ReturnType<typeof quotaWindows>;
+
+export const DEFAULT_QUOTA_POLL_INTERVAL_MS = 5 * 60_000;
+const RESET_JITTER_MS = 1000;
+
+function sameReset(previous: string | null, next: string | null, previousRemaining: number) {
+  if (previous === null) return next === null || previousRemaining === 100;
+  if (next === null) return false;
+  if (previous === next) return true;
+  const a = Date.parse(previous), b = Date.parse(next);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < RESET_JITTER_MS;
+}
 
 const State = z.strictObject({
   binding: z.string(), tokens: z.number().nonnegative(), attempts: z.number().int().nonnegative(),
   uncertain: z.boolean(),
+  polledAt: z.partialRecord(Vendors, z.number().nonnegative()).default({}),
   windows: z.partialRecord(Vendors, z.array(z.object({
-    id: z.string(), kind: z.string(), remaining: pp, reset: z.string(), observed: z.number().nonnegative(), reserved: z.number().nonnegative(),
+    id: z.string(), kind: z.string(), remaining: pp, reset: z.string().nullable(),
+    observed: z.number().nonnegative(), reserved: z.number().nonnegative(),
+    polledReserved: z.number().nonnegative().default(0),
   }))),
 });
+
+export interface MeterOptions {
+  pollIntervalMs?: number | Partial<Record<Vendor, number>>;
+  now?: () => number;
+}
 
 export class Meter {
   private readonly file: string;
   private readonly state: z.infer<typeof State>;
+  private readonly pollIntervalMs: number | Partial<Record<Vendor, number>>;
+  private readonly now: () => number;
   constructor(dir: string, private readonly stop: string, private readonly limit: z.infer<typeof Budget>,
-    binding: unknown, private readonly quota: (vendor: Vendor) => Promise<Windows>) {
+    binding: unknown, private readonly quota: (vendor: Vendor) => Promise<Windows>, options: MeterOptions = {}) {
     this.file = join(dir, "meter.json");
+    this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_QUOTA_POLL_INTERVAL_MS;
+    this.now = options.now ?? (() => Date.now());
     const hash = digest([limit, binding]);
     this.state = existsSync(this.file) ? State.parse(readJson(this.file)) : {
-      binding: hash, tokens: 0, attempts: 0, uncertain: false, windows: {},
+      binding: hash, tokens: 0, attempts: 0, uncertain: false, polledAt: {}, windows: {},
     };
     if (this.state.binding !== hash || this.state.uncertain) throw new Error("Budget changed or an interrupted call left usage uncertain");
   }
 
   get usage() { return { tokens: this.state.tokens, attempts: this.state.attempts, windows: this.state.windows }; }
 
+  private intervalFor(vendor: Vendor) {
+    return typeof this.pollIntervalMs === "number" ? this.pollIntervalMs : (this.pollIntervalMs[vendor] ?? DEFAULT_QUOTA_POLL_INTERVAL_MS);
+  }
+
+  private needsPoll(vendor: Vendor) {
+    const windows = this.state.windows[vendor];
+    const last = this.state.polledAt[vendor];
+    if (!windows || last === undefined) return true;
+    const interval = this.intervalFor(vendor);
+    return interval <= 0 || this.now() - last >= interval;
+  }
+
+  private effectiveRemaining(w: NonNullable<z.infer<typeof State>["windows"][Vendor]>[number]) {
+    return w.remaining - Math.max(0, w.reserved - w.polledReserved);
+  }
+
   private observe(vendor: Vendor, observed: Windows) {
     const previous = this.state.windows[vendor];
-    if (previous && (previous.length !== observed.length || observed.some((w, i) => w.id !== previous[i].id || w.resetsAt !== previous[i].reset))) {
+    if (previous && (previous.length !== observed.length || observed.some((w, i) =>
+      w.id !== previous[i].id || !sameReset(previous[i].reset, w.resetsAt, previous[i].remaining)))) {
       throw new Error("Quota window reset or changed during the round");
     }
-    return observed.map((w, i) => ({
-      id: w.id, kind: w.kind, remaining: w.percentRemaining, reset: w.resetsAt,
-      reserved: previous?.[i].reserved ?? 0,
-      observed: (previous?.[i].observed ?? 0) + Math.max(0, (previous?.[i].remaining ?? w.percentRemaining) - w.percentRemaining),
-    }));
+    return observed.map((w, i) => {
+      const reserved = previous?.[i].reserved ?? 0;
+      return {
+        id: w.id, kind: w.kind, remaining: w.percentRemaining, reset: previous?.[i].reset ?? w.resetsAt,
+        reserved, polledReserved: reserved,
+        observed: (previous?.[i].observed ?? 0) + Math.max(0, (previous?.[i].remaining ?? w.percentRemaining) - w.percentRemaining),
+      };
+    });
+  }
+
+  private async refresh(vendor: Vendor) {
+    if (!this.needsPoll(vendor)) return this.state.windows[vendor]!;
+    const observed = await this.quota(vendor);
+    const windows = this.observe(vendor, observed);
+    this.state.windows[vendor] = windows;
+    this.state.polledAt[vendor] = this.now();
+    saveJson(this.file, this.state);
+    return windows;
   }
 
   async reserve(vendor: Vendor, calls: number, tokensPerCall: number) {
     if (!Number.isSafeInteger(calls) || calls < 1 || this.state.tokens + calls * tokensPerCall > this.limit.maxTokens) throw new Error("Hard token cap would be exceeded");
     const limits = this.limit.quota[vendor];
     if (!limits) throw new Error("Missing allowance budget for provider");
-    const observed = await this.quota(vendor);
-    const windows = this.observe(vendor, observed);
-    this.state.windows[vendor] = windows;
-    saveJson(this.file, this.state);
-    for (const [i, w] of windows.entries()) {
-      const short = observed[i].kind === "session";
+    const windows = await this.refresh(vendor);
+    for (const w of windows) {
+      const short = w.kind === "session";
       const debit = calls * (short ? limits.shortPpPerCall : limits.weeklyPpPerCall);
-      if (w.remaining - debit < (short ? limits.reserveShortPp : limits.reserveWeeklyPp) ||
+      if (this.effectiveRemaining(w) - debit < (short ? limits.reserveShortPp : limits.reserveWeeklyPp) ||
           Math.max(w.observed, w.reserved) + debit > (short ? limits.maxShortPp : limits.maxWeeklyPp)) throw new Error("Quota cap or reserve would be exceeded");
     }
   }
@@ -199,12 +252,11 @@ export class Meter {
       let failure: unknown;
       try { answer = await run(); }
       catch (error) { failure = error; }
-      // Observe after every attempt even if inference or decoding failed.
-      const windows = await this.quota(vendor);
-      this.state.windows[vendor] = this.observe(vendor, windows);
-      for (const [i, w] of this.state.windows[vendor].entries()) {
-        const short = windows[i].kind === "session";
-        if (w.remaining < (short ? limits.reserveShortPp : limits.reserveWeeklyPp) ||
+      // Poll again once the throttle interval has elapsed; otherwise check conservative reserves.
+      const windows = await this.refresh(vendor);
+      for (const w of windows) {
+        const short = w.kind === "session";
+        if (this.effectiveRemaining(w) < (short ? limits.reserveShortPp : limits.reserveWeeklyPp) ||
             Math.max(w.observed, w.reserved) > (short ? limits.maxShortPp : limits.maxWeeklyPp)) {
           saveJson(this.file, this.state);
           throw new Error("Observed quota cap or reserve breached");
