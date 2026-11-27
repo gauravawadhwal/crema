@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { assertCurveStageInvariant, mockCurveStage } from "../evals/lib/review-crossed.js";
+import { seededDev } from "../evals/lib/iteration/panel.js";
 import { reviewFixture } from "../evals/lib/review-fixtures.js";
+import { loadIndependentReviewDataset } from "../evals/lib/review-independent.js";
 import { MockProvider } from "../server/llm/mock.js";
 import { ProviderChain } from "../server/llm/index.js";
 import type { StructuredRequest } from "../server/llm/types.js";
@@ -45,6 +47,102 @@ const earlier = (shot: ReviewInput, durationS: number): ReviewInput["history"][n
   timestamp: "2026-01-02T00:00:00Z", profileTitle: shot.profile?.title, profileShape: shot.profileShape,
   batchId: shot.batchId, tempC: shot.tempC, doseG: shot.doseG, yieldG: shot.yieldG, targetYieldG: shot.targetYieldG,
   stopReason: shot.stopReason, durationS, grinderSetting: shot.grinderSetting,
+});
+
+describe("round-one gym regressions", () => {
+  const cases = [...seededDev([], 1).dataset.cases, ...loadIndependentReviewDataset().cases];
+  const inputFor = (id: string) => cases.find(c => c.id === id)!.input;
+
+  it.each([
+    ["a1", /108\.2 g \(1:6\)/, /finished weight/],
+    ["a2", /80\.6 g \(1:4\.5\)/, /finished weight/],
+    ["c2", /stopped from the app at 15 s with 13\.1 g/, /check the cup at 15 s/],
+    ["e2", /first gram at about 23\.5 s/, /when the cup starts filling/],
+  ])("gives %s a repeat tied to the recording", (id, expectCopy, action) => {
+    expect(coachOf(inputFor(id)).recommendation).toMatchObject({
+      action: expect.stringMatching(action), expect: expect.stringMatching(expectCopy), adjustment: null,
+    });
+  });
+
+  it("checks the app-stopped shot at the same elapsed time", () => {
+    expect(coachOf(inputFor("c2")).recommendation.compare).toBe("At 15 s, see whether the cup weighs about 13.1 g again.");
+  });
+
+  it.each([
+    ["allonge-tracked.s0", /when the cup starts filling/],
+    ["allonge-capped.s0", /flow shortfall/],
+  ])("checks an observable change on %s when the machine already controls final weight", (id, action) => {
+    expect(coachOf(inputFor(id)).recommendation).toMatchObject({ action: expect.stringMatching(action), adjustment: null });
+  });
+
+  it("rewrites the repeat comparison without changing the experiment or mechanics", async () => {
+    const input = inputFor("a1");
+    const text = "See whether the cup lands near 108 g again.";
+    const provider: MockProvider["structured"] = async req => {
+      const drafts = JSON.parse(req.prompt.split("COACH DRAFTS (keys are slots):\n")[1].split("\n")[0]);
+      expect(drafts["repeat-check"].sentence).toMatch(/finishes near that weight/);
+      return req.schema.parse({ rewrites: [{ slot: "repeat-check", text, evidenceIds: ["recording"] }] });
+    };
+    const result = await reviewShot(new ProviderChain([{ id: "mock", billing: "free", structured: provider }]), input);
+    expect(result.coach.recommendation).toEqual({ ...coachOf(input).recommendation, compare: text });
+    expect(result.curve.narrative).toBeNull();
+  });
+
+  it.each(["d1", "d2"])("reports %s's configured ramp endpoint separately from the logged command", async id => {
+    const provider: MockProvider["structured"] = async req => {
+      const planned = JSON.parse(req.prompt.split("PLANNED PHASES:\n")[1].split("\n")[0]);
+      const evidence = JSON.parse(req.prompt.split("EVIDENCE (keys are evidence IDs):\n")[1].split("\n")[0]);
+      expect(planned[0].expected.finish).toBe(9);
+      expect(evidence["phase-0"].loggedCommand.value.last).toBe(8.55);
+      expect(req.system).toContain('Never append a second sentence such as "Confidence is low."');
+      return req.schema.parse({ rewrites: [] });
+    };
+    const result = await reviewShot(new ProviderChain([{ id: "mock", billing: "free", structured: provider }]), inputFor(id));
+    expect(result.source).toBe("mock");
+    expect(result.coach.phases[0].expected?.finish).toBe(9);
+  });
+
+  it.each([
+    ["turbo-taper-scale-dropout.s0", /scale stopped reporting.*final cup weight/],
+    ["d2", /scale readings cut out and the weight jumped/],
+  ])("surfaces interrupted scale readings on %s and checks the scale next", (id, copy) => {
+    const coach = coachOf(inputFor(id));
+    expect(coach.notable).toContainEqual(expect.objectContaining({ sentence: expect.stringMatching(copy) }));
+    expect(coach.recommendation).toMatchObject({
+      action: expect.stringMatching(/verify.*scale/i), compare: expect.stringMatching(/continuous weight/), adjustment: null,
+    });
+  });
+
+  it("keeps the pressure miss but leaves resistance open when flow plateaus after a paired drop", () => {
+    const input = inputFor("flat-pressure-gentler-fill-hidden-flow-cap.s0");
+    const result = rulesReviewResult(input);
+    expect(result.curve.issues).toContainEqual(expect.objectContaining({ kind: "pressure_shortfall" }));
+    expect(result.coach.notable).toContainEqual(expect.objectContaining({ sentence: expect.stringMatching(/fell together.*1\.1 mL\/s.*machine flow limit/) }));
+    expect(result.coach.hypotheses.some(h => h.id === "easy-flow")).toBe(false);
+    expect(result.coach.recommendation.adjustment).toBeNull();
+    expect(result.review.nextShot).toBeNull();
+    expect(coachOf({ ...input, feedback: { sourBitter: -1 } }).recommendation.adjustment).toBeNull();
+  });
+
+  it.each([
+    ["lever-willow-weight-stop.s0", ["planned-2", "planned-3"]],
+    ["f2", ["planned-2"]],
+  ])("shows %s's preempted finish as its own stage", (id, phaseIds) => {
+    expect(coachOf(inputFor(id)).stages.at(-1)).toMatchObject({
+      name: "Finish", verdict: "not_graded", phaseIds, sentence: expect.stringMatching(/target weight before the planned finish/),
+    });
+  });
+
+  it.each(["a2", "allonge-capped.s0", "bloom-zero-restart-restriction.s0",
+    "adaptive-flow-handoff-recorded-limiter.s0", "fixed-flow-capped.s0"])(
+    "describes %s's pressure-limited flow without automatically moving the grinder", id => {
+      const coach = coachOf(inputFor(id));
+      expect(coach.hypotheses).toContainEqual(expect.objectContaining({
+        id: "restricted-flow", confidence: "low", sentence: expect.stringMatching(/fits.*pressure limit/),
+      }));
+      expect(coach.recommendation.adjustment).toBeNull();
+      expect(coachOf(inputFor("flat-pressure-fast-fill-restriction.s0")).recommendation.adjustment?.grindDelta).toBe("coarser");
+    });
 });
 
 describe("coach phase and temperature verdicts", () => {

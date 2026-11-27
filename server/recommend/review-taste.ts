@@ -63,6 +63,7 @@ export function alignTaste(
   curve: Readonly<CurveReview>,
   interpreted: NotesInterpretation | undefined,
   knownEspresso: boolean,
+  hiddenFlowCap: boolean,
 ): { alignment: TasteAlignment; nextShot: DialInAdvice | null; askTaste: boolean } {
   const { feedback } = input;
   const notes = reviewNotes(input);
@@ -100,6 +101,10 @@ export function alignTaste(
     } else if (!nextShot) {
       check = "Repeat this recipe and confirm taste before changing a setting.";
     }
+  }
+  if (hiddenFlowCap && nextShot?.grindDelta.endsWith("finer")) {
+    nextShot = null;
+    check = "Repeat the shot and see whether pressure and flow drop together again.";
   }
 
   const changesExperiment = experiment(nextShot) !== experiment(curve.nextShot);

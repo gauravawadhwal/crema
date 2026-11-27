@@ -217,8 +217,8 @@ export function analyzeShot(input: ReviewInput, landmarks?: PhaseLandmark[]): Sh
     const ratio = actual / w.target;
     const limit = number(w.step.limiter?.value);
     const limiter = limit != null && limit > 0 ? limit : null;
-    // A flow step whose pressure limiter is holding: the puck is too restrictive
-    // for the flow asked of it. Called a flow shortfall, with the cap as the reason.
+    // A flow step at the pressure limit can miss its flow target without
+    // evidence of what caused the limiter to engage.
     const pressureCapped = judged && w.pump === "flow" && limiter != null && pressure != null && pressure >= 0.85 * limiter;
     let kind: string | null = null;
     let what = "";
@@ -253,7 +253,7 @@ export function analyzeShot(input: ReviewInput, landmarks?: PhaseLandmark[]): Sh
     } else if (!kind && judged && w.pump === "flow" && ratio <= 0.75 && w.target - actual >= 0.4) {
       issues.push({
         kind: "flow_shortfall", what: "Flow stayed below the profile's target during the pour.",
-        evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit, consistent with a restrictive puck` : ""}.`,
+        evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure == null ? "" : ` with pressure at ${pressure.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit` : ""}.`,
         severity: "caution", fromS: w.start, toS: w.end,
       });
     }

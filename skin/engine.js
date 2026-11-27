@@ -1443,6 +1443,14 @@ var CremaEngine = (() => {
     if (b.w - a.w > Math.max(5, 15 * dt) || a.w - b.w > Math.max(2, 8 * dt)) return "weight_jump";
     return null;
   }
+  function scaleInterruptions(rows, endS) {
+    const fresh = rows.filter((row) => row.w != null);
+    const last = fresh.at(-1);
+    const dropout = last != null && endS != null && endS - last.p.t > SCALE_GAP_S;
+    const gap = dropout || fresh.some((row, i) => i > 0 && (row.p.t - fresh[i - 1].p.t > SCALE_GAP_S || row.sampleS - fresh[i - 1].sampleS > SCALE_GAP_S));
+    const jump = rows.some((row) => row.reason === "weight_jump") || fresh.some((row, i) => i > 0 && (scaleEdge(fresh[i - 1], row) === "weight_jump" || fresh[i - 1].w - row.w > 2 && row.p.t - fresh[i - 1].p.t > SCALE_GAP_S));
+    return { gap, dropout, jump };
+  }
   function measureMassCheckpoints(points, phases) {
     const rows = scaleRows(points, points.some((p) => p.substate));
     const first = rows.findIndex((row) => row.reason !== "not_brewing");
@@ -1619,6 +1627,19 @@ var CremaEngine = (() => {
     if (/ramp|rise|pressure up/i.test(name) || delta != null && delta > 0.25) return "ramp";
     return mode ? "hold_or_pour" : null;
   }
+  function hiddenFlowPlateau(points) {
+    for (let i = 1; i < points.length; i++) {
+      const before = points[i - 1], after = points[i];
+      const { p, f, tp } = before;
+      const { p: lowP, f: lowF, tp: command } = after;
+      if (p == null || f == null || tp == null || lowP == null || lowF == null || command == null || after.t <= before.t || after.t - before.t > MACHINE_GAP_S || lowF < 0.2 || f - lowF < 0.25 || p - lowP < 1 || Math.abs(tp - command) > 0.1 || p < 0.9 * command || lowP > 0.85 * command || Math.abs(lowP / lowF / (p / f) - 1) > 0.15) continue;
+      for (let j = i + 1; j < points.length; j++) {
+        const next = points[j];
+        if (next.t - points[j - 1].t > MACHINE_GAP_S || next.p == null || next.p > 0.85 * command || next.f == null || next.tp == null || Math.abs(next.f - lowF) > 0.05 || Math.abs(next.tp - command) > 0.1) break;
+        if (next.t - after.t >= 2) return { fromS: rounded(after.t), inletFlowMlS: rounded(lowF) };
+      }
+    }
+  }
   function describePhase(run, index, step, alignmentReason, scale, hasScale, hasState, onset, landmarks2) {
     const xs = run.points, first = xs[0], last = xs.at(-1);
     const span = last.t - first.t;
@@ -1717,6 +1738,7 @@ var CremaEngine = (() => {
       next.t - last.t <= MACHINE_GAP_S ? "next_brew_phase_observed_trigger_unknown" : "next_brew_phase_after_gap_trigger_unknown"
     ) : evidence(null, "recorded", "no_adjacent_next_brew_phase");
     const plannedTarget = mode ? profileNumber(mode === "pressure" ? step?.pressure : step?.flow) : null;
+    const plateau = mode === "pressure" && limit == null ? hiddenFlowPlateau(xs) : void 0;
     const massRows = scale.filter((row) => row.p.t >= first.t && row.p.t <= last.t);
     const phaseWeight = massRows.filter((row) => row.w != null);
     const massStart = phaseWeight[0], massEnd = phaseWeight.at(-1);
@@ -1753,6 +1775,7 @@ var CremaEngine = (() => {
       controlledError,
       capLikeTime: cap2,
       steadyHold,
+      ...plateau && { hiddenFlowPlateau: plateau },
       earlyHydraulics: early,
       lateHydraulics: late,
       pressureCrest: crest,
@@ -1781,6 +1804,7 @@ var CremaEngine = (() => {
     const hasScale = brew.some((p) => p.w != null || p.weightFlow != null);
     const scale = scaleRows(points, hasState);
     const first = brew[0], last = brew.at(-1);
+    const brewScale = scale.filter((row) => isBrewPoint(row.p, hasState));
     const onset = firstBeverage(scale, hasScale, first?.t, landmarks2);
     const phases = runs.map((run, index) => {
       const frame = run.points[0].frame;
@@ -1900,6 +1924,7 @@ var CremaEngine = (() => {
       scaleAvailability: {
         weightSamples: scale.filter((row) => row.w != null).length,
         staleSamples: scale.filter((row) => row.reason === "stale_scale_sample").length,
+        ...scaleInterruptions(brewScale, last?.t),
         pairingAgeS: evidence(roundedReading(brew.reduce((max, p) => {
           if (weight(p) == null) return max;
           const age = p.scaleAgeS ?? (p.scaleSampleS != null ? p.t - p.scaleSampleS : null);
@@ -2082,7 +2107,7 @@ var CremaEngine = (() => {
         issues.push({
           kind: "flow_shortfall",
           what: "Flow stayed below the profile's target during the pour.",
-          evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure2 == null ? "" : ` with pressure at ${pressure2.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit, consistent with a restrictive puck` : ""}.`,
+          evidence: `${span}: target ${w.target.toFixed(1)} ml/s, measured ${actual.toFixed(1)} ml/s${pressure2 == null ? "" : ` with pressure at ${pressure2.toFixed(1)} bar`}${pressureCapped ? `, near the ${limiter} bar pressure limit` : ""}.`,
           severity: "caution",
           fromS: w.start,
           toS: w.end
@@ -2610,7 +2635,7 @@ var CremaEngine = (() => {
       name,
       unit: supported ? unit : null,
       evidenceIds: [p?.id ?? "finish"],
-      expected: supported && target != null ? { start: command?.entry ?? null, finish: command?.last ?? configured, average: target } : null,
+      expected: supported && target != null ? { start: command?.entry ?? null, finish: configured, average: target } : null,
       actual: supported && actualReadings ? { start: actualReadings.entry, finish: actualReadings.last, average: actualMean ?? null } : null,
       ceiling: supported && limit != null && limit > 0 ? { value: limit, unit: otherUnit } : null,
       meanAbsoluteError: p?.controlledError.value?.absoluteMean ?? null
@@ -2648,7 +2673,12 @@ var CremaEngine = (() => {
     const planned = steps.map((step, frame) => {
       const runs = observed.filter((p2) => p2.frame === frame && p2.plan.value);
       const p = runs.reduce((best, run) => !best || run.controlledError.coveredS > best.controlledError.coveredS ? run : best, void 0);
-      return { step, p, role: phaseName(step, p) };
+      const previous = steps[frame - 1];
+      const flow2 = step.pump?.toLowerCase() === "flow";
+      const endpoint = configuredNumber(flow2 ? step.flow : step.pressure);
+      const prior = configuredNumber(flow2 ? previous?.flow : previous?.pressure);
+      const weightStoppedFinish = !p && missed.get(frame) === "preempted_by_weight_stop" && (/\bfinish\b/i.test(step.name ?? "") || previous?.pump?.toLowerCase() === step.pump?.toLowerCase() && endpoint != null && prior != null && prior - endpoint >= (flow2 ? 0.3 : 0.5));
+      return { step, p, role: weightStoppedFinish ? "Decline" : phaseName(step, p) };
     });
     return planned.map(({ step, p, role }, frame) => {
       const siblings = planned.flatMap((phase, index) => phase.role === role ? [index] : []);
@@ -2749,7 +2779,10 @@ var CremaEngine = (() => {
       return p.mode.value === "flow" && hold && hold.meanCommand > 3 && Math.abs(hold.meanResponse - hold.meanCommand) <= 0.1 * hold.meanCommand && ceiling != null && pressure2 != null && pressure2 <= 0.5 * ceiling && onset && onset.tS >= p.fromS && onset.tS <= p.toS && (cupRateAfterOnsetGS.value ?? 0) >= 3;
     });
   }
-  function hypotheses(curve, easy) {
+  function pressureLimitedPour(p) {
+    return p.mode.value === "flow" && p.purpose.value !== "fill_or_soak" && p.purpose.value !== "bloom_or_pause" && coverage2(p) && (p.capLikeTime.value?.seconds ?? 0) >= 1 && (p.capLikeTime.value?.shareOfCoveredTime ?? 0) >= 0.2;
+  }
+  function hypotheses(curve, easy, limited, hiddenCap) {
     const result = [];
     const causes = [
       {
@@ -2772,6 +2805,17 @@ var CremaEngine = (() => {
       }
     ];
     for (const pattern of causes) {
+      if (pattern.id === "easy-flow" && hiddenCap) continue;
+      if (pattern.id === "restricted-flow" && limited) {
+        result.push({
+          id: pattern.id,
+          label: pattern.label,
+          signature: pattern.signature,
+          confidence: "low",
+          ...fact("This fits water having trouble getting through your puck at the pressure limit, though the curve leaves the cause open.", limited.id)
+        });
+        continue;
+      }
       const measured = curve.issues.findIndex((issue) => pattern.kinds.some((kind) => issue.kind === kind));
       const timing = curve.issues.findIndex((issue) => issue.kind === pattern.timing);
       const easyHold = pattern.id === "easy-flow" ? easy : void 0;
@@ -2807,15 +2851,29 @@ var CremaEngine = (() => {
     const stages = stageRows(planned);
     const temperature = temperatureRow(evidence2.phases);
     const notable = [];
-    const easy = easyFlowPhase(facts);
+    const hiddenCap = evidence2.phases.find((p) => p.hiddenFlowPlateau);
+    const limited = evidence2.phases.find(pressureLimitedPour);
+    const easy = hiddenCap ? void 0 : easyFlowPhase(facts);
+    const scale = evidence2.scaleAvailability;
+    if (scale.dropout) {
+      notable.push(fact("Your scale stopped reporting during the shot, leaving the final cup weight unknown.", "recording", "finish"));
+    } else if (scale.jump) {
+      notable.push(fact(scale.gap ? "Your scale readings cut out and the weight jumped when they returned, leaving part of the cup fill uncertain." : "Your scale readings jumped during the shot, so the cup weight across that part of the pour is uncertain.", "recording"));
+    } else if (scale.gap) {
+      notable.push(fact("Your scale readings cut out during part of the shot, leaving a gap in how the cup filled.", "recording"));
+    } else if (metrics.enoughTelemetry && scale.weightSamples === 0) {
+      notable.push(fact("Your scale readings were unavailable, so cup fill couldn't be assessed.", "recording"));
+    }
+    if (hiddenCap?.hiddenFlowPlateau) {
+      const { inletFlowMlS } = hiddenCap.hiddenFlowPlateau;
+      notable.push(fact(`Pressure and inlet flow fell together, then flow stayed near ${quantity(inletFlowMlS, "mL/s")}, which is consistent with a machine flow limit.`, hiddenCap.id));
+    }
     const cup = evidence2.firstSustainedBeverage.value;
     const after = evidence2.cupRateAfterOnsetGS.value;
     const rapidFill = (after ?? 0) >= 3 && (evidence2.cupRateBeforeOnsetGS.value ?? Infinity) <= 1;
     if (cup && cup.previousBelowGramS != null && (cup.brewElapsedS >= 6 || rapidFill)) {
       const started = (evidence2.cupRateBeforeOnsetGS.value ?? Infinity) <= 1 ? `Your cup stayed nearly dry for about ${quantity(cup.brewElapsedS, "s")}` : `Your cup reached its first gram after about ${quantity(cup.brewElapsedS, "s")}`;
       notable.push(fact(started + (rapidFill ? ", then filled quickly." : after != null && after < 1 ? ", then filled slowly." : "."), "cup", "first-sustained-gram"));
-    } else if (metrics.enoughTelemetry && evidence2.scaleAvailability.weightSamples === 0) {
-      notable.push(fact("Your scale readings were unavailable, so cup fill couldn't be assessed.", "recording"));
     }
     const held = easy?.steadyHold.value;
     const pressure2 = easy?.pressureCrest.value?.pressureBar;
@@ -2836,7 +2894,7 @@ var CremaEngine = (() => {
     else if (curve.issues.some((i) => i.kind === "channeling")) {
       notable.push(fact("Flow rose even as the machine held pressure near its target.", `finding-${curve.issues.findIndex((i) => i.kind === "channeling") + 1}`));
     }
-    const patterns = hypotheses(curve, easy);
+    const patterns = hypotheses(curve, easy, limited, hiddenCap);
     const main = stages.filter((row) => row.name !== "Start-up");
     const bad = main.find((row) => row.verdict === "off_plan");
     const departures = main.filter((row) => row.verdict === "partly");
@@ -2888,7 +2946,7 @@ var CremaEngine = (() => {
   function experiment(advice) {
     return [advice?.grindDelta ?? "same", advice?.yieldDeltaG ?? 0, advice?.tempDeltaC ?? 0, advice?.switchProfile ?? null].join("|");
   }
-  function alignTaste(input, curve, interpreted, knownEspresso) {
+  function alignTaste(input, curve, interpreted, knownEspresso, hiddenFlowCap) {
     const { feedback } = input;
     const notes = reviewNotes(input);
     const { sourBitter, body, enjoyment } = feedback ?? {};
@@ -2921,6 +2979,10 @@ var CremaEngine = (() => {
       } else if (!nextShot) {
         check = "Repeat this recipe and confirm taste before changing a setting.";
       }
+    }
+    if (hiddenFlowCap && nextShot?.grindDelta.endsWith("finer")) {
+      nextShot = null;
+      check = "Repeat the shot and see whether pressure and flow drop together again.";
     }
     const changesExperiment = experiment(nextShot) !== experiment(curve.nextShot);
     const relation = {
@@ -2973,10 +3035,88 @@ var CremaEngine = (() => {
     const reported = linked.length === 1 ? linked[0].sentence : submitted ? `You said it tasted ${submitted}${relation.length ? `, which ${relation.join(" and ")}` : ""}.` : !notes && enjoyment != null ? `You rated it ${enjoyment}/10 for enjoyment.` : null;
     return { sourBitter, body, enjoyment, notes, noteQuote: interpreted?.notesEvidence ?? null, reported, links };
   }
-  function coachRecommendation(curve, alignment, advice, taste, mechanics, knownEspresso) {
-    const repeat = (action, compare, puckCheck = null) => ({ action, expect: "Keep your recipe and other prep the same.", compare, puckCheck, adjustment: null });
+  var repeat = (action, expect, compare) => ({ action, expect, compare, puckCheck: null, adjustment: null });
+  var rounded3 = (n) => Number(n.toFixed(1));
+  function repeatRecommendation(stage) {
+    const { facts, metrics } = stage.evidence.analysis;
+    const { scaleAvailability: scale, firstSustainedBeverage: { value: onset }, phases } = facts.phaseEvidence;
+    if (scale.gap || scale.jump || metrics.enoughTelemetry && !scale.weightSamples) {
+      return repeat(
+        "Repeat to verify that your scale records the full shot.",
+        scale.dropout ? "The scale cut out before this shot finished." : scale.jump ? "The running cup weight jumped on this shot." : scale.gap ? "The cup weight was missing for part of this shot." : "This shot came through without cup weights.",
+        "Look for a continuous weight reading through the stop."
+      );
+    }
+    if (stage.earlyStop) {
+      const where = facts.stopReason?.toLowerCase() === "apistop" ? "from the app" : "by hand";
+      if (facts.durationS != null && facts.yieldG != null) {
+        const checkpoint = `${rounded3(facts.durationS)} s`;
+        const weight3 = `${rounded3(facts.yieldG)} g`;
+        return repeat(
+          `Repeat at the same settings and check the cup at ${checkpoint}.`,
+          `This shot was stopped ${where} at ${checkpoint} with ${weight3} in the cup.`,
+          `At ${checkpoint}, see whether the cup weighs about ${weight3} again.`
+        );
+      }
+      const when = facts.durationS == null ? "" : ` at ${rounded3(facts.durationS)} s`;
+      const weight2 = facts.yieldG == null ? "" : ` with ${rounded3(facts.yieldG)} g in the cup`;
+      return repeat(
+        "Repeat the same recipe and let it run to its planned stop.",
+        `This shot was stopped ${where}${when}${weight2}.`,
+        "Compare the final cup weight with this shot."
+      );
+    }
+    const plateau = phases.find((p) => p.hiddenFlowPlateau)?.hiddenFlowPlateau;
+    if (plateau) {
+      return repeat(
+        "Repeat at the same settings to check the flow plateau.",
+        `This time the inlet settled near ${rounded3(plateau.inletFlowMlS)} mL/s as pressure fell.`,
+        "See whether pressure and inlet flow drop together again."
+      );
+    }
+    const shortYield = facts.yieldG != null && facts.targetYieldG != null && facts.yieldG < 0.8 * facts.targetYieldG;
+    const extremeRatio = facts.ratio != null && (facts.ratio >= 4 || facts.ratio < 1.2);
+    if (facts.yieldG != null && (shortYield || extremeRatio && facts.stopReason?.toLowerCase() !== "targetweight")) {
+      return repeat(
+        "Repeat at the same settings to check the finished weight.",
+        `This shot finished at ${rounded3(facts.yieldG)} g${facts.ratio != null ? ` (1:${rounded3(facts.ratio)})` : ""}.`,
+        "See whether the cup finishes near that weight again."
+      );
+    }
+    if (phases.some(pressureLimitedPour)) {
+      return repeat(
+        "Repeat at the same settings to check for the flow shortfall.",
+        "This time the machine reached its pressure limit before it could deliver the commanded flow.",
+        "See whether flow runs below target at the pressure limit again."
+      );
+    }
+    if (onset?.previousBelowGramS != null) {
+      return repeat(
+        "Repeat at the same settings to check when the cup starts filling.",
+        `This time the cup reached its first gram at about ${rounded3(onset.brewElapsedS)} s.`,
+        "See whether the next shot takes about as long to reach its first gram."
+      );
+    }
+    if (!metrics.enoughTelemetry && !metrics.observedWindows) {
+      return repeat(
+        "Repeat with recording active.",
+        "This recording gave only a limited view of the pour.",
+        "Check that the new recording captures the full shot through the stop."
+      );
+    }
+    return repeat(
+      "Repeat at the same settings to check the pour.",
+      "A repeat gives you a second curve at the same settings.",
+      "Compare how closely the main pour follows the plan."
+    );
+  }
+  function coachRecommendation(curve, alignment, advice, taste, mechanics, knownEspresso, repeatCheck) {
     if (alignment.status === "conflicts" || taste?.links.some((link) => link.status === "does_not_match")) {
-      return repeat("Repeat the same shot and taste it again.", "Check whether the same pour and taste recur before moving the grinder.");
+      return repeat(
+        "Repeat the same shot and taste it again.",
+        "Your taste report and the curve give different signals.",
+        "Check whether the same taste comes through on the repeat."
+      );
     }
     if (!knownEspresso) return {
       action: "Repeat with the recorded setup.",
@@ -3028,10 +3168,7 @@ var CremaEngine = (() => {
         adjustment: null
       };
     }
-    if (!mechanics.phases.some((p) => p.verdict !== "not_graded")) {
-      return repeat("Repeat the recipe with recording active.", "Check that the next recording shows each phase before judging the curve.");
-    }
-    return repeat("Repeat the same recipe.", "Compare when the cup starts filling and how the pour and taste repeat.");
+    return repeatCheck;
   }
 
   // server/recommend/review-evidence.ts
@@ -3178,7 +3315,7 @@ var CremaEngine = (() => {
     if (!faultFrames.has(main.frame)) return `Pour ${name} averaged ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
     const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
     if (short || main.limiterEngaged) {
-      const why = main.limiterEngaged ? pressure2 ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck` : "";
+      const why = main.limiterEngaged ? pressure2 ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit` : "";
       return `Pour ${name} only reached ${n(main.actualMean)} ${unit} of the ${n(main.target)} ${unit} target${at}${why}.`;
     }
     if (Math.abs(ratio - 1) <= 0.1) return `${pressure2 ? "Pressure" : "Flow"} held ${n(main.actualMean)} ${unit} against the ${n(main.target)} ${unit} target${at}.`;
@@ -3284,8 +3421,15 @@ var CremaEngine = (() => {
   function rulesCurveReview(stage) {
     const { evidence: evidence2, profile } = stage;
     const { facts, metrics, issues, wentWell } = evidence2.analysis;
-    const kinds = issues.map((i) => i.kind);
-    const finer = kinds.some((k) => FAST.includes(k));
+    const { phases } = facts.phaseEvidence;
+    const hiddenCap = phases.some((p) => p.hiddenFlowPlateau);
+    const limited = phases.filter(pressureLimitedPour);
+    const kinds = issues.filter((issue) => {
+      if (issue.kind === "slow_shot") return limited.length === 0;
+      if (issue.kind !== "flow_shortfall") return true;
+      return !limited.some((p) => issue.fromS != null && issue.toS != null && p.fromS <= issue.toS && p.toS >= issue.fromS && (!p.steadyHold.value || p.steadyHold.value.meanResponse > 0.55 * p.steadyHold.value.meanCommand));
+    }).map((i) => i.kind);
+    const finer = !hiddenCap && kinds.some((k) => FAST.includes(k));
     const coarser = kinds.some((k) => SLOW.includes(k));
     let nextShot = null;
     if (profile === "espresso" && finer !== coarser) {
@@ -3307,10 +3451,12 @@ var CremaEngine = (() => {
       narrative: null
     };
   }
-  function finishReview(input, stage, curve, source, notes, mechanics = rulesCoachMechanics(stage, curve)) {
-    const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, stage.profile === "espresso");
+  function finishReview(input, stage, curve, source, notes, mechanics = rulesCoachMechanics(stage, curve), repeat2 = repeatRecommendation(stage)) {
+    const knownEspresso = stage.profile === "espresso";
+    const hiddenCap = stage.evidence.analysis.facts.phaseEvidence.phases.some((p) => p.hiddenFlowPlateau);
+    const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, knownEspresso, hiddenCap);
     const taste = coachTaste(input, mechanics, notes);
-    const recommendation = coachRecommendation(curve, alignment, nextShot, taste, mechanics, stage.profile === "espresso");
+    const recommendation = coachRecommendation(curve, alignment, nextShot, taste, mechanics, knownEspresso, repeat2);
     const legacyNextShot = recommendation.adjustment ?? (nextShot?.grindDelta === "same" && !nextShot.yieldDeltaG && !nextShot.tempDeltaC && !nextShot.switchProfile ? nextShot : null);
     const coachConflict = taste?.links.some((link) => link.status === "does_not_match") && alignment.status !== "conflicts";
     const summary = [

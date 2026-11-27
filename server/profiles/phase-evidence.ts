@@ -253,6 +253,19 @@ function scaleEdge(a: ScaleRow, b: ScaleRow) {
   return null;
 }
 
+function scaleInterruptions(rows: ScaleRow[], endS: number | undefined) {
+  const fresh = rows.filter(row => row.w != null);
+  const last = fresh.at(-1);
+  const dropout = last != null && endS != null && endS - last.p.t > SCALE_GAP_S;
+  const gap = dropout || fresh.some((row, i) => i > 0 &&
+    (row.p.t - fresh[i - 1].p.t > SCALE_GAP_S || row.sampleS - fresh[i - 1].sampleS > SCALE_GAP_S));
+  // A tare can occur while the feed is missing. A much lower reading when it
+  // returns still breaks the running cup weight, regardless of the gap length.
+  const jump = rows.some(row => row.reason === "weight_jump") || fresh.some((row, i) => i > 0 &&
+    (scaleEdge(fresh[i - 1], row) === "weight_jump" || fresh[i - 1].w! - row.w! > 2 && row.p.t - fresh[i - 1].p.t > SCALE_GAP_S));
+  return { gap, dropout, jump };
+}
+
 /** Sample first crossings on a fixed mass grid so past traces stay off the wire. */
 export function measureMassCheckpoints(points: ReviewPoint[], phases: PhaseEvidence[]) {
   const rows = scaleRows(points, points.some(p => p.substate));
@@ -400,6 +413,27 @@ function phasePurpose(first: ReviewPoint, step: ProfileStepLike | undefined, mod
   return mode ? "hold_or_pour" : null;
 }
 
+/** An abrupt paired drop under the same pressure command, followed by a sustained flat inlet. */
+function hiddenFlowPlateau(points: ReviewPoint[]) {
+  for (let i = 1; i < points.length; i++) {
+    const before = points[i - 1], after = points[i];
+    const { p, f, tp } = before;
+    const { p: lowP, f: lowF, tp: command } = after;
+    if (p == null || f == null || tp == null || lowP == null || lowF == null || command == null ||
+        after.t <= before.t || after.t - before.t > MACHINE_GAP_S || lowF < 0.2 || f - lowF < 0.25 ||
+        p - lowP < 1 || Math.abs(tp - command) > 0.1 ||
+        p < 0.9 * command || lowP > 0.85 * command ||
+        Math.abs((lowP / lowF) / (p / f) - 1) > 0.15) continue;
+    for (let j = i + 1; j < points.length; j++) {
+      const next = points[j];
+      if (next.t - points[j - 1].t > MACHINE_GAP_S || next.p == null || next.p > 0.85 * command ||
+          next.f == null || next.tp == null ||
+          Math.abs(next.f - lowF) > 0.05 || Math.abs(next.tp - command) > 0.1) break;
+      if (next.t - after.t >= 2) return { fromS: rounded(after.t), inletFlowMlS: rounded(lowF) };
+    }
+  }
+}
+
 function describePhase(run: Run, index: number, step: ProfileStepLike | undefined, alignmentReason: string,
   scale: ScaleRow[], hasScale: boolean, hasState: boolean, onset: ReviewPoint | null, landmarks?: PhaseLandmark[]) {
   const xs = run.points, first = xs[0], last = xs.at(-1)!;
@@ -489,6 +523,7 @@ function describePhase(run: Run, index: number, step: ProfileStepLike | undefine
       next.t - last.t <= MACHINE_GAP_S ? "next_brew_phase_observed_trigger_unknown" : "next_brew_phase_after_gap_trigger_unknown") :
     evidence<never>(null, "recorded", "no_adjacent_next_brew_phase");
   const plannedTarget = mode ? profileNumber(mode === "pressure" ? step?.pressure : step?.flow) : null;
+  const plateau = mode === "pressure" && limit == null ? hiddenFlowPlateau(xs) : undefined;
   const massRows = scale.filter(row => row.p.t >= first.t && row.p.t <= last.t);
   const phaseWeight = massRows.filter(row => row.w != null);
   const massStart = phaseWeight[0], massEnd = phaseWeight.at(-1);
@@ -510,6 +545,7 @@ function describePhase(run: Run, index: number, step: ProfileStepLike | undefine
     controlledUnit: mode === "pressure" ? "bar" : mode === "flow" ? "mL/s" : null,
     loggedCommand: mode ? loggedCommand : { ...evidence<never>(null, "recorded", alignmentReason), coveredS: 0 },
     pressureBar, inletFlowMlS, controlledError, capLikeTime: cap, steadyHold,
+    ...(plateau && { hiddenFlowPlateau: plateau }),
     earlyHydraulics: early, lateHydraulics: late, pressureCrest: crest, pressureDroopAtHeldFlowBar: decline,
     cupRateEarlyGS, cupRateLateGS,
     cupGainG: evidence(massStart && massEnd && massStart !== massEnd && !massFault ? rounded(massEnd.w! - massStart.w!) : null,
@@ -539,6 +575,7 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[], landmar
   const hasScale = brew.some(p => p.w != null || p.weightFlow != null);
   const scale = scaleRows(points, hasState);
   const first = brew[0], last = brew.at(-1);
+  const brewScale = scale.filter(row => isBrewPoint(row.p, hasState));
   const onset = firstBeverage(scale, hasScale, first?.t, landmarks);
   const phases = runs.map((run, index) => {
     const frame = run.points[0].frame;
@@ -627,6 +664,7 @@ export function measurePhases(input: ReviewInput, points: ReviewPoint[], landmar
     scaleAvailability: {
       weightSamples: scale.filter(row => row.w != null).length,
       staleSamples: scale.filter(row => row.reason === "stale_scale_sample").length,
+      ...scaleInterruptions(brewScale, last?.t),
       pairingAgeS: evidence(roundedReading(brew.reduce<number | null>((max, p) => {
         if (weight(p) == null) return max;
         const age = p.scaleAgeS ?? (p.scaleSampleS != null ? p.t - p.scaleSampleS : null);

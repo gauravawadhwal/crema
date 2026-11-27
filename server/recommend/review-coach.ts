@@ -52,7 +52,7 @@ function phaseRow(step: ProfileStepLike, p: PhaseEvidence | undefined, reason: s
   const actualMean = hold?.meanResponse ?? actualReadings?.timeWeightedMean;
   const supported = /^(flow|pressure)$/i.test(step.pump ?? "");
   const base = { id: `planned-${frame}`, name, unit: supported ? unit : null, evidenceIds: [p?.id ?? "finish"],
-    expected: supported && target != null ? { start: command?.entry ?? null, finish: command?.last ?? configured, average: target } : null,
+    expected: supported && target != null ? { start: command?.entry ?? null, finish: configured, average: target } : null,
     actual: supported && actualReadings ? { start: actualReadings.entry, finish: actualReadings.last, average: actualMean ?? null } : null,
     ceiling: supported && limit != null && limit > 0 ? { value: limit, unit: otherUnit } : null,
     meanAbsoluteError: p?.controlledError.value?.absoluteMean ?? null } satisfies Omit<Phase, "verdict" | "sentence">;
@@ -107,7 +107,15 @@ function phaseRows(steps: ProfileStepLike[], observed: PhaseEvidence[], stage: C
     const runs = observed.filter(p => p.frame === frame && p.plan.value);
     const p = runs.reduce<PhaseEvidence | undefined>((best, run) =>
       !best || run.controlledError.coveredS > best.controlledError.coveredS ? run : best, undefined);
-    return { step, p, role: phaseName(step, p) };
+    const previous = steps[frame - 1];
+    const flow = step.pump?.toLowerCase() === "flow";
+    const endpoint = configuredNumber(flow ? step.flow : step.pressure);
+    const prior = configuredNumber(flow ? previous?.flow : previous?.pressure);
+    // A skipped step has no logged command shape to give away its decline.
+    const weightStoppedFinish = !p && missed.get(frame) === "preempted_by_weight_stop" &&
+      (/\bfinish\b/i.test(step.name ?? "") || (previous?.pump?.toLowerCase() === step.pump?.toLowerCase() &&
+        endpoint != null && prior != null && prior - endpoint >= (flow ? 0.3 : 0.5)));
+    return { step, p, role: weightStoppedFinish ? "Decline" : phaseName(step, p) };
   });
   return planned.map(({ step, p, role }, frame) => {
     const siblings = planned.flatMap((phase, index) => phase.role === role ? [index] : []);
@@ -228,7 +236,14 @@ function easyFlowPhase(facts: CurveStageInput["evidence"]["analysis"]["facts"]) 
   });
 }
 
-function hypotheses(curve: CurveReview, easy: PhaseEvidence | undefined): Hypothesis[] {
+/** Binding pressure limits during extraction explain a flow miss, without settling its cause. */
+export function pressureLimitedPour(p: PhaseEvidence): boolean {
+  return p.mode.value === "flow" && p.purpose.value !== "fill_or_soak" && p.purpose.value !== "bloom_or_pause" &&
+    coverage(p) && (p.capLikeTime.value?.seconds ?? 0) >= 1 && (p.capLikeTime.value?.shareOfCoveredTime ?? 0) >= 0.2;
+}
+
+function hypotheses(curve: CurveReview, easy: PhaseEvidence | undefined, limited: PhaseEvidence | undefined,
+  hiddenCap: PhaseEvidence | undefined): Hypothesis[] {
   const result: Hypothesis[] = [];
   const causes = [
     { kinds: ["gushed", "pressure_shortfall"], timing: "fast_shot", id: "easy-flow", label: "Easy flow",
@@ -239,6 +254,12 @@ function hypotheses(curve: CurveReview, easy: PhaseEvidence | undefined): Hypoth
       pace: "A long finish could mean water moved more slowly through your coffee." },
   ] as const;
   for (const pattern of causes) {
+    if (pattern.id === "easy-flow" && hiddenCap) continue;
+    if (pattern.id === "restricted-flow" && limited) {
+      result.push({ id: pattern.id, label: pattern.label, signature: pattern.signature, confidence: "low",
+        ...fact("This fits water having trouble getting through your puck at the pressure limit, though the curve leaves the cause open.", limited.id) });
+      continue;
+    }
     const measured = curve.issues.findIndex(issue => pattern.kinds.some(kind => issue.kind === kind));
     const timing = curve.issues.findIndex(issue => issue.kind === pattern.timing);
     const easyHold = pattern.id === "easy-flow" ? easy : undefined;
@@ -265,7 +286,24 @@ export function rulesCoachMechanics(stage: CurveStageInput, curve: CurveReview):
   const stages = stageRows(planned);
   const temperature = temperatureRow(evidence.phases);
   const notable: Fact[] = [];
-  const easy = easyFlowPhase(facts);
+  const hiddenCap = evidence.phases.find(p => p.hiddenFlowPlateau);
+  const limited = evidence.phases.find(pressureLimitedPour);
+  const easy = hiddenCap ? undefined : easyFlowPhase(facts);
+  const scale = evidence.scaleAvailability;
+  if (scale.dropout) {
+    notable.push(fact("Your scale stopped reporting during the shot, leaving the final cup weight unknown.", "recording", "finish"));
+  } else if (scale.jump) {
+    notable.push(fact(scale.gap ? "Your scale readings cut out and the weight jumped when they returned, leaving part of the cup fill uncertain." :
+      "Your scale readings jumped during the shot, so the cup weight across that part of the pour is uncertain.", "recording"));
+  } else if (scale.gap) {
+    notable.push(fact("Your scale readings cut out during part of the shot, leaving a gap in how the cup filled.", "recording"));
+  } else if (metrics.enoughTelemetry && scale.weightSamples === 0) {
+    notable.push(fact("Your scale readings were unavailable, so cup fill couldn't be assessed.", "recording"));
+  }
+  if (hiddenCap?.hiddenFlowPlateau) {
+    const { inletFlowMlS } = hiddenCap.hiddenFlowPlateau;
+    notable.push(fact(`Pressure and inlet flow fell together, then flow stayed near ${quantity(inletFlowMlS, "mL/s")}, which is consistent with a machine flow limit.`, hiddenCap.id));
+  }
   const cup = evidence.firstSustainedBeverage.value;
   const after = evidence.cupRateAfterOnsetGS.value;
   const rapidFill = (after ?? 0) >= 3 && (evidence.cupRateBeforeOnsetGS.value ?? Infinity) <= 1;
@@ -274,8 +312,6 @@ export function rulesCoachMechanics(stage: CurveStageInput, curve: CurveReview):
       ? `Your cup stayed nearly dry for about ${quantity(cup.brewElapsedS, "s")}`
       : `Your cup reached its first gram after about ${quantity(cup.brewElapsedS, "s")}`;
     notable.push(fact(started + (rapidFill ? ", then filled quickly." : after != null && after < 1 ? ", then filled slowly." : "."), "cup", "first-sustained-gram"));
-  } else if (metrics.enoughTelemetry && evidence.scaleAvailability.weightSamples === 0) {
-    notable.push(fact("Your scale readings were unavailable, so cup fill couldn't be assessed.", "recording"));
   }
   const held = easy?.steadyHold.value;
   const pressure = easy?.pressureCrest.value?.pressureBar;
@@ -298,7 +334,7 @@ export function rulesCoachMechanics(stage: CurveStageInput, curve: CurveReview):
     notable.push(fact("Flow rose even as the machine held pressure near its target.", `finding-${curve.issues.findIndex(i => i.kind === "channeling") + 1}`));
   }
 
-  const patterns = hypotheses(curve, easy);
+  const patterns = hypotheses(curve, easy, limited, hiddenCap);
   const main = stages.filter(row => row.name !== "Start-up");
   const bad = main.find(row => row.verdict === "off_plan");
   const departures = main.filter(row => row.verdict === "partly");

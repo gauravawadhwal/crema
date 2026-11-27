@@ -1,8 +1,8 @@
 import { stoppedEarly, type ShotFacts } from "../profiles/analysis.js";
 import type { CoachReviewResult, CurveReview, ReviewInput, ShotReviewData } from "./review-types.js";
 import type { CoachMechanics, DialInAdvice } from "../schema.js";
-import { rulesCoachMechanics } from "./review-coach.js";
-import { coachRecommendation, coachTaste } from "./review-coach-taste.js";
+import { pressureLimitedPour, rulesCoachMechanics } from "./review-coach.js";
+import { coachRecommendation, coachTaste, repeatRecommendation } from "./review-coach-taste.js";
 import { historyCurveSentence, historySentence } from "./review-history.js";
 import { alignTaste, grindAdvice } from "./review-taste.js";
 import { buildReviewEvidence, projectReviewEvidence, type FullReviewTrace, type ReviewEvidence } from "./review-evidence.js";
@@ -58,7 +58,7 @@ export function trackingSentence(f: ShotFacts, faultFrames: ReadonlySet<number>)
   const atLimit = main.limiterValue != null && main.otherMean != null && main.otherMean >= 0.85 * main.limiterValue;
   if (short || main.limiterEngaged) {
     const why = main.limiterEngaged
-      ? pressure ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit, consistent with a restrictive puck`
+      ? pressure ? ` at the ${main.limiterValue} ml/s flow limit, consistent with low puck resistance` : ` at the ${main.limiterValue} bar pressure limit`
       : "";
     return `Pour ${name} only reached ${n(main.actualMean)} ${unit} of the ${n(main.target)} ${unit} target${at}${why}.`;
   }
@@ -182,8 +182,19 @@ function curveSummary(stage: CurveStageInput) {
 export function rulesCurveReview(stage: CurveStageInput): CurveReview {
   const { evidence, profile } = stage;
   const { facts, metrics, issues, wentWell } = evidence.analysis;
-  const kinds = issues.map(i => i.kind);
-  const finer = kinds.some(k => FAST.includes(k));
+  const { phases } = facts.phaseEvidence;
+  const hiddenCap = phases.some(p => p.hiddenFlowPlateau);
+  const limited = phases.filter(pressureLimitedPour);
+  const kinds = issues.filter(issue => {
+    if (issue.kind === "slow_shot") return limited.length === 0;
+    if (issue.kind !== "flow_shortfall") return true;
+    // A modest miss at the pressure limit alone doesn't justify moving the
+    // grinder. Use the same severe-shortfall ratio as the choke detector.
+    return !limited.some(p => issue.fromS != null && issue.toS != null &&
+      p.fromS <= issue.toS && p.toS >= issue.fromS &&
+      (!p.steadyHold.value || p.steadyHold.value.meanResponse > 0.55 * p.steadyHold.value.meanCommand));
+  }).map(i => i.kind);
+  const finer = !hiddenCap && kinds.some(k => FAST.includes(k));
   const coarser = kinds.some(k => SLOW.includes(k));
   let nextShot: DialInAdvice | null = null;
   if (profile === "espresso" && finer !== coarser) {
@@ -209,10 +220,12 @@ export function rulesCurveReview(stage: CurveStageInput): CurveReview {
 
 /** Keep the original review fields usable by older skins and saved reports. */
 export function finishReview(input: ReviewInput, stage: CurveStageInput, curve: CurveReview, source: string,
-  notes?: Parameters<typeof alignTaste>[2], mechanics = rulesCoachMechanics(stage, curve)): CoachReviewResult {
-  const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, stage.profile === "espresso");
+  notes?: Parameters<typeof alignTaste>[2], mechanics = rulesCoachMechanics(stage, curve), repeat = repeatRecommendation(stage)): CoachReviewResult {
+  const knownEspresso = stage.profile === "espresso";
+  const hiddenCap = stage.evidence.analysis.facts.phaseEvidence.phases.some(p => p.hiddenFlowPlateau);
+  const { alignment, nextShot, askTaste } = alignTaste(input, curve, notes, knownEspresso, hiddenCap);
   const taste = coachTaste(input, mechanics, notes);
-  const recommendation = coachRecommendation(curve, alignment, nextShot, taste, mechanics, stage.profile === "espresso");
+  const recommendation = coachRecommendation(curve, alignment, nextShot, taste, mechanics, knownEspresso, repeat);
   // Older clients can still display the flat review. Prevent a different
   // adjustment from surviving there when the coach asks for a repeat.
   const legacyNextShot = recommendation.adjustment ?? (nextShot?.grindDelta === "same" &&

@@ -1,4 +1,6 @@
 import type { CoachMechanics, CoachReview, DialInAdvice } from "../schema.js";
+import { pressureLimitedPour } from "./review-coach.js";
+import type { CurveStageInput } from "./review-local.js";
 import { reviewNotes, type NotesInterpretation } from "./review-taste.js";
 import type { CurveReview, ReviewInput, TasteAlignment } from "./review-types.js";
 
@@ -45,12 +47,72 @@ export function coachTaste(input: Pick<ReviewInput, "feedback" | "notes">, mecha
   return { sourBitter, body, enjoyment, notes, noteQuote: interpreted?.notesEvidence ?? null, reported, links };
 }
 
+const repeat = (action: string, expect: string, compare: string): Recommendation =>
+  ({ action, expect, compare, puckCheck: null, adjustment: null });
+
+const rounded = (n: number) => Number(n.toFixed(1));
+
+/** One check against this recording, with no taste assumptions or recipe change. */
+export function repeatRecommendation(stage: CurveStageInput): Recommendation {
+  const { facts, metrics } = stage.evidence.analysis;
+  const { scaleAvailability: scale, firstSustainedBeverage: { value: onset }, phases } = facts.phaseEvidence;
+  if (scale.gap || scale.jump || metrics.enoughTelemetry && !scale.weightSamples) {
+    return repeat("Repeat to verify that your scale records the full shot.",
+      scale.dropout ? "The scale cut out before this shot finished." :
+        scale.jump ? "The running cup weight jumped on this shot." :
+        scale.gap ? "The cup weight was missing for part of this shot." : "This shot came through without cup weights.",
+      "Look for a continuous weight reading through the stop.");
+  }
+  if (stage.earlyStop) {
+    const where = facts.stopReason?.toLowerCase() === "apistop" ? "from the app" : "by hand";
+    if (facts.durationS != null && facts.yieldG != null) {
+      const checkpoint = `${rounded(facts.durationS)} s`;
+      const weight = `${rounded(facts.yieldG)} g`;
+      return repeat(`Repeat at the same settings and check the cup at ${checkpoint}.`,
+        `This shot was stopped ${where} at ${checkpoint} with ${weight} in the cup.`,
+        `At ${checkpoint}, see whether the cup weighs about ${weight} again.`);
+    }
+    const when = facts.durationS == null ? "" : ` at ${rounded(facts.durationS)} s`;
+    const weight = facts.yieldG == null ? "" : ` with ${rounded(facts.yieldG)} g in the cup`;
+    return repeat("Repeat the same recipe and let it run to its planned stop.",
+      `This shot was stopped ${where}${when}${weight}.`, "Compare the final cup weight with this shot.");
+  }
+  const plateau = phases.find(p => p.hiddenFlowPlateau)?.hiddenFlowPlateau;
+  if (plateau) {
+    return repeat("Repeat at the same settings to check the flow plateau.",
+      `This time the inlet settled near ${rounded(plateau.inletFlowMlS)} mL/s as pressure fell.`,
+      "See whether pressure and inlet flow drop together again.");
+  }
+  const shortYield = facts.yieldG != null && facts.targetYieldG != null && facts.yieldG < 0.8 * facts.targetYieldG;
+  const extremeRatio = facts.ratio != null && (facts.ratio >= 4 || facts.ratio < 1.2);
+  if (facts.yieldG != null && (shortYield || extremeRatio && facts.stopReason?.toLowerCase() !== "targetweight")) {
+    return repeat("Repeat at the same settings to check the finished weight.",
+      `This shot finished at ${rounded(facts.yieldG)} g${facts.ratio != null ? ` (1:${rounded(facts.ratio)})` : ""}.`,
+      "See whether the cup finishes near that weight again.");
+  }
+  if (phases.some(pressureLimitedPour)) {
+    return repeat("Repeat at the same settings to check for the flow shortfall.",
+      "This time the machine reached its pressure limit before it could deliver the commanded flow.",
+      "See whether flow runs below target at the pressure limit again.");
+  }
+  if (onset?.previousBelowGramS != null) {
+    return repeat("Repeat at the same settings to check when the cup starts filling.",
+      `This time the cup reached its first gram at about ${rounded(onset.brewElapsedS)} s.`,
+      "See whether the next shot takes about as long to reach its first gram.");
+  }
+  if (!metrics.enoughTelemetry && !metrics.observedWindows) {
+    return repeat("Repeat with recording active.", "This recording gave only a limited view of the pour.",
+      "Check that the new recording captures the full shot through the stop.");
+  }
+  return repeat("Repeat at the same settings to check the pour.",
+    "A repeat gives you a second curve at the same settings.", "Compare how closely the main pour follows the plan.");
+}
+
 export function coachRecommendation(curve: CurveReview, alignment: TasteAlignment, advice: DialInAdvice | null,
-  taste: CoachReview["taste"], mechanics: CoachMechanics, knownEspresso: boolean): Recommendation {
-  const repeat = (action: string, compare: string, puckCheck: Recommendation["puckCheck"] = null): Recommendation =>
-    ({ action, expect: "Keep your recipe and other prep the same.", compare, puckCheck, adjustment: null });
+  taste: CoachReview["taste"], mechanics: CoachMechanics, knownEspresso: boolean, repeatCheck: Recommendation): Recommendation {
   if (alignment.status === "conflicts" || taste?.links.some(link => link.status === "does_not_match")) {
-    return repeat("Repeat the same shot and taste it again.", "Check whether the same pour and taste recur before moving the grinder.");
+    return repeat("Repeat the same shot and taste it again.",
+      "Your taste report and the curve give different signals.", "Check whether the same taste comes through on the repeat.");
   }
   if (!knownEspresso) return {
     action: "Repeat with the recorded setup.", expect: "Keep the settings fixed.",
@@ -88,8 +150,5 @@ export function coachRecommendation(curve: CurveReview, alignment: TasteAlignmen
       compare: "Keep grind, dose and yield fixed. Compare whether the flow still picks up late.",
       puckCheck: "even_distribution", adjustment: null };
   }
-  if (!mechanics.phases.some(p => p.verdict !== "not_graded")) {
-    return repeat("Repeat the recipe with recording active.", "Check that the next recording shows each phase before judging the curve.");
-  }
-  return repeat("Repeat the same recipe.", "Compare when the cup starts filling and how the pour and taste repeat.");
+  return repeatCheck;
 }

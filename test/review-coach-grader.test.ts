@@ -160,20 +160,15 @@ describe("synthetic plan truth", () => {
     expect(score(tracked).stages[1]).toMatchObject({ expected: "on_plan", actual: "on_plan" });
     expect(score(tracked).hypotheses).toEqual([{ id: "easy-flow", pass: true }]);
     expect(score(capped).stages[1]).toMatchObject({ expected: "partly", actual: "partly" });
-    expect(score(capped).hypotheses).toEqual([{ id: "restricted-flow", pass: false }]);
     const capReview = rulesReviewResult(capped.input).coach;
-    capReview.hypotheses = [{ id: "restricted-flow", label: "Restricted flow", signature: "bitter_heavy",
-      sentence: "This fits a restricted pour.", evidenceIds: ["phase-1"], confidence: "low" }];
+    expect(score(capped).hypotheses).toEqual([{ id: "restricted-flow", pass: true }]);
     expect(score(capped, capReview).hypothesisSetCorrect).toBe(true);
     capReview.hypotheses[0].signature = "sour_thin";
     expect(score(capped, capReview).hypothesisSetCorrect).toBe(false);
     const truncation = rulesReviewResult(stopped.input).coach;
-    expect(score(stopped, truncation).abstentions).toEqual([{ id: "planned-2", pass: false }]);
-    truncation.stages[1].phaseIds = ["planned-1"];
-    truncation.stages.push({ name: "Finish", verdict: "not_graded", phaseIds: ["planned-2"], evidenceIds: ["finish"],
-      sentence: "The shot reached target weight before the planned finish." });
     expect(score(stopped, truncation).abstentions).toEqual([{ id: "planned-2", pass: true }]);
-    truncation.phases[2].sentence = "The machine missed its target.";
+    truncation.stages[1].phaseIds.push("planned-2");
+    truncation.stages.pop();
     expect(score(stopped, truncation).abstentions).toEqual([{ id: "planned-2", pass: false }]);
   });
 

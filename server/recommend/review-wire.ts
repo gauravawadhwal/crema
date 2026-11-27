@@ -35,6 +35,7 @@ const phase = z.object({
   loggedCommand: readings, pressureBar: readings, inletFlowMlS: readings,
   controlledError: window(z.object({ absoluteMean: n, signedMean: n })),
   capLikeTime: window(z.object({ seconds: time, shareOfCoveredTime: share })),
+  hiddenFlowPlateau: z.object({ fromS: time, inletFlowMlS: n }).optional(),
   steadyHold: window(z.object({ meanCommand: n, meanResponse: n, otherMean: nullable })),
   earlyHydraulics: hydraulics, lateHydraulics: hydraulics,
   pressureCrest: evidence(z.object({ tS: time, pressureBar: pressure, inletFlowMlS: nullable, pressurePerInletFlowProxyBarPerMlS: proxy })),
@@ -57,7 +58,8 @@ const phaseEvidence = z.object({
   })),
   cupRateBeforeOnsetGS: rate, cupRateAfterOnsetGS: rate, cupRateChangeAtOnsetGS: evidence(n),
   scaleClock: evidence(z.enum(["scale_timestamps_checked", "scale_age_checked", "machine_timestamps_only"])),
-  scaleAvailability: z.object({ weightSamples: count, staleSamples: count, pairingAgeS: evidence(n) }),
+  scaleAvailability: z.object({ weightSamples: count, staleSamples: count, pairingAgeS: evidence(n),
+    gap: z.boolean().default(false), dropout: z.boolean().default(false), jump: z.boolean().default(false) }),
   thermalAvailability: z.object({ mixSamples: count, groupSamples: count }),
   finish: z.object({
     annotatedYieldG: evidence(n), suppliedYieldG: evidence(n), lastRecordedWeightG: evidence(n), yieldToDoseRatio: evidence(n),

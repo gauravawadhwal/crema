@@ -194,14 +194,17 @@ validates a bounded `ReviewInput` at `POST /api/review` and returns
 `{coach, review, curve, taste, source, evidence}`. The mechanical stage produces
 a headline, verdicts for planned phases and temperature, notable points,
 hedged hypotheses and a relevant history comparison. An optional provider call
-can rewrite the headline and coach sentences. The prompt asks for plain,
+can rewrite the headline, coach sentences and comparison wording for a repeat.
+The prompt asks for plain,
 evidence-based wording and uses the computed drafts as its source. The server
 applies the wording by slot and keeps each slot's computed verdict and
 evidence IDs. A response that fails to parse uses the rules wording.
 The card groups phases into brewing stages and shows one short verdict
 sentence for each. Numbers in the wording highlight large misses or notable
 events. Each stage names the saved phase IDs it covers. The saved phase rows
-carry their measured and expected values alongside the prose.
+carry their measured and expected values alongside the prose. The expected
+endpoint comes from the configured step. If a weight stop prevents the
+planned finish, the Finish stage shows the stop reason and stays ungraded.
 Ratings, notes, earlier review text and bean tasting descriptors stay outside
 this stage. The skin builds the same review locally when the connected server
 does not advertise the current format.
@@ -215,15 +218,19 @@ taste and body scales can support or conflict with a hypothesis. A conflict
 leads to a repeat. When there is a saved note and no taste or body rating, an
 optional second call can interpret a verbatim sensory quote and suggest one
 bounded trial. The final section describes one adjustment, a puck-prep check
-or a repeat, and what to compare. Adjustments are advisory.
+or a repeat, and what to compare on that shot. Code decides the structured
+adjustment. Adjustments are advisory.
 
 Phase evidence groups contiguous frame and machine substate readings on the shot
 clock and excludes preparation. It compares the active pump channel with its
 logged command, including ramps. Each time window reports covered seconds.
-Cup-rate windows require adjacent usable weights, and temperature offsets use
-the sensor selected by the recorded step. Limiter occupancy and the pressure
-to inlet-flow ratio describe the observed response. The existing diagnostic
-windows decide which findings can fire.
+Cup-rate windows require adjacent usable weights. Scale gaps and weight jumps
+are shown as recording limits and can give the repeat a scale check.
+Temperature offsets use the sensor selected by the recorded step. A shortfall
+at a pressure limit supports a tentative restricted-flow hypothesis. When
+pressure and flow fall together into a steady inlet plateau under an unchanged
+pressure command, the review keeps the pressure miss and notes a possible
+machine flow limit.
 
 The shared review evidence records units, phase and event IDs, elapsed time,
 coverage, and the source of measurements and guides. Both paths receive counted
