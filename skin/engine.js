@@ -3049,6 +3049,15 @@ var CremaEngine = (() => {
     }
     if (stage.earlyStop) {
       const where = facts.stopReason?.toLowerCase() === "apistop" ? "from the app" : "by hand";
+      if (facts.durationS != null && facts.yieldG != null) {
+        const checkpoint = `${rounded3(facts.durationS)} s`;
+        const weight3 = `${rounded3(facts.yieldG)} g`;
+        return repeat(
+          `Repeat at the same settings and check the cup at ${checkpoint}.`,
+          `This shot was stopped ${where} at ${checkpoint} with ${weight3} in the cup.`,
+          `At ${checkpoint}, see whether the cup weighs about ${weight3} again.`
+        );
+      }
       const when = facts.durationS == null ? "" : ` at ${rounded3(facts.durationS)} s`;
       const weight2 = facts.yieldG == null ? "" : ` with ${rounded3(facts.yieldG)} g in the cup`;
       return repeat(
@@ -3065,7 +3074,9 @@ var CremaEngine = (() => {
         "See whether pressure and inlet flow drop together again."
       );
     }
-    if (facts.yieldG != null && (facts.ratio != null && facts.ratio >= 4 || facts.targetYieldG != null && facts.yieldG < 0.8 * facts.targetYieldG || facts.ratio != null && facts.ratio < 1.2)) {
+    const shortYield = facts.yieldG != null && facts.targetYieldG != null && facts.yieldG < 0.8 * facts.targetYieldG;
+    const extremeRatio = facts.ratio != null && (facts.ratio >= 4 || facts.ratio < 1.2);
+    if (facts.yieldG != null && (shortYield || extremeRatio && facts.stopReason?.toLowerCase() !== "targetweight")) {
       return repeat(
         "Repeat at the same settings to check the finished weight.",
         `This shot finished at ${rounded3(facts.yieldG)} g${facts.ratio != null ? ` (1:${rounded3(facts.ratio)})` : ""}.`,

@@ -65,6 +65,13 @@ export function repeatRecommendation(stage: CurveStageInput): Recommendation {
   }
   if (stage.earlyStop) {
     const where = facts.stopReason?.toLowerCase() === "apistop" ? "from the app" : "by hand";
+    if (facts.durationS != null && facts.yieldG != null) {
+      const checkpoint = `${rounded(facts.durationS)} s`;
+      const weight = `${rounded(facts.yieldG)} g`;
+      return repeat(`Repeat at the same settings and check the cup at ${checkpoint}.`,
+        `This shot was stopped ${where} at ${checkpoint} with ${weight} in the cup.`,
+        `At ${checkpoint}, see whether the cup weighs about ${weight} again.`);
+    }
     const when = facts.durationS == null ? "" : ` at ${rounded(facts.durationS)} s`;
     const weight = facts.yieldG == null ? "" : ` with ${rounded(facts.yieldG)} g in the cup`;
     return repeat("Repeat the same recipe and let it run to its planned stop.",
@@ -76,9 +83,9 @@ export function repeatRecommendation(stage: CurveStageInput): Recommendation {
       `This time the inlet settled near ${rounded(plateau.inletFlowMlS)} mL/s as pressure fell.`,
       "See whether pressure and inlet flow drop together again.");
   }
-  if (facts.yieldG != null && (facts.ratio != null && facts.ratio >= 4 ||
-      facts.targetYieldG != null && facts.yieldG < 0.8 * facts.targetYieldG ||
-      facts.ratio != null && facts.ratio < 1.2)) {
+  const shortYield = facts.yieldG != null && facts.targetYieldG != null && facts.yieldG < 0.8 * facts.targetYieldG;
+  const extremeRatio = facts.ratio != null && (facts.ratio >= 4 || facts.ratio < 1.2);
+  if (facts.yieldG != null && (shortYield || extremeRatio && facts.stopReason?.toLowerCase() !== "targetweight")) {
     return repeat("Repeat at the same settings to check the finished weight.",
       `This shot finished at ${rounded(facts.yieldG)} g${facts.ratio != null ? ` (1:${rounded(facts.ratio)})` : ""}.`,
       "See whether the cup finishes near that weight again.");

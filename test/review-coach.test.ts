@@ -56,12 +56,23 @@ describe("round-one gym regressions", () => {
   it.each([
     ["a1", /108\.2 g \(1:6\)/, /finished weight/],
     ["a2", /80\.6 g \(1:4\.5\)/, /finished weight/],
-    ["c2", /stopped from the app at 15 s with 13\.1 g/, /run to its planned stop/],
+    ["c2", /stopped from the app at 15 s with 13\.1 g/, /check the cup at 15 s/],
     ["e2", /first gram at about 23\.5 s/, /when the cup starts filling/],
   ])("gives %s a repeat tied to the recording", (id, expectCopy, action) => {
     expect(coachOf(inputFor(id)).recommendation).toMatchObject({
       action: expect.stringMatching(action), expect: expect.stringMatching(expectCopy), adjustment: null,
     });
+  });
+
+  it("checks the app-stopped shot at the same elapsed time", () => {
+    expect(coachOf(inputFor("c2")).recommendation.compare).toBe("At 15 s, see whether the cup weighs about 13.1 g again.");
+  });
+
+  it.each([
+    ["allonge-tracked.s0", /when the cup starts filling/],
+    ["allonge-capped.s0", /flow shortfall/],
+  ])("checks an observable change on %s when the machine already controls final weight", (id, action) => {
+    expect(coachOf(inputFor(id)).recommendation).toMatchObject({ action: expect.stringMatching(action), adjustment: null });
   });
 
   it("rewrites the repeat comparison without changing the experiment or mechanics", async () => {
